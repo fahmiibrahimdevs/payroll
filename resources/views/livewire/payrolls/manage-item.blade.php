@@ -1435,7 +1435,7 @@
                 <div class="modal-body py-3 px-4 bg-white">
                     @if ($calculationDetail)
                         <!-- Calculation Detail Tile Group (Sesuai Desain Ringkasan Profil Karyawan) -->
-                        <div class="emp-tile-group mb-0 text-left bg-white" style="border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
+                        <div class="emp-tile-group mb-0 text-left">
                             @foreach ($calculationDetail['rows'] ?? [] as $row)
                                 @php
                                     $isHighlight = ! empty($row['is_bold']);
@@ -1469,14 +1469,21 @@
                             @endforeach
                         </div>
 
-                        <!-- Kesimpulan / Penjelasan Perhitungan -->
+                        <!-- Kesimpulan / Penjelasan Perhitungan (.bd-callout) -->
                         @if (! empty($calculationDetail['summary_text']))
-                            <div class="mt-3 p-3 bg-white" style="border: 1px solid #e2e8f0; border-left: 3px solid #0b52aa; border-radius: 8px;">
-                                <div class="d-flex align-items-center mb-1" style="font-size: 12px; font-weight: 600; color: #0b52aa; letter-spacing: 0.3px;">
-                                    <i class="fas fa-info-circle mr-1" style="color: #0b52aa !important;"></i> Kesimpulan Perhitungan
-                                </div>
-                                <div style="font-size: 12.5px; line-height: 1.6; color: #334155;">
-                                    {!! $calculationDetail['summary_text'] !!}
+                            <div class="bd-callout bd-callout-info mt-3 mb-0" role="alert">
+                                <div class="d-flex align-items-start">
+                                    <div class="bd-callout-icon mr-3 mt-0.5">
+                                        <i class="fas fa-info-circle"></i>
+                                    </div>
+                                    <div class="flex-grow-1 min-w-0">
+                                        <div class="bd-callout-title">
+                                            Kesimpulan Perhitungan
+                                        </div>
+                                        <div class="bd-callout-desc">
+                                            {!! $calculationDetail['summary_text'] !!}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         @endif
