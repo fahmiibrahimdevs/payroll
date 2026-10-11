@@ -95,7 +95,7 @@ new class extends Component
                 </div>
             @enderror
 
-            @if (auth()->user() instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! auth()->user()->hasVerifiedEmail())
+            @if (! app()->environment(['local', 'development']) && auth()->user() instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! auth()->user()->hasVerifiedEmail())
                 <div class="mt-2 text-warning text-small">
                     <i class="fas fa-exclamation-circle mr-1"></i> Email Anda belum diverifikasi.
                     <a href="#" wire:click.prevent="sendVerification" class="font-weight-bold ml-1">
@@ -112,10 +112,7 @@ new class extends Component
         </div>
 
         <div class="text-right">
-            <button type="submit" class="btn btn-primary" wire:loading.attr="disabled">
-                <span wire:loading.remove><i class="fas fa-save mr-1"></i> Simpan Perubahan</span>
-                <span wire:loading><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...</span>
-            </button>
+            <button type="submit" class="btn btn-primary" wire:loading.attr="disabled"><span wire:loading.remove><i class="fas fa-save mr-1"></i> Simpan Perubahan</span><span wire:loading><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...</span></button>
         </div>
     </form>
 </div>

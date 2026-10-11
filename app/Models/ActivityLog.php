@@ -2,13 +2,17 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Prunable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ActivityLog extends Model
 {
+    use Prunable;
+
     /**
      * The attributes that are mass assignable.
      *
@@ -24,6 +28,7 @@ class ActivityLog extends Model
         'context',
         'ip_address',
         'user_agent',
+        'created_at',
     ];
 
     /**
@@ -46,14 +51,19 @@ class ActivityLog extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function prunable(): Builder
+    {
+        return static::query()->where('created_at', '<', now()->subDays((int) config('app.activity_log_retention_days', 365)));
+    }
+
     /**
      * Scope a query to filter by date range.
      */
     public function scopeDateRange(Builder $query, ?string $startDate = null, ?string $endDate = null): Builder
     {
         return $query
-            ->when($startDate, fn (Builder $q) => $q->whereDate('created_at', '>=', $startDate))
-            ->when($endDate, fn (Builder $q) => $q->whereDate('created_at', '<=', $endDate));
+            ->when($startDate, fn (Builder $q) => $q->where('created_at', '>=', Carbon::parse($startDate)->startOfDay()))
+            ->when($endDate, fn (Builder $q) => $q->where('created_at', '<=', Carbon::parse($endDate)->endOfDay()));
     }
 
     /**

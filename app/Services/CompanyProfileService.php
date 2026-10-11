@@ -1,0 +1,61 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\CompanyProfile;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+
+class CompanyProfileService
+{
+    /**
+     * Get the active company profile record.
+     */
+    public function getProfile(): CompanyProfile
+    {
+        return CompanyProfile::getProfile();
+    }
+
+    /**
+     * Update the company profile information.
+     */
+    public function updateProfile(array $data, ?UploadedFile $logo = null): CompanyProfile
+    {
+        $profile = $this->getProfile();
+
+        if ($logo) {
+            if ($profile->logo_path && Storage::disk('public')->exists($profile->logo_path)) {
+                Storage::disk('public')->delete($profile->logo_path);
+            }
+            $data['logo_path'] = $logo->store('company', 'public');
+        }
+
+        $profile->update([
+            'name' => trim((string) ($data['name'] ?? $profile->name)),
+            'code' => ! empty($data['code']) ? trim((string) $data['code']) : null,
+            'email' => ! empty($data['email']) ? trim((string) $data['email']) : null,
+            'phone' => ! empty($data['phone']) ? trim((string) $data['phone']) : null,
+            'website' => ! empty($data['website']) ? trim((string) $data['website']) : null,
+            'address' => ! empty($data['address']) ? trim((string) $data['address']) : null,
+            'tax_identification_number' => ! empty($data['tax_identification_number']) ? trim((string) $data['tax_identification_number']) : null,
+            'enable_pph21' => isset($data['enable_pph21']) ? (bool) $data['enable_pph21'] : $profile->enable_pph21,
+            'include_bpjs_in_tax' => isset($data['include_bpjs_in_tax']) ? (bool) $data['include_bpjs_in_tax'] : $profile->include_bpjs_in_tax,
+            'bpjs_jkk_risk_rate' => isset($data['bpjs_jkk_risk_rate']) ? (float) $data['bpjs_jkk_risk_rate'] : $profile->bpjs_jkk_risk_rate,
+            'bpjs_jkm_rate' => isset($data['bpjs_jkm_rate']) ? (float) $data['bpjs_jkm_rate'] : $profile->bpjs_jkm_rate,
+            'bpjs_kes_emp_rate' => isset($data['bpjs_kes_emp_rate']) ? (float) $data['bpjs_kes_emp_rate'] : $profile->bpjs_kes_emp_rate,
+            'bpjs_kes_comp_rate' => isset($data['bpjs_kes_comp_rate']) ? (float) $data['bpjs_kes_comp_rate'] : $profile->bpjs_kes_comp_rate,
+            'bpjs_jht_emp_rate' => isset($data['bpjs_jht_emp_rate']) ? (float) $data['bpjs_jht_emp_rate'] : $profile->bpjs_jht_emp_rate,
+            'bpjs_jht_comp_rate' => isset($data['bpjs_jht_comp_rate']) ? (float) $data['bpjs_jht_comp_rate'] : $profile->bpjs_jht_comp_rate,
+            'bpjs_jp_emp_rate' => isset($data['bpjs_jp_emp_rate']) ? (float) $data['bpjs_jp_emp_rate'] : $profile->bpjs_jp_emp_rate,
+            'bpjs_jp_comp_rate' => isset($data['bpjs_jp_comp_rate']) ? (float) $data['bpjs_jp_comp_rate'] : $profile->bpjs_jp_comp_rate,
+            'bpjs_kes_cap' => isset($data['bpjs_kes_cap']) ? (float) $data['bpjs_kes_cap'] : $profile->bpjs_kes_cap,
+            'bpjs_jp_cap' => isset($data['bpjs_jp_cap']) ? (float) $data['bpjs_jp_cap'] : $profile->bpjs_jp_cap,
+            'bank_name' => ! empty($data['bank_name']) ? trim((string) $data['bank_name']) : null,
+            'bank_account_number' => ! empty($data['bank_account_number']) ? trim((string) $data['bank_account_number']) : null,
+            'bank_account_name' => ! empty($data['bank_account_name']) ? trim((string) $data['bank_account_name']) : null,
+            'logo_path' => $data['logo_path'] ?? $profile->logo_path,
+        ]);
+
+        return $profile;
+    }
+}

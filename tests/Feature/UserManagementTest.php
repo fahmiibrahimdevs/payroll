@@ -171,8 +171,9 @@ class UserManagementTest extends TestCase
             ->call('deleteUser', $targetUserId)
             ->assertDispatched('swal:alert');
 
-        $this->assertDatabaseMissing('users', [
+        $this->assertDatabaseHas('users', [
             'id' => $targetUserId,
+            'is_active' => false,
         ]);
 
         $this->assertDatabaseHas('activity_logs', [

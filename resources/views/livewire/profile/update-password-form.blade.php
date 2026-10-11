@@ -89,10 +89,7 @@ new class extends Component
         </div>
 
         <div class="text-right mt-1">
-            <button type="submit" class="btn btn-warning" wire:loading.attr="disabled">
-                <span wire:loading.remove><i class="fas fa-key mr-1"></i> Perbarui Password</span>
-                <span wire:loading><i class="fas fa-spinner fa-spin mr-1"></i> Memproses...</span>
-            </button>
+            <button type="submit" class="btn btn-warning" wire:loading.attr="disabled"><span wire:loading.remove><i class="fas fa-key mr-1"></i> Perbarui Password</span><span wire:loading><i class="fas fa-spinner fa-spin mr-1"></i> Memproses...</span></button>
         </div>
     </form>
 </div>

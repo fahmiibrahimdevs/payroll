@@ -82,11 +82,11 @@
                                     @endif
                                 </td>
                                 <td class="text-center align-middle text-nowrap">
-                                    <button type="button" wire:click="edit({{ $post->id }})" wire:loading.attr="disabled" wire:target="edit({{ $post->id }})" class="btn btn-primary btn-action mr-1" data-toggle="tooltip" title="Edit Data">
+                                    <button type="button" wire:click="edit({{ $post->id }})" wire:loading.attr="disabled" wire:target="edit({{ $post->id }})" class="btn btn-primary btn-action mr-1" title="Edit Data">
                                         <i wire:loading wire:target="edit({{ $post->id }})" class="fas fa-spinner fa-spin"></i>
                                         <i wire:loading.remove wire:target="edit({{ $post->id }})" class="fas fa-pencil-alt"></i>
                                     </button>
-                                    <button type="button" wire:click="confirmDelete({{ $post->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $post->id }})" class="btn btn-danger btn-action" data-toggle="tooltip" title="Hapus Data">
+                                    <button type="button" wire:click="confirmDelete({{ $post->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $post->id }})" class="btn btn-danger btn-action" title="Hapus Data">
                                         <i wire:loading wire:target="confirmDelete({{ $post->id }})" class="fas fa-spinner fa-spin"></i>
                                         <i wire:loading.remove wire:target="confirmDelete({{ $post->id }})" class="fas fa-trash"></i>
                                     </button>
@@ -137,47 +137,55 @@
 
 @push('scripts')
 <script>
-    document.addEventListener('livewire:init', () => {
-        // Izinkan focus Select2 di dalam modal Bootstrap
-        if ($.fn.modal && $.fn.modal.Constructor) {
-            $.fn.modal.Constructor.prototype._enforceFocus = function() {};
+    (function () {
+        function initPostScripts() {
+            // Izinkan focus Select2 di dalam modal Bootstrap
+            if ($.fn.modal && $.fn.modal.Constructor) {
+                $.fn.modal.Constructor.prototype._enforceFocus = function() {};
+            }
+
+            const initPostSelect2 = () => {
+                // Select2 Kategori
+                if ($('#category').length) {
+                    $('#category').select2({
+                        dropdownParent: $('#postModal'),
+                        width: '100%',
+                        placeholder: '-- Pilih Kategori --'
+                    }).on('change', function () {
+                        @this.set('form.category', $(this).val() || '');
+                    });
+                }
+
+                // Select2 Status
+                if ($('#status').length) {
+                    $('#status').select2({
+                        dropdownParent: $('#postModal'),
+                        width: '100%'
+                    }).on('change', function () {
+                        @this.set('form.status', $(this).val() || 'draft');
+                    });
+                }
+            };
+
+            initPostSelect2();
+
+            // Listen open-modal event untuk sinkronisasi nilai Select2
+            Livewire.on('open-modal', (event) => {
+                const data = Array.isArray(event) ? event[0] : event;
+                if (data && data.id === 'postModal') {
+                    setTimeout(() => {
+                        $('#category').val(data.category || '').trigger('change.select2');
+                        $('#status').val(data.status || 'draft').trigger('change.select2');
+                    }, 50);
+                }
+            });
         }
 
-        const initPostSelect2 = () => {
-            // Select2 Kategori
-            if ($('#category').length) {
-                $('#category').select2({
-                    dropdownParent: $('#postModal'),
-                    width: '100%',
-                    placeholder: '-- Pilih Kategori --'
-                }).on('change', function () {
-                    @this.set('form.category', $(this).val() || '');
-                });
-            }
-
-            // Select2 Status
-            if ($('#status').length) {
-                $('#status').select2({
-                    dropdownParent: $('#postModal'),
-                    width: '100%'
-                }).on('change', function () {
-                    @this.set('form.status', $(this).val() || 'draft');
-                });
-            }
-        };
-
-        initPostSelect2();
-
-        // Listen open-modal event untuk sinkronisasi nilai Select2
-        Livewire.on('open-modal', (event) => {
-            const data = Array.isArray(event) ? event[0] : event;
-            if (data && data.id === 'postModal') {
-                setTimeout(() => {
-                    $('#category').val(data.category || '').trigger('change.select2');
-                    $('#status').val(data.status || 'draft').trigger('change.select2');
-                }, 50);
-            }
-        });
-    });
+        if (typeof window.Livewire !== 'undefined') {
+            initPostScripts();
+        } else {
+            document.addEventListener('livewire:init', initPostScripts);
+        }
+    })();
 </script>
 @endpush

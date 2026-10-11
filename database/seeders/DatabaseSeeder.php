@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             LaratrustSeeder::class,
             PostSeeder::class,
+            SalaryComponentSeeder::class,
         ]);
 
         $admin = User::firstOrCreate(
@@ -28,9 +29,35 @@ class DatabaseSeeder extends Seeder
                 'name' => 'Fahmi Admin',
                 'password' => '1',
                 'is_active' => true,
+                'email_verified_at' => now(),
             ]
         );
+        $admin->forceFill(['is_active' => true, 'email_verified_at' => $admin->email_verified_at ?? now()])->save();
         $admin->syncRoles(['admin']);
+
+        $direktur = User::firstOrCreate(
+            ['email' => 'direktur@larashiz.com'],
+            [
+                'name' => 'Direktur Utama',
+                'password' => 'password',
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]
+        );
+        $direktur->forceFill(['is_active' => true, 'email_verified_at' => $direktur->email_verified_at ?? now()])->save();
+        $direktur->syncRoles(['direktur']);
+
+        $developer = User::firstOrCreate(
+            ['email' => 'developer@larashiz.com'],
+            [
+                'name' => 'System Developer',
+                'password' => 'password',
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]
+        );
+        $developer->forceFill(['is_active' => true, 'email_verified_at' => $developer->email_verified_at ?? now()])->save();
+        $developer->syncRoles(['developer']);
 
         $user = User::firstOrCreate(
             ['email' => 'fahmi@user.com'],
@@ -41,5 +68,9 @@ class DatabaseSeeder extends Seeder
             ]
         );
         $user->syncRoles(['user']);
+
+        $this->call([
+            EmployeeSeeder::class,
+        ]);
     }
 }

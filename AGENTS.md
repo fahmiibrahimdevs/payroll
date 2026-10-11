@@ -19,7 +19,8 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 ## Conventions
 
-- You must follow all existing code conventions used in this application. When creating or editing a file, check sibling files for the correct structure, approach, and naming.
+- You must follow all existing code conventions and rules defined in `docs/` (`GENERAL_RULES.md`, `RULES_BACKEND.md`, `RULES_FRONTEND.md`, `STANDARD_LOGGING.md`) and `.agents/rules/`.
+- When creating or editing a file, check sibling files for the correct structure, approach, and naming.
 - Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
 - Check for existing components to reuse before writing a new one.
 

@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Livewire\Logs\Index;
 use App\Models\ActivityLog;
-use App\Models\User;
 use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -24,7 +23,7 @@ class ActivityLogTest extends TestCase
 
     public function test_authenticated_user_can_view_logs_monitoring_page(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createAdminUser();
 
         $response = $this->actingAs($user)->get(route('logs.index'));
 
@@ -34,7 +33,7 @@ class ActivityLogTest extends TestCase
 
     public function test_default_filter_is_today_and_shows_todays_logs(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createAdminUser();
 
         // Create log today
         ActivityLog::forceCreate([
@@ -68,7 +67,7 @@ class ActivityLogTest extends TestCase
 
     public function test_date_preset_filter_shows_past_logs(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createAdminUser();
 
         ActivityLog::forceCreate([
             'user_id' => $user->id,
@@ -88,7 +87,7 @@ class ActivityLogTest extends TestCase
 
     public function test_level_filter_and_search_filter(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createAdminUser();
 
         ActivityLog::create([
             'user_id' => $user->id,
@@ -122,7 +121,7 @@ class ActivityLogTest extends TestCase
 
     public function test_show_detail_dispatches_modal_event(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createAdminUser();
 
         $log = ActivityLog::create([
             'user_id' => $user->id,

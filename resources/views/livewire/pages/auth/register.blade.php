@@ -28,10 +28,18 @@ new #[Layout('layouts.guest')] class extends Component
         $validated['password'] = Hash::make($validated['password']);
         $validated['is_active'] = false;
 
+        $skipEmailVerification = app()->environment(['local', 'development']);
+
+        if ($skipEmailVerification) {
+            $validated['email_verified_at'] = now();
+        }
+
         $user = User::create($validated);
         $user->syncRoles(['user']);
 
-        event(new Registered($user));
+        if (! $skipEmailVerification) {
+            event(new Registered($user));
+        }
 
         session()->flash('status', 'Pendaftaran berhasil! Akun Anda berstatus nonaktif dan sedang menunggu aktivasi oleh Admin.');
 
@@ -98,10 +106,7 @@ new #[Layout('layouts.guest')] class extends Component
                 </div>
 
                 <div class="form-group">
-                    <button type="submit" class="btn btn-primary btn-lg btn-block" wire:loading.attr="disabled">
-                        <span wire:loading.remove>Daftar Sekarang</span>
-                        <span wire:loading><i class="fas fa-spinner fa-spin"></i> Mendaftar...</span>
-                    </button>
+                    <button type="submit" class="btn btn-primary btn-lg btn-block" wire:loading.attr="disabled"><span wire:loading.remove>Daftar Sekarang</span><span wire:loading><i class="fas fa-spinner fa-spin"></i> Mendaftar...</span></button>
                 </div>
             </form>
         </div>

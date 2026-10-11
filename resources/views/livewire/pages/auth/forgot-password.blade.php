@@ -69,10 +69,7 @@ new #[Layout('layouts.guest')] class extends Component
                 </div>
 
                 <div class="form-group">
-                    <button type="submit" class="btn btn-primary btn-lg btn-block" tabindex="2" wire:loading.attr="disabled">
-                        <span wire:loading.remove>Kirim Link Reset</span>
-                        <span wire:loading><i class="fas fa-spinner fa-spin"></i> Mengirim...</span>
-                    </button>
+                    <button type="submit" class="btn btn-primary btn-lg btn-block" tabindex="2" wire:loading.attr="disabled"><span wire:loading.remove>Kirim Link Reset</span><span wire:loading><i class="fas fa-spinner fa-spin"></i> Mengirim...</span></button>
                 </div>
             </form>
         </div>

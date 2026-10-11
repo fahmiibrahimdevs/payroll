@@ -30,7 +30,7 @@ class PostForm extends Form
             'title' => ['required', 'string', 'min:3', 'max:255'],
             'category' => ['required', 'string', 'max:100'],
             'status' => ['required', 'in:draft,published'],
-            'content' => ['required', 'string', 'min:5'],
+            'content' => ['required', 'string', 'min:5', 'max:50000'],
         ];
     }
 

@@ -3,8 +3,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
-        "dev": "vite",
+        "build": "npm run build:shizuefi && vite build",
+        "dev": "concurrently \"npm run watch:shizuefi\" \"vite\"",
         "build:shizuefi": "node ./node_modules/@tailwindcss/cli/dist/index.mjs -i public/assets/css/style-tailwind.css -o public/assets/css/style-tailwind.compiled.css && node ./node_modules/@tailwindcss/cli/dist/index.mjs -i public/assets/css/components-tailwind.css -o public/assets/css/components-tailwind.compiled.css && node ./node_modules/@tailwindcss/cli/dist/index.mjs -i public/assets/css/bootstrap-tailwind.css -o public/assets/css/bootstrap-tailwind.compiled.css",
         "watch:shizuefi": "concurrently \"node ./node_modules/@tailwindcss/cli/dist/index.mjs -i public/assets/css/style-tailwind.css -o public/assets/css/style-tailwind.compiled.css --watch\" \"node ./node_modules/@tailwindcss/cli/dist/index.mjs -i public/assets/css/components-tailwind.css -o public/assets/css/components-tailwind.compiled.css --watch\" \"node ./node_modules/@tailwindcss/cli/dist/index.mjs -i public/assets/css/bootstrap-tailwind.css -o public/assets/css/bootstrap-tailwind.compiled.css --watch\"",
         "postinstall": "node -e \"const fs = require('fs'); if (!fs.existsSync('public/node_modules')) { try { fs.symlinkSync('../node_modules', 'public/node_modules', 'junction'); } catch(e) {} }\""

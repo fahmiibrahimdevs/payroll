@@ -6,6 +6,7 @@ use App\Livewire\Forms\PostForm;
 use App\Models\Post;
 use App\Services\PostService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
@@ -34,6 +35,11 @@ class Index extends Component
     public bool $isEditMode = false;
 
     public ?int $editingPostId = null;
+
+    public function mount(): void
+    {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+    }
 
     /**
      * Reset pagination when search input changes.
@@ -87,6 +93,8 @@ class Index extends Component
                 'title' => 'Berhasil!',
                 'message' => 'Post baru berhasil ditambahkan!',
             ]);
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (Throwable) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -135,6 +143,8 @@ class Index extends Component
                 'title' => 'Berhasil!',
                 'message' => 'Post berhasil diperbarui!',
             ]);
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (Throwable) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',

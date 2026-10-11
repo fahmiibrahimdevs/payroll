@@ -19,18 +19,22 @@ Route::middleware('guest')->group(function () {
         ->name('password.reset');
 });
 
-Route::middleware('auth')->group(function () {
-    Volt::route('verify-email', 'pages.auth.verify-email')
-        ->name('verification.notice');
+if (! app()->environment(['local', 'development'])) {
+    Route::middleware(['auth', 'active'])->group(function () {
+        Volt::route('verify-email', 'pages.auth.verify-email')
+            ->name('verification.notice');
 
-    Route::get('verify-email/{id}/{hash}', VerifyEmailController::class)
-        ->middleware(['signed', 'throttle:6,1'])
-        ->name('verification.verify');
+        Route::get('verify-email/{id}/{hash}', VerifyEmailController::class)
+            ->middleware(['signed', 'throttle:6,1'])
+            ->name('verification.verify');
+    });
+}
 
+Route::middleware(['auth', 'active'])->group(function () {
     Volt::route('confirm-password', 'pages.auth.confirm-password')
         ->name('password.confirm');
 
-    Route::match(['get', 'post'], 'logout', function (Logout $logout) {
+    Route::post('logout', function (Logout $logout) {
         $logout();
 
         return redirect()->route('login');

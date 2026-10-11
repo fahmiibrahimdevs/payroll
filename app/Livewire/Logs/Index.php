@@ -79,6 +79,7 @@ class Index extends Component
         };
 
         $this->resetPage();
+        $this->dispatch('sync-log-preset', preset: $preset);
     }
 
     /**
@@ -93,12 +94,14 @@ class Index extends Component
     {
         $this->activePreset = 'custom';
         $this->resetPage();
+        $this->dispatch('sync-log-preset', preset: 'custom');
     }
 
     public function updatingEndDate(): void
     {
         $this->activePreset = 'custom';
         $this->resetPage();
+        $this->dispatch('sync-log-preset', preset: 'custom');
     }
 
     public function updatingFilterLevel(): void
@@ -126,6 +129,7 @@ class Index extends Component
         $this->filterModule = '';
         $this->perPage = 10;
         $this->setPreset('today');
+        $this->dispatch('reset-log-filters');
     }
 
     /**

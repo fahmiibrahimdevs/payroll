@@ -573,29 +573,25 @@ tr:first-child > td > .fc-day-grid-event {
     @apply outline-none shadow-none;
 }
 .select2-container .select2-selection--multiple {
-    @apply box-border cursor-pointer flex flex-wrap items-center min-h-[42px] py-[4px] px-[8px] select-none outline-none bg-[#fdfdff] border border-solid border-[#d3e0f0] rounded-[3px];
+    @apply box-border cursor-pointer flex flex-wrap items-center min-h-[42px] py-[4px] px-[8px] select-none outline-none bg-white border border-solid border-[#cbd5e1] rounded-[8px] transition-all;
 }
 .select2-container .select2-selection--single {
-    @apply box-border cursor-pointer block min-h-[42px] select-none outline-none bg-[#fdfdff] border border-solid border-[#d3e0f0] rounded-[3px];
+    @apply box-border cursor-pointer block min-h-[42px] select-none outline-none bg-white border border-solid border-[#cbd5e1] rounded-[8px] transition-all;
 }
 .select2-dropdown {
-    @apply !border-[#d3e0f0];
+    @apply !border-[#cbd5e1] rounded-[8px] shadow-[0_4px_12px_rgba(0,0,0,0.08)];
 }
-.select2-container.select2-container--open .select2-selection--multiple {
-    @apply bg-[#fefeff] border-[#5486c4];
-}
+.select2-container.select2-container--open .select2-selection--multiple,
 .select2-container.select2-container--focus .select2-selection--multiple,
-.select2-container.select2-container--focus .select2-selection--single {
-    @apply bg-[#fefeff] border-[#5486c4];
-}
+.select2-container.select2-container--focus .select2-selection--single,
 .select2-container.select2-container--open .select2-selection--single {
-    @apply bg-[#fefeff] border-[#5486c4];
+    @apply bg-white border-[#0b52aa] shadow-[0_0_0_3px_rgba(11,82,170,0.12)];
 }
 .select2-results__option {
     @apply p-[10px];
 }
 .select2-search--dropdown .select2-search__field {
-    @apply p-[7px];
+    @apply p-[7px] border-[#cbd5e1] rounded-[6px];
 }
 .select2-container--default
     .select2-selection--single
@@ -1161,25 +1157,42 @@ tr:first-child > td > .fc-day-grid-event {
 }
 .activities .activity:before {
     content: " ";
-    @apply absolute left-[25px] top-0 w-[2px] h-full bg-[#0b52aa];
+    @apply absolute left-[24px] top-0 w-[2px] h-full bg-[#e2e8f0];
 }
 .activities .activity:last-child:before {
     @apply hidden;
 }
 .activities .activity .activity-icon {
-    @apply w-[50px] h-[50px] leading-[50px] text-[20px] text-center mr-[20px] rounded-full shrink-0 z-[1];
-} /* border-radius: 3px and 50% mixed in original, 50% overrides */
+    @apply w-[50px] h-[50px] flex items-center justify-center text-[18px] mr-[20px] rounded-full shrink-0 z-[1] leading-none;
+}
+.activities .activity .activity-icon i {
+    @apply m-0 p-0 leading-none flex items-center justify-center;
+}
 .activities .activity .activity-detail {
-    @apply shadow-[0_4px_8px_rgba(0,0,0,0.03)] bg-white rounded-[3px] border-none relative mb-[30px] p-[15px];
+    @apply shadow-[0_2px_6px_0_rgba(0,0,0,0.06),0_1px_2px_0_rgba(0,0,0,0.04)] bg-white rounded-[12px] border border-[#e9edf2] relative mb-[25px] p-[20px] flex-1 min-w-0;
 }
 .activities .activity .activity-detail:before {
-    @apply content-['\f0d9'] font-['Font_Awesome_5_Free'] font-black text-[20px] absolute left-[-8px] text-white;
+    @apply content-['\f0d9'] font-['Font_Awesome_5_Free'] font-black text-[22px] absolute left-[-9px] top-[14px] text-white;
 }
 .activities .activity .activity-detail h4 {
     @apply text-[18px] text-[#191d21];
 }
 .activities .activity .activity-detail p {
     @apply mb-0;
+}
+@media (max-width: 575.98px) {
+    .activities .activity:before {
+        @apply left-[20px];
+    }
+    .activities .activity .activity-icon {
+        @apply w-[42px] h-[42px] text-[15px] mr-[12px];
+    }
+    .activities .activity .activity-detail {
+        @apply p-[14px] mb-[20px];
+    }
+    .activities .activity .activity-detail:before {
+        @apply top-[10px];
+    }
 }
 
 /* 1.37 Invoice */
@@ -1418,7 +1431,16 @@ tr:first-child > td > .fc-day-grid-event {
 }
 
 .dt-select-entries {
-    @apply mx-[8px] px-[12px] py-[4px] h-[34px] rounded-[6px] border border-[#e2e8f0] bg-white text-[#334155] text-[13px] focus:border-[#0b52aa] focus:outline-none;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 8px center !important;
+    background-size: 11px 7px !important;
+    padding-right: 24px !important;
+    cursor: pointer !important;
+    @apply mx-[8px] pl-[12px] py-[4px] h-[36px] rounded-[8px] border border-[#cbd5e1] bg-white text-[#0f172a] text-[13px] font-medium focus:border-[#0b52aa] focus:shadow-[0_0_0_3px_rgba(11,82,170,0.12)] focus:outline-none transition-all;
 }
 
 .dt-search-wrapper {
@@ -1426,7 +1448,7 @@ tr:first-child > td > .fc-day-grid-event {
 }
 
 .dt-search-input {
-    @apply ml-[8px] px-[12px] py-[4px] h-[36px] w-[200px] sm:w-[240px] rounded-[6px] border border-[#e2e8f0] bg-white text-[#334155] text-[13px] placeholder-[#94a3b8] focus:border-[#0b52aa] focus:outline-none;
+    @apply ml-[8px] px-[12px] py-[4px] h-[38px] w-[200px] sm:w-[240px] rounded-[8px] border border-[#cbd5e1] bg-white text-[#0f172a] text-[13px] placeholder-[#94a3b8] focus:border-[#0b52aa] focus:shadow-[0_0_0_3px_rgba(11,82,170,0.12)] focus:outline-none transition-all;
 }
 
 .table-clean {
@@ -1459,7 +1481,7 @@ tr:first-child > td > .fc-day-grid-event {
 }
 
 .dt-footer-wrapper {
-    @apply flex flex-col sm:flex-row justify-between items-center p-[20px] px-[25px] text-[13px] text-[#64748b] gap-[15px] border-t border-[#f1f5f9];
+    @apply flex flex-col sm:flex-row justify-between items-center p-[20px] px-[25px] text-[13px] text-[#64748b] gap-[15px] border-t border-[#f1f5f9] rounded-b-[12px];
 }
 
 /* 1.44 Floating Action Button (FAB) Tambah Data */
@@ -1506,51 +1528,31 @@ tr:first-child > td > .fc-day-grid-event {
 }
 
 .filter-chip-list {
-    @apply flex flex-wrap gap-[6px] mb-[12px];
+    @apply flex flex-wrap gap-[8px];
 }
 
 .filter-chip-item {
-    @apply inline-flex items-center px-[12px] py-[5px] text-[11.5px] font-medium text-[#475569] bg-white border border-[#e2e8f0] rounded-[8px] cursor-pointer transition-all duration-150 select-none hover:border-[#0b52aa] hover:text-[#0b52aa] hover:bg-[#eff6ff] focus:outline-none;
+    @apply inline-flex items-center justify-center px-[12px] py-[6px] text-[12px] font-medium text-[#344054] bg-white border border-[#cbd5e1] rounded-[8px] cursor-pointer transition-all duration-150 select-none hover:border-[#0b52aa] hover:text-[#0b52aa] hover:bg-[#f0f7ff] active:scale-95 focus:outline-none;
 }
 
 .filter-chip-item.active {
-    @apply bg-[#eff6ff] border-[#0b52aa] text-[#0b52aa] font-semibold shadow-[0_1px_3px_rgba(11,82,170,0.15)];
+    @apply bg-[#eff6ff] border-[#0b52aa] text-[#0b52aa] font-semibold shadow-[0_1px_3px_rgba(11,82,170,0.12)];
 }
 
 .filter-chip-item.active-info {
-    @apply bg-[#e0f2fe] border-[#0284c7] text-[#0369a1] font-semibold shadow-[0_1px_3px_rgba(2,132,199,0.15)];
+    @apply bg-[#f0f9ff] border-[#0284c7] text-[#0369a1] font-semibold shadow-[0_1px_3px_rgba(2,132,199,0.12)];
 }
 
 .filter-chip-item.active-warning {
-    @apply bg-[#fef3c7] border-[#d97706] text-[#b45309] font-semibold shadow-[0_1px_3px_rgba(217,119,6,0.15)];
+    @apply bg-[#fffbeb] border-[#d97706] text-[#b45309] font-semibold shadow-[0_1px_3px_rgba(217,119,6,0.12)];
 }
 
 .filter-chip-item.active-danger {
-    @apply bg-[#fee2e2] border-[#dc2626] text-[#b91c1c] font-semibold shadow-[0_1px_3px_rgba(220,38,38,0.15)];
+    @apply bg-[#fef2f2] border-[#dc2626] text-[#b91c1c] font-semibold shadow-[0_1px_3px_rgba(220,38,38,0.12)];
 }
 
 .filter-dot {
     @apply w-[7px] h-[7px] rounded-full inline-block mr-[6px];
-}
-
-.filter-date-grid {
-    @apply grid grid-cols-2 gap-[10px];
-}
-
-.filter-date-group {
-    @apply flex flex-col;
-}
-
-.filter-date-label {
-    @apply text-[11px] font-semibold text-[#64748b] mb-[4px];
-}
-
-.filter-date-control {
-    @apply w-full h-[34px] px-[10px] py-[4px] text-[12px] text-[#334155] bg-white border border-[#e2e8f0] rounded-[6px] focus:border-[#0b52aa] focus:outline-none transition-colors;
-}
-
-.filter-separator {
-    @apply my-[16px] h-[1px] bg-[#f1f5f9] w-full;
 }
 
 /* 1.46 Log Table & Activity Monitoring Components */
@@ -1716,5 +1718,1853 @@ tr:first-child > td > .fc-day-grid-event {
         transform: rotate(360deg);
     }
 }
+
+/* 1.51 Employee Profile Mobile / Flutter-style ListTile Components */
+.emp-profile-header {
+    @apply bg-white border border-[#e2e8f0] rounded-[10px] p-[18px] mb-[18px] shadow-[0_1px_3px_rgba(0,0,0,0.03)];
+}
+
+.emp-profile-avatar-center {
+    @apply w-[64px] h-[64px] rounded-full border-2 border-[#e2e8f0] shadow-sm object-cover mx-auto;
+}
+
+.emp-profile-name {
+    @apply text-[16px] font-semibold text-[#0f172a] truncate mb-[2px];
+}
+
+.emp-profile-role {
+    @apply text-[12.5px] text-[#475569] truncate font-normal;
+}
+
+.emp-profile-tags {
+    @apply flex items-center flex-wrap gap-[6px] pt-[12px] border-t border-[#f1f5f9];
+}
+
+.modal-body .section-title {
+    @apply text-[14px] text-[#191d21] font-semibold relative mt-[20px] mb-[2px] block;
+}
+
+.modal-body .section-title:before {
+    content: " ";
+    @apply rounded-[4px] h-[5px] w-[18px] bg-[#0b52aa] inline-block float-left mt-[6px] mr-[8px];
+}
+
+.modal-body .section-title + .section-lead,
+.modal-body .section-lead {
+    @apply !mt-0 !ml-[26px] text-[12px] text-[#64748b] leading-normal mb-[12px] block;
+}
+
+.emp-tile-group {
+    @apply bg-white border border-[#e2e8f0] rounded-[10px] overflow-hidden mb-[10px];
+}
+
+.emp-tile-row {
+    @apply flex items-center justify-between px-[12px] py-[9px] border-b border-[#f1f5f9] last:border-b-0;
+}
+
+.emp-tile-left {
+    @apply flex items-center text-[12.5px] text-[#475569] font-normal;
+}
+
+.emp-tile-icon {
+    @apply w-[26px] h-[26px] rounded-[6px] bg-[#f1f5f9] text-[#475569] flex items-center justify-center text-[11px] mr-[8px] shrink-0;
+}
+
+.emp-tile-right {
+    @apply text-[12.5px] text-[#0f172a] font-medium text-right;
+}
+
+/* 1.50 Employee Card Grid (Modern CSS Grid: 4 cards on desktop, 2 on tablet, 1 on mobile with equal gap-x & gap-y) */
+.emp-card-grid {
+    @apply grid grid-cols-1 gap-[16px] mb-[20px];
+}
+
+@media (min-width: 768px) {
+    .emp-card-grid {
+        @apply grid-cols-2 gap-[20px];
+    }
+}
+
+@media (min-width: 992px) {
+    .emp-card-grid {
+        @apply grid-cols-4 gap-[20px];
+    }
+}
+
+.grid-column-span-full {
+    @apply col-span-full;
+}
+
+/* Cash advance approval modal primitives */
+.cash-advance-modal {
+    @apply border border-[#eaedf2] rounded-[8px];
+}
+
+.cash-advance-modal-title {
+    @apply font-medium;
+}
+
+.cash-advance-card {
+    border-color: #eaedf2 !important;
+}
+
+.cash-advance-approval-applicant {
+    @apply border-b border-[#eaedf2];
+}
+
+.cash-advance-avatar {
+    @apply w-[44px] h-[44px] shrink-0 border border-[#eaedf2] bg-white text-[#0b52aa] text-[15px] font-semibold;
+}
+
+.cash-advance-min-width {
+    @apply min-w-0;
+}
+
+.cash-advance-applicant-name {
+    @apply text-[15px] font-semibold leading-[1.3];
+}
+
+.cash-advance-label {
+    @apply text-[11px] font-medium tracking-[0.5px];
+}
+
+.cash-advance-amount {
+    @apply text-[1.4rem] font-semibold leading-[1.2];
+}
+
+.cash-advance-value {
+    @apply text-[13px] font-medium;
+}
+
+.cash-advance-reason {
+    @apply border-t border-[#eaedf2] pt-[8px];
+}
+
+.cash-advance-reason-text {
+    @apply leading-[1.45] break-words;
+}
+
+/* Cash advance statement status filters */
+.cash-advance-status-tabs {
+    @apply flex flex-wrap items-center gap-[8px] mb-[16px];
+}
+
+.cash-advance-status-tab {
+    @apply inline-flex items-center gap-[8px] border rounded-full bg-white px-[14px] py-[8px] text-[13px] font-semibold leading-none cursor-pointer transition-all duration-150;
+}
+
+.cash-advance-status-tab:focus-visible {
+    @apply outline-none ring-2 ring-[#bfdbfe] ring-offset-1;
+}
+
+.cash-advance-status-tab:hover {
+    @apply -translate-y-[1px] shadow-[0_3px_8px_rgba(15,23,42,0.1)];
+}
+
+.cash-advance-status-tab:disabled {
+    @apply cursor-not-allowed opacity-60;
+}
+
+.cash-advance-status-tab-unpaid {
+    @apply border-[#bfdbfe] text-[#0b52aa];
+}
+
+.cash-advance-status-tab-paid {
+    @apply border-[#bbf7d0] text-[#15803d];
+}
+
+.cash-advance-status-tab-unpaid.is-active {
+    @apply border-[#0b52aa] bg-[#0b52aa] text-white shadow-[0_3px_8px_rgba(11,82,170,0.22)];
+}
+
+.cash-advance-status-tab-paid.is-active {
+    @apply border-[#16a34a] bg-[#16a34a] text-white shadow-[0_3px_8px_rgba(22,163,74,0.22)];
+}
+
+.cash-advance-status-icon {
+    @apply inline-flex items-center justify-center text-[12px];
+}
+
+.cash-advance-status-count {
+    @apply inline-flex items-center justify-center min-w-[24px] h-[24px] rounded-full bg-[#f1f5f9] px-[7px] text-[11px] font-bold leading-none text-[#64748b];
+}
+
+.cash-advance-status-tab-unpaid:not(.is-active) .cash-advance-status-count {
+    @apply bg-[#eff6ff] text-[#0b52aa];
+}
+
+.cash-advance-status-tab-paid:not(.is-active) .cash-advance-status-count {
+    @apply bg-[#f0fdf4] text-[#15803d];
+}
+
+.cash-advance-status-tab.is-active .cash-advance-status-count {
+    @apply bg-white;
+}
+
+.cash-advance-status-tab-unpaid.is-active .cash-advance-status-count {
+    @apply text-[#0b52aa];
+}
+
+.cash-advance-status-tab-paid.is-active .cash-advance-status-count {
+    @apply text-[#16a34a];
+}
+
+@media (max-width: 575.98px) {
+    .cash-advance-status-tabs {
+        @apply gap-[6px];
+    }
+
+    .cash-advance-status-tab {
+        @apply grow justify-center px-[11px] py-[8px];
+    }
+}
+
+/* Cash advance detail modal */
+#cashAdvanceDetailModal .modal-dialog {
+    max-width: 500px;
+}
+@media (min-width: 768px) {
+    #cashAdvanceDetailModal .modal-dialog {
+        max-width: 630px;
+    }
+}
+
+.cash-advance-detail-modal {
+    @apply overflow-hidden border border-[#e2e8f0] rounded-[14px] bg-white;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+}
+
+.cash-advance-detail-header {
+    @apply flex items-center justify-between border-b border-[#f1f5f9] bg-white px-[18px] py-[14px];
+}
+
+.cash-advance-detail-title {
+    @apply mb-0 text-[15px] font-bold text-[#0f172a] flex items-center gap-[8px];
+}
+
+.cash-advance-detail-reference {
+    @apply inline-block px-[8px] py-[2px] text-[11px] font-semibold text-[#0b52aa] bg-[#eff6ff] rounded-[6px] border border-[#dbeafe];
+}
+
+.cash-advance-detail-body {
+    @apply bg-white px-[18px] py-[16px];
+}
+
+/* 1 Elevated Single Card (Flutter Mobile Style) */
+.cash-advance-card {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+/* Top Section: Employee & Badges */
+.cash-advance-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.cash-advance-card-employee {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.cash-advance-card-avatar {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    border-radius: 9999px;
+    background-color: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.cash-advance-card-employee-details {
+    min-width: 0;
+}
+
+.cash-advance-card-employee-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cash-advance-card-employee-dept {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cash-advance-card-dot {
+    margin: 0 4px;
+    color: #cbd5e1;
+}
+
+.cash-advance-card-badges {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.cash-advance-card-badges .badge {
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 9999px;
+    letter-spacing: 0.02em;
+}
+
+/* Metadata Row: Disbursement Date & Submitter */
+.cash-advance-card-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 10px;
+    padding-bottom: 12px;
+    border-top: 1px dashed #e2e8f0;
+    font-size: 11px;
+}
+
+.cash-advance-card-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #475569;
+}
+
+.cash-advance-card-meta-icon {
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+.cash-advance-card-meta-label {
+    color: #64748b;
+    font-weight: 500;
+}
+
+.cash-advance-card-meta-value {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+/* 3-Column Financial Metrics (Centered) */
+.cash-advance-card-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 12px 0;
+    background-color: #ffffff;
+}
+
+.cash-advance-card-metric-col {
+    padding: 0 8px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.cash-advance-card-metric-col + .cash-advance-card-metric-col {
+    border-left: 1px solid #e2e8f0;
+}
+
+.cash-advance-card-metric-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    margin-bottom: 4px;
+    text-align: center;
+}
+
+.cash-advance-card-metric-amount {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+    text-align: center;
+}
+
+.cash-advance-card-metric-remaining .cash-advance-card-metric-amount {
+    color: #0b52aa;
+}
+
+/* Mini Progress Bar */
+.cash-advance-card-progress-wrap {
+    padding-top: 10px;
+    padding-bottom: 2px;
+}
+
+.cash-advance-card-progress-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    margin-bottom: 4px;
+}
+
+.cash-advance-card-progress-title {
+    color: #64748b;
+    font-weight: 500;
+}
+
+.cash-advance-card-progress-percentage {
+    color: #0f172a;
+    font-weight: 700;
+}
+
+.cash-advance-card-progress-track {
+    width: 100%;
+    height: 6px;
+    background-color: #f1f5f9;
+    border-radius: 9999px;
+    overflow: hidden;
+}
+
+.cash-advance-card-progress-fill {
+    height: 100%;
+    background-color: #0b52aa;
+    border-radius: 9999px;
+    transition: width 0.4s ease;
+}
+
+/* Reason / Keperluan Box */
+.cash-advance-card-reason {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #e2e8f0;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.cash-advance-card-reason-icon {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.cash-advance-card-reason-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.cash-advance-card-reason-title {
+    font-weight: 600;
+    color: #475569;
+    margin-right: 4px;
+}
+
+.cash-advance-card-reason-text {
+    color: #334155;
+    word-break: break-word;
+}
+
+.cash-advance-card-reason-rejected {
+    background-color: #fef2f2;
+    border: 1px solid #fee2e2;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-top: 8px;
+}
+
+/* Tabs: Strict 1 Row (2 Tabs) - Shizuefi .nav-pills style with transparent inactive bg */
+.cash-advance-detail-tabs {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    margin-bottom: 22px !important;
+    border-bottom: none !important;
+    padding-bottom: 0 !important;
+    width: 100%;
+}
+
+.cash-advance-detail-tabs .nav-item {
+    flex: 1 1 0px !important;
+    min-width: 0 !important;
+}
+
+.cash-advance-detail-tabs .nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    text-align: center;
+    font-weight: 600;
+    font-size: 13px;
+    color: #0b52aa;
+    border-radius: 4px;
+    padding: 9px 12px;
+    transition: all 0.2s ease-in-out;
+    background-color: transparent !important;
+    border: 1px solid transparent !important;
+    white-space: nowrap;
+}
+
+.cash-advance-detail-tabs .nav-link:hover {
+    color: #083c7d;
+    background-color: #eff6ff !important;
+}
+
+.cash-advance-detail-tabs .nav-link.active {
+    background-color: #0b52aa !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(11, 82, 170, 0.25) !important;
+    border-color: #0b52aa !important;
+}
+
+/* Tab Pane Header: Section Title & Lead */
+.cash-advance-pane-header {
+    margin-bottom: 12px;
+}
+
+.cash-advance-pane-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cash-advance-pane-title::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 13px;
+    background-color: #0b52aa;
+    border-radius: 9999px;
+}
+
+.cash-advance-pane-lead {
+    font-size: 11.5px;
+    color: #64748b;
+    margin-bottom: 0;
+    padding-left: 11px;
+    line-height: 1.4;
+}
+
+/* Installment Table: Swipeable with HIDDEN scrollbar */
+.cash-advance-detail-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background-color: #ffffff;
+    margin-bottom: 8px;
+}
+
+.cash-advance-detail-table-wrap::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
+.cash-advance-detail-table {
+    width: 100%;
+    margin-bottom: 0;
+    table-layout: auto;
+}
+
+.cash-advance-detail-table thead th {
+    background-color: #f8fafc;
+    color: #475569;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 10px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    border-top: none;
+    white-space: nowrap;
+}
+
+.cash-advance-detail-table tbody td {
+    padding: 10px 10px;
+    font-size: 12px;
+    color: #1e293b;
+    vertical-align: middle;
+    border-top: 1px solid #f1f5f9;
+}
+
+.cash-advance-detail-table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+.cash-advance-detail-table tbody td.cash-advance-detail-amount {
+    font-weight: 600;
+}
+
+/* Payment Cards List (Flutter Mobile Style) */
+.cash-advance-payment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.cash-advance-payment-card {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cash-advance-payment-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
+}
+
+.cash-advance-payment-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.cash-advance-payment-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.cash-advance-payment-icon {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 8px;
+    background-color: #f0fdf4;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.cash-advance-payment-number {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+}
+
+.cash-advance-payment-meta {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+.cash-advance-payment-amount {
+    font-size: 14px;
+    font-weight: 700;
+    color: #16a34a;
+    line-height: 1.2;
+}
+
+.cash-advance-payment-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #f1f5f9;
+    font-size: 11px;
+}
+
+.cash-advance-payment-notes {
+    color: #475569;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cash-advance-payment-proof-btn {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+.cash-advance-payment-empty {
+    text-align: center;
+    padding: 36px 16px;
+    background-color: #ffffff;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    color: #64748b;
+}
+
+.cash-advance-payment-empty-icon {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 12px;
+    border-radius: 9999px;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #94a3b8;
+}
+
+.cash-advance-detail-footer {
+    @apply justify-end border-t border-[#eaedf2] bg-white px-[20px] py-[14px];
+}
+
+@media (max-width: 767.98px) {
+    .cash-advance-detail-body {
+        @apply px-[16px] py-[16px];
+    }
+
+    /* Opsi A: Hilangkan kotak/border/shadow card di HP agar lega tanpa dobel padding */
+    .cash-advance-card {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        background-color: transparent !important;
+        margin-bottom: 22px !important;
+    }
+
+    /* Mobile mode: Stacked and centered avatar, name, badges, metadata */
+    .cash-advance-card-top {
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+        gap: 8px !important;
+        margin-bottom: 12px !important;
+    }
+
+    .cash-advance-card-employee {
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+        gap: 8px !important;
+    }
+
+    .cash-advance-card-avatar {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        font-size: 16px !important;
+        margin: 0 auto !important;
+    }
+
+    .cash-advance-card-employee-details {
+        text-align: center !important;
+    }
+
+    .cash-advance-card-employee-name {
+        font-size: 16px !important;
+        text-align: center !important;
+    }
+
+    .cash-advance-card-employee-dept {
+        font-size: 12px !important;
+        text-align: center !important;
+        margin-top: 3px !important;
+    }
+
+    .cash-advance-card-badges {
+        justify-content: center !important;
+        margin-top: 4px !important;
+        gap: 6px !important;
+    }
+
+    .cash-advance-card-meta-row {
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+        gap: 6px !important;
+        padding-top: 10px !important;
+        padding-bottom: 12px !important;
+    }
+
+    .cash-advance-card-meta-item {
+        justify-content: center !important;
+        text-align: center !important;
+    }
+
+    .cash-advance-detail-tabs {
+        margin-bottom: 18px !important;
+        gap: 6px !important;
+    }
+
+    .cash-advance-detail-tabs .nav-link {
+        @apply px-[6px] py-[8px] text-[11px];
+    }
+
+    /* Opsi A: Tabel cicilan swipeable tanpa scrollbar terlihat di HP */
+    .cash-advance-detail-table {
+        min-width: 500px;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .cash-advance-detail-header,
+    .cash-advance-detail-footer {
+        @apply px-[16px];
+    }
+
+    .cash-advance-detail-title {
+        @apply text-[14px];
+    }
+}
+
+/* ==========================================================================
+   Cash Advance Monthly Statement Detail Modal
+   ========================================================================== */
+#statementDetailModal .modal-dialog {
+    max-width: 500px;
+    margin: 1.75rem auto;
+}
+
+@media (min-width: 768px) {
+    #statementDetailModal .modal-dialog {
+        max-width: 560px;
+    }
+}
+
+.statement-modal-content {
+    @apply overflow-hidden border border-[#e2e8f0] rounded-[14px] bg-white;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+}
+
+.statement-modal-header {
+    @apply flex items-center justify-between border-b border-[#f1f5f9] bg-white px-[18px] py-[13px];
+}
+
+.statement-modal-title {
+    @apply mb-0 text-[15px] font-bold text-[#0f172a] flex items-center gap-[8px];
+}
+
+.statement-modal-body {
+    @apply bg-white px-[18px] py-[15px];
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.statement-modal-body::-webkit-scrollbar {
+    display: none;
+}
+
+/* Status Header Banner */
+.statement-status-banner {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 15px 16px 14px;
+    margin-bottom: 12px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.statement-status-icon-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+.statement-status-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    border: 1px solid transparent;
+}
+
+.statement-status-icon-paid {
+    color: #16a34a;
+    background-color: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.statement-status-icon-unpaid {
+    color: #d97706;
+    background-color: #fffbeb;
+    border-color: #fde68a;
+}
+
+.statement-status-title {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.3;
+    margin: 0 0 4px 0;
+}
+
+.statement-status-period {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #475569;
+    line-height: 1.3;
+    margin: 0 0 4px 0;
+}
+
+.statement-status-due {
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.3;
+    margin: 0;
+    font-weight: 400;
+}
+
+.statement-status-due-val {
+    color: #1e293b;
+    font-weight: 600;
+}
+
+/* 3-Column Metrics Card */
+.statement-metrics-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background-color: #ffffff;
+    padding: 11px 6px;
+    margin-bottom: 14px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.statement-metric-col {
+    padding: 0 6px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.statement-metric-col + .statement-metric-col {
+    border-left: 1px solid #e2e8f0;
+}
+
+.statement-metric-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    margin-bottom: 3px;
+    white-space: nowrap;
+}
+
+.statement-metric-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.statement-metric-value-paid {
+    color: #0f172a;
+}
+
+.statement-metric-value-remaining {
+    color: #dc2626;
+}
+
+/* Section Header */
+.statement-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.statement-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.statement-section-period {
+    font-size: 11.5px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+/* Items List - Natural flow without scrollbar */
+.statement-items-list {
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: visible;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.statement-items-list::-webkit-scrollbar {
+    display: none;
+}
+
+/* Item Card */
+.statement-item-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background-color: #ffffff;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    transition: all 0.15s ease-in-out;
+}
+
+.statement-item-card-paid {
+    border-color: #86efac;
+}
+
+.statement-item-card-paid:hover {
+    border-color: #22c55e;
+    box-shadow: 0 2px 6px rgba(34, 197, 94, 0.12);
+}
+
+.statement-item-card-unpaid {
+    border-color: #fcd34d;
+}
+
+.statement-item-card-unpaid:hover {
+    border-color: #f59e0b;
+    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.12);
+}
+
+.statement-item-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.statement-item-icon {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    border-radius: 8px;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    transition: all 0.15s ease-in-out;
+}
+
+.statement-item-icon-paid {
+    background-color: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #16a34a;
+}
+
+.statement-item-icon-unpaid {
+    background-color: #fffbeb;
+    border-color: #fde68a;
+    color: #d97706;
+}
+
+.statement-item-info {
+    min-width: 0;
+}
+
+.statement-item-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.statement-item-meta {
+    font-size: 11.5px;
+    color: #64748b;
+    margin-top: 2px;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.statement-item-meta-paid {
+    color: #16a34a;
+    font-weight: 500;
+}
+
+.statement-item-ref {
+    font-weight: 600;
+    color: #334155;
+}
+
+.statement-item-dot {
+    margin: 0 4px;
+    color: #cbd5e1;
+}
+
+.statement-item-side {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.statement-item-amount {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+    margin-bottom: 0;
+}
+
+.statement-items-empty {
+    padding: 20px 16px;
+    text-align: center;
+    color: #64748b;
+    font-size: 12px;
+    border: 1px dashed #e2e8f0;
+    border-radius: 10px;
+    background-color: #f8fafc;
+}
+
+/* Modal Footer */
+.statement-modal-footer {
+    @apply flex items-center justify-between border-t border-[#f1f5f9] bg-white px-[18px] py-[12px];
+    gap: 10px;
+}
+
+.statement-btn-close {
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 0 18px;
+    height: 38px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.statement-btn-action {
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 0 16px;
+    height: 38px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+    line-height: normal;
+}
+
+@media (max-width: 575.98px) {
+    .statement-modal-header,
+    .statement-modal-footer {
+        @apply px-[14px];
+    }
+
+    .statement-modal-body {
+        @apply px-[14px] py-[12px];
+    }
+
+    .statement-modal-title {
+        @apply text-[14px];
+    }
+
+    .statement-metrics-card {
+        padding: 10px 4px;
+    }
+
+    .statement-metric-label {
+        font-size: 9.5px;
+    }
+
+    .statement-metric-value {
+        font-size: 12px;
+    }
+}
+
+/* ==========================================================================
+   Cash Advance Early Payment Modal
+   ========================================================================== */
+#earlyPaymentModal .modal-dialog {
+    max-width: 500px;
+    margin: 1.75rem auto;
+}
+
+@media (min-width: 768px) {
+    #earlyPaymentModal .modal-dialog {
+        max-width: 560px;
+    }
+}
+
+.early-payment-modal-content {
+    @apply overflow-hidden border border-[#e2e8f0] rounded-[14px] bg-white;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+}
+
+.early-payment-modal-header {
+    @apply flex items-center justify-between border-b border-[#f1f5f9] bg-white px-[18px] py-[13px];
+}
+
+.early-payment-modal-title {
+    @apply mb-0 text-[15px] font-bold text-[#0f172a] flex items-center gap-[8px];
+}
+
+.early-payment-modal-body {
+    @apply bg-white px-[18px] py-[15px];
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.early-payment-modal-body::-webkit-scrollbar {
+    display: none;
+}
+
+/* Info Banner Card (Employee & Total Balance) */
+.early-pay-info-card {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 11px 14px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.early-pay-info-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    margin-bottom: 2px;
+}
+
+.early-pay-info-name {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+}
+
+.early-pay-info-amount {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0b52aa;
+    line-height: 1.25;
+}
+
+/* Section Header */
+.early-pay-section-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 2px;
+}
+
+.early-pay-section-sub {
+    font-size: 11.5px;
+    color: #64748b;
+    font-weight: 400;
+    margin-bottom: 8px;
+}
+
+/* Month List */
+.early-pay-month-list {
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: visible;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.early-pay-month-list::-webkit-scrollbar {
+    display: none;
+}
+
+/* Month Item Card */
+.early-pay-month-card {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+}
+
+.early-pay-month-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.03);
+}
+
+.early-pay-month-card-selected {
+    border-color: #0b52aa;
+    background-color: #f8fafc;
+}
+
+.early-pay-month-card-full {
+    border-color: #16a34a;
+}
+
+.early-pay-month-card-partial {
+    border-color: #eab308;
+}
+
+.early-pay-month-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.early-pay-month-checkbox {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+    accent-color: #0b52aa;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.early-pay-month-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.early-pay-month-due {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+    line-height: 1.25;
+}
+
+.early-pay-month-partial-note {
+    font-size: 11px;
+    font-weight: 600;
+    color: #dc2626;
+    margin-top: 2px;
+}
+
+.early-pay-month-amount {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.early-pay-month-amount-unselected {
+    color: #64748b;
+}
+
+/* Button Select All */
+.early-pay-btn-select-all {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    width: 100%;
+}
+
+/* Summary Card (Total Selected) */
+.early-pay-summary-card {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 9px 14px;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.early-pay-summary-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    margin-bottom: 2px;
+}
+
+.early-pay-summary-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+}
+
+.early-pay-summary-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 9999px;
+    background-color: #eff6ff;
+    color: #0b52aa;
+    border: 1px solid #dbeafe;
+}
+
+/* Form Controls */
+.early-pay-form-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.early-pay-form-control {
+    font-size: 13px !important;
+    height: 40px !important;
+    border-radius: 8px;
+    border-color: #cbd5e1 !important;
+}
+
+.early-pay-form-control:focus {
+    border-color: #0b52aa !important;
+    box-shadow: 0 0 0 2px rgba(11, 82, 170, 0.15) !important;
+}
+
+/* Input Group: Rp addon & input field seamlessly flush & aligned */
+.input-group > .early-pay-input-group-prepend {
+    margin-right: -1px;
+    display: flex;
+}
+
+.early-pay-input-addon {
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    color: #64748b !important;
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    height: 40px !important;
+    padding: 0 14px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-top-left-radius: 8px !important;
+    border-bottom-left-radius: 8px !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+.input-group > .early-pay-form-control:not(:first-child) {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-top-right-radius: 8px !important;
+    border-bottom-right-radius: 8px !important;
+    height: 40px !important;
+}
+
+.early-pay-file-label {
+    font-size: 12.5px;
+    height: 40px !important;
+    line-height: 26px !important;
+    border-radius: 8px !important;
+    border-color: #cbd5e1 !important;
+}
+
+.early-pay-file-label::after {
+    font-size: 12px;
+    font-weight: 600;
+    height: 38px !important;
+    line-height: 26px !important;
+    padding: 6px 14px;
+    background-color: #f1f5f9;
+    color: #475569;
+    border-top-right-radius: 7px !important;
+    border-bottom-right-radius: 7px !important;
+}
+
+/* Modal Footer */
+.early-payment-modal-footer {
+    @apply flex items-center justify-between border-t border-[#f1f5f9] bg-white px-[18px] py-[12px];
+}
+
+.early-pay-btn-cancel {
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 6px 16px;
+    border-radius: 6px;
+}
+
+.early-pay-btn-submit {
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 18px;
+    border-radius: 6px;
+}
+
+@media (max-width: 575.98px) {
+    .early-payment-modal-header,
+    .early-payment-modal-footer {
+        @apply px-[14px];
+    }
+
+    .early-payment-modal-body {
+        @apply px-[14px] py-[12px];
+    }
+
+    .early-payment-modal-title {
+        @apply text-[14px];
+    }
+
+    .early-pay-info-name {
+        font-size: 12.5px;
+    }
+
+    .early-pay-info-amount {
+        font-size: 13px;
+    }
+}
+
+/* Card Header Back Navigation (.section-header-back inside .card-header) */
+.card-header .section-header-back {
+    @apply mr-[15px] flex items-center;
+}
+
+.card-header .section-header-back .btn,
+.card-header .section-header-back .btn:not(.note-btn) {
+    @apply !rounded-[4px] !px-[0.8rem] !py-[0.3rem] text-[12px] leading-[24px] text-[#212529] bg-transparent border border-transparent transition-colors duration-150;
+}
+
+.card-header .section-header-back .btn:hover,
+.card-header .section-header-back .btn:focus {
+    @apply !bg-[#0b52aa] !text-white;
+}
+
+.card-header .section-header-back .btn:disabled {
+    @apply opacity-65 cursor-not-allowed;
+}
+
+/* Cash Advance Tabs Wrapper (Mobile: 50%-50% Segmented, Desktop: Auto Width) */
+.cash-advance-tabs-wrapper {
+    width: 100%;
+}
+
+@media (min-width: 768px) {
+    .cash-advance-tabs-wrapper {
+        padding: 8px 25px 14px 25px !important;
+        background-color: transparent !important;
+        border-top: 1px solid #f1f5f9 !important;
+    }
+
+    .cash-advance-tabs-wrapper .nav-pills {
+        display: inline-flex !important;
+        width: auto !important;
+        gap: 8px;
+    }
+
+    .cash-advance-tabs-wrapper .nav-item {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+
+    .cash-advance-tabs-wrapper .nav-link {
+        width: auto !important;
+        padding: 7px 18px !important;
+        font-size: 13px !important;
+        white-space: nowrap !important;
+        border-radius: 8px !important;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .cash-advance-tabs-wrapper {
+        padding: 8px 16px 12px 16px !important;
+        background-color: transparent !important;
+        border-top: 1px solid #f1f5f9 !important;
+    }
+
+    .cash-advance-tabs-wrapper .nav-pills {
+        display: flex !important;
+        width: 100% !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 6px;
+    }
+
+    .cash-advance-tabs-wrapper .nav-item {
+        flex: 1 1 50% !important;
+        min-width: 0 !important;
+    }
+
+    .cash-advance-tabs-wrapper .nav-link {
+        width: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+        padding: 7px 8px !important;
+        font-size: 12px !important;
+        white-space: nowrap !important;
+        border-radius: 8px !important;
+    }
+}
+
+/* Mobile Responsive 3-Card Stack for Cash Advance (Row 1: Header+Controls, Row 2: Table, Row 3: Footer) */
+@media (max-width: 767.98px) {
+    .card.cash-advance-main-card {
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        margin-bottom: 20px !important;
+    }
+
+    .cash-advance-top-card {
+        background-color: #ffffff !important;
+        border: 1px solid #e9edf2 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04) !important;
+        margin-bottom: 14px !important;
+        overflow: hidden;
+    }
+
+    .cash-advance-top-card .card-header {
+        background-color: transparent !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+        padding: 14px 16px 10px 16px !important;
+        min-height: auto !important;
+    }
+
+    .cash-advance-top-card .dt-control-wrapper {
+        padding: 12px 16px 10px 16px !important;
+        background-color: transparent !important;
+        gap: 10px;
+        border-top: none !important;
+    }
+
+    .cash-advance-main-card .card-body {
+        background-color: transparent !important;
+        padding: 0 !important;
+    }
+
+    .cash-advance-main-card .table-responsive {
+        background-color: #ffffff !important;
+        border-radius: 12px !important;
+        border: 1px solid #e9edf2 !important;
+        box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04) !important;
+        margin-bottom: 14px !important;
+        overflow-x: auto;
+    }
+
+    .cash-advance-main-card .dt-footer-wrapper {
+        background-color: #ffffff !important;
+        border-radius: 12px !important;
+        border: 1px solid #e9edf2 !important;
+        box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04) !important;
+        padding: 14px 16px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 10px;
+        border-top: none !important;
+    }
+
+    .cash-advance-main-card .dt-footer-wrapper .dt-info {
+        text-align: center;
+        color: #64748b;
+        font-size: 12px;
+        margin-bottom: 0;
+    }
+
+    .cash-advance-main-card .dt-footer-wrapper .dt-pagination {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+    }
+
+    .statement-mobile-card {
+        background-color: #ffffff !important;
+        border-top: 1px solid #e2e8f0 !important;
+        border-right: 1px solid #e2e8f0 !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        border-left-width: 5px !important;
+        border-left-style: solid !important;
+        border-left-color: #e2e8f0 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
+        margin-bottom: 10px !important;
+        overflow: hidden;
+    }
+
+    .statement-mobile-card .card-body {
+        padding: 11px 13px !important;
+    }
+
+    .statement-mobile-card.statement-card-paid,
+    .statement-card-paid {
+        border-left-color: #10b981 !important;
+        border-left-width: 5px !important;
+        border-left-style: solid !important;
+    }
+
+    .statement-mobile-card.statement-card-unpaid,
+    .statement-card-unpaid {
+        border-left-color: #f59e0b !important;
+        border-left-width: 5px !important;
+        border-left-style: solid !important;
+    }
+}
+
+/* Cash Advance Summary Stat Cards (Iconless & Compact on Mobile 2x2, Rich with Stat-Icon on Desktop 1x4) */
+.cash-advance-stat-grid {
+    @apply grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-4 sm:mb-6;
+}
+
+.cash-advance-stat-grid .card,
+.cash-advance-stat-card {
+    @apply h-full transition-all duration-200 border border-[#e2e8f0] shadow-sm hover:shadow-md bg-white rounded-xl;
+    margin-bottom: 0 !important;
+}
+
+.cash-advance-stat-card .card-body,
+.cash-advance-stat-body {
+    padding: 10px 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+}
+
+@media (min-width: 992px) {
+    .cash-advance-stat-card .card-body,
+    .cash-advance-stat-body {
+        padding: 14px 16px !important;
+        flex-direction: row !important;
+        align-items: center !important;
+    }
+}
+
+.cash-advance-stat-icon {
+    @apply hidden lg:flex items-center justify-center shrink-0 w-[46px] h-[46px] min-w-[46px] rounded-[12px] text-white;
+}
+
+.cash-advance-stat-icon i {
+    @apply text-[19px];
+}
+
+.cash-advance-stat-icon-blue {
+    @apply bg-gradient-to-br from-[#3b82f6] to-[#1d4ed8] shadow-[0_4px_10px_rgba(59,130,246,0.28)];
+}
+
+.cash-advance-stat-icon-green {
+    @apply bg-gradient-to-br from-[#22c55e] to-[#16a34a] shadow-[0_4px_10px_rgba(34,197,94,0.28)];
+}
+
+.cash-advance-stat-icon-amber {
+    @apply bg-gradient-to-br from-[#f59e0b] to-[#d97706] shadow-[0_4px_10px_rgba(245,158,11,0.28)];
+}
+
+.cash-advance-stat-icon-purple {
+    @apply bg-gradient-to-br from-[#8b5cf6] to-[#6d28d9] shadow-[0_4px_10px_rgba(139,92,246,0.28)];
+}
+
+.cash-advance-stat-content {
+    @apply grow min-w-0 lg:ml-3;
+}
+
+.cash-advance-stat-title {
+    @apply text-[#64748b] text-[11.5px] sm:text-[12.5px] font-semibold mb-0.5 sm:mb-1 truncate;
+}
+
+.cash-advance-stat-value-row {
+    @apply flex items-center justify-between;
+}
+
+.cash-advance-stat-value {
+    @apply font-bold truncate text-[16px] sm:text-[18px] lg:text-[1.2rem] leading-tight;
+}
+
+.cash-advance-stat-badge {
+    @apply hidden lg:inline-flex items-center justify-center rounded-full shrink-0 ml-2 w-[22px] h-[22px];
+}
+
+.cash-advance-stat-badge-blue {
+    @apply bg-[#eff6ff] text-[#3b82f6];
+}
+
+.cash-advance-stat-badge-green {
+    @apply bg-[#f0fdf4] text-[#22c55e];
+}
+
+.cash-advance-stat-badge-amber {
+    @apply bg-[#fffbeb] text-[#f59e0b];
+}
+
+.cash-advance-stat-subtext {
+    @apply text-[#94a3b8] text-[10.5px] sm:text-[11.5px] md:text-[12px] mt-0.5 truncate;
+}
+
+
+
 
 

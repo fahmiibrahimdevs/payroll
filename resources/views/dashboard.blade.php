@@ -25,7 +25,7 @@
                         <h4>Total Pengguna</h4>
                     </div>
                     <div class="card-body">
-                        {{ \App\Models\User::count() }}
+                        {{ number_format($statistics['total_users']) }}
                     </div>
                 </div>
             </div>
@@ -40,7 +40,7 @@
                         <h4>Pengguna Aktif</h4>
                     </div>
                     <div class="card-body">
-                        {{ \App\Models\User::where('is_active', true)->count() }}
+                        {{ number_format($statistics['active_users']) }}
                     </div>
                 </div>
             </div>
@@ -55,7 +55,7 @@
                         <h4>Menunggu Aktivasi</h4>
                     </div>
                     <div class="card-body">
-                        {{ \App\Models\User::where('is_active', false)->count() }}
+                        {{ number_format($statistics['inactive_users']) }}
                     </div>
                 </div>
             </div>
@@ -70,7 +70,7 @@
                         <h4>Total Roles</h4>
                     </div>
                     <div class="card-body">
-                        {{ \App\Models\Role::count() }}
+                        {{ number_format($statistics['total_roles']) }}
                     </div>
                 </div>
             </div>
@@ -85,7 +85,7 @@
                     <h4>Informasi Akun</h4>
                 </div>
                 <div class="card-body">
-                    <div class="hero bg-primary text-white" style="border-radius: 8px; padding: 25px;">
+                    <div class="hero bg-primary text-white rounded p-4">
                         <div class="hero-inner">
                             <h2>Selamat Datang, {{ auth()->user()->name }}! 👋</h2>
                             <p class="lead">
@@ -117,15 +117,21 @@
                                 <div>
                                     <i class="fas fa-users-cog text-primary mr-2"></i> Kelola Pengguna
                                 </div>
-                                <span class="badge badge-primary badge-pill">{{ \App\Models\User::where('is_active', false)->count() }} baru</span>
+                                <span class="badge badge-primary badge-pill">{{ $statistics['inactive_users'] }} baru</span>
                             </a>
                         @endif
-                        <a href="/shizuefi/index" class="list-group-item list-group-item-action">
-                            <i class="fas fa-chart-line text-success mr-2"></i> Ecommerce Dashboard
-                        </a>
-                        <a href="/shizuefi/index-0" class="list-group-item list-group-item-action">
-                            <i class="fas fa-fire text-danger mr-2"></i> General Dashboard
-                        </a>
+                        @if (auth()->user()->hasRole('admin'))
+                            <a href="{{ route('employees.index') }}" class="list-group-item list-group-item-action">
+                                <i class="fas fa-users text-success mr-2"></i> Data Karyawan
+                            </a>
+                            <a href="{{ route('cash-advances.index') }}" class="list-group-item list-group-item-action">
+                                <i class="fas fa-hand-holding-usd text-warning mr-2"></i> Kasbon
+                            </a>
+                        @else
+                            <a href="{{ route('cash-advances.index') }}" class="list-group-item list-group-item-action">
+                                <i class="fas fa-check-circle text-success mr-2"></i> Approval Kasbon
+                            </a>
+                        @endif
                         <a href="{{ route('profile') }}" class="list-group-item list-group-item-action">
                             <i class="far fa-user text-info mr-2"></i> Edit Profil
                         </a>

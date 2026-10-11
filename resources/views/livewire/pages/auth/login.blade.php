@@ -84,10 +84,7 @@ new #[Layout('layouts.guest')] class extends Component
                 </div>
 
                 <div class="form-group">
-                    <button type="submit" class="btn btn-primary btn-lg btn-block" tabindex="4" wire:loading.attr="disabled">
-                        <span wire:loading.remove>Login</span>
-                        <span wire:loading><i class="fas fa-spinner fa-spin"></i> Memproses...</span>
-                    </button>
+                    <button type="submit" class="btn btn-primary btn-lg btn-block" tabindex="4" wire:loading.attr="disabled"><span wire:loading.remove>Login</span><span wire:loading><i class="fas fa-spinner fa-spin"></i> Memproses...</span></button>
                 </div>
             </form>
         </div>

@@ -1,0 +1,1641 @@
+<?php
+
+namespace App\Services;
+
+use App\Enums\CashAdvanceStatus;
+use App\Enums\InstallmentStatus;
+use App\Enums\PaymentMethod;
+use App\Enums\RepaymentScheme;
+use App\Models\CashAdvance;
+use App\Models\CashAdvanceInstallment;
+use App\Models\CashAdvancePayment;
+use App\Models\Employee;
+use App\Models\PayrollItemLine;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+use Throwable;
+
+class CashAdvanceService
+{
+    public function __construct(
+        protected ActivityLogService $logger
+    ) {}
+
+    /**
+     * Retrieve paginated cash advances with search and filters.
+     */
+    public function getPaginatedCashAdvances(
+        ?string $search = null,
+        ?string $status = null,
+        ?int $employeeId = null,
+        ?string $repaymentScheme = null,
+        ?string $startDate = null,
+        ?string $endDate = null,
+        int $perPage = 15,
+        string $sortField = 'created_at',
+        string $sortDir = 'desc'
+    ): LengthAwarePaginator {
+        $perPage = max(1, min($perPage, 100));
+        $allowedSorts = [
+            'reference_number',
+            'amount',
+            'remaining_amount',
+            'disbursement_date',
+            'status',
+            'repayment_scheme',
+            'created_at',
+        ];
+        $sortColumn = in_array($sortField, $allowedSorts, true) ? $sortField : 'created_at';
+        $direction = strtolower($sortDir) === 'asc' ? 'asc' : 'desc';
+
+        return CashAdvance::query()
+            ->with([
+                'employee.department',
+                'employee.position',
+                'submitter',
+                'approver',
+                'installments.payments.recorder',
+                'payments.recorder',
+            ])
+            ->when($search, fn ($q) => $q->search($search))
+            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($employeeId, fn ($q) => $q->where('employee_id', $employeeId))
+            ->when($repaymentScheme, fn ($q) => $q->where('repayment_scheme', $repaymentScheme))
+            ->when($startDate, fn ($q) => $q->whereDate('disbursement_date', '>=', $startDate))
+            ->when($endDate, fn ($q) => $q->whereDate('disbursement_date', '<=', $endDate))
+            ->orderBy($sortColumn, $direction)
+            ->orderBy('id', $direction)
+            ->paginate($perPage);
+    }
+
+    /**
+     * Get summary metrics for cash advances.
+     *
+    /**
+     * Retrieve summary statistics for dashboard / index header metrics.
+     *
+     * @return array{
+     *     total_active_count: int,
+     *     total_employees_with_active_advances: int,
+     *     total_employees_count: int,
+     *     total_remaining_balance: float,
+     *     formatted_total_remaining_balance: string,
+     *     total_pending_count: int,
+     *     total_disbursed_this_month: float,
+     *     formatted_total_disbursed_this_month: string,
+     *     total_approved_amount: float,
+     *     formatted_total_approved_amount: string,
+     *     total_approved_count: int,
+     *     total_paid_amount: float,
+     *     formatted_total_paid_amount: string,
+     *     total_paid_transactions_count: int,
+     * }
+     */
+    public function getSummaryStats(): array
+    {
+        $now = Carbon::now();
+        $startOfMonth = $now->copy()->startOfMonth()->toDateString();
+        $endOfMonth = $now->copy()->endOfMonth()->toDateString();
+
+        $activeQuery = CashAdvance::query()
+            ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
+            ->where('remaining_amount', '>', 0);
+
+        $totalRemaining = (float) (clone $activeQuery)->sum('remaining_amount');
+        $activeCount = (clone $activeQuery)->count();
+        $activeEmployeesCount = (clone $activeQuery)->distinct('employee_id')->count('employee_id');
+
+        $pendingCount = CashAdvance::query()
+            ->where('status', CashAdvanceStatus::PENDING->value)
+            ->count();
+
+        $disbursedThisMonth = (float) CashAdvance::query()
+            ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::PAID->value])
+            ->whereDate('disbursement_date', '>=', $startOfMonth)
+            ->whereDate('disbursement_date', '<=', $endOfMonth)
+            ->sum('amount');
+
+        $approvedQuery = CashAdvance::query()
+            ->whereIn('status', [
+                CashAdvanceStatus::ACTIVE->value,
+                CashAdvanceStatus::APPROVED->value,
+                CashAdvanceStatus::PAID->value,
+            ]);
+
+        $totalApprovedAmount = (float) (clone $approvedQuery)->sum('amount');
+        $totalApprovedCount = (clone $approvedQuery)->count();
+
+        $paymentsSum = (float) CashAdvancePayment::query()->sum('amount');
+        $diffPaidSum = (float) (CashAdvance::query()
+            ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::PAID->value])
+            ->selectRaw('SUM(amount - remaining_amount) as paid')
+            ->value('paid') ?? 0);
+        $totalPaidAmount = max($paymentsSum, $diffPaidSum);
+
+        $paymentsCount = CashAdvancePayment::query()->count();
+        $totalPaidTransactionsCount = $paymentsCount > 0 ? $paymentsCount : (int) CashAdvance::query()->where('status', CashAdvanceStatus::PAID->value)->count();
+
+        $totalEmployeesCount = Employee::query()->count();
+
+        return [
+            'total_active_count' => $activeCount,
+            'total_employees_with_active_advances' => $activeEmployeesCount,
+            'total_employees_count' => $totalEmployeesCount,
+            'total_remaining_balance' => $totalRemaining,
+            'formatted_total_remaining_balance' => 'Rp '.number_format($totalRemaining, 0, ',', '.'),
+            'total_pending_count' => $pendingCount,
+            'total_disbursed_this_month' => $disbursedThisMonth,
+            'formatted_total_disbursed_this_month' => 'Rp '.number_format($disbursedThisMonth, 0, ',', '.'),
+            'total_approved_amount' => $totalApprovedAmount,
+            'formatted_total_approved_amount' => 'Rp '.number_format($totalApprovedAmount, 0, ',', '.'),
+            'total_approved_count' => $totalApprovedCount,
+            'total_paid_amount' => $totalPaidAmount,
+            'formatted_total_paid_amount' => 'Rp '.number_format($totalPaidAmount, 0, ',', '.'),
+            'total_paid_transactions_count' => $totalPaidTransactionsCount,
+        ];
+    }
+
+    /**
+     * Generate unique reference number (e.g. KB-202610-0001).
+     */
+    public function generateReferenceNumber(?Carbon $date = null): string
+    {
+        $callback = fn (): string => $this->reserveSequenceNumber('cash_advance', $date ?? Carbon::now());
+
+        return DB::transactionLevel() > 0 ? $callback() : DB::transaction($callback);
+    }
+
+    /**
+     * Generate unique payment number (e.g. PAY-KB-202610-0001).
+     */
+    public function generatePaymentNumber(?Carbon $date = null): string
+    {
+        $callback = fn (): string => $this->reserveSequenceNumber('payment', $date ?? Carbon::now());
+
+        return DB::transactionLevel() > 0 ? $callback() : DB::transaction($callback);
+    }
+
+    /**
+     * Reserve the next number for a monthly transaction sequence.
+     */
+    private function reserveSequenceNumber(string $type, Carbon $date): string
+    {
+        $prefix = $type === 'cash_advance'
+            ? 'KB-'.$date->format('Ym').'-'
+            : 'PAY-KB-'.$date->format('Ym').'-';
+        $sequenceKey = rtrim($prefix, '-');
+        $sourceTable = $type === 'cash_advance' ? 'cash_advances' : 'cash_advance_payments';
+        $sourceColumn = $type === 'cash_advance' ? 'reference_number' : 'payment_number';
+        $latest = DB::table($sourceTable)
+            ->where($sourceColumn, 'like', $prefix.'%')
+            ->orderByDesc($sourceColumn)
+            ->value($sourceColumn);
+        $initialNumber = $latest && preg_match('/(\d{4,})$/', (string) $latest, $matches)
+            ? (int) $matches[1]
+            : 0;
+
+        DB::table('cash_advance_sequences')->insertOrIgnore([
+            'sequence_key' => $sequenceKey,
+            'last_number' => $initialNumber,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $sequence = DB::table('cash_advance_sequences')
+            ->where('sequence_key', $sequenceKey)
+            ->lockForUpdate()
+            ->first();
+
+        $lastNumber = max((int) $sequence->last_number, $initialNumber);
+        $nextNumber = $lastNumber + 1;
+
+        DB::table('cash_advance_sequences')
+            ->where('sequence_key', $sequenceKey)
+            ->update([
+                'last_number' => $nextNumber,
+                'updated_at' => now(),
+            ]);
+
+        return $prefix.str_pad((string) $nextNumber, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Create a new cash advance submission.
+     *
+     * @param  array<string, mixed>  $data
+     *
+     * @throws Throwable
+     */
+    public function createCashAdvance(array $data, User $user): CashAdvance
+    {
+        Gate::forUser($user)->authorize('create', CashAdvance::class);
+
+        try {
+            return DB::transaction(function () use ($data, $user) {
+                $disbursementDate = Carbon::parse($data['disbursement_date']);
+                $referenceNumber = $this->generateReferenceNumber($disbursementDate);
+
+                $amount = (float) $data['amount'];
+                $scheme = $data['repayment_scheme'] instanceof RepaymentScheme
+                    ? $data['repayment_scheme']->value
+                    : (string) $data['repayment_scheme'];
+
+                $installmentCount = ($scheme === RepaymentScheme::SALARY_INSTALLMENT->value)
+                    ? max(1, (int) ($data['installment_count'] ?? 1))
+                    : 1;
+
+                $monthlyInstallment = ($installmentCount > 0)
+                    ? round($amount / $installmentCount, 2)
+                    : $amount;
+
+                $cashAdvance = CashAdvance::create([
+                    'reference_number' => $referenceNumber,
+                    'employee_id' => $data['employee_id'],
+                    'amount' => $amount,
+                    'remaining_amount' => $amount,
+                    'repayment_scheme' => $scheme,
+                    'installment_count' => $installmentCount,
+                    'monthly_installment' => $monthlyInstallment,
+                    'disbursement_date' => $disbursementDate->toDateString(),
+                    'reason' => trim((string) $data['reason']),
+                    'status' => CashAdvanceStatus::PENDING->value,
+                    'submitted_by' => $user->id,
+                    'notes' => ! empty($data['notes']) ? trim((string) $data['notes']) : null,
+                ]);
+
+                $this->logger->info(
+                    action: 'CREATE',
+                    module: 'cash_advances',
+                    message: 'Cash advance requested',
+                    context: [
+                        'cash_advance_id' => $cashAdvance->id,
+                        'reference_number' => $cashAdvance->reference_number,
+                        'employee_id' => $cashAdvance->employee_id,
+                        'amount' => $cashAdvance->amount,
+                        'repayment_scheme' => $cashAdvance->repayment_scheme instanceof RepaymentScheme ? $cashAdvance->repayment_scheme->value : $cashAdvance->repayment_scheme,
+                    ]
+                );
+
+                return $cashAdvance;
+            });
+        } catch (Throwable $e) {
+            $this->logger->error(
+                action: 'CREATE_FAILED',
+                module: 'cash_advances',
+                message: 'Cash advance creation failed',
+                context: ['payload' => $data],
+                exception: $e
+            );
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Update an existing pending cash advance.
+     *
+     * @param  array<string, mixed>  $data
+     *
+     * @throws Throwable
+     */
+    public function updateCashAdvance(CashAdvance $cashAdvance, array $data, User $user): CashAdvance
+    {
+        Gate::forUser($user)->authorize('update', $cashAdvance);
+
+        try {
+            return DB::transaction(function () use ($cashAdvance, $data) {
+                $lockedCashAdvance = CashAdvance::query()
+                    ->lockForUpdate()
+                    ->findOrFail($cashAdvance->id);
+
+                if ($lockedCashAdvance->status !== CashAdvanceStatus::PENDING) {
+                    throw new InvalidArgumentException('Hanya pengajuan kasbon berstatus Menunggu Persetujuan yang dapat diubah.');
+                }
+
+                $amount = (float) $data['amount'];
+                $scheme = $data['repayment_scheme'] instanceof RepaymentScheme
+                    ? $data['repayment_scheme']->value
+                    : (string) $data['repayment_scheme'];
+
+                $installmentCount = ($scheme === RepaymentScheme::SALARY_INSTALLMENT->value)
+                    ? max(1, (int) ($data['installment_count'] ?? 1))
+                    : 1;
+
+                $monthlyInstallment = ($installmentCount > 0)
+                    ? round($amount / $installmentCount, 2)
+                    : $amount;
+
+                $disbursementDate = Carbon::parse($data['disbursement_date'])->toDateString();
+
+                $lockedCashAdvance->update([
+                    'employee_id' => $data['employee_id'],
+                    'amount' => $amount,
+                    'remaining_amount' => $amount,
+                    'repayment_scheme' => $scheme,
+                    'installment_count' => $installmentCount,
+                    'monthly_installment' => $monthlyInstallment,
+                    'disbursement_date' => $disbursementDate,
+                    'reason' => trim((string) $data['reason']),
+                    'notes' => ! empty($data['notes']) ? trim((string) $data['notes']) : null,
+                ]);
+
+                $this->logger->info(
+                    action: 'UPDATE',
+                    module: 'cash_advances',
+                    message: 'Cash advance updated',
+                    context: [
+                        'cash_advance_id' => $lockedCashAdvance->id,
+                        'reference_number' => $lockedCashAdvance->reference_number,
+                        'amount' => $lockedCashAdvance->amount,
+                    ]
+                );
+
+                return $lockedCashAdvance;
+            });
+        } catch (Throwable $e) {
+            $this->logger->error(
+                action: 'UPDATE_FAILED',
+                module: 'cash_advances',
+                message: 'Cash advance update failed',
+                context: [
+                    'cash_advance_id' => $cashAdvance->id,
+                    'payload' => $data,
+                ],
+                exception: $e
+            );
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Approve cash advance request and generate installment schedule.
+     *
+     * @throws Throwable
+     */
+    public function approveCashAdvance(CashAdvance $cashAdvance, User $approver, ?string $notes = null): CashAdvance
+    {
+        Gate::forUser($approver)->authorize('approve', $cashAdvance);
+
+        try {
+            return DB::transaction(function () use ($cashAdvance, $approver, $notes) {
+                $lockedCashAdvance = CashAdvance::query()
+                    ->lockForUpdate()
+                    ->findOrFail($cashAdvance->id);
+
+                if ($lockedCashAdvance->status !== CashAdvanceStatus::PENDING) {
+                    throw new InvalidArgumentException('Kasbon ini sudah tidak dalam status Menunggu Persetujuan.');
+                }
+
+                $lockedCashAdvance->update([
+                    'status' => CashAdvanceStatus::ACTIVE->value,
+                    'approved_by' => $approver->id,
+                    'approved_at' => Carbon::now(),
+                    'notes' => $notes !== null && trim($notes) !== '' ? trim($notes) : $lockedCashAdvance->notes,
+                ]);
+
+                // Delete any existing installments if regenerated
+                $lockedCashAdvance->installments()->delete();
+
+                // Generate installment schedule
+                $count = $lockedCashAdvance->installment_count;
+                $amount = (float) $lockedCashAdvance->amount;
+                $baseMonthly = (float) floor($amount / $count);
+                $startDate = Carbon::parse($lockedCashAdvance->disbursement_date);
+
+                $allocatedTotal = 0.0;
+                for ($i = 1; $i <= $count; $i++) {
+                    $installmentAmount = ($i === $count)
+                        ? round($amount - $allocatedTotal, 2)
+                        : $baseMonthly;
+
+                    $allocatedTotal += $installmentAmount;
+                    $dueDate = $startDate->copy()->addMonths($i);
+
+                    CashAdvanceInstallment::create([
+                        'cash_advance_id' => $lockedCashAdvance->id,
+                        'installment_number' => $i,
+                        'due_date' => $dueDate->toDateString(),
+                        'amount' => $installmentAmount,
+                        'paid_amount' => 0,
+                        'status' => InstallmentStatus::PENDING->value,
+                    ]);
+                }
+
+                $this->logger->info(
+                    action: 'APPROVE',
+                    module: 'cash_advances',
+                    message: 'Cash advance approved',
+                    context: [
+                        'cash_advance_id' => $lockedCashAdvance->id,
+                        'reference_number' => $lockedCashAdvance->reference_number,
+                        'approved_by' => $approver->id,
+                        'installments_created' => $count,
+                    ]
+                );
+
+                return $lockedCashAdvance->fresh(['installments']);
+            });
+        } catch (Throwable $e) {
+            $this->logger->error(
+                action: 'APPROVE_FAILED',
+                module: 'cash_advances',
+                message: 'Cash advance approval failed',
+                context: ['cash_advance_id' => $cashAdvance->id],
+                exception: $e
+            );
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Reject cash advance request.
+     *
+     * @throws Throwable
+     */
+    public function rejectCashAdvance(CashAdvance $cashAdvance, User $approver, string $reason): CashAdvance
+    {
+        Gate::forUser($approver)->authorize('reject', $cashAdvance);
+
+        try {
+            return DB::transaction(function () use ($cashAdvance, $approver, $reason) {
+                $lockedCashAdvance = CashAdvance::query()
+                    ->lockForUpdate()
+                    ->findOrFail($cashAdvance->id);
+
+                if ($lockedCashAdvance->status !== CashAdvanceStatus::PENDING) {
+                    throw new InvalidArgumentException('Kasbon ini sudah tidak dalam status Menunggu Persetujuan.');
+                }
+
+                $lockedCashAdvance->update([
+                    'status' => CashAdvanceStatus::REJECTED->value,
+                    'approved_by' => $approver->id,
+                    'approved_at' => Carbon::now(),
+                    'rejection_reason' => trim($reason),
+                ]);
+
+                $this->logger->info(
+                    action: 'REJECT',
+                    module: 'cash_advances',
+                    message: 'Cash advance rejected',
+                    context: [
+                        'cash_advance_id' => $lockedCashAdvance->id,
+                        'reference_number' => $lockedCashAdvance->reference_number,
+                        'approved_by' => $approver->id,
+                        'reason' => $reason,
+                    ]
+                );
+
+                return $lockedCashAdvance;
+            });
+        } catch (Throwable $e) {
+            $this->logger->error(
+                action: 'REJECT_FAILED',
+                module: 'cash_advances',
+                message: 'Cash advance rejection failed',
+                context: ['cash_advance_id' => $cashAdvance->id],
+                exception: $e
+            );
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Record a payment against a cash advance.
+     *
+     * @param  array<string, mixed>  $paymentData
+     *
+     * @throws Throwable
+     */
+    public function recordPayment(CashAdvance $cashAdvance, array $paymentData, User $user): CashAdvancePayment
+    {
+        Gate::forUser($user)->authorize('recordPayment', $cashAdvance);
+        $temporaryProofPath = $this->storeTemporaryProofDocument($paymentData['proof_document'] ?? null);
+        $paymentNumber = null;
+        $storedProofPath = null;
+
+        try {
+            $storedProofPath = $temporaryProofPath
+                ? $this->moveProofDocument($temporaryProofPath, 'pending-'.Str::uuid())
+                : null;
+            $payment = DB::transaction(function () use ($cashAdvance, $paymentData, $user, &$paymentNumber, $storedProofPath) {
+                $lockedCashAdvance = CashAdvance::query()
+                    ->lockForUpdate()
+                    ->findOrFail($cashAdvance->id);
+
+                if (! in_array($lockedCashAdvance->status, [CashAdvanceStatus::ACTIVE, CashAdvanceStatus::APPROVED], true)) {
+                    throw new InvalidArgumentException('Hanya kasbon yang aktif/berjalan yang dapat menerima pembayaran.');
+                }
+
+                $paymentAmount = round((float) ($paymentData['amount'] ?? 0), 2);
+                $remaining = (float) $lockedCashAdvance->remaining_amount;
+
+                if ($paymentAmount <= 0) {
+                    throw new InvalidArgumentException('Nominal pembayaran harus lebih besar dari 0.');
+                }
+
+                if ($paymentAmount > $remaining + 0.001) {
+                    throw new InvalidArgumentException('Nominal pembayaran (Rp '.number_format($paymentAmount, 0, ',', '.').') tidak boleh melebihi sisa kasbon (Rp '.number_format($remaining, 0, ',', '.').').');
+                }
+
+                $paymentDate = Carbon::parse($paymentData['payment_date']);
+                if ($paymentDate->isFuture() || $paymentDate->lt(Carbon::parse($lockedCashAdvance->disbursement_date))) {
+                    throw new InvalidArgumentException('Tanggal pembayaran harus berada setelah tanggal pencairan dan tidak boleh di masa depan.');
+                }
+                $paymentNumber = $this->generatePaymentNumber($paymentDate);
+                $targetInstallmentId = $paymentData['cash_advance_installment_id'] ?? null;
+                $unpaidInstallments = $lockedCashAdvance->installments()
+                    ->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
+                    ->orderBy('installment_number', 'asc')
+                    ->lockForUpdate()
+                    ->get();
+
+                if ($targetInstallmentId) {
+                    $targetInstallment = $lockedCashAdvance->installments()
+                        ->whereKey($targetInstallmentId)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $targetInstallment || ! $unpaidInstallments->contains('id', (int) $targetInstallmentId)) {
+                        throw new InvalidArgumentException('Cicilan yang dipilih tidak dimiliki kasbon ini atau sudah lunas.');
+                    }
+
+                    $unpaidInstallments = $unpaidInstallments->sortBy(
+                        fn (CashAdvanceInstallment $installment): int => (int) $installment->id === (int) $targetInstallmentId ? 0 : 1
+                    )->values();
+                }
+
+                $payment = CashAdvancePayment::create([
+                    'payment_number' => $paymentNumber,
+                    'cash_advance_id' => $lockedCashAdvance->id,
+                    'cash_advance_installment_id' => $targetInstallmentId,
+                    'payment_date' => $paymentDate->toDateString(),
+                    'amount' => $paymentAmount,
+                    'payment_method' => $paymentData['payment_method'],
+                    'proof_document' => $storedProofPath,
+                    'notes' => ! empty($paymentData['notes']) ? trim((string) $paymentData['notes']) : null,
+                    'recorded_by' => $user->id,
+                ]);
+
+                // Reduce remaining amount
+                $newRemaining = max(0, round($remaining - $paymentAmount, 2));
+                $newStatus = ($newRemaining <= 0.001) ? CashAdvanceStatus::PAID->value : $lockedCashAdvance->status->value;
+
+                $lockedCashAdvance->update([
+                    'remaining_amount' => $newRemaining,
+                    'status' => $newStatus,
+                ]);
+
+                // Allocate payment to installments
+                $leftToAllocate = $paymentAmount;
+                foreach ($unpaidInstallments as $installment) {
+                    if ($leftToAllocate <= 0) {
+                        break;
+                    }
+
+                    $installmentRemaining = (float) $installment->amount - (float) $installment->paid_amount;
+                    $allocation = min($leftToAllocate, $installmentRemaining);
+
+                    $newPaidAmount = round((float) $installment->paid_amount + $allocation, 2);
+                    $installmentStatus = ($newPaidAmount >= (float) $installment->amount)
+                        ? InstallmentStatus::PAID->value
+                        : InstallmentStatus::PARTIALLY_PAID->value;
+
+                    $installment->update([
+                        'paid_amount' => $newPaidAmount,
+                        'status' => $installmentStatus,
+                        'paid_at' => ($installmentStatus === InstallmentStatus::PAID->value) ? Carbon::now() : $installment->paid_at,
+                    ]);
+
+                    $this->syncOpenPayrollLinesForInstallment($installment);
+
+                    $leftToAllocate -= $allocation;
+                }
+
+                if ($unpaidInstallments->isNotEmpty() && $leftToAllocate > 0.001) {
+                    throw new InvalidArgumentException('Nominal pembayaran tidak dapat dialokasikan ke cicilan kasbon.');
+                }
+
+                $this->logger->info(
+                    action: 'PAYMENT',
+                    module: 'cash_advances',
+                    message: 'Cash advance payment recorded',
+                    context: [
+                        'cash_advance_id' => $lockedCashAdvance->id,
+                        'payment_id' => $payment->id,
+                        'payment_number' => $payment->payment_number,
+                        'amount' => $paymentAmount,
+                        'remaining_amount' => $newRemaining,
+                        'is_fully_paid' => $newRemaining <= 0,
+                    ]
+                );
+
+                return $payment;
+            });
+
+            return $payment;
+        } catch (Throwable $e) {
+            $this->cleanupProofDocument($temporaryProofPath, $storedProofPath);
+            $this->logger->error(
+                action: 'PAYMENT_FAILED',
+                module: 'cash_advances',
+                message: 'Cash advance payment failed',
+                context: [
+                    'cash_advance_id' => $cashAdvance->id,
+                    'payment_number' => $paymentNumber,
+                ],
+                exception: $e
+            );
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Delete a pending or rejected cash advance.
+     *
+     * @throws Throwable
+     */
+    public function deleteCashAdvance(CashAdvance $cashAdvance, User $user): bool
+    {
+        Gate::forUser($user)->authorize('delete', $cashAdvance);
+
+        try {
+            return DB::transaction(function () use ($cashAdvance) {
+                $lockedCashAdvance = CashAdvance::query()
+                    ->lockForUpdate()
+                    ->findOrFail($cashAdvance->id);
+
+                if (! in_array($lockedCashAdvance->status, [CashAdvanceStatus::PENDING, CashAdvanceStatus::REJECTED, CashAdvanceStatus::CANCELLED], true)) {
+                    throw new InvalidArgumentException('Kasbon yang sudah berjalan atau memiliki pembayaran tidak dapat dihapus.');
+                }
+
+                $refNumber = $lockedCashAdvance->reference_number;
+                $id = $lockedCashAdvance->id;
+
+                $lockedCashAdvance->delete();
+
+                $this->logger->info(
+                    action: 'DELETE',
+                    module: 'cash_advances',
+                    message: 'Cash advance deleted',
+                    context: [
+                        'cash_advance_id' => $id,
+                        'reference_number' => $refNumber,
+                    ]
+                );
+
+                return true;
+            });
+        } catch (Throwable $e) {
+            $this->logger->error(
+                action: 'DELETE_FAILED',
+                module: 'cash_advances',
+                message: 'Cash advance deletion failed',
+                context: ['cash_advance_id' => $cashAdvance->id],
+                exception: $e
+            );
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Store an uploaded proof document outside the final payment directory.
+     */
+    private function storeTemporaryProofDocument(mixed $proofDocument): ?string
+    {
+        if (! $proofDocument instanceof UploadedFile) {
+            return null;
+        }
+
+        return $proofDocument->store('cash-advances/.tmp', 'local');
+    }
+
+    /**
+     * Move a temporary proof document to its permanent location after commit.
+     */
+    private function moveProofDocument(?string $temporaryPath, string $paymentNumber): ?string
+    {
+        if (! $temporaryPath) {
+            return null;
+        }
+
+        $extension = pathinfo($temporaryPath, PATHINFO_EXTENSION) ?: 'bin';
+        $permanentPath = 'cash-advances/payments/'.$paymentNumber.'-'.Str::uuid().'.'.$extension;
+        $disk = Storage::disk('local');
+
+        if (! $disk->move($temporaryPath, $permanentPath)) {
+            throw new \RuntimeException('Bukti pembayaran gagal dipindahkan ke penyimpanan permanen.');
+        }
+
+        return $permanentPath;
+    }
+
+    /**
+     * Remove temporary or partially persisted proof documents after a failure.
+     */
+    private function cleanupProofDocument(?string $temporaryPath, ?string $storedPath): void
+    {
+        $disk = Storage::disk('local');
+
+        foreach (array_unique(array_filter([$temporaryPath, $storedPath])) as $path) {
+            if ($disk->exists($path)) {
+                $disk->delete($path);
+            }
+        }
+    }
+
+    /**
+     * Get active cash advance model for an employee if any.
+     */
+    public function getActiveAdvanceByEmployee(int $employeeId, ?int $exceptId = null): ?CashAdvance
+    {
+        return CashAdvance::query()
+            ->where('employee_id', $employeeId)
+            ->when($exceptId, fn ($q) => $q->where('id', '!=', $exceptId))
+            ->whereIn('status', [
+                CashAdvanceStatus::PENDING->value,
+                CashAdvanceStatus::APPROVED->value,
+                CashAdvanceStatus::ACTIVE->value,
+            ])
+            ->where('remaining_amount', '>', 0)
+            ->first();
+    }
+
+    /**
+     * Get active cash advances summary for an employee (for blocking alert on new submission).
+     *
+     * @return array{has_active: bool, count: int, total_remaining: float, formatted_total_remaining: string, advances: array<int, array<string, mixed>>}
+     */
+    public function getActiveCashAdvanceSummaryByEmployee(int $employeeId, ?int $exceptId = null): array
+    {
+        $activeQuery = CashAdvance::query()
+            ->where('employee_id', $employeeId)
+            ->when($exceptId, fn ($q) => $q->where('id', '!=', $exceptId))
+            ->whereIn('status', [
+                CashAdvanceStatus::PENDING->value,
+                CashAdvanceStatus::APPROVED->value,
+                CashAdvanceStatus::ACTIVE->value,
+            ])
+            ->where('remaining_amount', '>', 0)
+            ->select(['id', 'reference_number', 'status', 'amount', 'remaining_amount', 'disbursement_date']);
+
+        $count = (clone $activeQuery)->count();
+        $totalRemaining = (float) (clone $activeQuery)->sum('remaining_amount');
+        $activeAdvances = $activeQuery->orderBy('disbursement_date')->limit(10)->get();
+
+        return [
+            'has_active' => $count > 0,
+            'count' => $count,
+            'total_remaining' => $totalRemaining,
+            'formatted_total_remaining' => 'Rp '.number_format($totalRemaining, 0, ',', '.'),
+            'advances' => $activeAdvances->map(fn (CashAdvance $ca) => [
+                'id' => $ca->id,
+                'reference_number' => $ca->reference_number,
+                'status_label' => $ca->status_label,
+                'status_badge' => $ca->status_badge_class,
+                'amount' => $ca->formatted_amount,
+                'remaining' => $ca->formatted_remaining_amount,
+                'date' => $ca->disbursement_date?->translatedFormat('d M Y'),
+            ])->toArray(),
+        ];
+    }
+
+    /**
+     * Get summary overview for a selected employee.
+     *
+     * @return array{employee: Employee|null, total_balance: float, formatted_total_balance: string, active_advances_count: int}
+     */
+    public function getEmployeeSummary(?int $employeeId): array
+    {
+        if (! $employeeId) {
+            return [
+                'employee' => null,
+                'total_balance' => 0.0,
+                'formatted_total_balance' => 'Rp 0',
+                'active_advances_count' => 0,
+            ];
+        }
+
+        $employee = Employee::with(['department', 'position', 'detail'])->find($employeeId);
+
+        $activeAdvances = CashAdvance::query()
+            ->where('employee_id', $employeeId)
+            ->whereIn('status', [
+                CashAdvanceStatus::APPROVED->value,
+                CashAdvanceStatus::ACTIVE->value,
+            ])
+            ->where('remaining_amount', '>', 0);
+
+        $totalBalance = (float) (clone $activeAdvances)->sum('remaining_amount');
+        $activeCount = (clone $activeAdvances)->count();
+
+        return [
+            'employee' => $employee,
+            'total_balance' => $totalBalance,
+            'formatted_total_balance' => 'Rp '.number_format($totalBalance, 0, ',', '.'),
+            'active_advances_count' => $activeCount,
+        ];
+    }
+
+    /**
+     * Get paginated summary of employees with their cash advances for the overview table.
+     */
+    public function getEmployeesCashAdvanceSummary(
+        ?string $search = null,
+        ?int $departmentId = null,
+        string $filter = 'all',
+        int $perPage = 10,
+        int $page = 1
+    ): LengthAwarePaginator {
+        $perPage = max(1, min($perPage, 100));
+
+        $query = Employee::query()
+            ->where('status', 'active')
+            ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId));
+
+        if ($filter === 'active_balance') {
+            $query->whereHas('cashAdvances', function ($q) {
+                $q->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
+                    ->where('remaining_amount', '>', 0);
+            });
+        } elseif ($filter === 'pending') {
+            $query->whereHas('cashAdvances', function ($q) {
+                $q->where('status', CashAdvanceStatus::PENDING->value);
+            });
+        } elseif ($filter === 'has_advance') {
+            $query->whereHas('cashAdvances');
+        } else {
+            // 'all' (default)
+            // No whereHas restriction
+        }
+
+        if (! empty(trim((string) $search))) {
+            $searchTerm = trim((string) $search);
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('full_name', 'like', "%{$searchTerm}%")
+                    ->orWhereHas('department', fn ($d) => $d->where('name', 'like', "%{$searchTerm}%"))
+                    ->orWhereHas('position', fn ($p) => $p->where('name', 'like', "%{$searchTerm}%"));
+            });
+        }
+
+        $query->with([
+            'department:id,name',
+            'position:id,name',
+            'cashAdvances' => fn ($q) => $q->orderByDesc('id'),
+            'cashAdvances.installments',
+        ])->orderBy('full_name', 'asc');
+
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+        $currentMonthKey = Carbon::now()->format('Y-m');
+
+        $paginator->getCollection()->transform(function (Employee $emp) use ($currentMonthKey): array {
+            $advances = $emp->cashAdvances;
+            $activeAdvances = $advances->filter(
+                fn ($a) => in_array($a->status->value, [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value], true)
+            );
+
+            $totalInitial = (float) $activeAdvances->sum('amount');
+            $totalRemaining = (float) $activeAdvances->sum('remaining_amount');
+            $totalPaid = max(0.0, round($totalInitial - $totalRemaining, 2));
+
+            $monthlyDeduction = 0.0;
+            foreach ($activeAdvances as $adv) {
+                foreach ($adv->installments as $inst) {
+                    $instDueMonth = $inst->due_date ? Carbon::parse($inst->due_date)->format('Y-m') : null;
+                    if ($instDueMonth && $instDueMonth <= $currentMonthKey && $inst->status !== InstallmentStatus::PAID) {
+                        $monthlyDeduction += max(0.0, (float) $inst->amount - (float) $inst->paid_amount);
+                    }
+                }
+            }
+
+            return [
+                'id' => $emp->id,
+                'name' => $emp->full_name,
+                'photo_url' => $emp->photo_url,
+                'department' => $emp->department?->name ?: 'Tanpa Departemen',
+                'position' => $emp->position?->name ?: 'Tanpa Jabatan',
+                'initial_amount' => $totalInitial,
+                'formatted_initial_amount' => 'Rp '.number_format($totalInitial, 0, ',', '.'),
+                'paid_amount' => $totalPaid,
+                'formatted_paid_amount' => 'Rp '.number_format($totalPaid, 0, ',', '.'),
+                'remaining_amount' => $totalRemaining,
+                'formatted_remaining_amount' => 'Rp '.number_format($totalRemaining, 0, ',', '.'),
+                'monthly_deduction' => $monthlyDeduction,
+                'formatted_monthly_deduction' => 'Rp '.number_format($monthlyDeduction, 0, ',', '.'),
+                'has_active' => $activeAdvances->isNotEmpty(),
+            ];
+        });
+
+        return $paginator;
+    }
+
+    /**
+     * Get paginated cash advances for an employee with eager loaded relations.
+     */
+    public function getEmployeeAdvances(int $employeeId, ?string $search = null, ?string $filterStatus = null, int $perPage = 15, int $page = 1): LengthAwarePaginator
+    {
+        $query = CashAdvance::query()
+            ->with([
+                'employee.department',
+                'employee.position',
+                'submitter',
+                'approver',
+                'installments.payments.recorder',
+                'payments.recorder',
+            ])
+            ->where('employee_id', $employeeId);
+
+        if (! empty(trim((string) $search))) {
+            $term = trim((string) $search);
+            $query->where(function ($q) use ($term) {
+                $q->where('reference_number', 'like', "%{$term}%")
+                    ->orWhere('reason', 'like', "%{$term}%")
+                    ->orWhere('amount', 'like', "%{$term}%");
+            });
+        }
+
+        if (! empty($filterStatus)) {
+            $query->where('status', $filterStatus);
+        }
+
+        $perPage = max(1, min($perPage, 100));
+
+        return $query->orderBy('created_at', 'desc')->orderByDesc('id')->paginate($perPage, ['*'], 'page', $page);
+    }
+
+    /**
+     * Get chronological transaction ledger (pengajuan + pelunasan) for a specific employee.
+     */
+    public function getEmployeeLedger(int $employeeId, ?string $search = null, int $perPage = 25, int $page = 1): LengthAwarePaginator
+    {
+        return $this->getEmployeeLedgerFromDatabase($employeeId, $search, $perPage, $page);
+    }
+
+    private function getEmployeeLedgerFromDatabase(int $employeeId, ?string $search, int $perPage, int $page): LengthAwarePaginator
+    {
+        $advanceQuery = DB::table('cash_advances')
+            ->leftJoin('users as submitters', 'submitters.id', '=', 'cash_advances.submitted_by')
+            ->where('cash_advances.employee_id', $employeeId)
+            ->select([
+                'cash_advances.id as id',
+                DB::raw("'advance' as type"),
+                DB::raw('0 as type_order'),
+                DB::raw('cash_advances.id as cash_advance_id'),
+                'cash_advances.reference_number',
+                DB::raw('COALESCE(cash_advances.disbursement_date, DATE(cash_advances.created_at)) as transaction_date'),
+                'cash_advances.created_at as transaction_time',
+                'submitters.name as creator_name',
+                'cash_advances.reason as description',
+                'cash_advances.status',
+                DB::raw("CASE cash_advances.status
+                    WHEN 'active' THEN 'Disetujui'
+                    WHEN 'approved' THEN 'Disetujui'
+                    WHEN 'pending' THEN 'Menunggu Persetujuan'
+                    WHEN 'paid' THEN 'Lunas'
+                    WHEN 'rejected' THEN 'Ditolak'
+                    WHEN 'cancelled' THEN 'Dibatalkan'
+                    ELSE cash_advances.status
+                END as status_label"),
+                'cash_advances.amount as advance_amount',
+                DB::raw('NULL as payment_amount'),
+            ]);
+
+        $paymentQuery = DB::table('cash_advance_payments')
+            ->join('cash_advances as payment_advances', 'payment_advances.id', '=', 'cash_advance_payments.cash_advance_id')
+            ->leftJoin('users as recorders', 'recorders.id', '=', 'cash_advance_payments.recorded_by')
+            ->where('payment_advances.employee_id', $employeeId)
+            ->select([
+                'cash_advance_payments.id as id',
+                DB::raw("'payment' as type"),
+                DB::raw('1 as type_order'),
+                'cash_advance_payments.cash_advance_id',
+                'cash_advance_payments.payment_number as reference_number',
+                'cash_advance_payments.payment_date as transaction_date',
+                'cash_advance_payments.created_at as transaction_time',
+                'recorders.name as creator_name',
+                'cash_advance_payments.notes as description',
+                DB::raw("'paid' as status"),
+                DB::raw("'Disetujui' as status_label"),
+                DB::raw('NULL as advance_amount'),
+                'cash_advance_payments.amount as payment_amount',
+            ]);
+
+        $baseUnion = $advanceQuery->unionAll($paymentQuery);
+        $ledgerQuery = DB::query()->fromSub($baseUnion, 'ledger');
+        $term = trim((string) $search);
+
+        if ($term !== '') {
+            $ledgerQuery->where(function ($query) use ($term) {
+                $query
+                    ->where('reference_number', 'like', "%{$term}%")
+                    ->orWhere('description', 'like', "%{$term}%")
+                    ->orWhere('creator_name', 'like', "%{$term}%")
+                    ->orWhere('status', 'like', "%{$term}%")
+                    ->orWhere('status_label', 'like', "%{$term}%");
+            });
+        }
+
+        $perPage = max(1, min($perPage, 100));
+        $page = max(1, $page);
+        $paginator = $ledgerQuery
+            ->orderBy('transaction_date')
+            ->orderBy('transaction_time')
+            ->orderBy('type_order')
+            ->orderBy('id')
+            ->paginate($perPage, ['*'], 'page', $page);
+        $rows = collect($paginator->items());
+
+        if ($rows->isEmpty()) {
+            $paginator->setCollection(collect());
+
+            return $paginator;
+        }
+
+        $allRows = DB::query()
+            ->fromSub($baseUnion, 'ledger_all')
+            ->orderBy('transaction_date')
+            ->orderBy('transaction_time')
+            ->orderBy('type_order')
+            ->orderBy('id')
+            ->get([
+                'id',
+                'type',
+                'status',
+                'type_order',
+                'transaction_date',
+                'transaction_time',
+                'advance_amount',
+                'payment_amount',
+            ]);
+        $balanceByKey = [];
+        $runningBalance = 0.0;
+
+        foreach ($allRows as $allRow) {
+            if ($allRow->type === 'advance' && in_array($allRow->status, ['active', 'approved', 'paid'], true)) {
+                $runningBalance += (float) $allRow->advance_amount;
+            } elseif ($allRow->type === 'payment') {
+                $runningBalance = max(0.0, $runningBalance - (float) $allRow->payment_amount);
+            }
+
+            $balanceByKey[$allRow->type.':'.$allRow->id] = $runningBalance;
+        }
+
+        $advanceIds = $rows->where('type', 'advance')->pluck('id')->map(fn ($id): int => (int) $id);
+        $paymentIds = $rows->where('type', 'payment')->pluck('id')->map(fn ($id): int => (int) $id);
+        $advanceModels = CashAdvance::query()->with(['submitter', 'approver'])->whereIn('id', $advanceIds)->get()->keyBy('id');
+        $paymentModels = CashAdvancePayment::query()->with(['recorder', 'cashAdvance', 'installment'])->whereIn('id', $paymentIds)->get()->keyBy('id');
+        $ledgerItems = $rows->map(function ($row) use ($advanceModels, $paymentModels, $balanceByKey) {
+            $transactionDate = Carbon::parse($row->transaction_date ?? $row->transaction_time);
+            $transactionTime = Carbon::parse($row->transaction_time);
+            $transactionDate->setTime($transactionTime->hour, $transactionTime->minute, $transactionTime->second);
+
+            if ($row->type === 'advance') {
+                $advance = $advanceModels->get((int) $row->id);
+                if (! $advance) {
+                    return null;
+                }
+
+                $status = $advance->status->value;
+                $schemeLabel = match ($advance->repayment_scheme) {
+                    RepaymentScheme::SALARY_INSTALLMENT => "Cicilan {$advance->installment_count} Bln (@ {$advance->formatted_monthly_installment})",
+                    RepaymentScheme::SALARY_SINGLE => 'Potong Gaji 1x'.($advance->disbursement_date ? ' ('.$advance->disbursement_date->format('M Y').')' : ''),
+                    RepaymentScheme::MANUAL => "Manual ({$advance->installment_count} Bln)",
+                    default => $advance->scheme_label,
+                };
+                $schemeBadge = match ($advance->repayment_scheme) {
+                    RepaymentScheme::SALARY_INSTALLMENT => 'badge badge-light text-primary border',
+                    RepaymentScheme::SALARY_SINGLE => 'badge badge-light text-dark border',
+                    RepaymentScheme::MANUAL => 'badge badge-light text-info border',
+                    default => 'badge badge-light text-muted border',
+                };
+
+                return [
+                    'id' => $advance->id,
+                    'type' => 'advance',
+                    'created_at' => $advance->created_at ?? $advance->disbursement_date,
+                    'sort_date' => $transactionDate->timestamp,
+                    'formatted_date' => $transactionDate->translatedFormat('d M Y H:i'),
+                    'reference_number' => $advance->reference_number,
+                    'creator_name' => $advance->submitter?->name ?? 'System',
+                    'sub_badge_label' => $schemeLabel,
+                    'sub_badge_class' => $schemeBadge,
+                    'advance_amount' => (float) $advance->amount,
+                    'formatted_advance_amount' => $advance->formatted_amount,
+                    'payment_amount' => null,
+                    'formatted_payment_amount' => '-',
+                    'description' => $advance->reason ?: '-',
+                    'status' => $status,
+                    'status_label' => $advance->status_label,
+                    'status_badge' => $advance->status_badge_class,
+                    'model' => $advance,
+                    'saldo_akhir' => $balanceByKey['advance:'.$row->id] ?? 0,
+                    'formatted_saldo_akhir' => 'Rp '.number_format($balanceByKey['advance:'.$row->id] ?? 0, 0, ',', '.'),
+                ];
+            }
+
+            $payment = $paymentModels->get((int) $row->id);
+            if (! $payment) {
+                return null;
+            }
+
+            $paymentContext = 'Setoran Kasbon';
+            if ($payment->installment) {
+                $installmentNumber = $payment->installment->installment_number;
+                $isEarly = $payment->payment_date && $payment->installment->due_date && $payment->payment_date->lt($payment->installment->due_date);
+                $paymentContext = "Cicilan #{$installmentNumber}".($isEarly ? ' (Bayar Awal)' : '');
+            } elseif ($payment->cashAdvance?->repayment_scheme === RepaymentScheme::SALARY_SINGLE) {
+                $paymentContext = 'Lunas Sebelum Payroll';
+            } elseif ((float) $payment->amount >= (float) ($payment->cashAdvance?->amount ?? 0) || (float) ($payment->cashAdvance?->remaining_amount ?? 0) <= 0) {
+                $paymentContext = 'Pelunasan Penuh (Lunas Awal)';
+            }
+
+            $subBadgeLabel = $payment->method_label.' • '.$paymentContext;
+            $subBadgeClass = match ($payment->payment_method) {
+                PaymentMethod::SALARY_DEDUCTION => 'badge badge-light text-success border',
+                PaymentMethod::BANK_TRANSFER => 'badge badge-light text-info border',
+                PaymentMethod::CASH => 'badge badge-light text-warning border',
+                default => 'badge badge-light text-secondary border',
+            };
+
+            return [
+                'id' => $payment->id,
+                'type' => 'payment',
+                'created_at' => $payment->created_at ?? $payment->payment_date,
+                'sort_date' => $transactionDate->timestamp,
+                'formatted_date' => $transactionDate->translatedFormat('d M Y H:i'),
+                'reference_number' => $payment->payment_number,
+                'creator_name' => $payment->recorder?->name ?? 'System',
+                'sub_badge_label' => $subBadgeLabel,
+                'sub_badge_class' => $subBadgeClass,
+                'advance_amount' => null,
+                'formatted_advance_amount' => '-',
+                'payment_amount' => (float) $payment->amount,
+                'formatted_payment_amount' => $payment->formatted_amount,
+                'description' => $payment->notes ?: $subBadgeLabel,
+                'status' => 'approved',
+                'status_label' => 'Disetujui',
+                'status_badge' => 'badge badge-info',
+                'model' => $payment,
+                'cash_advance_id' => $payment->cash_advance_id,
+                'saldo_akhir' => $balanceByKey['payment:'.$row->id] ?? 0,
+                'formatted_saldo_akhir' => 'Rp '.number_format($balanceByKey['payment:'.$row->id] ?? 0, 0, ',', '.'),
+            ];
+        })->filter()->values();
+
+        $paginator->setCollection($ledgerItems);
+
+        return $paginator;
+    }
+
+    /**
+     * Get monthly billing statements breakdown for an employee.
+     *
+     * @return array{
+     *     unpaid_statements: array<int, array<string, mixed>>,
+     *     paid_statements: array<string, array<int, array<string, mixed>>>,
+     *     next_statement: array<string, mixed>|null,
+     *     total_unpaid_amount: float,
+     *     formatted_total_unpaid_amount: string,
+     *     total_paid_amount: float,
+     *     formatted_total_paid_amount: string,
+     *     unpaid_count: int,
+     *     paid_count: int
+     * }
+     */
+    public function getEmployeeMonthlyStatements(
+        int $employeeId,
+        ?string $search = null,
+        int $perPage = 10,
+        int $page = 1
+    ): array {
+        $advances = CashAdvance::query()
+            ->with('installments')
+            ->where('employee_id', $employeeId)
+            ->whereIn('status', [
+                CashAdvanceStatus::ACTIVE->value,
+                CashAdvanceStatus::APPROVED->value,
+                CashAdvanceStatus::PAID->value,
+            ])
+            ->get();
+
+        $installments = collect();
+        foreach ($advances as $adv) {
+            foreach ($adv->installments as $inst) {
+                $installments->push([
+                    'installment' => $inst,
+                    'cash_advance' => $adv,
+                ]);
+            }
+        }
+
+        if ($installments->isEmpty()) {
+            $emptyPaginator = new \Illuminate\Pagination\LengthAwarePaginator(
+                collect(),
+                0,
+                $perPage,
+                $page,
+                ['path' => \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPath(), 'pageName' => 'page']
+            );
+
+            return [
+                'paginated_statements' => $emptyPaginator,
+                'all_statements' => [],
+                'unpaid_statements' => [],
+                'paid_statements' => [],
+                'next_statement' => null,
+                'total_unpaid_amount' => 0.0,
+                'formatted_total_unpaid_amount' => 'Rp 0',
+                'total_paid_amount' => 0.0,
+                'formatted_total_paid_amount' => 'Rp 0',
+                'unpaid_count' => 0,
+                'paid_count' => 0,
+            ];
+        }
+
+        // Group installments by due_date Year-Month (e.g. '2026-10')
+        $grouped = $installments->groupBy(function ($item) {
+            $dueDate = $item['installment']->due_date ?? Carbon::now();
+
+            return $dueDate->format('Y-m');
+        });
+
+        $statements = collect();
+
+        foreach ($grouped as $monthKey => $items) {
+            $firstDueDate = $items->first()['installment']->due_date ?? Carbon::parse($monthKey.'-01');
+            $year = $firstDueDate->format('Y');
+            $monthNameShort = $firstDueDate->translatedFormat('M');
+            $monthNameFull = $firstDueDate->translatedFormat('F Y');
+            $formattedDueDate = $firstDueDate->translatedFormat('d M Y');
+
+            $totalAmount = (float) $items->sum(fn ($i) => (float) $i['installment']->amount);
+            $totalPaid = (float) $items->sum(fn ($i) => (float) $i['installment']->paid_amount);
+            $remaining = max(0.0, round($totalAmount - $totalPaid, 2));
+            $isPaid = $remaining <= 0.001;
+
+            $itemList = $items->map(function ($item) {
+                /** @var CashAdvanceInstallment $inst */
+                $inst = $item['installment'];
+                /** @var CashAdvance $adv */
+                $adv = $item['cash_advance'];
+
+                $instRemaining = max(0.0, round((float) $inst->amount - (float) $inst->paid_amount, 2));
+                $isInstPaid = $instRemaining <= 0.001;
+
+                $tenorInfo = "[{$inst->installment_number}/{$adv->installment_count}]";
+                $title = "{$tenorInfo} ".($adv->reason ?: 'Kasbon Karyawan');
+
+                return [
+                    'id' => $inst->id,
+                    'cash_advance_id' => $adv->id,
+                    'reference_number' => $adv->reference_number,
+                    'installment_number' => $inst->installment_number,
+                    'total_installments' => $adv->installment_count,
+                    'title' => $title,
+                    'reason' => $adv->reason,
+                    'due_date' => $inst->due_date?->toDateString(),
+                    'formatted_due_date' => $inst->due_date?->translatedFormat('d M Y'),
+                    'amount' => (float) $inst->amount,
+                    'formatted_amount' => 'Rp '.number_format((float) $inst->amount, 0, ',', '.'),
+                    'paid_amount' => (float) $inst->paid_amount,
+                    'formatted_paid_amount' => 'Rp '.number_format((float) $inst->paid_amount, 0, ',', '.'),
+                    'remaining_amount' => $instRemaining,
+                    'formatted_remaining_amount' => 'Rp '.number_format($instRemaining, 0, ',', '.'),
+                    'is_paid' => $isInstPaid,
+                    'status' => $inst->status instanceof InstallmentStatus ? $inst->status->value : (string) $inst->status,
+                    'status_label' => $inst->status_label,
+                    'status_badge_class' => $inst->status_badge_class,
+                    'paid_at' => $inst->paid_at?->translatedFormat('d M Y H:i'),
+                ];
+            })->values()->toArray();
+
+            $statements->push([
+                'month_key' => $monthKey,
+                'year' => $year,
+                'month_name_short' => $monthNameShort,
+                'month_name_full' => $monthNameFull,
+                'due_date' => $firstDueDate->toDateString(),
+                'formatted_due_date' => $formattedDueDate,
+                'total_amount' => $totalAmount,
+                'formatted_total_amount' => 'Rp '.number_format($totalAmount, 0, ',', '.'),
+                'paid_amount' => $totalPaid,
+                'formatted_paid_amount' => 'Rp '.number_format($totalPaid, 0, ',', '.'),
+                'remaining_amount' => $remaining,
+                'formatted_remaining_amount' => 'Rp '.number_format($remaining, 0, ',', '.'),
+                'is_paid' => $isPaid,
+                'status' => $isPaid ? 'paid' : 'unpaid',
+                'status_label' => $isPaid ? 'Lunas' : 'Belum Lunas',
+                'status_badge_class' => $isPaid ? 'badge badge-success' : 'badge badge-warning',
+                'items_count' => count($itemList),
+                'items' => $itemList,
+            ]);
+        }
+
+        // Unpaid statements sorted chronologically (earliest month first)
+        $unpaidStatements = $statements
+            ->filter(fn ($s) => ! $s['is_paid'])
+            ->sortBy('month_key')
+            ->values()
+            ->toArray();
+
+        // Paid statements sorted descending (newest month first), grouped by year
+        $paidGroupedByYear = $statements
+            ->filter(fn ($s) => $s['is_paid'])
+            ->sortByDesc('month_key')
+            ->groupBy('year')
+            ->map(fn ($group) => $group->values()->toArray())
+            ->toArray();
+
+        $paidCount = 0;
+        foreach ($paidGroupedByYear as $yearStatements) {
+            $paidCount += count($yearStatements);
+        }
+
+        $nextStatement = ! empty($unpaidStatements) ? $unpaidStatements[0] : null;
+
+        $totalUnpaid = (float) $statements->filter(fn ($s) => ! $s['is_paid'])->sum('remaining_amount');
+        $totalPaid = (float) $statements->sum('paid_amount');
+
+        $allStatements = $statements->sortBy('month_key')->values();
+
+        // Search filtering if search is given
+        if ($search !== null && trim($search) !== '') {
+            $searchTerm = mb_strtolower(trim($search));
+            $allStatements = $allStatements->filter(function ($st) use ($searchTerm) {
+                if (str_contains(mb_strtolower($st['month_name_full']), $searchTerm)) {
+                    return true;
+                }
+                if (str_contains(mb_strtolower($st['formatted_due_date']), $searchTerm)) {
+                    return true;
+                }
+                if (str_contains(mb_strtolower($st['status_label']), $searchTerm)) {
+                    return true;
+                }
+                if (str_contains(mb_strtolower($st['formatted_total_amount']), $searchTerm)) {
+                    return true;
+                }
+                if (str_contains(mb_strtolower($st['formatted_remaining_amount']), $searchTerm)) {
+                    return true;
+                }
+                foreach ($st['items'] as $item) {
+                    if (str_contains(mb_strtolower($item['reference_number']), $searchTerm)) {
+                        return true;
+                    }
+                    if (! empty($item['reason']) && str_contains(mb_strtolower($item['reason']), $searchTerm)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })->values();
+        }
+
+        $totalItems = $allStatements->count();
+        $pagedItems = $allStatements->forPage($page, $perPage)->values();
+
+        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            $pagedItems,
+            $totalItems,
+            $perPage,
+            $page,
+            ['path' => \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPath(), 'pageName' => 'page']
+        );
+
+        return [
+            'paginated_statements' => $paginator,
+            'all_statements' => $allStatements->toArray(),
+            'unpaid_statements' => $unpaidStatements,
+            'paid_statements' => $paidGroupedByYear,
+            'next_statement' => $nextStatement,
+            'total_unpaid_amount' => $totalUnpaid,
+            'formatted_total_unpaid_amount' => 'Rp '.number_format($totalUnpaid, 0, ',', '.'),
+            'total_paid_amount' => $totalPaid,
+            'formatted_total_paid_amount' => 'Rp '.number_format($totalPaid, 0, ',', '.'),
+            'unpaid_count' => count($unpaidStatements),
+            'paid_count' => $paidCount,
+        ];
+    }
+
+    /**
+     * Record early payment for selected month(s) or installments.
+     *
+     * @param  array<string, mixed>  $paymentData
+     * @return array<int, CashAdvancePayment>
+     *
+     * @throws Throwable
+     */
+    public function recordMonthlySettlement(int $employeeId, array $paymentData, User $user): array
+    {
+        Gate::forUser($user)->authorize('recordEarlySettlement', CashAdvance::class);
+
+        $selectedMonthKeys = array_values(array_unique(array_filter((array) ($paymentData['month_keys'] ?? []), 'is_string')));
+        if (empty($selectedMonthKeys) || collect($selectedMonthKeys)->contains(fn (string $month): bool => ! preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month))) {
+            throw new InvalidArgumentException('Silakan pilih minimal 1 bulan tagihan untuk pelunasan.');
+        }
+
+        $paymentDate = Carbon::parse($paymentData['payment_date'] ?? Carbon::today());
+        if ($paymentDate->isFuture()) {
+            throw new InvalidArgumentException('Tanggal pembayaran tidak boleh di masa depan.');
+        }
+        $paymentMethod = $paymentData['payment_method'] instanceof PaymentMethod
+            ? $paymentData['payment_method']->value
+            : (string) ($paymentData['payment_method'] ?? PaymentMethod::CASH->value);
+        $notes = ! empty($paymentData['notes']) ? trim((string) $paymentData['notes']) : null;
+        $proofDocument = $paymentData['proof_document'] ?? null;
+        $temporaryProofPath = $this->storeTemporaryProofDocument($proofDocument);
+        $storedProofPath = null;
+
+        try {
+            $storedProofPath = $temporaryProofPath
+                ? $this->moveProofDocument($temporaryProofPath, 'pending-'.Str::uuid())
+                : null;
+            $payments = DB::transaction(function () use ($employeeId, $selectedMonthKeys, $paymentDate, $paymentMethod, $notes, $user, $paymentData, $storedProofPath) {
+                $advances = CashAdvance::query()
+                    ->where('employee_id', $employeeId)
+                    ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+                $earliestDisbursement = $advances->min(fn (CashAdvance $advance): string => $advance->disbursement_date->toDateString());
+                if ($earliestDisbursement && $paymentDate->lt(Carbon::parse($earliestDisbursement))) {
+                    throw new InvalidArgumentException('Tanggal pembayaran tidak boleh sebelum tanggal pencairan kasbon.');
+                }
+                $matchingInstallments = collect();
+
+                foreach ($advances as $advance) {
+                    $installments = CashAdvanceInstallment::query()
+                        ->where('cash_advance_id', $advance->id)
+                        ->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
+                        ->orderBy('due_date')
+                        ->orderBy('id')
+                        ->lockForUpdate()
+                        ->get();
+
+                    foreach ($installments as $installment) {
+                        $monthKey = $installment->due_date?->format('Y-m');
+                        $remaining = max(0.0, round((float) $installment->amount - (float) $installment->paid_amount, 2));
+
+                        if ($monthKey && in_array($monthKey, $selectedMonthKeys, true) && $remaining > 0) {
+                            $matchingInstallments->push([
+                                'installment' => $installment,
+                                'cash_advance' => $advance,
+                                'remaining' => $remaining,
+                            ]);
+                        }
+                    }
+                }
+
+                if ($matchingInstallments->isEmpty()) {
+                    throw new InvalidArgumentException('Tidak ada tagihan yang belum lunas pada bulan yang dipilih.');
+                }
+
+                $totalRemainingDue = (float) $matchingInstallments->sum('remaining');
+                $maxAllowed = (float) ceil($totalRemainingDue);
+                $customAmount = isset($paymentData['amount']) ? (float) $paymentData['amount'] : $totalRemainingDue;
+
+                if ($customAmount <= 0 || $customAmount > $maxAllowed + 0.01) {
+                    throw new InvalidArgumentException('Nominal pembayaran tidak boleh melebihi total tagihan bulan terpilih (Rp '.number_format($maxAllowed, 0, ',', '.').').');
+                }
+
+                $leftToAllocate = $customAmount;
+                $allocatedItems = collect();
+                $sortedItems = $matchingInstallments->sortBy(fn (array $item): int => $item['installment']->due_date?->timestamp ?? 0)->values();
+                $itemsCount = $sortedItems->count();
+
+                foreach ($sortedItems as $index => $item) {
+                    if ($leftToAllocate <= 0.001) {
+                        break;
+                    }
+
+                    $rem = (float) $item['remaining'];
+                    $allocation = min($leftToAllocate, $rem);
+                    if ($index === $itemsCount - 1 && $leftToAllocate >= $rem) {
+                        $allocation = $rem;
+                    }
+
+                    $allocatedItems->push([...$item, 'allocation' => $allocation]);
+                    $leftToAllocate -= $allocation;
+                }
+
+                if ($leftToAllocate > 1.00) {
+                    throw new InvalidArgumentException('Nominal pembayaran tidak dapat dialokasikan ke tagihan yang dipilih.');
+                }
+
+                $paymentsCreated = [];
+                $monthLabels = implode(', ', $selectedMonthKeys);
+                $paymentNotes = $notes ?: "Pelunasan Tagihan Bulan [{$monthLabels}]";
+
+                foreach ($allocatedItems->groupBy(fn (array $item): int => $item['cash_advance']->id) as $items) {
+                    /** @var CashAdvance $advance */
+                    $advance = $items->first()['cash_advance'];
+                    $advancePaymentSum = (float) $items->sum('allocation');
+                    $paymentNumber = $this->generatePaymentNumber($paymentDate);
+                    $firstInstallmentId = $items->first()['installment']->id;
+
+                    $payment = CashAdvancePayment::create([
+                        'payment_number' => $paymentNumber,
+                        'cash_advance_id' => $advance->id,
+                        'cash_advance_installment_id' => count($items) === 1 ? $firstInstallmentId : null,
+                        'payment_date' => $paymentDate->toDateString(),
+                        'amount' => $advancePaymentSum,
+                        'payment_method' => $paymentMethod,
+                        'proof_document' => $storedProofPath,
+                        'notes' => $paymentNotes,
+                        'recorded_by' => $user->id,
+                    ]);
+
+                    foreach ($items as $item) {
+                        /** @var CashAdvanceInstallment $installment */
+                        $installment = $item['installment'];
+                        $newPaidAmount = round((float) $installment->paid_amount + (float) $item['allocation'], 2);
+                        $isPaid = $newPaidAmount >= ((float) $installment->amount - 0.01);
+                        $installment->update([
+                            'paid_amount' => $newPaidAmount,
+                            'status' => $isPaid ? InstallmentStatus::PAID->value : InstallmentStatus::PARTIALLY_PAID->value,
+                            'paid_at' => $isPaid ? Carbon::now() : $installment->paid_at,
+                        ]);
+
+                        $this->syncOpenPayrollLinesForInstallment($installment);
+                    }
+
+                    $newRemaining = max(0.0, round((float) $advance->remaining_amount - $advancePaymentSum, 2));
+                    $advance->update([
+                        'remaining_amount' => $newRemaining,
+                        'status' => $newRemaining <= 0.001 ? CashAdvanceStatus::PAID->value : $advance->status->value,
+                    ]);
+
+                    $this->logger->info(
+                        action: 'MONTHLY_PAYMENT',
+                        module: 'cash_advances',
+                        message: 'Cash advance monthly payment recorded',
+                        context: [
+                            'cash_advance_id' => $advance->id,
+                            'payment_id' => $payment->id,
+                            'payment_number' => $paymentNumber,
+                            'amount' => $advancePaymentSum,
+                            'months' => $selectedMonthKeys,
+                        ]
+                    );
+
+                    $paymentsCreated[] = $payment;
+                }
+
+                return $paymentsCreated;
+            });
+
+            return $payments;
+        } catch (Throwable $e) {
+            $this->cleanupProofDocument($temporaryProofPath, $storedProofPath);
+            $this->logger->error(
+                action: 'MONTHLY_PAYMENT_FAILED',
+                module: 'cash_advances',
+                message: 'Monthly settlement payment failed',
+                context: [
+                    'employee_id' => $employeeId,
+                    'months' => $selectedMonthKeys,
+                ],
+                exception: $e
+            );
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Synchronize open/editable payroll lines when an installment receives a payment.
+     */
+    protected function syncOpenPayrollLinesForInstallment(CashAdvanceInstallment $installment): void
+    {
+        $openLines = PayrollItemLine::query()
+            ->where('cash_advance_installment_id', $installment->id)
+            ->whereHas('item.payrollPeriod', fn ($q) => $q->whereNotIn('status', ['paid', 'completed']))
+            ->with('item')
+            ->get();
+
+        if ($openLines->isEmpty()) {
+            return;
+        }
+
+        $unpaidBalance = max(0.0, round((float) $installment->amount - (float) $installment->paid_amount, 2));
+        $payrollService = app(PayrollService::class);
+
+        foreach ($openLines as $line) {
+            $line->update(['amount' => $unpaidBalance]);
+            if ($line->item) {
+                $payrollService->recalculateItem($line->item);
+            }
+        }
+    }
+}

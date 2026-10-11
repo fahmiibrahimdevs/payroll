@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Throwable;
 
@@ -22,6 +24,8 @@ class UserService
         string $role = '',
         int $perPage = 10
     ): LengthAwarePaginator {
+        $perPage = max(1, min($perPage, 100));
+
         return User::query()
             ->with('roles')
             ->when($search, function ($query) use ($search) {
@@ -35,7 +39,8 @@ class UserService
                     $q->where('name', $role);
                 });
             })
-            ->latest()
+            ->latest('created_at')
+            ->orderByDesc('id')
             ->paginate($perPage);
     }
 
@@ -72,16 +77,26 @@ class UserService
                 $oldStatus = $user->is_active;
                 $newStatus = ! $oldStatus;
 
+                if (! $newStatus && $user->hasRole('admin') && User::whereHas('roles', fn ($query) => $query->where('name', 'admin'))->where('is_active', true)->count() <= 1) {
+                    throw new InvalidArgumentException('Minimal harus ada satu akun admin aktif.');
+                }
+
                 $user->is_active = $newStatus;
+                if (! $newStatus) {
+                    $user->setRememberToken(Str::random(60));
+                }
                 $user->save();
 
+                if (! $newStatus && Schema::hasTable('sessions')) {
+                    DB::table('sessions')->where('user_id', $user->id)->delete();
+                }
+
                 $action = $newStatus ? 'USER_ACTIVATED' : 'USER_DEACTIVATED';
-                $statusText = $newStatus ? 'diaktifkan' : 'dinonaktifkan';
 
                 $this->logger->info(
                     action: $action,
                     module: 'users',
-                    message: "Status akun {$user->name} ({$user->email}) berhasil {$statusText}",
+                    message: 'User status changed',
                     context: [
                         'user_id' => $user->id,
                         'name' => $user->name,
@@ -103,10 +118,9 @@ class UserService
             $this->logger->error(
                 action: 'USER_TOGGLE_STATUS_FAILED',
                 module: 'users',
-                message: "Gagal mengubah status pengguna ID: {$userId} - {$e->getMessage()}",
+                message: 'User status change failed',
                 context: [
                     'user_id' => $userId,
-                    'error' => $e->getMessage(),
                 ],
                 userId: $currentAdminId,
                 exception: $e
@@ -117,7 +131,7 @@ class UserService
     }
 
     /**
-     * Delete a user account permanently.
+     * Archive a user account without destroying audit and transaction history.
      *
      * @throws InvalidArgumentException
      * @throws Throwable
@@ -131,6 +145,9 @@ class UserService
         try {
             return DB::transaction(function () use ($userId, $currentAdminId) {
                 $user = User::with('roles')->findOrFail($userId);
+                if ($user->hasRole('admin') && User::whereHas('roles', fn ($query) => $query->where('name', 'admin'))->count() <= 1) {
+                    throw new InvalidArgumentException('Akun admin terakhir tidak boleh dihapus.');
+                }
                 $userData = [
                     'user_id' => $user->id,
                     'name' => $user->name,
@@ -139,12 +156,18 @@ class UserService
                     'deleted_by' => $currentAdminId,
                 ];
 
-                $user->delete();
+                $user->is_active = false;
+                $user->setRememberToken(Str::random(60));
+                $user->save();
+
+                if (Schema::hasTable('sessions')) {
+                    DB::table('sessions')->where('user_id', $user->id)->delete();
+                }
 
                 $this->logger->warning(
                     action: 'USER_DELETED',
                     module: 'users',
-                    message: "Akun pengguna {$user->name} ({$user->email}) telah dihapus secara permanen",
+                    message: 'User account archived',
                     context: $userData,
                     userId: $currentAdminId
                 );
@@ -159,10 +182,9 @@ class UserService
             $this->logger->error(
                 action: 'USER_DELETE_FAILED',
                 module: 'users',
-                message: "Gagal menghapus pengguna ID: {$userId} - {$e->getMessage()}",
+                message: 'User account deletion failed',
                 context: [
                     'user_id' => $userId,
-                    'error' => $e->getMessage(),
                 ],
                 userId: $currentAdminId,
                 exception: $e

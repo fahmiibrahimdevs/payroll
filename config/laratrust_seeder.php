@@ -12,11 +12,29 @@ return [
     'truncate_tables' => true,
 
     'roles_structure' => [
+        'direktur' => [
+            'employees' => 'r',
+            'cash_advances' => 'r',
+            'payrolls' => 'r,u',
+            'receipts' => 'r',
+        ],
         'admin' => [
             'users' => 'c,r,u,d',
+            'departments' => 'c,r,u,d',
+            'positions' => 'c,r,u,d',
+            'employees' => 'c,r,u,d',
+            'salary_components' => 'c,r,u,d',
+            'cash_advances' => 'c,r,u,d',
+            'posts' => 'c,r,u,d',
+            'logs' => 'r',
+            'payrolls' => 'c,r,u,d',
+            'receipts' => 'c,r,u,d',
+        ],
+        'developer' => [
+            'logs' => 'r',
         ],
         'user' => [
-            'users' => 'c,r,u,d',
+            'users' => 'r',
         ],
     ],
 

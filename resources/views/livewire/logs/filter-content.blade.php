@@ -1,58 +1,58 @@
-<!-- 1. Periode Waktu -->
-<div class="filter-section">
-    <div class="filter-section-header">
-        <span class="filter-section-title">Periode Waktu</span>
-        <span class="filter-section-subtitle">Pilih Cepat</span>
-    </div>
+@php
+    $ctx = $filterContext ?? 'desktop';
+@endphp
 
-    <!-- Presets Chips -->
-    <div class="filter-chip-list">
-        <button type="button" wire:click="setPreset('today')" class="filter-chip-item {{ $activePreset === 'today' ? 'active' : '' }}">Hari Ini</button>
-        <button type="button" wire:click="setPreset('yesterday')" class="filter-chip-item {{ $activePreset === 'yesterday' ? 'active' : '' }}">Kemarin</button>
-        <button type="button" wire:click="setPreset('7days')" class="filter-chip-item {{ $activePreset === '7days' ? 'active' : '' }}">7 Hari Terakhir</button>
-        <button type="button" wire:click="setPreset('this_month')" class="filter-chip-item {{ $activePreset === 'this_month' ? 'active' : '' }}">Bulan Ini</button>
-        <button type="button" wire:click="setPreset('all')" class="filter-chip-item {{ $activePreset === 'all' ? 'active' : '' }}">Semua</button>
+<!-- 1. Periode Waktu (Select2) -->
+<div class="form-group mb-3">
+    <label for="filterPreset_{{ $ctx }}">Periode Waktu</label>
+    <div wire:ignore>
+        <select id="filterPreset_{{ $ctx }}" class="form-control form-control-sm select2 select2-filter-preset">
+            <option value="today" @selected($activePreset === 'today')>Hari Ini</option>
+            <option value="yesterday" @selected($activePreset === 'yesterday')>Kemarin</option>
+            <option value="7days" @selected($activePreset === '7days')>7 Hari Terakhir</option>
+            <option value="this_month" @selected($activePreset === 'this_month')>Bulan Ini</option>
+            <option value="all" @selected($activePreset === 'all')>Semua Periode</option>
+            <option value="custom" @selected($activePreset === 'custom')>Kustom Tanggal</option>
+        </select>
     </div>
+</div>
 
-    <!-- Custom Date Inputs (Clean Side-by-Side) -->
-    <div class="filter-date-grid">
-        <div class="filter-date-group">
-            <label class="filter-date-label">Dari Tanggal</label>
-            <input type="date" wire:model.live="startDate" class="filter-date-control">
+<!-- Rentang Tanggal -->
+<div class="form-group mb-3">
+    <div class="row">
+        <div class="col-6 pr-1">
+            <label for="filterStartDate_{{ $ctx }}" class="text-[12px] text-[#475467] font-medium mb-1.5 d-block">Dari Tanggal</label>
+            <input type="date" id="filterStartDate_{{ $ctx }}" wire:model.live="startDate" class="form-control form-control-sm">
         </div>
-        <div class="filter-date-group">
-            <label class="filter-date-label">Sampai Tanggal</label>
-            <input type="date" wire:model.live="endDate" class="filter-date-control">
+        <div class="col-6 pl-1">
+            <label for="filterEndDate_{{ $ctx }}" class="text-[12px] text-[#475467] font-medium mb-1.5 d-block">Sampai Tanggal</label>
+            <input type="date" id="filterEndDate_{{ $ctx }}" wire:model.live="endDate" class="form-control form-control-sm">
         </div>
     </div>
 </div>
 
-<div class="filter-separator"></div>
-
-<!-- 2. Tingkat (Level) -->
-<div class="filter-section">
-    <div class="filter-section-header">
-        <span class="filter-section-title">Tingkat (Level)</span>
-    </div>
-    <div class="filter-chip-list">
-        <button type="button" wire:click="setLevel('')" class="filter-chip-item {{ empty($filterLevel) ? 'active' : '' }}">Semua</button>
-        <button type="button" wire:click="setLevel('info')" class="filter-chip-item {{ $filterLevel === 'info' ? 'active-info' : '' }}"><span class="filter-dot bg-info"></span> Info</button>
-        <button type="button" wire:click="setLevel('warning')" class="filter-chip-item {{ $filterLevel === 'warning' ? 'active-warning' : '' }}"><span class="filter-dot bg-warning"></span> Warning</button>
-        <button type="button" wire:click="setLevel('error')" class="filter-chip-item {{ $filterLevel === 'error' ? 'active-danger' : '' }}"><span class="filter-dot bg-danger"></span> Error</button>
+<!-- 2. Tingkat / Level (Select2) -->
+<div class="form-group mb-3">
+    <label for="filterLevel_{{ $ctx }}">Tingkat (Level)</label>
+    <div wire:ignore>
+        <select id="filterLevel_{{ $ctx }}" class="form-control form-control-sm select2 select2-filter-level">
+            <option value="">Semua Tingkat (Level)</option>
+            <option value="info" @selected($filterLevel === 'info')>Info</option>
+            <option value="warning" @selected($filterLevel === 'warning')>Warning</option>
+            <option value="error" @selected($filterLevel === 'error')>Error</option>
+        </select>
     </div>
 </div>
 
-<div class="filter-separator"></div>
-
-<!-- 3. Modul Sistem -->
-<div class="filter-section">
-    <div class="filter-section-header">
-        <span class="filter-section-title">Modul Sistem</span>
-    </div>
-    <div class="filter-chip-list">
-        <button type="button" wire:click="setModule('')" class="filter-chip-item {{ empty($filterModule) ? 'active' : '' }}">Semua Modul</button>
-        @foreach ($modules as $module)
-            <button type="button" wire:click="setModule('{{ $module }}')" class="filter-chip-item {{ $filterModule === $module ? 'active' : '' }}">{{ ucfirst($module) }}</button>
-        @endforeach
+<!-- 3. Modul Sistem (Select2) -->
+<div class="form-group mb-0">
+    <label for="filterModule_{{ $ctx }}">Modul Sistem</label>
+    <div wire:ignore>
+        <select id="filterModule_{{ $ctx }}" class="form-control form-control-sm select2 select2-filter-module">
+            <option value="">Semua Modul</option>
+            @foreach ($modules as $module)
+                <option value="{{ $module }}" @selected($filterModule === $module)>{{ ucfirst($module) }}</option>
+            @endforeach
+        </select>
     </div>
 </div>

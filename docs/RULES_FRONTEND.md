@@ -339,5 +339,29 @@ npm run build:shizuefi
 3. **Pengecualian untuk Kolom Data Dinamis (`<td>`)**:
    - Kolom data tabel (`<td>`) yang berisi sintaks Blade dinamis `{{ ... }}`, badge, wrapper div, atau manipulasi format tanggal diperbolehkan ditulis multi-line agar kode tetap terstruktur dan rapi.
 
+---
 
+## 12. Standar Anti-Wrapping Teks & Label (Zero-Wrap UI Standard)
+
+1. **Dilarang Ada Teks/Label/Badge/Nav Pills Terpotong atau Ter-wrap ke Baris Baru**:
+   - Seluruh label input form, nav-pills, badges, tombol aksi, dan header tabel **DILARANG** ter-wrap secara canggung (*awkward line breaks*) ke bawah, baik pada tampilan desktop maupun mobile viewport.
+2. **Penulisan Label Ringkas & Padat**:
+   - Gunakan nama label yang ringkas, jelas, dan lugas (contoh: `Total Kasbon`, `Kepegawaian & Gaji`, `Pribadi & Bank`).
+   - Hindari menulis teks keterangan panjang di dalam label (seperti keterangan di dalam kurung) yang memicu pemecahan baris.
+3. **Pills & Tabs Responsif**:
+   - Pada modal atau form yang memiliki nav-pills/tabs, wajib selalu mengunci tata letak dalam 1 baris horizontal (`.nav-fill.flex-row.flex-nowrap`, `style="flex: 1 1 50%;"`, dan `.text-nowrap`) agar tidak pernah menumpuk ke bawah di layar mobile.
+
+---
+
+## 13. Standar Shadow & Border Radius Card (Card Shadow Standard)
+
+1. **Wajib Menggunakan Standar Card Shadow & Border Radius Larashiz**:
+   - Seluruh elemen card di aplikasi (termasuk `.card`, card Filter Log, card Riwayat Aktivitas, card Data Karyawan, widget statistik, serta `.activity-detail` pada timeline) **WAJIB TANPA KECUALI** menggunakan spesifikasi baku:
+     - **Shadow**: `box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04);` (`shadow-[0_2px_6px_0_rgba(0,0,0,0.06),0_1px_2px_0_rgba(0,0,0,0.04)]`)
+     - **Border**: `1px solid #e9edf2` (`border border-[#e9edf2]`)
+     - **Border Radius**: `12px` (`rounded-[12px]`)
+     - **Background**: `bg-white` (`#ffffff`)
+   - ✅ **BENAR**: Semua card (baik container utama maupun item activities timeline) memiliki shadow yang sangat bersih, crisp, modern depth, dan memiliki border halus yang 100% identik dengan Card Filter Log.
+2. **Dilarang Mengubah Ukuran Shadow / Radius Card**:
+   - ❌ **DILARANG**: Mengubah atau membedakan nilai shadow dan radius pada card apapun di seluruh sistem (jangan gunakan shadow tebal seperti `0 8px 20px rgba(0,0,0,0.08)`).
 

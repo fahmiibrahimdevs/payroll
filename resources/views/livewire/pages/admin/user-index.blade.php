@@ -138,7 +138,7 @@ new #[Layout('layouts.app')] class extends Component
             $this->dispatch('swal:alert', [
                 'type' => 'warning',
                 'title' => 'Aksi Ditolak',
-                'message' => 'Anda tidak dapat menghapus akun Anda sendiri.',
+                'message' => 'Anda tidak dapat mengarsipkan akun Anda sendiri.',
             ]);
 
             return;
@@ -147,7 +147,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->dispatch('swal:confirm-delete', [
             'id' => $userId,
             'title' => $user->name,
-            'text' => "Akun {$user->name} ({$user->email}) akan dihapus secara permanen dari sistem!",
+            'text' => "Akun {$user->name} ({$user->email}) akan diarsipkan dan dinonaktifkan.",
             'action' => 'delete-user',
             'params' => ['id' => $userId],
         ]);
@@ -168,7 +168,7 @@ new #[Layout('layouts.app')] class extends Component
             $this->dispatch('swal:alert', [
                 'type' => 'success',
                 'title' => 'Berhasil!',
-                'message' => "Akun {$user->name} ({$user->email}) berhasil dihapus permanen.",
+                'message' => "Akun {$user->name} ({$user->email}) berhasil diarsipkan.",
             ]);
         } catch (\InvalidArgumentException $e) {
             $this->dispatch('swal:alert', [
@@ -179,8 +179,8 @@ new #[Layout('layouts.app')] class extends Component
         } catch (\Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
-                'title' => 'Gagal Menghapus!',
-                'message' => 'Terjadi kesalahan sistem saat menghapus data pengguna.',
+                'title' => 'Gagal Mengarsipkan!',
+                'message' => 'Terjadi kesalahan sistem saat mengarsipkan data pengguna.',
             ]);
         }
     }
@@ -360,20 +360,8 @@ new #[Layout('layouts.app')] class extends Component
                                     @if ($user->id === auth()->id())
                                         <span class="badge badge-light border text-muted">Terkunci</span>
                                     @else
-                                        <button type="button" wire:click="confirmToggleStatus({{ $user->id }})" wire:loading.attr="disabled" wire:target="confirmToggleStatus({{ $user->id }})" class="btn btn-sm {{ $user->is_active ? 'btn-outline-danger' : 'btn-outline-success' }} mr-1" data-toggle="tooltip" title="{{ $user->is_active ? 'Nonaktifkan Akun Pengguna' : 'Aktifkan Akun Pengguna' }}">
-                                            <i wire:loading wire:target="confirmToggleStatus({{ $user->id }})" class="fas fa-spinner fa-spin mr-1"></i>
-                                            <span wire:loading.remove wire:target="confirmToggleStatus({{ $user->id }})">
-                                                @if ($user->is_active)
-                                                    <i class="fas fa-user-times mr-1"></i> Nonaktifkan
-                                                @else
-                                                    <i class="fas fa-user-check mr-1"></i> Aktifkan
-                                                @endif
-                                            </span>
-                                        </button>
-                                        <button type="button" wire:click="confirmDelete({{ $user->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $user->id }})" class="btn btn-sm btn-outline-danger" data-toggle="tooltip" title="Hapus Pengguna">
-                                            <i wire:loading wire:target="confirmDelete({{ $user->id }})" class="fas fa-spinner fa-spin"></i>
-                                            <i wire:loading.remove wire:target="confirmDelete({{ $user->id }})" class="fas fa-trash"></i>
-                                        </button>
+                                        <button type="button" wire:click="confirmToggleStatus({{ $user->id }})" wire:loading.attr="disabled" wire:target="confirmToggleStatus({{ $user->id }})" class="btn btn-sm {{ $user->is_active ? 'btn-outline-danger' : 'btn-outline-success' }} mr-1" title="{{ $user->is_active ? 'Nonaktifkan Akun Pengguna' : 'Aktifkan Akun Pengguna' }}"><i wire:loading wire:target="confirmToggleStatus({{ $user->id }})" class="fas fa-spinner fa-spin mr-1"></i><span wire:loading.remove wire:target="confirmToggleStatus({{ $user->id }})"><i class="fas {{ $user->is_active ? 'fa-user-times' : 'fa-user-check' }} mr-1"></i> {{ $user->is_active ? 'Nonaktifkan' : 'Aktifkan' }}</span></button>
+                                        <button type="button" wire:click="confirmDelete({{ $user->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $user->id }})" class="btn btn-sm btn-outline-danger" title="Arsipkan Pengguna"><i wire:loading wire:target="confirmDelete({{ $user->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="confirmDelete({{ $user->id }})" class="fas fa-user-slash"></i></button>
                                     @endif
                                 </td>
                             </tr>
@@ -391,10 +379,7 @@ new #[Layout('layouts.app')] class extends Component
                                             @endif
                                         </small>
                                         @if ($search || $role)
-                                            <button type="button" wire:click="resetFilters" wire:loading.attr="disabled" wire:target="resetFilters" class="btn btn-primary btn-sm mt-3 px-3">
-                                                <i wire:loading wire:target="resetFilters" class="fas fa-spinner fa-spin mr-1"></i>
-                                                <i wire:loading.remove wire:target="resetFilters" class="fas fa-undo-alt mr-1"></i> Reset Pencarian
-                                            </button>
+                                            <button type="button" wire:click="resetFilters" wire:loading.attr="disabled" wire:target="resetFilters" class="btn btn-primary btn-sm mt-3 px-3"><i wire:loading wire:target="resetFilters" class="fas fa-spinner fa-spin mr-1"></i><i wire:loading.remove wire:target="resetFilters" class="fas fa-undo-alt mr-1"></i> Reset Pencarian</button>
                                         @endif
                                     </div>
                                 </td>

@@ -5,9 +5,7 @@
                 <h5 class="modal-title" id="postModalLabel">
                     {{ $isEditMode ? 'Edit Data' : 'Tambah Data' }}
                 </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close" wire:click="$set('form.post', null)">
-                    <span aria-hidden="true">&times;</span>
-                </button>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" wire:click="$set('form.post', null)"><span aria-hidden="true">&times;</span></button>
             </div>
 
             <form wire:submit="{{ $isEditMode ? 'update' : 'store' }}">
@@ -70,17 +68,8 @@
                 </div>
 
                 <div class="modal-footer bg-whitesmoke br">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">
-                        <i class="fas fa-times mr-1"></i> Batal
-                    </button>
-                    <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="update, store">
-                        <span wire:loading wire:target="update, store">
-                            <i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...
-                        </span>
-                        <span wire:loading.remove wire:target="update, store">
-                            <i class="fas fa-save mr-1"></i> {{ $isEditMode ? 'Simpan Perubahan' : 'Tambah Data' }}
-                        </span>
-                    </button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fas fa-times mr-1"></i> Batal</button>
+                    <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="update, store"><span wire:loading wire:target="update, store"><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...</span><span wire:loading.remove wire:target="update, store"><i class="fas fa-save mr-1"></i> {{ $isEditMode ? 'Simpan Perubahan' : 'Tambah Data' }}</span></button>
                 </div>
             </form>
         </div>

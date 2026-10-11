@@ -23,9 +23,7 @@ class AuthenticationTest extends TestCase
 
     public function test_users_can_authenticate_using_the_login_screen(): void
     {
-        $user = User::factory()->create([
-            'is_active' => true,
-        ]);
+        $user = $this->createAdminUser();
 
         $component = Volt::test('pages.auth.login')
             ->set('form.email', $user->email)
@@ -61,9 +59,7 @@ class AuthenticationTest extends TestCase
 
     public function test_dashboard_can_be_rendered_for_authenticated_user(): void
     {
-        $user = User::factory()->create([
-            'is_active' => true,
-        ]);
+        $user = $this->createAdminUser();
 
         $response = $this->actingAs($user)->get(route('dashboard'));
 

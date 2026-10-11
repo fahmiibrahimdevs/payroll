@@ -23,11 +23,14 @@ class PostService
         string $category = '',
         int $perPage = 10
     ): LengthAwarePaginator {
+        $perPage = max(1, min($perPage, 100));
+
         return Post::query()
             ->when($search, fn ($q) => $q->search($search))
             ->when($status, fn ($q) => $q->status($status))
             ->when($category, fn ($q) => $q->category($category))
-            ->latest()
+            ->latest('created_at')
+            ->orderByDesc('id')
             ->paginate($perPage);
     }
 
@@ -56,9 +59,7 @@ class PostService
     {
         try {
             return DB::transaction(function () use ($data) {
-                if (empty($data['slug']) && ! empty($data['title'])) {
-                    $data['slug'] = Str::slug($data['title']);
-                }
+                $data['slug'] = $this->uniqueSlug((string) ($data['slug'] ?? ''), (string) ($data['title'] ?? ''));
 
                 $post = Post::create($data);
 
@@ -104,8 +105,8 @@ class PostService
             return DB::transaction(function () use ($post, $data) {
                 $oldValues = $post->only(['title', 'category', 'status', 'content']);
 
-                if (isset($data['title']) && $data['title'] !== $post->title && empty($data['slug'])) {
-                    $data['slug'] = Str::slug($data['title']);
+                if (isset($data['title']) && $data['title'] !== $post->title) {
+                    $data['slug'] = $this->uniqueSlug('', (string) $data['title'], $post->id);
                 }
 
                 $post->update($data);
@@ -178,5 +179,22 @@ class PostService
 
             throw $e;
         }
+    }
+
+    private function uniqueSlug(string $slug, string $title, ?int $ignoreId = null): string
+    {
+        $baseSlug = Str::slug($slug !== '' ? $slug : $title) ?: 'post';
+        $candidate = $baseSlug;
+        $suffix = 2;
+
+        while (Post::query()
+            ->where('slug', $candidate)
+            ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->exists()) {
+            $candidate = $baseSlug.'-'.$suffix;
+            $suffix++;
+        }
+
+        return $candidate;
     }
 }

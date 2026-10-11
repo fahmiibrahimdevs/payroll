@@ -71,13 +71,13 @@ class ActivityLogService
 
         // Attach structured error payload if exception is present
         if ($exception instanceof Throwable) {
-            $sanitizedContext['error'] = [
+            $sanitizedContext['error'] = $this->maskSensitiveData([
                 'type' => get_class($exception),
                 'message' => $exception->getMessage(),
                 'file' => $exception->getFile(),
                 'line' => $exception->getLine(),
                 'stack' => Str::limit($exception->getTraceAsString(), 2048),
-            ];
+            ]);
         }
 
         // 1. Write structured JSON line to standard Laravel/Monolog logging
@@ -96,11 +96,11 @@ class ActivityLogService
         ];
 
         match ($normalizedLevel) {
-            'DEBUG' => Log::debug("[{$module}][{$action}] {$message}", $standardLogPayload),
-            'WARN', 'WARNING' => Log::warning("[{$module}][{$action}] {$message}", $standardLogPayload),
-            'ERROR' => Log::error("[{$module}][{$action}] {$message}", $standardLogPayload),
-            'CRITICAL' => Log::critical("[{$module}][{$action}] {$message}", $standardLogPayload),
-            default => Log::info("[{$module}][{$action}] {$message}", $standardLogPayload),
+            'DEBUG' => Log::debug($message, $standardLogPayload),
+            'WARN', 'WARNING' => Log::warning($message, $standardLogPayload),
+            'ERROR' => Log::error($message, $standardLogPayload),
+            'CRITICAL' => Log::critical($message, $standardLogPayload),
+            default => Log::info($message, $standardLogPayload),
         };
 
         // 2. Persist to Database table with fail-safe try-catch
@@ -117,8 +117,8 @@ class ActivityLogService
                 'user_agent' => $userAgent,
             ]);
         } catch (Throwable $e) {
-            Log::emergency("Failed to write ActivityLog to database: {$e->getMessage()}", [
-                'exception' => $e->getMessage(),
+            Log::emergency('Failed to write ActivityLog to database', [
+                'exception_type' => get_class($e),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]);
@@ -298,13 +298,16 @@ class ActivityLogService
         string $module = '',
         int $perPage = 10
     ): LengthAwarePaginator {
+        $perPage = max(1, min($perPage, 100));
+
         return ActivityLog::query()
             ->with('user')
             ->dateRange($startDate ?: null, $endDate ?: null)
             ->level($level ?: null)
             ->module($module ?: null)
             ->search($search ?: null)
-            ->latest('id')
+            ->latest('created_at')
+            ->orderByDesc('id')
             ->paginate($perPage);
     }
 

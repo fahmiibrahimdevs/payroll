@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Livewire\Posts\Index;
 use App\Models\Post;
-use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -22,7 +21,7 @@ class PostCrudTest extends TestCase
 
     public function test_authenticated_user_can_view_posts_page(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createAdminUser();
 
         $response = $this->actingAs($user)->get(route('posts.index'));
 
@@ -32,7 +31,7 @@ class PostCrudTest extends TestCase
 
     public function test_can_create_post_and_logs_activity(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createAdminUser();
 
         $this->actingAs($user);
 
@@ -64,7 +63,7 @@ class PostCrudTest extends TestCase
 
     public function test_can_update_post_and_logs_activity(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createAdminUser();
         $post = Post::factory()->create([
             'title' => 'Judul Lama',
             'category' => 'Technology',
@@ -100,7 +99,7 @@ class PostCrudTest extends TestCase
 
     public function test_can_delete_post_and_logs_activity(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createAdminUser();
         $post = Post::factory()->create([
             'title' => 'Post yang Akan Dihapus',
         ]);
@@ -127,7 +126,7 @@ class PostCrudTest extends TestCase
 
     public function test_search_filter_returns_matching_posts(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createAdminUser();
         Post::factory()->create(['title' => 'Tutorial Laravel Livewire']);
         Post::factory()->create(['title' => 'Belajar Vue JS']);
 
