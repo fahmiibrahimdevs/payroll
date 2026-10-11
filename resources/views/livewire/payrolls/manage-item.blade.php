@@ -1435,7 +1435,7 @@
                 <div class="modal-body py-3 px-4 bg-white">
                     @if ($calculationDetail)
                         <!-- Calculation Detail Tile Group (Sesuai Desain Ringkasan Profil Karyawan) -->
-                        <div class="emp-tile-group mb-0 text-left">
+                        <div class="emp-tile-group mb-0 text-left bg-white" style="border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
                             @foreach ($calculationDetail['rows'] ?? [] as $row)
                                 @php
                                     $isHighlight = ! empty($row['is_bold']);
@@ -1444,22 +1444,24 @@
                                     $formulaText = ($hasAmount && ! empty($row['calc']) && $row['calc'] !== '—') ? $row['calc'] : null;
                                     $icon = $row['icon'] ?? 'fas fa-receipt';
                                 @endphp
-                                <div class="emp-tile-row {{ $isHighlight ? 'bg-light' : '' }}" @if($isHighlight) style="background-color: #f8fafc;" @endif>
+                                <div class="emp-tile-row bg-white" style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9;">
                                     <div class="emp-tile-left d-flex align-items-center min-w-0 pr-2">
-                                        <div class="emp-tile-icon"><i class="{{ $icon }} text-primary" style="color: #0b52aa !important;"></i></div>
+                                        <div class="emp-tile-icon" style="background-color: #f0f7ff; color: #0b52aa !important; width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11.5px; margin-right: 10px; flex-shrink: 0;">
+                                            <i class="{{ $icon }}"></i>
+                                        </div>
                                         <div class="min-w-0 text-left">
-                                            <div class="{{ $isHighlight ? 'font-weight-700 text-dark' : 'text-dark font-weight-600' }} text-truncate" style="font-size: 12.5px; line-height: 1.3;" title="{{ $row['component'] }}">
+                                            <div class="text-truncate" style="font-size: 13px; font-weight: 500; color: #0f172a; line-height: 1.35;" title="{{ $row['component'] }}">
                                                 {{ $row['component'] }}
                                             </div>
                                             @if ($formulaText)
-                                                <div class="text-muted text-truncate" style="font-size: 11px; line-height: 1.2; margin-top: 1px;" title="{{ $formulaText }}">
+                                                <div class="text-truncate" style="font-size: 11.5px; font-weight: 400; color: #475569; line-height: 1.3; margin-top: 2px;" title="{{ $formulaText }}">
                                                     {{ $formulaText }}
                                                 </div>
                                             @endif
                                         </div>
                                     </div>
                                     <div class="emp-tile-right text-nowrap pl-2 d-flex align-items-center justify-content-end" style="flex-shrink: 0;">
-                                        <span class="{{ $isHighlight ? 'font-weight-700 text-primary' : 'font-weight-600 text-dark' }}" style="{{ $isHighlight ? 'color: #0b52aa !important;' : '' }} font-size: 13px;">
+                                        <span style="font-size: 13px; {{ $isHighlight ? 'font-weight: 600; color: #0b52aa !important;' : 'font-weight: 500; color: #0f172a;' }}">
                                             {{ $displayValue }}
                                         </span>
                                     </div>
@@ -1469,11 +1471,11 @@
 
                         <!-- Kesimpulan / Penjelasan Perhitungan -->
                         @if (! empty($calculationDetail['summary_text']))
-                            <div class="alert alert-light border mt-3 mb-0" style="background-color: #f8fafc; border-color: #e2e8f0 !important; border-radius: 8px;">
-                                <div class="font-weight-bold text-dark mb-1 small text-uppercase" style="letter-spacing: 0.5px;">
-                                    <i class="fas fa-info-circle text-primary mr-1" style="color: #0b52aa !important;"></i> Kesimpulan Perhitungan
+                            <div class="mt-3 p-3 bg-white" style="border: 1px solid #e2e8f0; border-left: 3px solid #0b52aa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-1" style="font-size: 12px; font-weight: 600; color: #0b52aa; letter-spacing: 0.3px;">
+                                    <i class="fas fa-info-circle mr-1" style="color: #0b52aa !important;"></i> Kesimpulan Perhitungan
                                 </div>
-                                <div class="text-dark small" style="line-height: 1.5; font-size: 12px;">
+                                <div style="font-size: 12.5px; line-height: 1.6; color: #334155;">
                                     {!! $calculationDetail['summary_text'] !!}
                                 </div>
                             </div>
