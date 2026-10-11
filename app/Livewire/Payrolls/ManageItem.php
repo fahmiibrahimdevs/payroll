@@ -2102,6 +2102,28 @@ class ManageItem extends Component
                 return;
         }
 
+        if (! empty($this->calculationDetail['rows'])) {
+            foreach ($this->calculationDetail['rows'] as &$r) {
+                if (empty($r['icon'])) {
+                    $c = strtolower((string) ($r['component'] ?? ''));
+                    if (str_contains($c, 'ptkp') || str_contains($c, 'kategori') || str_contains($c, 'ter') || str_contains($c, 'lapisan')) {
+                        $r['icon'] = 'fas fa-percentage';
+                    } elseif (str_contains($c, 'premi') || str_contains($c, 'asuransi') || str_contains($c, 'kantor') || str_contains($c, 'tanggungan') || str_contains($c, 'jht') || str_contains($c, 'jkk') || str_contains($c, 'jkm')) {
+                        $r['icon'] = 'fas fa-shield-alt';
+                    } elseif (str_contains($c, 'pajak') || str_contains($c, 'pph') || str_contains($c, 'npwp') || str_contains($c, 'penyesuaian')) {
+                        $r['icon'] = 'fas fa-calculator';
+                    } elseif (str_contains($c, 'bpjs') || str_contains($c, 'iuran') || str_contains($c, 'kes')) {
+                        $r['icon'] = 'fas fa-heartbeat';
+                    } elseif (str_contains($c, 'gaji') || str_contains($c, 'bruto') || str_contains($c, 'pokok') || str_contains($c, 'upah')) {
+                        $r['icon'] = 'fas fa-wallet';
+                    } else {
+                        $r['icon'] = 'fas fa-receipt';
+                    }
+                }
+            }
+            unset($r);
+        }
+
         $this->dispatch('open-modal', ['id' => 'calcDetailModal']);
     }
 
