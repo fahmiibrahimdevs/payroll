@@ -155,6 +155,7 @@ class Index extends Component
         return view('livewire.payrolls.index', [
             'periods' => $periods,
             'statistics' => $statistics,
+            'activePeriod' => $statistics['active_period'] ?? null,
             'statuses' => PayrollPeriodStatus::cases(),
             'availableYears' => range((int) Carbon::now()->year + 1, (int) Carbon::now()->year - 3),
         ]);

@@ -73,9 +73,35 @@ class PayrollService
         $draftCount = PayrollPeriod::where('status', PayrollPeriodStatus::DRAFT->value)->count();
         $totalActiveEmployees = Employee::where('status', EmployeeStatus::ACTIVE)->count();
 
-        $latestPeriod = PayrollPeriod::where('year', $currentYear)
+        $activePeriod = PayrollPeriod::where('year', $currentYear)
             ->where('month', $currentMonth)
-            ->first();
+            ->first() ?? PayrollPeriod::orderByDesc('year')->orderByDesc('month')->first();
+
+        $activeNetSalary = (float) ($activePeriod?->total_net_salary ?? 0);
+        $activePph21 = 0;
+        $activeKasbon = 0;
+        $activeBpjsKaryawan = 0;
+        $activeBpjsPerusahaan = (float) ($activePeriod?->total_company_contributions ?? 0);
+        $activeKasbonCount = 0;
+
+        if ($activePeriod) {
+            $itemIds = $activePeriod->items()->pluck('id');
+            $activePph21 = (float) $activePeriod->items()->sum('pph21_amount');
+
+            $activeKasbon = (float) PayrollItemLine::whereIn('payroll_item_id', $itemIds)
+                ->where('category', PayrollLineCategory::CASH_ADVANCE)
+                ->sum('amount');
+
+            $activeKasbonCount = PayrollItemLine::whereIn('payroll_item_id', $itemIds)
+                ->where('category', PayrollLineCategory::CASH_ADVANCE)
+                ->count();
+
+            $activeBpjsKaryawan = (float) PayrollItemLine::whereIn('payroll_item_id', $itemIds)
+                ->where('category', PayrollLineCategory::BPJS)
+                ->sum('amount');
+        }
+
+        $activeTotalBpjs = $activeBpjsKaryawan + $activeBpjsPerusahaan;
 
         return [
             'total_paid_this_year' => $totalPaidThisYear,
@@ -83,8 +109,20 @@ class PayrollService
             'pending_approval_count' => $pendingApprovalCount,
             'draft_count' => $draftCount,
             'total_active_employees' => $totalActiveEmployees,
-            'current_period_status' => $latestPeriod?->status->label() ?? 'Belum Dibuat',
-            'current_period_badge' => $latestPeriod?->status_badge_class ?? 'badge badge-secondary',
+            'current_period_status' => $activePeriod?->status->label() ?? 'Belum Dibuat',
+            'current_period_badge' => $activePeriod?->status_badge_class ?? 'badge badge-secondary',
+
+            // HRD Operational Metrics
+            'active_period' => $activePeriod,
+            'active_net_salary' => $activeNetSalary,
+            'formatted_active_net_salary' => 'Rp '.number_format($activeNetSalary, 0, ',', '.'),
+            'active_pph21' => $activePph21,
+            'formatted_active_pph21' => 'Rp '.number_format($activePph21, 0, ',', '.'),
+            'active_kasbon' => $activeKasbon,
+            'formatted_active_kasbon' => 'Rp '.number_format($activeKasbon, 0, ',', '.'),
+            'active_kasbon_count' => $activeKasbonCount,
+            'active_total_bpjs' => $activeTotalBpjs,
+            'formatted_active_total_bpjs' => 'Rp '.number_format($activeTotalBpjs, 0, ',', '.'),
         ];
     }
 
