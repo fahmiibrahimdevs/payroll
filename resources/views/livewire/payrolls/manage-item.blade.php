@@ -1427,12 +1427,12 @@
         <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
             <div class="modal-content bg-white" style="border: 1px solid #eaedf2; border-radius: 8px;">
                 <div class="modal-header bg-white border-bottom py-3">
-                    <h5 class="modal-title text-dark" id="calcDetailModalLabel" style="font-weight: 500;">
+                    <h5 class="modal-title text-dark" id="calcDetailModalLabel" style="font-weight: 500; font-size: 16px; line-height: 1.35; padding-right: 28px; word-break: break-word;">
                         {{ $calculationDetail['title'] ?? 'Rincian Perhitungan' }}
                     </h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                 </div>
-                <div class="modal-body py-3 px-4 bg-white">
+                <div class="modal-body py-3 px-4 bg-white" style="min-width: 0; max-width: 100%; overflow-x: hidden;">
                     @if ($calculationDetail)
                         <!-- Clean Key-Value Table Container (Matches Kasbon Table Wrap) -->
                         <div class="calc-detail-tiles">
@@ -1872,26 +1872,53 @@
                 }
             }
 
-            /* Calculation Detail Modal Tiles & Tables (Clean & Standard) */
-            .calc-detail-tiles {
+            /* ================= CALCULATION DETAIL MODAL (KASBON-STYLE BOTTOM SHEET) ================= */
+            #calcDetailModal .modal-dialog,
+            #calcDetailModal .modal-content,
+            #calcDetailModal .modal-body {
+                min-width: 0 !important;
+                max-width: 100% !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            #calcDetailModal .modal-header {
+                min-width: 0 !important;
+                max-width: 100% !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            #calcDetailModal .modal-title {
+                max-width: calc(100% - 32px) !important;
+                word-break: break-word !important;
+                overflow-wrap: break-word !important;
+                font-size: 16px !important;
+                line-height: 1.35 !important;
+            }
+
+            #calcDetailModal .calc-detail-tiles {
                 background-color: #ffffff;
                 border: 1px solid #eaedf2;
                 border-radius: 8px;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch !important;
                 margin-bottom: 14px;
-                width: 100%;
-                max-width: 100%;
-                box-sizing: border-box;
+                width: 100% !important;
+                max-width: 100% !important;
+                min-width: 0 !important;
+                box-sizing: border-box !important;
+                display: block !important;
             }
 
-            .calc-detail-table {
+            #calcDetailModal .calc-detail-table {
                 width: 100%;
+                min-width: 480px;
                 margin-bottom: 0 !important;
                 border-collapse: collapse;
             }
 
-            .calc-detail-th {
+            #calcDetailModal .calc-detail-th {
                 background-color: #f8fafc !important;
                 color: #475569 !important;
                 font-size: 11px !important;
@@ -1903,7 +1930,7 @@
                 border-bottom: 1px solid #eaedf2 !important;
             }
 
-            .calc-detail-td {
+            #calcDetailModal .calc-detail-td {
                 padding: 10px 14px !important;
                 font-size: 12.5px !important;
                 line-height: 1.45 !important;
@@ -1912,11 +1939,11 @@
                 vertical-align: middle !important;
             }
 
-            .calc-detail-table tbody tr:last-child .calc-detail-td {
+            #calcDetailModal .calc-detail-table tbody tr:last-child .calc-detail-td {
                 border-bottom: 0 !important;
             }
 
-            .calc-detail-component {
+            #calcDetailModal .calc-detail-component {
                 font-size: 12.5px !important;
                 font-weight: 500 !important;
                 color: #334155 !important;
@@ -1924,16 +1951,16 @@
                 word-break: break-word;
             }
 
-            .calc-detail-row-highlight {
+            #calcDetailModal .calc-detail-row-highlight {
                 background-color: #f8fafc !important;
             }
 
-            .calc-detail-row-highlight .calc-detail-component {
+            #calcDetailModal .calc-detail-row-highlight .calc-detail-component {
                 font-weight: 600 !important;
                 color: #0f172a !important;
             }
 
-            .calc-detail-formula {
+            #calcDetailModal .calc-detail-formula {
                 font-size: 12px !important;
                 font-weight: 400 !important;
                 color: #64748b !important;
@@ -1942,7 +1969,7 @@
                 word-break: break-word;
             }
 
-            .calc-detail-amount {
+            #calcDetailModal .calc-detail-amount {
                 font-size: 12.5px !important;
                 font-weight: 500 !important;
                 color: #334155 !important;
@@ -1950,24 +1977,27 @@
                 white-space: nowrap !important;
             }
 
-            .calc-detail-amount-highlight {
+            #calcDetailModal .calc-detail-amount-highlight {
                 font-size: 13px !important;
                 font-weight: 700 !important;
                 color: #0b52aa !important;
             }
 
-            .calc-detail-reason-box {
+            #calcDetailModal .calc-detail-reason-box {
                 background-color: #f8fafc;
                 border: 1px solid #eaedf2;
                 border-radius: 8px;
                 padding: 12px 14px;
                 margin-bottom: 4px;
-                width: 100%;
-                max-width: 100%;
-                box-sizing: border-box;
+                width: 100% !important;
+                max-width: 100% !important;
+                min-width: 0 !important;
+                box-sizing: border-box !important;
+                word-break: break-word !important;
+                overflow-wrap: break-word !important;
             }
 
-            .calc-detail-reason-label {
+            #calcDetailModal .calc-detail-reason-label {
                 font-size: 11px;
                 font-weight: 600;
                 color: #475569;
@@ -1979,7 +2009,7 @@
                 line-height: 1.3;
             }
 
-            .calc-detail-reason-icon {
+            #calcDetailModal .calc-detail-reason-icon {
                 color: #0b52aa;
                 margin-right: 8px;
                 width: 14px;
@@ -1987,17 +2017,23 @@
                 font-size: 12px;
             }
 
-            .calc-detail-reason-text {
+            #calcDetailModal .calc-detail-reason-text {
                 font-size: 12.5px;
                 color: #334155;
                 line-height: 1.55;
-                word-break: break-word;
-                overflow-wrap: break-word;
+                word-break: break-word !important;
+                overflow-wrap: break-word !important;
                 white-space: normal;
                 font-weight: 400;
             }
 
-            .calc-detail-reason-text strong {
+            #calcDetailModal .calc-detail-reason-text * {
+                word-break: break-word !important;
+                overflow-wrap: break-word !important;
+                max-width: 100% !important;
+            }
+
+            #calcDetailModal .calc-detail-reason-text strong {
                 font-weight: 600;
                 color: #0f172a;
             }
