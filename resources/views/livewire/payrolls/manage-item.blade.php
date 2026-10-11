@@ -1424,17 +1424,17 @@
 
     <!-- ================= MODAL RINCIAN PERHITUNGAN (CALCULATION BREAKDOWN) ================= -->
     <div wire:ignore.self class="modal fade" id="calcDetailModal" role="dialog" aria-labelledby="calcDetailModalLabel" aria-hidden="true" data-backdrop="static">
-        <div class="modal-dialog modal-dialog-centered" role="document">
-            <div class="modal-content calc-detail-modal-content">
-                <div class="modal-header calc-detail-modal-header">
-                    <h5 class="modal-title calc-detail-modal-title" id="calcDetailModalLabel">
-                        <span>{{ $calculationDetail['title'] ?? 'Rincian Perhitungan' }}</span>
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content bg-white" style="border: 1px solid #eaedf2; border-radius: 8px;">
+                <div class="modal-header bg-white border-bottom py-3">
+                    <h5 class="modal-title text-dark" id="calcDetailModalLabel" style="font-weight: 500;">
+                        {{ $calculationDetail['title'] ?? 'Rincian Perhitungan' }}
                     </h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                 </div>
-                <div class="modal-body calc-detail-modal-body">
+                <div class="modal-body py-3 px-4 bg-white">
                     @if ($calculationDetail)
-                        <!-- Clean Key-Value Table Container (Responsive Stacked on Mobile) -->
+                        <!-- Clean Key-Value Table Container (Matches Kasbon Table Wrap) -->
                         <div class="calc-detail-tiles">
                             <table class="calc-detail-table">
                                 <thead>
@@ -1482,8 +1482,8 @@
                         </div>
                     @endif
                 </div>
-                <div class="modal-footer calc-detail-modal-footer">
-                    <button type="button" class="btn btn-secondary shadow-none" data-dismiss="modal"><i class="fas fa-times mr-1"></i> Tutup</button>
+                <div class="modal-footer bg-white border-top px-4 py-3">
+                    <button type="button" class="btn btn-secondary shadow-none" data-dismiss="modal" style="font-weight: 500;">Tutup</button>
                 </div>
             </div>
         </div>
@@ -1872,67 +1872,13 @@
                 }
             }
 
-            /* Calculation Detail Modal (Kasbon-Inspired Responsive Modal) */
-            #calcDetailModal .modal-dialog {
-                margin: 12px auto !important;
-                max-width: calc(100% - 24px) !important;
-                width: calc(100% - 24px) !important;
-            }
-            @media (min-width: 576px) {
-                #calcDetailModal .modal-dialog {
-                    max-width: 560px !important;
-                    width: 100% !important;
-                    margin: 1.75rem auto !important;
-                }
-            }
-
-            .calc-detail-modal-content {
-                border-radius: 14px !important;
-                border: 1px solid #e2e8f0 !important;
-                overflow: hidden !important;
-                background-color: #ffffff !important;
-                box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04) !important;
-            }
-
-            .calc-detail-modal-header {
-                border-bottom: 1px solid #f1f5f9 !important;
-                background-color: #ffffff !important;
-                padding: 14px 18px !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: space-between !important;
-            }
-
-            .calc-detail-modal-title {
-                font-size: 15px !important;
-                font-weight: 700 !important;
-                color: #0f172a !important;
-                margin-bottom: 0 !important;
-                display: flex !important;
-                align-items: center !important;
-                gap: 8px !important;
-            }
-
-            .calc-detail-modal-body {
-                background-color: #ffffff !important;
-                padding: 16px 18px !important;
-                max-height: calc(85vh - 120px);
-                overflow-y: auto;
-            }
-
-            .calc-detail-modal-footer {
-                border-top: 1px solid #f1f5f9 !important;
-                background-color: #f8fafc !important;
-                padding: 12px 18px !important;
-                display: flex !important;
-                justify-content: flex-end !important;
-            }
-
+            /* Calculation Detail Modal Tiles & Tables (Clean & Standard) */
             .calc-detail-tiles {
                 background-color: #ffffff;
-                border: 1px solid #e2e8f0;
-                border-radius: 12px;
-                overflow: hidden;
+                border: 1px solid #eaedf2;
+                border-radius: 8px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
                 margin-bottom: 14px;
                 width: 100%;
                 max-width: 100%;
@@ -1954,7 +1900,7 @@
                 text-transform: uppercase !important;
                 padding: 10px 14px !important;
                 border: 0 !important;
-                border-bottom: 1px solid #e2e8f0 !important;
+                border-bottom: 1px solid #eaedf2 !important;
             }
 
             .calc-detail-td {
@@ -2012,8 +1958,8 @@
 
             .calc-detail-reason-box {
                 background-color: #f8fafc;
-                border: 1px solid #e2e8f0;
-                border-radius: 10px;
+                border: 1px solid #eaedf2;
+                border-radius: 8px;
                 padding: 12px 14px;
                 margin-bottom: 4px;
                 width: 100%;
@@ -2054,91 +2000,6 @@
             .calc-detail-reason-text strong {
                 font-weight: 600;
                 color: #0f172a;
-            }
-
-            /* Mobile Stacked Card View for Calculation Table (< 576px) */
-            @media (max-width: 575.98px) {
-                .calc-detail-modal-header {
-                    padding: 12px 14px !important;
-                }
-                .calc-detail-modal-body {
-                    padding: 12px 14px !important;
-                }
-                .calc-detail-modal-footer {
-                    padding: 10px 14px !important;
-                }
-                .calc-detail-modal-title {
-                    font-size: 14px !important;
-                }
-
-                .calc-detail-table,
-                .calc-detail-table tbody {
-                    display: block !important;
-                    width: 100% !important;
-                }
-                .calc-detail-table thead {
-                    display: none !important;
-                }
-                .calc-detail-table tbody tr {
-                    display: flex !important;
-                    flex-wrap: wrap !important;
-                    justify-content: space-between !important;
-                    align-items: baseline !important;
-                    padding: 10px 12px !important;
-                    border-bottom: 1px solid #f1f5f9 !important;
-                    width: 100% !important;
-                    box-sizing: border-box !important;
-                }
-                .calc-detail-table tbody tr:last-child {
-                    border-bottom: 0 !important;
-                }
-                .calc-detail-td {
-                    padding: 0 !important;
-                    border: 0 !important;
-                    line-height: 1.4 !important;
-                }
-                .calc-detail-component {
-                    font-size: 12.5px !important;
-                    font-weight: 600 !important;
-                    color: #1e293b !important;
-                    flex: 1 1 auto !important;
-                    max-width: calc(100% - 110px) !important;
-                    padding-right: 6px !important;
-                }
-                .calc-detail-amount {
-                    font-size: 12.5px !important;
-                    font-weight: 600 !important;
-                    color: #0f172a !important;
-                    flex: 0 0 auto !important;
-                    text-align: right !important;
-                    white-space: nowrap !important;
-                }
-                .calc-detail-amount-highlight {
-                    font-size: 13px !important;
-                    font-weight: 700 !important;
-                    color: #0b52aa !important;
-                }
-                .calc-detail-formula {
-                    font-size: 11px !important;
-                    color: #64748b !important;
-                    flex: 1 1 100% !important;
-                    width: 100% !important;
-                    text-align: left !important;
-                    margin-top: 4px !important;
-                    word-break: break-word !important;
-                    overflow-wrap: break-word !important;
-                    line-height: 1.35 !important;
-                }
-                .calc-detail-formula:empty {
-                    display: none !important;
-                }
-
-                .calc-detail-reason-box {
-                    padding: 10px 12px !important;
-                }
-                .calc-detail-reason-text {
-                    font-size: 12px !important;
-                }
             }
         </style>
     @endpush
