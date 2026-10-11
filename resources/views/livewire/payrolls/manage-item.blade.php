@@ -14,8 +14,12 @@
         </div>
     </x-slot>
 
+    @php
+        $hasDirekturAction = auth()->user()?->hasRole('direktur');
+    @endphp
+
     <!-- Template Native Section Title & Lead + Persetujuan Direktur & Simpan -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-2 mb-md-3">
         <div class="mr-md-3">
             <h2 class="section-title mt-0">Kelola Komponen Gaji: {{ $period->period_label }}</h2>
             <p class="section-lead mb-0">
@@ -27,7 +31,7 @@
             </p>
         </div>
 
-        <div class="d-flex align-items-center mt-3 mt-md-0 flex-shrink-0" style="gap: 10px;">
+        <div class="{{ $hasDirekturAction ? 'd-flex' : 'd-none d-md-flex' }} align-items-center mt-2 mt-md-0 flex-shrink-0" style="gap: 10px;">
             @if (auth()->user()?->hasRole('direktur'))
                 @if ($item->isApproved())
                     <button type="button" 
