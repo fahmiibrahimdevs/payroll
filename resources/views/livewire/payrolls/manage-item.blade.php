@@ -1441,25 +1441,27 @@
                                     $isHighlight = ! empty($row['is_bold']);
                                     $hasAmount = ! empty($row['amount']) && $row['amount'] !== '—';
                                     $displayValue = $hasAmount ? $row['amount'] : ($row['calc'] ?? '—');
-                                    $tooltipFormula = ($hasAmount && ! empty($row['calc']) && $row['calc'] !== '—') ? $row['calc'] : null;
+                                    $formulaText = ($hasAmount && ! empty($row['calc']) && $row['calc'] !== '—') ? $row['calc'] : null;
                                     $icon = $row['icon'] ?? 'fas fa-receipt';
                                 @endphp
                                 <div class="emp-tile-row {{ $isHighlight ? 'bg-light' : '' }}" @if($isHighlight) style="background-color: #f8fafc;" @endif>
-                                    <div class="emp-tile-left text-nowrap min-w-0" style="overflow: hidden; text-overflow: ellipsis;">
+                                    <div class="emp-tile-left d-flex align-items-center min-w-0 pr-2">
                                         <div class="emp-tile-icon"><i class="{{ $icon }} text-primary" style="color: #0b52aa !important;"></i></div>
-                                        <span class="{{ $isHighlight ? 'font-weight-700 text-dark' : 'text-dark font-weight-500' }}" style="font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ $row['component'] }}">
-                                            {{ $row['component'] }}
-                                        </span>
+                                        <div class="min-w-0 text-left">
+                                            <div class="{{ $isHighlight ? 'font-weight-700 text-dark' : 'text-dark font-weight-600' }} text-truncate" style="font-size: 12.5px; line-height: 1.3;" title="{{ $row['component'] }}">
+                                                {{ $row['component'] }}
+                                            </div>
+                                            @if ($formulaText)
+                                                <div class="text-muted text-truncate" style="font-size: 11px; line-height: 1.2; margin-top: 1px;" title="{{ $formulaText }}">
+                                                    {{ $formulaText }}
+                                                </div>
+                                            @endif
+                                        </div>
                                     </div>
                                     <div class="emp-tile-right text-nowrap pl-2 d-flex align-items-center justify-content-end" style="flex-shrink: 0;">
                                         <span class="{{ $isHighlight ? 'font-weight-700 text-primary' : 'font-weight-600 text-dark' }}" style="{{ $isHighlight ? 'color: #0b52aa !important;' : '' }} font-size: 13px;">
                                             {{ $displayValue }}
                                         </span>
-                                        @if ($tooltipFormula)
-                                            <span class="text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="left" title="{{ $tooltipFormula }}" style="font-size: 11px;">
-                                                <i class="fas fa-info-circle text-primary" style="opacity: 0.7;"></i>
-                                            </span>
-                                        @endif
                                     </div>
                                 </div>
                             @endforeach
