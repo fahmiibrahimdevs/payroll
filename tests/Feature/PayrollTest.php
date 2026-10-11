@@ -1855,7 +1855,7 @@ class PayrollTest extends TestCase
 
         Livewire::test(Show::class, ['period' => $period])
             ->call('openPaymentDetailModal', $item->id)
-            ->assertSeeHtml($admin->name);
+            ->assertSeeHtml(e($admin->name));
     }
 
     public function test_individual_payroll_item_payment_can_be_edited(): void

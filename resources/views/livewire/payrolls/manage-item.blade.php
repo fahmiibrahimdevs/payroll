@@ -1435,7 +1435,7 @@
                 <div class="modal-body py-3 px-4 bg-white">
                     @if ($calculationDetail)
                         <!-- Calculation Detail Tile Group (Sesuai Desain Ringkasan Profil Karyawan) -->
-                        <div class="emp-tile-group mb-0 text-left">
+                        <div class="emp-tile-group mb-3 text-left">
                             @foreach ($calculationDetail['rows'] ?? [] as $row)
                                 @php
                                     $isHighlight = ! empty($row['is_bold']);
@@ -1454,7 +1454,7 @@
                                                 {{ $row['component'] }}
                                             </div>
                                             @if ($formulaText)
-                                                <div class="text-truncate" style="font-size: 11.5px; font-weight: 400; color: #475569; line-height: 1.3; margin-top: 2px;" title="{{ $formulaText }}">
+                                                <div class="text-truncate" style="font-size: 11.5px; font-weight: 400; color: #475569; line-height: 1.3; margin-top: 4px;" title="{{ $formulaText }}">
                                                     {{ $formulaText }}
                                                 </div>
                                             @endif
@@ -1471,7 +1471,7 @@
 
                         <!-- Kesimpulan / Penjelasan Perhitungan (.bd-callout) -->
                         @if (! empty($calculationDetail['summary_text']))
-                            <div class="bd-callout bd-callout-info mt-3 mb-0" role="alert">
+                            <div class="bd-callout bd-callout-info mt-4 mb-0" role="alert" style="margin-top: 18px !important;">
                                 <div class="d-flex align-items-start">
                                     <div class="bd-callout-icon mr-3 mt-0.5">
                                         <i class="fas fa-info-circle"></i>
@@ -1558,7 +1558,7 @@
             /* Bootstrap Callout (.bd-callout) Component */
             .bd-callout {
                 padding: 1rem 1.25rem !important;
-                margin-top: 0 !important;
+                margin-top: 0;
                 margin-bottom: 1.5rem !important;
                 background-color: #ffffff !important;
                 border: 1px solid #e2e8f0 !important;
@@ -1614,7 +1614,7 @@
                 font-size: 14px !important;
                 font-weight: 700 !important;
                 line-height: 1.35 !important;
-                margin-bottom: 3px !important;
+                margin-bottom: 8px !important;
                 letter-spacing: -0.15px !important;
             }
 
