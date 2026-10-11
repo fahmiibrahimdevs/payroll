@@ -138,7 +138,7 @@
     <div class="row align-items-start">
         <!-- ================= CARD 1: INFORMASI KARYAWAN & RINGKASAN SLIP GAJI (COL-3) ================= -->
         <div class="col-12 col-lg-3 mb-4">
-            <div class="card mb-4 shadow-sm" style="position: sticky; top: 85px; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; background: #ffffff;">
+            <div class="card mb-4 shadow-sm emp-summary-card">
                 <div class="card-body p-3 text-center">
                     <!-- Avatar Circle -->
                     <div class="d-flex justify-content-center mb-2">
@@ -1425,16 +1425,16 @@
     <!-- ================= MODAL RINCIAN PERHITUNGAN (CALCULATION BREAKDOWN) ================= -->
     <div wire:ignore.self class="modal fade" id="calcDetailModal" role="dialog" aria-labelledby="calcDetailModalLabel" aria-hidden="true" data-backdrop="static">
         <div class="modal-dialog modal-dialog-centered" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="calcDetailModalLabel">
-                        {{ $calculationDetail['title'] ?? 'Rincian Perhitungan' }}
+            <div class="modal-content calc-detail-modal-content">
+                <div class="modal-header calc-detail-modal-header">
+                    <h5 class="modal-title calc-detail-modal-title" id="calcDetailModalLabel">
+                        <span>{{ $calculationDetail['title'] ?? 'Rincian Perhitungan' }}</span>
                     </h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body calc-detail-modal-body">
                     @if ($calculationDetail)
-                        <!-- Clean Key-Value Table Container (Matches Tiles in Reference) -->
+                        <!-- Clean Key-Value Table Container (Responsive Stacked on Mobile) -->
                         <div class="calc-detail-tiles">
                             <table class="calc-detail-table">
                                 <thead>
@@ -1465,7 +1465,7 @@
                             </table>
                         </div>
 
-                        <!-- Summary / Explanation Box (Matches Reason Box in Reference) -->
+                        <!-- Summary / Explanation Box (Matches Kasbon Reason Box) -->
                         @if (! empty($calculationDetail['summary_text']))
                             <div class="calc-detail-reason-box">
                                 <div class="calc-detail-reason-label">
@@ -1482,8 +1482,8 @@
                         </div>
                     @endif
                 </div>
-                <div class="modal-footer bg-whitesmoke br">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fas fa-times mr-1"></i> Tutup</button>
+                <div class="modal-footer calc-detail-modal-footer">
+                    <button type="button" class="btn btn-secondary shadow-none" data-dismiss="modal"><i class="fas fa-times mr-1"></i> Tutup</button>
                 </div>
             </div>
         </div>
@@ -1857,28 +1857,94 @@
                 transform: scale(0.9) !important;
             }
 
-            /* Calculation Detail Modal (Standard Shizuefi / Stisla Modal) */
-            @media (min-width: 576px) {
-                #calcDetailModal .modal-dialog {
-                    max-width: 540px;
+            /* Employee summary card desktop sticky */
+            .emp-summary-card {
+                border-radius: 12px;
+                border: 1px solid #e2e8f0;
+                overflow: hidden;
+                background: #ffffff;
+            }
+            @media (min-width: 992px) {
+                .emp-summary-card {
+                    position: sticky;
+                    top: 85px;
+                    z-index: 10;
                 }
             }
+
+            /* Calculation Detail Modal (Kasbon-Inspired Responsive Modal) */
+            #calcDetailModal .modal-dialog {
+                margin: 12px auto !important;
+                max-width: calc(100% - 24px) !important;
+                width: calc(100% - 24px) !important;
+            }
+            @media (min-width: 576px) {
+                #calcDetailModal .modal-dialog {
+                    max-width: 560px !important;
+                    width: 100% !important;
+                    margin: 1.75rem auto !important;
+                }
+            }
+
+            .calc-detail-modal-content {
+                border-radius: 14px !important;
+                border: 1px solid #e2e8f0 !important;
+                overflow: hidden !important;
+                background-color: #ffffff !important;
+                box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04) !important;
+            }
+
+            .calc-detail-modal-header {
+                border-bottom: 1px solid #f1f5f9 !important;
+                background-color: #ffffff !important;
+                padding: 14px 18px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+            }
+
+            .calc-detail-modal-title {
+                font-size: 15px !important;
+                font-weight: 700 !important;
+                color: #0f172a !important;
+                margin-bottom: 0 !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+            }
+
+            .calc-detail-modal-body {
+                background-color: #ffffff !important;
+                padding: 16px 18px !important;
+                max-height: calc(85vh - 120px);
+                overflow-y: auto;
+            }
+
+            .calc-detail-modal-footer {
+                border-top: 1px solid #f1f5f9 !important;
+                background-color: #f8fafc !important;
+                padding: 12px 18px !important;
+                display: flex !important;
+                justify-content: flex-end !important;
+            }
+
             .calc-detail-tiles {
                 background-color: #ffffff;
                 border: 1px solid #e2e8f0;
-                border-radius: 10px;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                margin-bottom: 12px;
+                border-radius: 12px;
+                overflow: hidden;
+                margin-bottom: 14px;
                 width: 100%;
                 max-width: 100%;
                 box-sizing: border-box;
             }
+
             .calc-detail-table {
                 width: 100%;
                 margin-bottom: 0 !important;
                 border-collapse: collapse;
             }
+
             .calc-detail-th {
                 background-color: #f8fafc !important;
                 color: #475569 !important;
@@ -1886,35 +1952,41 @@
                 font-weight: 600 !important;
                 letter-spacing: 0.5px !important;
                 text-transform: uppercase !important;
-                padding: 10px 12px !important;
+                padding: 10px 14px !important;
                 border: 0 !important;
                 border-bottom: 1px solid #e2e8f0 !important;
             }
+
             .calc-detail-td {
-                padding: 10px 12px !important;
+                padding: 10px 14px !important;
                 font-size: 12.5px !important;
                 line-height: 1.45 !important;
                 border: 0 !important;
                 border-bottom: 1px solid #f1f5f9 !important;
                 vertical-align: middle !important;
             }
+
             .calc-detail-table tbody tr:last-child .calc-detail-td {
                 border-bottom: 0 !important;
             }
+
             .calc-detail-component {
                 font-size: 12.5px !important;
-                font-weight: 400 !important;
-                color: #475569 !important;
+                font-weight: 500 !important;
+                color: #334155 !important;
                 white-space: normal;
                 word-break: break-word;
             }
+
             .calc-detail-row-highlight {
                 background-color: #f8fafc !important;
             }
+
             .calc-detail-row-highlight .calc-detail-component {
                 font-weight: 600 !important;
                 color: #0f172a !important;
             }
+
             .calc-detail-formula {
                 font-size: 12px !important;
                 font-weight: 400 !important;
@@ -1923,18 +1995,21 @@
                 white-space: normal;
                 word-break: break-word;
             }
+
             .calc-detail-amount {
                 font-size: 12.5px !important;
-                font-weight: 400 !important;
-                color: #475569 !important;
+                font-weight: 500 !important;
+                color: #334155 !important;
                 text-align: right !important;
                 white-space: nowrap !important;
             }
+
             .calc-detail-amount-highlight {
                 font-size: 13px !important;
-                font-weight: 600 !important;
-                color: #0f172a !important;
+                font-weight: 700 !important;
+                color: #0b52aa !important;
             }
+
             .calc-detail-reason-box {
                 background-color: #f8fafc;
                 border: 1px solid #e2e8f0;
@@ -1945,6 +2020,7 @@
                 max-width: 100%;
                 box-sizing: border-box;
             }
+
             .calc-detail-reason-label {
                 font-size: 11px;
                 font-weight: 600;
@@ -1956,6 +2032,7 @@
                 align-items: center;
                 line-height: 1.3;
             }
+
             .calc-detail-reason-icon {
                 color: #0b52aa;
                 margin-right: 8px;
@@ -1963,6 +2040,7 @@
                 text-align: center;
                 font-size: 12px;
             }
+
             .calc-detail-reason-text {
                 font-size: 12.5px;
                 color: #334155;
@@ -1972,36 +2050,94 @@
                 white-space: normal;
                 font-weight: 400;
             }
+
             .calc-detail-reason-text strong {
                 font-weight: 600;
                 color: #0f172a;
             }
-            @media (max-width: 576px) {
-                .calc-detail-th {
-                    font-size: 10px !important;
-                    padding: 8px 8px !important;
+
+            /* Mobile Stacked Card View for Calculation Table (< 576px) */
+            @media (max-width: 575.98px) {
+                .calc-detail-modal-header {
+                    padding: 12px 14px !important;
+                }
+                .calc-detail-modal-body {
+                    padding: 12px 14px !important;
+                }
+                .calc-detail-modal-footer {
+                    padding: 10px 14px !important;
+                }
+                .calc-detail-modal-title {
+                    font-size: 14px !important;
+                }
+
+                .calc-detail-table,
+                .calc-detail-table tbody {
+                    display: block !important;
+                    width: 100% !important;
+                }
+                .calc-detail-table thead {
+                    display: none !important;
+                }
+                .calc-detail-table tbody tr {
+                    display: flex !important;
+                    flex-wrap: wrap !important;
+                    justify-content: space-between !important;
+                    align-items: baseline !important;
+                    padding: 10px 12px !important;
+                    border-bottom: 1px solid #f1f5f9 !important;
+                    width: 100% !important;
+                    box-sizing: border-box !important;
+                }
+                .calc-detail-table tbody tr:last-child {
+                    border-bottom: 0 !important;
                 }
                 .calc-detail-td {
-                    font-size: 11.5px !important;
-                    padding: 8px 8px !important;
+                    padding: 0 !important;
+                    border: 0 !important;
+                    line-height: 1.4 !important;
                 }
                 .calc-detail-component {
-                    font-size: 11.5px !important;
+                    font-size: 12.5px !important;
+                    font-weight: 600 !important;
+                    color: #1e293b !important;
+                    flex: 1 1 auto !important;
+                    max-width: calc(100% - 110px) !important;
+                    padding-right: 6px !important;
+                }
+                .calc-detail-amount {
+                    font-size: 12.5px !important;
+                    font-weight: 600 !important;
+                    color: #0f172a !important;
+                    flex: 0 0 auto !important;
+                    text-align: right !important;
+                    white-space: nowrap !important;
+                }
+                .calc-detail-amount-highlight {
+                    font-size: 13px !important;
+                    font-weight: 700 !important;
+                    color: #0b52aa !important;
                 }
                 .calc-detail-formula {
                     font-size: 11px !important;
+                    color: #64748b !important;
+                    flex: 1 1 100% !important;
+                    width: 100% !important;
+                    text-align: left !important;
+                    margin-top: 4px !important;
+                    word-break: break-word !important;
+                    overflow-wrap: break-word !important;
+                    line-height: 1.35 !important;
                 }
-                .calc-detail-amount {
-                    font-size: 11.5px !important;
+                .calc-detail-formula:empty {
+                    display: none !important;
                 }
-                .calc-detail-amount-highlight {
-                    font-size: 12px !important;
-                }
+
                 .calc-detail-reason-box {
-                    padding: 10px 12px;
+                    padding: 10px 12px !important;
                 }
                 .calc-detail-reason-text {
-                    font-size: 12px;
+                    font-size: 12px !important;
                 }
             }
         </style>
