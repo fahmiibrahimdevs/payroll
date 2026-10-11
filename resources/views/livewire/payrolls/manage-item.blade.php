@@ -14,11 +14,11 @@
         </div>
     </x-slot>
 
-    <!-- Template Native Section Title & Lead + Persetujuan Direktur -->
-    <div>
-        <div>
-            <h2 class="section-title">Kelola Komponen Gaji: {{ $period->period_label }}</h2>
-            <p class="section-lead">
+    <!-- Template Native Section Title & Lead + Persetujuan Direktur & Simpan -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
+        <div class="mr-md-3">
+            <h2 class="section-title mt-0">Kelola Komponen Gaji: {{ $period->period_label }}</h2>
+            <p class="section-lead mb-0">
                 @if ($this->isEditable)
                     Atur rincian penghasilan (tunjangan) dan potongan gaji karyawan. Perubahan akan langsung memengaruhi total take home pay.
                 @else
@@ -27,8 +27,8 @@
             </p>
         </div>
 
-        @if (auth()->user()?->hasRole('direktur'))
-            <div class="d-flex align-items-center mt-3 mt-md-0 flex-shrink-0">
+        <div class="d-flex align-items-center mt-3 mt-md-0 flex-shrink-0" style="gap: 10px;">
+            @if (auth()->user()?->hasRole('direktur'))
                 @if ($item->isApproved())
                     <button type="button" 
                         onclick="openApprovalMenu(this)"
@@ -72,8 +72,24 @@
                         <i class="fas fa-user-check"></i> Persetujuan Direktur <i class="fas fa-caret-down ml-1"></i>
                     </button>
                 @endif
-            </div>
-        @endif
+            @endif
+
+            @if ($this->isEditable && (auth()->user()?->hasRole(['admin', 'direktur']) || auth()->user()?->can('update', $period)))
+                <button type="button" 
+                        wire:click="save" 
+                        wire:loading.attr="disabled" 
+                        wire:target="save" 
+                        class="btn btn-primary d-none d-md-inline-flex align-items-center font-weight-bold shadow-sm" 
+                        style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; padding: 9px 16px; font-size: 13px;">
+                    <span wire:loading.remove wire:target="save">
+                        <i class="fas fa-save mr-1.5"></i> Simpan Komponen Gaji
+                    </span>
+                    <span wire:loading wire:target="save">
+                        <i class="fas fa-spinner fa-spin mr-1.5"></i> Menyimpan...
+                    </span>
+                </button>
+            @endif
+        </div>
     </div>
 
     <!-- Status Banner: Catatan Revisi Direktur atau ACC -->
@@ -413,22 +429,6 @@
                         </div>
                     </div>
 
-                    @if ($this->isEditable && (auth()->user()?->hasRole(['admin', 'direktur']) || auth()->user()?->can('update', $period)))
-                        <div class="mt-3">
-                            <button type="button" 
-                                    wire:click="save" 
-                                    wire:loading.attr="disabled" 
-                                    class="btn btn-primary btn-block py-2.5 font-weight-bold shadow-sm" 
-                                    style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px;">
-                                <span wire:loading.remove wire:target="save">
-                                    <i class="fas fa-save mr-1.5"></i> Simpan Komponen Gaji
-                                </span>
-                                <span wire:loading wire:target="save">
-                                    <i class="fas fa-spinner fa-spin mr-1.5"></i> Menyimpan...
-                                </span>
-                            </button>
-                        </div>
-                    @endif
 
                 </div>
             </div>
@@ -1499,6 +1499,20 @@
             </div>
         </div>
     </div>
+
+    <!-- Floating Action Button Simpan (Mobile Only) -->
+    @if ($this->isEditable && (auth()->user()?->hasRole(['admin', 'direktur']) || auth()->user()?->can('update', $period)))
+        <button type="button" 
+                wire:click="save" 
+                wire:loading.attr="disabled" 
+                wire:target="save" 
+                class="btn-floating-add d-md-none" 
+                title="Simpan Komponen Gaji" 
+                aria-label="Simpan Komponen Gaji">
+            <i wire:loading.remove wire:target="save" class="fas fa-save"></i>
+            <i wire:loading wire:target="save" class="fas fa-spinner fa-spin"></i>
+        </button>
+    @endif
 
     @push('styles')
         <style>
