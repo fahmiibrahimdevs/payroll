@@ -1495,16 +1495,37 @@
                 display: none !important;
             }
 
-            /* Allow table dropdowns to float seamlessly */
-            .card.card-payroll-table {
-                overflow: visible !important;
+            /* Responsive flexbox constraints & horizontal table scroll containment */
+            .table-responsive {
+                width: 100% !important;
+                max-width: 100% !important;
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch !important;
             }
-            .card.card-payroll-table .table-responsive {
-                overflow: visible !important;
+
+            @media (max-width: 991.98px) {
+                .row {
+                    min-width: 0 !important;
+                }
+                .row > [class*="col-"] {
+                    min-width: 0 !important;
+                    max-width: 100% !important;
+                }
+                .card,
+                .card.card-payroll-table {
+                    min-width: 0 !important;
+                    max-width: 100% !important;
+                    overflow: hidden !important;
+                }
             }
-            @media (max-width: 991px) {
+
+            @media (min-width: 992px) {
+                /* On desktop, allow autocomplete dropdowns to float outside card cleanly */
+                .card.card-payroll-table {
+                    overflow: visible !important;
+                }
                 .card.card-payroll-table .table-responsive {
-                    overflow-x: auto !important;
+                    overflow: visible !important;
                 }
             }
 
