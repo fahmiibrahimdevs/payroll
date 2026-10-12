@@ -29,269 +29,370 @@
         @endif
     </div>
 
-    <!-- 4 Modern Stat Cards (Kebutuhan Nyata HRD & Keuangan) -->
+    <!-- 4 Modern Stat Cards (Rekap Tahunan HRD & Keuangan) -->
     <div class="payroll-stat-grid mb-4">
-        <!-- 1. Take Home Pay Berjalan -->
+        <!-- 1. Total Biaya Perusahaan -->
         <div class="card cash-advance-stat-card">
             <div class="card-body cash-advance-stat-body">
                 <div class="cash-advance-stat-icon cash-advance-stat-icon-blue">
-                    <i class="fas fa-wallet"></i>
+                    <i class="fas fa-building"></i>
                 </div>
                 <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Take Home Pay Berjalan">Take Home Pay Berjalan</div>
+                    <div class="cash-advance-stat-title" title="Total Biaya Perusahaan">Total biaya perusahaan</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-primary" title="{{ $statistics['formatted_active_net_salary'] }}">
-                            {{ $statistics['formatted_active_net_salary'] }}
+                        <div class="cash-advance-stat-value text-primary" title="{{ $statistics['formatted_yearly_total_company_cost'] }}">
+                            {{ $statistics['compact_yearly_company_cost'] }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
-                            <i class="fas fa-coins text-[10px]"></i>
+                            <i class="fas fa-chart-line text-[10px]"></i>
                         </span>
                     </div>
                     <div class="cash-advance-stat-subtext">
-                        @if ($activePeriod)
-                            Estimasi transfer {{ $activePeriod->employee_count }} karyawan
-                        @else
-                            Belum ada draf aktif
-                        @endif
+                        {{ $statistics['yearly_company_cost_subtitle'] }}
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 2. Potongan Kasbon Terpotong -->
+        <!-- 2. Total THP Ditransfer -->
+        <div class="card cash-advance-stat-card">
+            <div class="card-body cash-advance-stat-body">
+                <div class="cash-advance-stat-icon cash-advance-stat-icon-green">
+                    <i class="fas fa-wallet"></i>
+                </div>
+                <div class="cash-advance-stat-content">
+                    <div class="cash-advance-stat-title" title="Total THP Ditransfer">Total THP ditransfer</div>
+                    <div class="cash-advance-stat-value-row">
+                        <div class="cash-advance-stat-value text-success" title="{{ $statistics['formatted_yearly_total_thp'] }}">
+                            {{ $statistics['compact_yearly_thp'] }}
+                        </div>
+                        <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
+                            <i class="fas fa-money-bill-wave text-[10px]"></i>
+                        </span>
+                    </div>
+                    <div class="cash-advance-stat-subtext">
+                        {{ $statistics['yearly_thp_subtitle'] }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Total Setoran -->
+        <div class="card cash-advance-stat-card">
+            <div class="card-body cash-advance-stat-body">
+                <div class="cash-advance-stat-icon cash-advance-stat-icon-red">
+                    <i class="fas fa-landmark"></i>
+                </div>
+                <div class="cash-advance-stat-content">
+                    <div class="cash-advance-stat-title" title="Total Setoran PPh 21 & BPJS">Total setoran</div>
+                    <div class="cash-advance-stat-value-row">
+                        <div class="cash-advance-stat-value text-danger" title="{{ $statistics['formatted_yearly_total_setoran'] }}">
+                            {{ $statistics['compact_yearly_setoran'] }}
+                        </div>
+                        <span class="cash-advance-stat-badge cash-advance-stat-badge-red">
+                            <i class="fas fa-file-invoice-dollar text-[10px]"></i>
+                        </span>
+                    </div>
+                    <div class="cash-advance-stat-subtext">
+                        {{ $statistics['yearly_setoran_subtitle'] }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Sisa Kasbon -->
         <div class="card cash-advance-stat-card">
             <div class="card-body cash-advance-stat-body">
                 <div class="cash-advance-stat-icon cash-advance-stat-icon-amber">
                     <i class="fas fa-hand-holding-usd"></i>
                 </div>
                 <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Potongan Kasbon Terpotong">Potongan Kasbon</div>
+                    <div class="cash-advance-stat-title" title="Sisa Kasbon Belum Lunas">Sisa kasbon</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-warning" title="{{ $statistics['formatted_active_kasbon'] }}">
-                            {{ $statistics['formatted_active_kasbon'] }}
+                        <div class="cash-advance-stat-value text-warning" title="{{ $statistics['formatted_remaining_kasbon'] }}">
+                            {{ $statistics['compact_remaining_kasbon'] }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-amber">
                             <i class="fas fa-receipt text-[10px]"></i>
                         </span>
                     </div>
                     <div class="cash-advance-stat-subtext">
-                        @if ($statistics['active_kasbon_count'] > 0)
-                            {{ $statistics['active_kasbon_count'] }} cicilan kasbon terpotong
-                        @else
-                            Tidak ada potongan kasbon
-                        @endif
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 3. Pajak PPh 21 Masa -->
-        <div class="card cash-advance-stat-card">
-            <div class="card-body cash-advance-stat-body">
-                <div class="cash-advance-stat-icon cash-advance-stat-icon-red">
-                    <i class="fas fa-file-invoice-dollar"></i>
-                </div>
-                <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Pajak PPh 21 Masa">Pajak PPh 21 Masa</div>
-                    <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-danger" title="{{ $statistics['formatted_active_pph21'] }}">
-                            {{ $statistics['formatted_active_pph21'] }}
-                        </div>
-                        <span class="cash-advance-stat-badge cash-advance-stat-badge-red">
-                            <i class="fas fa-university text-[10px]"></i>
-                        </span>
-                    </div>
-                    <div class="cash-advance-stat-subtext">
-                        Setor kas negara (TER)
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 4. Total Iuran BPJS -->
-        <div class="card cash-advance-stat-card">
-            <div class="card-body cash-advance-stat-body">
-                <div class="cash-advance-stat-icon cash-advance-stat-icon-green">
-                    <i class="fas fa-shield-alt"></i>
-                </div>
-                <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Total BPJS (Karyawan + Kantor)">Total Iuran BPJS</div>
-                    <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-success" title="{{ $statistics['formatted_active_total_bpjs'] }}">
-                            {{ $statistics['formatted_active_total_bpjs'] }}
-                        </div>
-                        <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
-                            <i class="fas fa-heartbeat text-[10px]"></i>
-                        </span>
-                    </div>
-                    <div class="cash-advance-stat-subtext">
-                        Kesehatan & Ketenagakerjaan
+                        {{ $statistics['remaining_kasbon_subtitle'] }}
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Main Split Layout (4 Kolom Sorotan Periode Berjalan : 8 Kolom Riwayat Periode) -->
+    <!-- Main Split Layout (3 Kolom Sorotan Periode Berjalan : 9 Kolom Riwayat Periode) -->
     <div class="row align-items-start">
-        <!-- ================= KOLOM KIRI (COL-4): SOROTAN PERIODE BERJALAN ================= -->
-        <div class="col-12 col-lg-4 mb-4">
-            @if ($activePeriod)
-                <div class="card shadow-sm payroll-focus-card">
-                    <div class="card-header border-bottom-0 pb-0 d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center">
-                            <span class="payroll-sidebar-indicator mr-2"></span>
-                            <h4 class="mb-0 font-weight-bold text-dark" style="font-size: 15px;">Periode Berjalan</h4>
+        <!-- ================= KOLOM KIRI (COL-3): RINGKASAN PAYROLL EKSEKUTIF ================= -->
+        <div class="col-12 col-lg-3 col-md-4 mb-4">
+            <div class="card shadow-sm border-0" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03);">
+                <!-- 1. Header Card -->
+                <div class="border-bottom d-flex align-items-center justify-content-between" style="background: #ffffff; padding: 14px 20px;">
+                    <div>
+                        <h4 class="mb-0" style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.35;">
+                            Rekap payroll
+                        </h4>
+                        <div style="font-size: 11.5px; font-weight: 500; color: #64748b; margin-top: 2px;">
+                            {{ $statistics['rekap_payroll_subtitle'] }}
                         </div>
-                        <span class="{{ $activePeriod->status_badge_class }}">
-                            {{ $activePeriod->status_label }}
-                        </span>
                     </div>
-                    <div class="card-body pt-3">
-                        <!-- Nama & Info Periode -->
-                        <div class="mb-3">
-                            <div class="text-xs font-weight-bold text-uppercase text-muted letter-spacing-1 mb-1">
-                                {{ $activePeriod->reference_number }} &bull; {{ $activePeriod->period_label }}
+
+                    <!-- Dropdown Filter Tahun -->
+                    <div>
+                        <select wire:model.live="selectedYear" class="form-control form-control-sm border shadow-none font-weight-bold" style="font-size: 11.5px; border-radius: 8px; border-color: #e2e8f0; background-color: #f8fafc; color: #0f172a; height: 30px; padding: 2px 10px; cursor: pointer;">
+                            @foreach ($availableYears as $yearOpt)
+                                <option value="{{ $yearOpt }}">{{ $yearOpt }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card-body p-0">
+                    <!-- 2. Hero Metric: Total Biaya Perusahaan (Donut Chart) -->
+                    @php
+                        $activeMonthsInYear = collect($statistics['twelve_months_data'])
+                            ->filter(fn ($tm) => $tm['cost'] > 0)
+                            ->values();
+
+                        $hasChartData = $activeMonthsInYear->isNotEmpty();
+                        $chartLabels = $hasChartData ? $activeMonthsInYear->pluck('month_name')->all() : ['Belum ada data'];
+                        $chartValues = $hasChartData ? $activeMonthsInYear->pluck('cost')->all() : [1];
+
+                        $donutPalette = ['#0b52aa', '#2563eb', '#3b82f6', '#0284c7', '#0ea5e9', '#06b6d4', '#10b981', '#14b8a6', '#6366f1', '#8b5cf6', '#f59e0b', '#ec4899'];
+                        $chartColors = $hasChartData
+                            ? ($activeMonthsInYear->count() === 1 ? ['#2563eb'] : array_slice($donutPalette, 0, $activeMonthsInYear->count()))
+                            : ['#e2e8f0'];
+                    @endphp
+
+                    <div style="padding: 16px 20px 14px;" class="text-center">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <div style="font-size: 12px; font-weight: 600; color: #64748b;">
+                                Total biaya perusahaan
                             </div>
-                            <h5 class="font-weight-bold text-dark mb-1" style="font-size: 16px; line-height: 1.35;">
-                                {{ $activePeriod->name }}
-                            </h5>
-                            @if ($activePeriod->notes)
-                                <p class="text-muted small mb-0">{{ $activePeriod->notes }}</p>
-                            @endif
+                            <span class="badge badge-light border text-muted font-weight-600 px-2 py-0.5" style="font-size: 10.5px; border-radius: 6px;">
+                                Tahun {{ $selectedYear }}
+                            </span>
                         </div>
 
-                        <!-- Financial Snapshot Box -->
-                        <div class="payroll-financial-box p-3 rounded mb-3" style="background-color: #f8fafc; border: 1px solid #e2e8f0;">
-                            <div class="d-flex justify-content-between align-items-center mb-1.5 small">
-                                <span class="text-muted">Gaji Pokok:</span>
-                                <span class="font-weight-600 text-dark">{{ $activePeriod->formatted_total_basic_salary }}</span>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center mb-1.5 small">
-                                <span class="text-muted">Tunjangan (+):</span>
-                                <span class="font-weight-600 text-success">+{{ $activePeriod->formatted_total_allowances }}</span>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center mb-2 small">
-                                <span class="text-muted">Potongan (-):</span>
-                                <span class="font-weight-600 text-danger">-{{ $activePeriod->formatted_total_deductions }}</span>
-                            </div>
-                            <div class="border-top pt-2 d-flex justify-content-between align-items-baseline">
-                                <span class="font-weight-bold text-dark" style="font-size: 13px;">Take Home Pay:</span>
-                                <span class="font-weight-bold text-primary" style="font-size: 17px;">{{ $activePeriod->formatted_total_net_salary }}</span>
+                        <!-- Donut Chart Container -->
+                        <div wire:key="payroll-doughnut-{{ $selectedYear }}-{{ $statistics['yearly_total_company_cost'] }}"
+                             x-data="{
+                                 chartInstance: null,
+                                 initChart() {
+                                     const year = {{ (int) $selectedYear }};
+                                     const hasData = {{ $hasChartData ? 'true' : 'false' }};
+                                     const labels = {{ \Illuminate\Support\Js::from($chartLabels) }};
+                                     const dataVals = {{ \Illuminate\Support\Js::from($chartValues) }};
+                                     const bgColors = {{ \Illuminate\Support\Js::from($chartColors) }};
+
+                                     const render = () => {
+                                         const canvas = document.getElementById('payrollDoughnutCanvas-' + year);
+                                         if (!canvas) return;
+
+                                         if (typeof Chart === 'undefined') {
+                                             setTimeout(render, 100);
+                                             return;
+                                         }
+
+                                         if (this.chartInstance) {
+                                             try { this.chartInstance.destroy(); } catch (e) {}
+                                             this.chartInstance = null;
+                                         }
+
+                                         this.chartInstance = new Chart(canvas, {
+                                             type: 'doughnut',
+                                             data: {
+                                                 labels: labels,
+                                                 datasets: [{
+                                                     data: dataVals,
+                                                     backgroundColor: bgColors,
+                                                     hoverBackgroundColor: bgColors,
+                                                     borderWidth: hasData ? 2 : 0,
+                                                     borderColor: '#ffffff',
+                                                     hoverOffset: hasData ? 4 : 0
+                                                 }]
+                                             },
+                                             options: {
+                                                 responsive: true,
+                                                 maintainAspectRatio: false,
+                                                 cutout: '74%',
+                                                 animation: {
+                                                     duration: 500
+                                                 },
+                                                 plugins: {
+                                                     legend: {
+                                                         display: false
+                                                     },
+                                                     tooltip: {
+                                                         enabled: hasData,
+                                                         backgroundColor: '#0f172a',
+                                                         titleColor: '#ffffff',
+                                                         bodyColor: '#ffffff',
+                                                         padding: 10,
+                                                         cornerRadius: 8,
+                                                         displayColors: false,
+                                                         callbacks: {
+                                                             title: function(context) {
+                                                                 return context[0].label + ' ' + year;
+                                                             },
+                                                             label: function(context) {
+                                                                 const val = context.raw || 0;
+                                                                 return 'Total Biaya: Rp ' + new Intl.NumberFormat('id-ID').format(val);
+                                                             }
+                                                         }
+                                                     }
+                                                 }
+                                             }
+                                         });
+                                     };
+
+                                     this.$nextTick(() => {
+                                         render();
+                                     });
+
+                                     if (typeof this.$cleanup === 'function') {
+                                         this.$cleanup(() => {
+                                             if (this.chartInstance) {
+                                                 try { this.chartInstance.destroy(); } catch (e) {}
+                                                 this.chartInstance = null;
+                                             }
+                                         });
+                                     }
+                                 }
+                             }"
+                             x-init="initChart()"
+                             class="position-relative d-flex justify-content-center align-items-center my-3"
+                             style="height: 180px; width: 100%;">
+
+                            <canvas id="payrollDoughnutCanvas-{{ $selectedYear }}" style="max-height: 180px; max-width: 180px;"></canvas>
+
+                            <!-- Center Text Overlay -->
+                            <div class="position-absolute text-center d-flex flex-column justify-content-center align-items-center" style="pointer-events: none; max-width: 125px;">
+                                <span style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase;">
+                                    TOTAL {{ $selectedYear }}
+                                </span>
+                                <span style="font-size: 20px; font-weight: 800; color: #0f172a; line-height: 1.25; margin-top: 2px;" title="{{ $statistics['formatted_yearly_total_company_cost'] }}">
+                                    {{ $statistics['compact_yearly_company_cost'] }}
+                                </span>
                             </div>
                         </div>
 
-                        <!-- Status Kesiapan Operasional -->
-                        <div class="mb-4">
-                            <div class="text-xs font-weight-bold text-uppercase text-muted mb-2.5">Status Kesiapan Operasional</div>
-                            <div class="payroll-checklist-group">
-                                <div class="d-flex align-items-center mb-2">
-                                    <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 20px; height: 20px; font-size: 10px;">
-                                        <i class="fas fa-check"></i>
-                                    </div>
-                                    <div class="small text-dark font-weight-500">
-                                        <strong>{{ $activePeriod->employee_count }} Karyawan</strong> terdata dalam slip
-                                    </div>
-                                </div>
+                        <div style="font-size: 11.5px; font-weight: 400; color: #94a3b8; line-height: 1.35;">
+                            Gaji bruto + BPJS porsi perusahaan
+                        </div>
+                    </div>
 
-                                <div class="d-flex align-items-center mb-2">
-                                    <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 20px; height: 20px; font-size: 10px;">
-                                        <i class="fas fa-check"></i>
-                                    </div>
-                                    <div class="small text-dark font-weight-500">
-                                        Pajak PPh 21 &amp; iuran BPJS terhitung
-                                    </div>
+                    <!-- 3. Dual Metric Tiles: Rata-rata/bulan & Biaya/orang/bulan -->
+                    <div style="padding: 0 20px 14px;">
+                        <div class="row no-gutters" style="gap: 8px;">
+                            <div class="col" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px;">
+                                <div style="font-size: 11px; font-weight: 500; color: #64748b; line-height: 1.3;">
+                                    Rata-rata / bulan
                                 </div>
-
-                                <div class="d-flex align-items-center mb-2">
-                                    @if ($statistics['active_kasbon_count'] > 0)
-                                        <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 20px; height: 20px; font-size: 10px;">
-                                            <i class="fas fa-check"></i>
-                                        </div>
-                                        <div class="small text-dark font-weight-500">
-                                            {{ $statistics['active_kasbon_count'] }} cicilan kasbon otomatis terpotong
-                                        </div>
-                                    @else
-                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 20px; height: 20px; font-size: 10px;">
-                                            <i class="fas fa-minus"></i>
-                                        </div>
-                                        <div class="small text-muted font-weight-500">
-                                            Tidak ada potongan cicilan kasbon
-                                        </div>
-                                    @endif
+                                <div style="font-size: 13px; font-weight: 700; color: #0f172a; line-height: 1.35; margin-top: 3px; word-break: break-all;">
+                                    {{ $statistics['formatted_yearly_avg_cost_per_month'] }}
                                 </div>
+                            </div>
+                            <div class="col" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px;">
+                                <div style="font-size: 11px; font-weight: 500; color: #64748b; line-height: 1.3;">
+                                    Biaya / orang / bulan
+                                </div>
+                                <div style="font-size: 13px; font-weight: 700; color: #0f172a; line-height: 1.35; margin-top: 3px; word-break: break-all;">
+                                    {{ $statistics['formatted_yearly_avg_cost_per_person'] }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
+                    <!-- 4. Uang gaji dipakai untuk apa (Allocation Bar) -->
+                    <div style="border-top: 1px solid #f1f5f9; padding: 14px 20px;">
+                        <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 9px;">
+                            Uang gaji dipakai untuk apa
+                        </div>
+
+                        <!-- Multi-segment bar -->
+                        <div class="d-flex w-100 overflow-hidden mb-2.5" style="height: 8px; border-radius: 4px; background-color: #f1f5f9; gap: 2px;">
+                            <div style="width: {{ $statistics['yearly_thp_pct'] }}%; background-color: #0b52aa; border-radius: 3px 0 0 3px;" title="Take Home Pay: {{ $statistics['yearly_thp_pct'] }}%"></div>
+                            <div style="width: {{ $statistics['yearly_bpjs_pct'] }}%; background-color: #f59e0b;" title="BPJS: {{ $statistics['yearly_bpjs_pct'] }}%"></div>
+                            <div style="width: {{ $statistics['yearly_pph_pct'] }}%; background-color: #ef4444; border-radius: 0 3px 3px 0;" title="PPh 21: {{ $statistics['yearly_pph_pct'] }}%"></div>
+                        </div>
+
+                        <!-- Breakdown List -->
+                        <div class="d-flex flex-column" style="gap: 6px;">
+                            <div class="d-flex align-items-center justify-content-between" style="font-size: 11.5px; line-height: 1.4;">
                                 <div class="d-flex align-items-center">
-                                    @if ($activePeriod->status === \App\Enums\PayrollPeriodStatus::DRAFT)
-                                        <div class="rounded-circle bg-warning text-white d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 20px; height: 20px; font-size: 10px;">
-                                            <i class="fas fa-clock"></i>
-                                        </div>
-                                        <div class="small text-dark font-weight-500">
-                                            Draf belum diajukan ke Direktur
-                                        </div>
-                                    @elseif ($activePeriod->status === \App\Enums\PayrollPeriodStatus::SUBMITTED)
-                                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 20px; height: 20px; font-size: 10px;">
-                                            <i class="fas fa-paper-plane"></i>
-                                        </div>
-                                        <div class="small text-dark font-weight-500">
-                                            Menunggu persetujuan Direktur (ACC)
-                                        </div>
-                                    @elseif ($activePeriod->status === \App\Enums\PayrollPeriodStatus::APPROVED)
-                                        <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 20px; height: 20px; font-size: 10px;">
-                                            <i class="fas fa-check-double"></i>
-                                        </div>
-                                        <div class="small text-dark font-weight-500">
-                                            Telah disetujui Direktur &bull; Siap ditransfer
-                                        </div>
-                                    @elseif ($activePeriod->status === \App\Enums\PayrollPeriodStatus::PAID)
-                                        <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 20px; height: 20px; font-size: 10px;">
-                                            <i class="fas fa-check-double"></i>
-                                        </div>
-                                        <div class="small text-dark font-weight-500">
-                                            Selesai dibayar &amp; slip diterbitkan
-                                        </div>
-                                    @else
-                                        <div class="rounded-circle bg-danger text-white d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 20px; height: 20px; font-size: 10px;">
-                                            <i class="fas fa-exclamation"></i>
-                                        </div>
-                                        <div class="small text-danger font-weight-500">
-                                            Perlu revisi komponen gaji
-                                        </div>
-                                    @endif
+                                    <span style="width: 8px; height: 8px; border-radius: 2px; background-color: #0b52aa; margin-right: 7px; flex-shrink: 0;"></span>
+                                    <span style="color: #475569; font-weight: 500;">Take home pay</span>
                                 </div>
+                                <span style="font-weight: 600; color: #0f172a;">
+                                    {{ $statistics['formatted_yearly_total_thp'] }} · {{ $statistics['yearly_thp_pct'] }}%
+                                </span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between" style="font-size: 11.5px; line-height: 1.4;">
+                                <div class="d-flex align-items-center">
+                                    <span style="width: 8px; height: 8px; border-radius: 2px; background-color: #f59e0b; margin-right: 7px; flex-shrink: 0;"></span>
+                                    <span style="color: #475569; font-weight: 500;">BPJS (setor)</span>
+                                </div>
+                                <span style="font-weight: 600; color: #0f172a;">
+                                    {{ $statistics['formatted_yearly_total_bpjs'] }} · {{ $statistics['yearly_bpjs_pct'] }}%
+                                </span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between" style="font-size: 11.5px; line-height: 1.4;">
+                                <div class="d-flex align-items-center">
+                                    <span style="width: 8px; height: 8px; border-radius: 2px; background-color: #ef4444; margin-right: 7px; flex-shrink: 0;"></span>
+                                    <span style="color: #475569; font-weight: 500;">PPh 21 (setor)</span>
+                                </div>
+                                <span style="font-weight: 600; color: #0f172a;">
+                                    {{ $statistics['formatted_yearly_total_pph'] }} · {{ $statistics['yearly_pph_pct'] }}%
+                                </span>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Single Action Button to Manage Current Period -->
-                        <a href="{{ route('payrolls.show', $activePeriod) }}" class="btn btn-primary btn-block d-flex align-items-center justify-content-center font-weight-600 shadow-sm" style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; padding: 10px 16px; font-size: 13.5px;">
-                            <span>Kelola Periode Ini</span>
-                            <i class="fas fa-arrow-right ml-2"></i>
+                    <!-- 5. Biaya per departemen -->
+                    <div style="border-top: 1px solid #f1f5f9; padding: 14px 20px;">
+                        <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 10px;">
+                            Biaya per departemen
+                        </div>
+                        <div class="d-flex flex-column" style="gap: 10px;">
+                            @forelse ($statistics['department_breakdown'] as $dept)
+                                <div>
+                                    <div class="d-flex align-items-center justify-content-between mb-1" style="font-size: 11.5px; line-height: 1.35;">
+                                        <span style="font-weight: 500; color: #334155;">
+                                            {{ $dept['name'] }} · {{ $dept['count'] }} orang
+                                        </span>
+                                        <span style="font-weight: 700; color: #0f172a;">
+                                            {{ $dept['compact_cost'] }}
+                                        </span>
+                                    </div>
+                                    <div class="w-100" style="height: 5px; background-color: #f1f5f9; border-radius: 9999px; overflow: hidden;">
+                                        <div style="width: {{ $dept['bar_pct'] }}%; height: 100%; background-color: #0b52aa; border-radius: 9999px;"></div>
+                                    </div>
+                                </div>
+                            @empty
+                                <div style="font-size: 11.5px; color: #94a3b8;">Belum ada rincian departemen</div>
+                            @endforelse
+                        </div>
+                    </div>
+
+                    <!-- 6. Tombol Action: Export Rekap Tahunan (PDF) -->
+                    <div class="border-top" style="background-color: #ffffff; padding: 14px 20px;">
+                        <a href="{{ route('payrolls.yearly-summary.print', $selectedYear) }}" target="_blank"
+                           class="btn btn-block d-flex align-items-center justify-content-center font-weight-bold shadow-none"
+                           style="border-radius: 10px; border: 1px solid #cbd5e1; color: #0f172a; background-color: #f8fafc; padding: 8px 14px; font-size: 12px; transition: all 0.15s ease;">
+                            <i class="fas fa-file-pdf mr-1.5" style="color: #ef4444; font-size: 13px;"></i>
+                            <span>Export rekap tahunan (PDF)</span>
                         </a>
                     </div>
                 </div>
-            @else
-                <div class="card shadow-sm payroll-focus-card">
-                    <div class="card-header border-bottom-0 pb-0">
-                        <div class="d-flex align-items-center">
-                            <span class="payroll-sidebar-indicator mr-2"></span>
-                            <h4 class="mb-0 font-weight-bold text-dark" style="font-size: 15px;">Periode Berjalan</h4>
-                        </div>
-                    </div>
-                    <div class="card-body text-center py-5">
-                        <div class="rounded-circle d-inline-flex align-items-center justify-content-center text-muted mb-3" style="width: 56px; height: 56px; background-color: #f1f5f9;">
-                            <i class="fas fa-calendar-plus" style="font-size: 24px; color: #0b52aa;"></i>
-                        </div>
-                        <h5 class="font-weight-600 text-dark mb-1" style="font-size: 15px;">Belum Ada Periode Aktif</h5>
-                        <p class="text-muted small mb-0 px-2">
-                            Gunakan tombol "+ Buat Periode Baru" untuk memulai perhitungan gaji bulan ini.
-                        </p>
-                    </div>
-                </div>
-            @endif
+            </div>
         </div>
 
-        <!-- ================= KOLOM KANAN (COL-8): DAFTAR RIWAYAT PERIODE ================= -->
-        <div class="col-12 col-lg-8 mb-4">
+        <!-- ================= KOLOM KANAN (COL-9): DAFTAR RIWAYAT PERIODE ================= -->
+        <div class="col-12 col-lg-9 col-md-8 mb-4">
             <div class="card shadow-sm">
                 <div class="card-header">
                     <h4>Daftar Riwayat Periode</h4>
@@ -320,63 +421,86 @@
                     <!-- Table Responsive -->
                     <div class="table-responsive">
                         <table class="table table-clean">
-                            <thead class="bg-gray-100">
+                            <thead style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
                                 <tr>
-                                    <th class="text-center text-nowrap" style="width: 50px;">NO</th>
-                                    <th class="text-nowrap" style="width: 130px;">NO. PERIODE</th>
-                                    <th class="text-nowrap">NAMA PERIODE</th>
-                                    <th class="text-center text-nowrap" style="width: 95px;">KARYAWAN</th>
-                                    <th class="text-right text-nowrap" style="width: 150px;">TOTAL GAJI BERSIH</th>
-                                    <th class="text-center text-nowrap" style="width: 125px;">STATUS</th>
-                                    <th class="text-center text-nowrap" style="width: 90px;"><i class="fas fa-cog text-muted" title="Aksi"></i></th>
+                                    <th class="text-nowrap !py-3 !px-3.5" style="min-width: 180px; font-size: 11px; font-weight: 700; color: #475569; letter-spacing: 0.5px;">PERIODE</th>
+                                    <th class="text-center text-nowrap !py-3 !px-3.5" style="width: 110px; font-size: 11px; font-weight: 700; color: #475569; letter-spacing: 0.5px;">KARYAWAN</th>
+                                    <th class="text-right text-nowrap !py-3 !px-3.5" style="min-width: 140px; font-size: 11px; font-weight: 700; color: #475569; letter-spacing: 0.5px;">TOTAL BIAYA</th>
+                                    <th class="text-right text-nowrap !py-3 !px-3.5" style="min-width: 140px; font-size: 11px; font-weight: 700; color: #475569; letter-spacing: 0.5px;">THP DITRANSFER</th>
+                                    <th class="text-center text-nowrap !py-3 !px-3.5" style="width: 125px; font-size: 11px; font-weight: 700; color: #475569; letter-spacing: 0.5px;">STATUS</th>
+                                    <th class="text-nowrap !py-3 !px-3.5" style="min-width: 135px; font-size: 11px; font-weight: 700; color: #475569; letter-spacing: 0.5px;">DISETUJUI</th>
+                                    <th class="text-center text-nowrap !py-3 !px-3.5" style="width: 90px; font-size: 11px; font-weight: 700; color: #475569; letter-spacing: 0.5px;"><i class="fas fa-cog text-muted" title="Aksi"></i></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @forelse ($periods as $index => $period)
-                                    <tr wire:key="period-{{ $period->id }}">
-                                        <td class="text-center font-weight-600 text-muted align-middle">
-                                            {{ $periods->firstItem() + $index }}
+                                @forelse ($periods as $period)
+                                    <tr wire:key="period-{{ $period->id }}" style="border-bottom: 1px solid #f1f5f9;">
+                                        <td class="align-middle text-nowrap !py-3 !px-3.5">
+                                            <div class="d-flex align-items-center text-nowrap">
+                                                <span class="d-inline-flex align-items-center justify-content-center mr-2.5" style="width: 32px; height: 32px; border-radius: 8px; background-color: #eff6ff; border: 1px solid #bfdbfe; flex-shrink: 0;">
+                                                    <i class="far fa-calendar-alt" style="color: #0b52aa; font-size: 13px;"></i>
+                                                </span>
+                                                <a href="{{ route('payrolls.show', $period) }}" class="font-weight-700 text-decoration-none" style="font-size: 13.5px; color: #0f172a !important;" title="{{ $period->reference_number }}">
+                                                    {{ $period->period_label }}
+                                                </a>
+                                            </div>
                                         </td>
-                                        <td class="font-weight-600 align-middle text-nowrap">
-                                            <a href="{{ route('payrolls.show', $period) }}" class="text-primary font-weight-600">
-                                                {{ $period->reference_number }}
-                                            </a>
-                                            <div class="text-muted small">{{ $period->period_label }}</div>
+                                        <td class="text-center align-middle font-weight-600 text-nowrap !py-3 !px-3.5">
+                                            <span class="badge font-weight-700 px-2.5 py-1" style="font-size: 11.5px; border-radius: 12px; background-color: #f8fafc; color: #334155; border: 1px solid #e2e8f0;">
+                                                <i class="fas fa-users mr-1" style="color: #64748b; font-size: 10px;"></i>{{ $period->employee_count }} orang
+                                            </span>
                                         </td>
-                                        <td class="align-middle">
-                                            <div class="font-weight-600 text-dark">{{ $period->name }}</div>
-                                            @if ($period->notes)
-                                                <div class="text-muted small text-truncate" style="max-width: 220px;">{{ $period->notes }}</div>
-                                            @endif
+                                        <td class="text-right align-middle text-nowrap !py-3 !px-3.5">
+                                            <span class="font-weight-700" style="color: #0f172a; font-size: 13px;">
+                                                {{ $period->formatted_total_cost_to_company }}
+                                            </span>
                                         </td>
-                                        <td class="text-center align-middle font-weight-600 text-nowrap">
-                                            {{ $period->employee_count }} <span class="text-muted small">orang</span>
+                                        <td class="text-right align-middle text-nowrap !py-3 !px-3.5">
+                                            <span class="font-weight-700" style="color: #059669; font-size: 13px;">
+                                                {{ $period->formatted_total_net_salary }}
+                                            </span>
                                         </td>
-                                        <td class="text-right align-middle font-weight-bold text-dark text-nowrap">
-                                            {{ $period->formatted_total_net_salary }}
-                                        </td>
-                                        <td class="text-center align-middle text-nowrap">
-                                            <span class="{{ $period->status_badge_class }}">
+                                        <td class="text-center align-middle text-nowrap !py-3 !px-3.5">
+                                            <span class="{{ $period->status_badge_class }} font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 12px;">
                                                 {{ $period->status_label }}
                                             </span>
                                         </td>
-                                        <td class="text-center align-middle text-nowrap">
-                                            <a href="{{ route('payrolls.show', $period) }}" class="btn btn-info btn-action mr-1" title="Lihat & Kelola Rincian">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            @if ($period->status->isEditable() && auth()->user()?->hasRole('admin'))
-                                                <button type="button" 
-                                                    wire:click="$dispatch('swal:confirm', {
-                                                        title: 'Hapus Periode?',
-                                                        text: 'Draf periode {{ $period->reference_number }} dan seluruh rincian slip karyawan di dalamnya akan dihapus!',
-                                                        action: 'delete-period-confirmed',
-                                                        params: { id: {{ $period->id }} }
-                                                    })" 
-                                                    class="btn btn-danger btn-action" 
-                                                    title="Hapus Periode">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
+                                        <td class="align-middle text-nowrap !py-3 !px-3.5">
+                                            @if ($period->approved_by && $period->approved_at)
+                                                <div class="d-inline-flex align-items-center text-nowrap">
+                                                    <i class="fas fa-check-circle text-success mr-1.5" style="font-size: 12px;"></i>
+                                                    <span class="font-weight-600" style="color: #1e293b; font-size: 12px;">
+                                                        {{ $period->approver?->name ?? 'Direktur' }}, {{ $period->approved_at->locale('id')->translatedFormat('d M') }}
+                                                    </span>
+                                                </div>
+                                            @elseif ($period->status === \App\Enums\PayrollPeriodStatus::REJECTED)
+                                                <div class="d-inline-flex align-items-center text-nowrap">
+                                                    <i class="fas fa-times-circle text-danger mr-1.5" style="font-size: 12px;"></i>
+                                                    <span class="text-danger font-weight-600" style="font-size: 12px;" title="{{ $period->rejection_reason }}">
+                                                        {{ $period->approver?->name ?? 'Direktur' }} (Revisi)
+                                                    </span>
+                                                </div>
+                                            @else
+                                                <span class="text-muted font-weight-600" style="font-size: 13px;">-</span>
                                             @endif
+                                        </td>
+                                        <td class="text-center align-middle text-nowrap !py-3 !px-3.5">
+                                            <div class="d-inline-flex align-items-center text-nowrap">
+                                                <a href="{{ route('payrolls.show', $period) }}" class="btn btn-info btn-action mr-1" title="Lihat">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                @if ($period->status->isEditable() && auth()->user()?->hasRole('admin'))
+                                                    <button type="button" 
+                                                        wire:click="confirmDelete({{ $period->id }})" 
+                                                        wire:loading.attr="disabled"
+                                                        wire:target="confirmDelete({{ $period->id }})"
+                                                        class="btn btn-danger btn-action" 
+                                                        title="Hapus">
+                                                        <i wire:loading wire:target="confirmDelete({{ $period->id }})" class="fas fa-spinner fa-spin"></i>
+                                                        <i wire:loading.remove wire:target="confirmDelete({{ $period->id }})" class="fas fa-trash"></i>
+                                                    </button>
+                                                @endif
+                                            </div>
                                         </td>
                                     </tr>
                                 @empty
@@ -425,16 +549,26 @@
                                 <div class="form-group">
                                     <label class="font-weight-600">Bulan Penggajian <span class="text-danger">*</span></label>
                                     <select wire:model.live="newMonth" class="form-control @error('newMonth') is-invalid @enderror">
+                                        @php
+                                            $monthNames = [1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'];
+                                        @endphp
                                         @for ($m = 1; $m <= 12; $m++)
                                             @php
-                                                $monthNames = [1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'];
+                                                $isTaken = in_array($m, $existingMonthsForNewYear ?? [], true);
                                             @endphp
-                                            <option value="{{ $m }}">{{ $monthNames[$m] }}</option>
+                                            <option value="{{ $m }}" {{ $isTaken ? 'disabled' : '' }}>
+                                                {{ $monthNames[$m] }} {{ $isTaken ? '(Sudah Ada)' : '' }}
+                                            </option>
                                         @endfor
                                     </select>
                                     @error('newMonth')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
+                                    @if (in_array($newMonth, $existingMonthsForNewYear ?? [], true))
+                                        <div class="text-danger small mt-1 font-weight-600">
+                                            <i class="fas fa-exclamation-circle mr-1"></i> Periode bulan ini sudah pernah dibuat. Silakan pilih bulan lain.
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -475,7 +609,7 @@
                     </div>
                     <div class="modal-footer bg-whitesmoke br">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary" wire:loading.attr="disabled">
+                        <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" {{ in_array($newMonth, $existingMonthsForNewYear ?? [], true) ? 'disabled' : '' }}>
                             <span wire:loading.remove wire:target="storePeriod">
                                 <i class="fas fa-check mr-1"></i> Proses & Buat Draf
                             </span>
@@ -534,29 +668,12 @@
             background-color: #fef2f2 !important;
             color: #dc2626 !important;
         }
-        .payroll-sidebar-indicator {
-            display: inline-block;
-            width: 4px;
-            height: 18px;
-            background-color: #0b52aa !important;
-            border-radius: 2.5px;
-            flex-shrink: 0;
-        }
-        .payroll-focus-card {
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-            background: #ffffff;
-        }
-        .payroll-financial-box {
-            border-radius: 10px;
-        }
+
+
     </style>
 @endpush
 
-@script
-<script>
-    $wire.on('delete-period-confirmed', (data) => {
-        $wire.deletePeriod(data.id);
-    });
-</script>
-@endscript
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+@endpush
+

@@ -256,13 +256,11 @@ class ManageItem extends Component
 
                 if ($inst) {
                     $unpaidInstallment = max(0.0, round((float) $inst->amount - (float) $inst->paid_amount, 2));
-                    if ($this->isEditable && abs($amount - $unpaidInstallment) > 0.001) {
+                    if ($this->isEditable && $amount > $unpaidInstallment + 0.001) {
                         $amount = $unpaidInstallment;
                         $line->update(['amount' => $amount]);
                         app(PayrollService::class)->recalculateItem($this->item);
                         $this->item->refresh();
-                    } else {
-                        $amount = $unpaidInstallment;
                     }
                 }
             }
@@ -890,6 +888,19 @@ class ManageItem extends Component
             $this->syncAutoBpjsAndTax();
             $this->clearComputedProperties();
         }
+    }
+
+    public function resetKasbonDeduction(int $index): void
+    {
+        if (! $this->isEditable || ! isset($this->deductionRows[$index])) {
+            return;
+        }
+
+        $total = (float) ($this->deductionRows[$index]['installment_total_amount'] ?? 0);
+        $paid = (float) ($this->deductionRows[$index]['installment_paid_amount'] ?? 0);
+        $this->deductionRows[$index]['amount'] = max(0.0, round($total - $paid, 2));
+        $this->deductionRows[$index]['is_enabled'] = true;
+        $this->clearComputedProperties();
     }
 
     public function clearComputedProperties(): void
@@ -2152,6 +2163,13 @@ class ManageItem extends Component
 
             // Strictly filter deductions: keep system rows (Tax, BPJS, Cash Advance), and only keep custom rows if both name and amount > 0
             $validDeductions = collect($this->deductionRows)
+                ->map(function ($row) {
+                    if (! empty($row['cash_advance_installment_id']) && isset($row['is_enabled']) && $row['is_enabled'] === false) {
+                        $row['amount'] = 0;
+                    }
+
+                    return $row;
+                })
                 ->filter(function ($row) {
                     $name = trim((string) ($row['name'] ?? ''));
                     $cat = $row['category'] ?? '';

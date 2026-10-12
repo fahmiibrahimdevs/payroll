@@ -9,7 +9,8 @@
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
 
-            <form wire:submit="storePayment">
+            @if (auth()->user()?->hasRole('admin'))
+                <form wire:submit="storePayment">
                 <div class="modal-body py-3 px-4 bg-white">
                     @if ($selectedCashAdvance)
                         <!-- Card Info Kasbon & Sisa Kasbon -->
@@ -82,9 +83,27 @@
                     <!-- Nominal Pembayaran -->
                     <div class="form-group mb-3">
                         <label for="pay_amount">Nominal Pembayaran (Rp) <span class="text-danger">*</span></label>
-                        <input type="number" id="pay_amount" wire:model.live="paymentForm.amount" min="1" step="1000" placeholder="Nominal pembayaran..." class="form-control @error('paymentForm.amount') is-invalid @enderror">
+                        <div class="input-group" x-data>
+                            <div class="input-group-prepend">
+                                <span class="input-group-text font-weight-500">Rp</span>
+                            </div>
+                            <input type="text"
+                                   id="pay_amount"
+                                   inputmode="numeric"
+                                   x-on:input="
+                                       let raw = $el.value.replace(/\D/g, '');
+                                       $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                   "
+                                   x-on:input.debounce.350ms="$wire.set('paymentForm.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                   x-on:change="$wire.set('paymentForm.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                   x-on:blur="$wire.set('paymentForm.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                   value="{{ !empty($paymentForm->amount) ? number_format((float) $paymentForm->amount, 0, ',', '.') : '' }}"
+                                   class="form-control text-right @error('paymentForm.amount') is-invalid @enderror"
+                                   placeholder="0"
+                                   autocomplete="off">
+                        </div>
                         @error('paymentForm.amount')
-                            <div class="invalid-feedback">{{ $message }}</div>
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
                     </div>
 
@@ -151,6 +170,12 @@
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
+
+                    <!-- Info Approval Direktur -->
+                    <div class="alert alert-light border mt-3 mb-0 d-flex align-items-center" style="font-size: 12px; color: #475569; border-color: #e2e8f0 !important; background-color: #f8fafc;">
+                        <i class="fas fa-info-circle text-primary mr-2" style="font-size: 14px;"></i>
+                        <span>Pembayaran manual ini akan berstatus <strong>Menunggu Approval Direktur</strong> sebelum saldo kasbon dan cicilan berkurang.</span>
+                    </div>
                 </div>
 
                 <div class="modal-footer bg-white border-top px-4 py-3 d-flex justify-content-between">
@@ -161,6 +186,7 @@
                     </button>
                 </div>
             </form>
+            @endif
         </div>
     </div>
 </div>

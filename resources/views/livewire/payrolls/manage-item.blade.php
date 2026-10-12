@@ -785,11 +785,56 @@
                                                     @endif
                                                 </div>
                                             </td>
-                                            <td class="text-right align-middle {{ $rowAmt > 0 ? 'text-danger' : 'text-muted' }} !px-3 !py-2.5" style="font-weight: 600; font-size: 13px;">
-                                                -Rp {{ number_format($rowAmt, 0, ',', '.') }}
+                                            <td class="text-right align-middle !px-3 !py-2.5">
+                                                @if ($this->isEditable)
+                                                    <div class="d-inline-flex align-items-center" style="max-width: 175px;">
+                                                        <div class="input-group input-group-sm" x-data>
+                                                            <div class="input-group-prepend"><span class="input-group-text font-weight-bold text-danger py-0 px-2">-Rp</span></div>
+                                                            <input type="text"
+                                                                   inputmode="numeric"
+                                                                   x-on:input="
+                                                                       let raw = $el.value.replace(/\D/g, '');
+                                                                       $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                                                   "
+                                                                   x-on:input.debounce.350ms="$wire.set('deductionRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                                                   x-on:change="$wire.set('deductionRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                                                   x-on:blur="$wire.set('deductionRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                                                   value="{{ !empty($rowAmt) ? number_format((float) $rowAmt, 0, ',', '.') : '' }}"
+                                                                   class="form-control form-control-sm text-right font-weight-bold text-danger px-2"
+                                                                   placeholder="0"
+                                                                   autocomplete="off">
+                                                        </div>
+                                                    </div>
+                                                @else
+                                                    <span class="{{ $rowAmt > 0 ? 'text-danger' : 'text-muted' }}" style="font-weight: 600; font-size: 13px;">
+                                                        -Rp {{ number_format($rowAmt, 0, ',', '.') }}
+                                                    </span>
+                                                @endif
                                             </td>
-                                            <td class="text-center align-middle text-muted !px-3 !py-2.5">-</td>
-                                            <td class="text-center align-middle text-muted !px-3 !py-2.5">-</td>
+                                            <td class="text-center align-middle text-muted !px-3 !py-2.5">
+                                                @if ($this->isEditable)
+                                                    <button type="button" wire:click="resetKasbonDeduction({{ $index }})" class="btn btn-sm btn-outline-secondary" title="Reset ke tagihan normal">
+                                                        <i class="fas fa-undo"></i>
+                                                    </button>
+                                                @else
+                                                    -
+                                                @endif
+                                            </td>
+                                            <td class="text-center align-middle text-muted !px-3 !py-2.5">
+                                                @if ($this->isEditable)
+                                                    @php $isKasbonEnabled = $row['is_enabled'] ?? true; @endphp
+                                                    <label class="custom-switch payroll-status-toggle m-0" wire:key="deduction-kasbon-toggle-{{ $index }}-{{ $isKasbonEnabled ? '1' : '0' }}" title="{{ $isKasbonEnabled ? 'Aktif' : 'Nonaktif' }}">
+                                                        <input type="checkbox" wire:click="toggleDeductionEnabled({{ $index }})" @checked($isKasbonEnabled) class="custom-switch-input">
+                                                        <span class="custom-switch-indicator"></span>
+                                                    </label>
+                                                @else
+                                                    @if (($row['is_enabled'] ?? true) && $rowAmt > 0)
+                                                        <span class="badge badge-light border text-success text-xs font-weight-600">Aktif</span>
+                                                    @else
+                                                        <span class="badge badge-light border text-muted text-xs">Nonaktif</span>
+                                                    @endif
+                                                @endif
+                                            </td>
                                         </tr>
                                     @endif
                                 @endforeach

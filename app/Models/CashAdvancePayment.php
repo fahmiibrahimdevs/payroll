@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CashAdvancePaymentStatus;
 use App\Enums\PaymentMethod;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -24,9 +25,13 @@ class CashAdvancePayment extends Model
         'payment_date',
         'amount',
         'payment_method',
+        'status',
         'proof_document',
         'notes',
         'recorded_by',
+        'approved_by',
+        'approved_at',
+        'rejection_reason',
     ];
 
     /**
@@ -40,6 +45,8 @@ class CashAdvancePayment extends Model
             'amount' => 'decimal:2',
             'payment_date' => 'date',
             'payment_method' => PaymentMethod::class,
+            'status' => CashAdvancePaymentStatus::class,
+            'approved_at' => 'datetime',
         ];
     }
 
@@ -65,6 +72,62 @@ class CashAdvancePayment extends Model
     public function recorder(): BelongsTo
     {
         return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    /**
+     * Get the user who approved this payment.
+     */
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /**
+     * Check if payment is pending approval.
+     */
+    public function isPending(): bool
+    {
+        return $this->status === CashAdvancePaymentStatus::PENDING;
+    }
+
+    /**
+     * Check if payment is approved.
+     */
+    public function isApproved(): bool
+    {
+        return $this->status === CashAdvancePaymentStatus::APPROVED;
+    }
+
+    /**
+     * Check if payment is rejected.
+     */
+    public function isRejected(): bool
+    {
+        return $this->status === CashAdvancePaymentStatus::REJECTED;
+    }
+
+    /**
+     * Badge CSS class for payment status.
+     */
+    protected function statusBadgeClass(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->status instanceof CashAdvancePaymentStatus
+                ? $this->status->badgeClass()
+                : (CashAdvancePaymentStatus::tryFrom((string) $this->status)?->badgeClass() ?? 'badge badge-warning')
+        );
+    }
+
+    /**
+     * Human-readable label for payment status.
+     */
+    protected function statusLabel(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->status instanceof CashAdvancePaymentStatus
+                ? $this->status->label()
+                : (CashAdvancePaymentStatus::tryFrom((string) $this->status)?->label() ?? (string) $this->status)
+        );
     }
 
     /**

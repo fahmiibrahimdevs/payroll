@@ -6,6 +6,7 @@ use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
 use App\Enums\Gender;
 use App\Livewire\Forms\EmployeeForm;
+use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Position;
@@ -51,11 +52,25 @@ class Index extends Component
 
     public ?int $editingEmployeeId = null;
 
+    public bool $isEmailManuallyModified = false;
+
     public ?Employee $selectedEmployee = null;
 
     public function mount(): void
     {
-        abort_unless(auth()->user()?->hasRole('admin') || auth()->user()?->hasRole('direktur'), 403);
+        $user = auth()->user();
+        if ($user?->hasRole('karyawan')) {
+            $emp = $user->getEmployeeRecord();
+            if ($emp) {
+                $this->redirect(route('employees.show', $emp->id), navigate: true);
+
+                return;
+            }
+
+            abort(403, 'Akun Anda belum terhubung dengan data profil karyawan.');
+        }
+
+        abort_unless($user?->hasRole('admin') || $user?->hasRole('direktur'), 403);
 
         if (session()->has('employee_view_mode') && ! request()->has('view')) {
             $this->viewMode = session('employee_view_mode');
@@ -109,6 +124,48 @@ class Index extends Component
     }
 
     /**
+     * Auto generate email when employee full name is modified in create mode.
+     */
+    public function updatedFormFullName(string $value): void
+    {
+        $this->autoGenerateEmail($value);
+    }
+
+    public function updatedFormEmail(): void
+    {
+        $this->isEmailManuallyModified = true;
+    }
+
+    public function updated(string $property, mixed $value): void
+    {
+        if ($property === 'form.full_name') {
+            $this->autoGenerateEmail((string) $value);
+        } elseif ($property === 'form.email') {
+            $this->isEmailManuallyModified = true;
+        }
+    }
+
+    protected function autoGenerateEmail(string $name): void
+    {
+        if (! $this->isEmailManuallyModified && (! $this->isEditMode || empty($this->form->email))) {
+            if (! empty(trim($name))) {
+                $this->form->email = CompanyProfile::generateEmployeeEmail($name);
+            }
+        }
+    }
+
+    /**
+     * Explicitly generate email from full name using company profile email domain.
+     */
+    public function generateEmailFromName(): void
+    {
+        if (! empty(trim($this->form->full_name))) {
+            $this->form->email = CompanyProfile::generateEmployeeEmail($this->form->full_name);
+            $this->isEmailManuallyModified = false;
+        }
+    }
+
+    /**
      * Open modal for creating a new employee.
      */
     public function create(): void
@@ -116,6 +173,7 @@ class Index extends Component
         abort_unless(auth()->user()?->hasRole('admin'), 403);
         $this->isEditMode = false;
         $this->editingEmployeeId = null;
+        $this->isEmailManuallyModified = false;
         $this->form->resetForm();
         $this->dispatch('open-modal', [
             'id' => 'employeeModal',
@@ -162,6 +220,7 @@ class Index extends Component
             $employee = Employee::with(['department', 'position', 'detail'])->findOrFail($id);
             $this->isEditMode = true;
             $this->editingEmployeeId = $id;
+            $this->isEmailManuallyModified = true;
             $this->form->setEmployee($employee);
             $this->dispatch('open-modal', [
                 'id' => 'employeeModal',

@@ -69,6 +69,18 @@ class DatabaseSeeder extends Seeder
         );
         $user->syncRoles(['user']);
 
+        $karyawan = User::firstOrCreate(
+            ['email' => 'karyawan@larashiz.com'],
+            [
+                'name' => 'Arif Fahmi Abdillah',
+                'password' => 'password',
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]
+        );
+        $karyawan->forceFill(['is_active' => true, 'email_verified_at' => $karyawan->email_verified_at ?? now()])->save();
+        $karyawan->syncRoles(['karyawan']);
+
         $this->call([
             EmployeeSeeder::class,
         ]);

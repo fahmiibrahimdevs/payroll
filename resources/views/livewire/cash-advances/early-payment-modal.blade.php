@@ -130,11 +130,24 @@
                             <label for="early_pay_amount" class="early-pay-form-label">
                                 Nominal yang Ingin Dibayar <span class="text-danger">*</span>
                             </label>
-                            <div class="input-group">
+                            <div class="input-group" x-data>
                                 <div class="input-group-prepend early-pay-input-group-prepend">
                                     <span class="input-group-text early-pay-input-addon">Rp</span>
                                 </div>
-                                <input type="number" id="early_pay_amount" wire:model.live.debounce.300ms="earlyPaymentAmount" min="1000" max="{{ (int) ceil($selectedSum > 0 ? $selectedSum : $totalAllUnpaid) }}" step="any" placeholder="Nominal yang dibayar..." class="form-control early-pay-form-control @error('earlyPaymentAmount') is-invalid @enderror">
+                                <input type="text"
+                                       id="early_pay_amount"
+                                       inputmode="numeric"
+                                       x-on:input="
+                                           let raw = $el.value.replace(/\D/g, '');
+                                           $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                       "
+                                       x-on:input.debounce.350ms="$wire.set('earlyPaymentAmount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                       x-on:change="$wire.set('earlyPaymentAmount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                       x-on:blur="$wire.set('earlyPaymentAmount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                       value="{{ !empty($earlyPaymentAmount) ? number_format((float) $earlyPaymentAmount, 0, ',', '.') : '' }}"
+                                       class="form-control text-right early-pay-form-control @error('earlyPaymentAmount') is-invalid @enderror"
+                                       placeholder="0"
+                                       autocomplete="off">
                             </div>
                             @error('earlyPaymentAmount')
                                 <div class="text-danger small mt-1">{{ $message }}</div>
@@ -210,6 +223,12 @@
                         @error('earlyPaymentNotes')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
+                    </div>
+
+                    <!-- Info Approval Direktur -->
+                    <div class="alert alert-light border mt-3 mb-0 d-flex align-items-center" style="font-size: 12px; color: #475569; border-color: #e2e8f0 !important; background-color: #f8fafc;">
+                        <i class="fas fa-info-circle text-primary mr-2" style="font-size: 14px;"></i>
+                        <span>Pelunasan manual ini akan berstatus <strong>Menunggu Approval Direktur</strong> sebelum saldo kasbon dan cicilan berkurang.</span>
                     </div>
                 </div>
 

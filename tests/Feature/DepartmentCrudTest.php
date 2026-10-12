@@ -156,4 +156,52 @@ class DepartmentCrudTest extends TestCase
             ->call('store')
             ->assertHasErrors(['form.name' => 'unique']);
     }
+
+    public function test_director_can_view_and_crud_departments(): void
+    {
+        $director = $this->createDirectorUser();
+
+        $response = $this->actingAs($director)->get(route('departments.index'));
+        $response->assertOk();
+
+        $this->actingAs($director);
+
+        // Director can create department
+        Livewire::test(Index::class)
+            ->call('create')
+            ->set('form.name', 'Divisi Eksekutif')
+            ->set('form.description', 'Departemen khusus jajaran direksi.')
+            ->call('store')
+            ->assertHasNoErrors()
+            ->assertDispatched('close-modal', id: 'departmentModal')
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseHas('departments', [
+            'name' => 'Divisi Eksekutif',
+        ]);
+
+        $department = Department::where('name', 'Divisi Eksekutif')->first();
+
+        // Director can update department
+        Livewire::test(Index::class)
+            ->call('edit', $department->id)
+            ->set('form.name', 'Divisi Eksekutif & Legal')
+            ->call('update')
+            ->assertHasNoErrors()
+            ->assertDispatched('close-modal', id: 'departmentModal');
+
+        $this->assertDatabaseHas('departments', [
+            'id' => $department->id,
+            'name' => 'Divisi Eksekutif & Legal',
+        ]);
+
+        // Director can delete department
+        Livewire::test(Index::class)
+            ->call('delete', $department->id)
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseMissing('departments', [
+            'id' => $department->id,
+        ]);
+    }
 }

@@ -190,11 +190,19 @@
                                             $isHighlighted = ((int) $highlightPaymentId === (int) $pay->id);
                                         @endphp
                                         <div id="pay-card-{{ $pay->id }}" class="border rounded-lg p-2.5 transition-all duration-200 {{ $isHighlighted ? 'bg-blue-50/70 border-blue-500 ring-2 ring-blue-200 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300' }}" wire:key="pay-card-{{ $pay->id }}">
-                                            <!-- Line 1: NO REFERENCE & JUMLAH -->
-                                            <div class="flex items-center justify-between gap-2">
-                                                <span class="font-bold text-slate-900 text-[13px] tracking-tight">
-                                                    {{ $pay->payment_number }}
-                                                </span>
+                                            <!-- Line 1: NO REFERENCE, STATUS & JUMLAH -->
+                                            <div class="flex items-center justify-between gap-2 flex-wrap">
+                                                <div class="d-flex align-items-center gap-1.5 flex-wrap">
+                                                    <span class="font-bold text-slate-900 text-[13px] tracking-tight">
+                                                        {{ $pay->payment_number }}
+                                                    </span>
+                                                    <span class="{{ $pay->status_badge_class }} text-xs">
+                                                        {{ $pay->status_label }}
+                                                    </span>
+                                                    <span class="{{ $pay->method_badge_class }} text-xs">
+                                                        {{ $pay->method_label }}
+                                                    </span>
+                                                </div>
                                                 <span class="font-bold text-slate-900 text-[13.5px] whitespace-nowrap">
                                                     {{ $pay->formatted_amount }}
                                                 </span>
@@ -205,10 +213,19 @@
                                                 {{ $pay->notes ?: '-' }}
                                             </div>
 
+                                            @if ($pay->isRejected() && $pay->rejection_reason)
+                                                <div class="text-[11.5px] text-danger font-medium mt-1 mb-1 bg-danger-light p-1.5 rounded">
+                                                    <i class="fas fa-info-circle mr-1"></i>Alasan Ditolak: {{ $pay->rejection_reason }}
+                                                </div>
+                                            @endif
+
                                             <!-- Line 3: TANGGAL WAKTU & LIHAT BUKTI -->
                                             <div class="flex items-center justify-between gap-2 text-[11.5px] text-slate-500">
                                                 <span>
                                                     {{ $pay->created_at ? $pay->created_at->translatedFormat('d M Y H:i') : $pay->payment_date?->translatedFormat('d M Y') }}
+                                                    @if ($pay->recorder)
+                                                        &bull; Oleh {{ $pay->recorder->name }}
+                                                    @endif
                                                 </span>
                                                 @if ($pay->proof_document)
                                                     <a href="{{ $pay->proof_document_url }}" target="_blank" class="inline-flex items-center gap-1 text-[#0b52aa] hover:text-blue-800 font-semibold text-[11.5px] whitespace-nowrap">
@@ -216,6 +233,21 @@
                                                     </a>
                                                 @endif
                                             </div>
+
+                                            <!-- Direktur Approval Actions for Pending Payment -->
+                                            @if ($pay->isPending() && auth()->user()?->hasRole('direktur'))
+                                                <div class="d-flex align-items-center justify-content-between gap-2 mt-2 pt-2 border-top">
+                                                    <span class="text-xs text-muted"><i class="fas fa-shield-alt mr-1"></i>Persetujuan Pembayaran:</span>
+                                                    <div class="d-flex align-items-center gap-1.5">
+                                                        <button type="button" onclick="confirmRejectPayment({{ $pay->id }})" class="btn btn-sm btn-outline-danger py-1 px-2.5" style="font-size: 11.5px;">
+                                                            <i class="fas fa-times mr-1"></i> Tolak
+                                                        </button>
+                                                        <button type="button" onclick="confirmApprovePayment({{ $pay->id }})" class="btn btn-sm btn-primary py-1 px-2.5" style="background-color: #0b52aa; border-color: #0b52aa; font-size: 11.5px;">
+                                                            <i class="fas fa-check mr-1"></i> Setujui (ACC)
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            @endif
                                         </div>
                                     @empty
                                         <div class="text-center py-6 px-3 border border-dashed border-slate-200 rounded-lg bg-slate-50/50 text-slate-500">

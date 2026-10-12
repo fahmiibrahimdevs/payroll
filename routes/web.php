@@ -24,7 +24,7 @@ if (! app()->environment(['local', 'development', 'testing'])) {
     $dashboardMiddleware[] = 'verified';
 }
 
-$dashboardMiddleware[] = 'role:admin|direktur';
+$dashboardMiddleware[] = 'role:admin|direktur|karyawan';
 
 Route::get('dashboard', function (DashboardService $dashboardService): View {
     return view('dashboard', ['statistics' => $dashboardService->getStatistics()]);
@@ -37,31 +37,35 @@ Route::view('profile', 'profile')
     ->name('profile');
 
 Route::get('departments', DepartmentIndex::class)
-    ->middleware(['auth', 'active', 'role:admin'])
+    ->middleware(['auth', 'active', 'role:admin|direktur'])
     ->name('departments.index');
 
 Route::get('positions', PositionIndex::class)
-    ->middleware(['auth', 'active', 'role:admin'])
+    ->middleware(['auth', 'active', 'role:admin|direktur'])
     ->name('positions.index');
 
 Route::get('employees', EmployeeIndex::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
+    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
     ->name('employees.index');
 
+Route::get('employees/{employee}', App\Livewire\Employees\Show::class)
+    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
+    ->name('employees.show');
+
 Route::get('employees/{employee}/documents/cv', [SecureDocumentController::class, 'employeeCv'])
-    ->middleware(['auth', 'active', 'role:admin'])
+    ->middleware(['auth', 'active', 'role:admin|karyawan'])
     ->name('employees.documents.cv');
 
 Route::get('salary-components', SalaryComponentIndex::class)
-    ->middleware(['auth', 'active', 'role:admin'])
+    ->middleware(['auth', 'active', 'role:admin|direktur'])
     ->name('salary-components.index');
 
 Route::get('cash-advances', CashAdvanceIndex::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
+    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
     ->name('cash-advances.index');
 
 Route::get('cash-advances/payments/{payment}/proof', [SecureDocumentController::class, 'paymentProof'])
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
+    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
     ->name('cash-advances.documents.proof');
 
 Route::get('payrolls', App\Livewire\Payrolls\Index::class)
@@ -77,11 +81,15 @@ Route::get('payrolls/{period}/items/{item}/edit', ManageItem::class)
     ->name('payrolls.items.edit');
 
 Route::get('payrolls/{period}/items/{item}/print', [PayrollPrintController::class, 'printSlip'])
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
+    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
     ->name('payrolls.items.print');
 
+Route::get('payrolls/yearly-summary/{year}/print', [PayrollPrintController::class, 'printYearlySummary'])
+    ->middleware(['auth', 'active', 'role:admin|direktur'])
+    ->name('payrolls.yearly-summary.print');
+
 Route::get('company-profile', App\Livewire\CompanyProfile\Index::class)
-    ->middleware(['auth', 'active', 'role:admin'])
+    ->middleware(['auth', 'active', 'role:admin|direktur'])
     ->name('company-profile.index');
 
 Route::get('posts', Index::class)

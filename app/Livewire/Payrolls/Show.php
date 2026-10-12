@@ -1052,22 +1052,60 @@ class Show extends Component
     {
         $items = $this->period->items()
             ->with(['employee.department', 'employee.position', 'employee.detail', 'lines', 'approver', 'updater', 'payer'])
+            ->join('employees', 'payroll_items.employee_id', '=', 'employees.id')
+            ->leftJoin('departments', 'employees.department_id', '=', 'departments.id')
+            ->leftJoin('positions', 'employees.position_id', '=', 'positions.id')
+            ->select('payroll_items.*')
             ->when($this->period->status->isEditable(), function ($query) {
-                $query->whereHas('employee', fn ($q) => $q->whereNull('deleted_at'));
+                $query->whereNull('employees.deleted_at');
             })
             ->when($this->search, function ($query, $search) {
                 $query->where(function ($sub) use ($search) {
-                    $sub->whereHas('employee', function ($q) use ($search) {
-                        $q->where('full_name', 'like', "%{$search}%");
-                    })->orWhere('payslip_number', 'like', "%{$search}%");
+                    $sub->where('employees.full_name', 'like', "%{$search}%")
+                        ->orWhere('payroll_items.payslip_number', 'like', "%{$search}%");
                 });
             })
+            ->orderByRaw('
+                CASE WHEN departments.id IS NOT NULL THEN 0 ELSE 1 END ASC,
+                departments.name ASC,
+                CASE
+                    WHEN LOWER(positions.name) LIKE "%direktur%" OR LOWER(positions.name) LIKE "%director%" THEN 1
+                    WHEN LOWER(positions.name) LIKE "%manager%" THEN 2
+                    WHEN LOWER(positions.name) LIKE "%supervisor%" OR LOWER(positions.name) LIKE "%spv%" THEN 3
+                    WHEN LOWER(positions.name) LIKE "%lead%" THEN 4
+                    WHEN LOWER(positions.name) LIKE "%senior%" THEN 5
+                    WHEN LOWER(positions.name) LIKE "%staff%" THEN 6
+                    WHEN LOWER(positions.name) LIKE "%magang%" OR LOWER(positions.name) LIKE "%intern%" OR LOWER(positions.name) LIKE "%pkl%" THEN 7
+                    WHEN positions.id IS NOT NULL THEN 8
+                    ELSE 99
+                END ASC,
+                employees.join_date ASC,
+                employees.full_name ASC
+            ')
             ->paginate($this->perPage);
+
+        $departmentSummaries = $this->period->items()
+            ->with(['employee.department'])
+            ->when($this->period->status->isEditable(), function ($query) {
+                $query->whereHas('employee', fn ($q) => $q->whereNull('deleted_at'));
+            })
+            ->get()
+            ->groupBy(fn ($item) => $item->employee?->department_id ?? 0)
+            ->map(function ($group) {
+                return [
+                    'count' => $group->count(),
+                    'total_gross' => (float) $group->sum('gross_salary'),
+                    'total_net' => (float) $group->sum('net_salary'),
+                    'formatted_total_gross' => 'Rp '.number_format($group->sum('gross_salary'), 0, ',', '.'),
+                    'formatted_total_net' => 'Rp '.number_format($group->sum('net_salary'), 0, ',', '.'),
+                ];
+            });
 
         $company = CompanyProfile::getProfile();
 
         return view('livewire.payrolls.show', [
             'items' => $items,
+            'departmentSummaries' => $departmentSummaries,
             'company' => $company,
         ]);
     }

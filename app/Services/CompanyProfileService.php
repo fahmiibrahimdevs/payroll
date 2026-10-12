@@ -36,6 +36,7 @@ class CompanyProfileService
             'email' => ! empty($data['email']) ? trim((string) $data['email']) : null,
             'phone' => ! empty($data['phone']) ? trim((string) $data['phone']) : null,
             'website' => ! empty($data['website']) ? trim((string) $data['website']) : null,
+            'email_domain' => ! empty($data['email_domain']) ? ltrim(trim((string) $data['email_domain']), '@') : null,
             'address' => ! empty($data['address']) ? trim((string) $data['address']) : null,
             'tax_identification_number' => ! empty($data['tax_identification_number']) ? trim((string) $data['tax_identification_number']) : null,
             'enable_pph21' => isset($data['enable_pph21']) ? (bool) $data['enable_pph21'] : $profile->enable_pph21,

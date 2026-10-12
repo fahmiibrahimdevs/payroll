@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class CompanyProfile extends Model
 {
@@ -17,6 +18,7 @@ class CompanyProfile extends Model
         'email',
         'phone',
         'website',
+        'email_domain',
         'address',
         'logo_path',
         'tax_identification_number',
@@ -71,6 +73,7 @@ class CompanyProfile extends Model
             'email' => 'info@larashiz.com',
             'phone' => '021-12345678',
             'website' => 'https://larashiz.com',
+            'email_domain' => 'larashiz.com',
             'address' => 'Jl. Jenderal Sudirman No. 123, Jakarta Selatan',
             'tax_identification_number' => '01.234.567.8-901.000',
             'enable_pph21' => true,
@@ -86,6 +89,59 @@ class CompanyProfile extends Model
             'bpjs_kes_cap' => 12000000.00,
             'bpjs_jp_cap' => 10042300.00,
         ]);
+    }
+
+    /**
+     * Resolve the active company email domain (e.g. larashiz.com).
+     */
+    public function getEmailDomain(): string
+    {
+        if (! empty($this->email_domain)) {
+            return ltrim(trim($this->email_domain), '@');
+        }
+
+        if (! empty($this->website)) {
+            $host = parse_url($this->website, PHP_URL_HOST) ?: $this->website;
+            $host = preg_replace('/^www\./i', '', trim($host));
+            if (! empty($host)) {
+                return strtolower($host);
+            }
+        }
+
+        if (! empty($this->email) && str_contains($this->email, '@')) {
+            $parts = explode('@', $this->email);
+
+            return strtolower($parts[1]);
+        }
+
+        $slug = Str::slug($this->code ?: $this->name);
+
+        return ($slug ?: 'namaperusahaan').'.com';
+    }
+
+    /**
+     * Automatically generate employee email from their full name (e.g. Arif Fahmi Abdillah -> arif.fahmi.abdillah@company.com).
+     */
+    public static function generateEmployeeEmail(string $name, ?string $domain = null): string
+    {
+        $name = trim($name);
+        if (empty($name)) {
+            return '';
+        }
+
+        // Clean out special characters and punctuation
+        $cleaned = preg_replace('/[^a-zA-Z0-9\s]/', '', $name);
+        $words = array_values(array_filter(preg_split('/\s+/', strtolower($cleaned))));
+        $username = implode('.', $words);
+
+        if (empty($username)) {
+            return '';
+        }
+
+        $domain = $domain ?: static::getProfile()->getEmailDomain();
+        $domain = ltrim(trim($domain), '@');
+
+        return $username.'@'.$domain;
     }
 
     /**

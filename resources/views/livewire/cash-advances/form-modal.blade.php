@@ -11,15 +11,21 @@
 
             <form wire:submit="{{ $isEditMode ? 'update' : 'store' }}">
                 <div class="modal-body py-3 px-4 bg-white">
-                    <!-- Alert Peringatan jika Karyawan Masih Memiliki Kasbon Aktif -->
+                    <!-- Alert Peringatan jika Karyawan Masih Memiliki Kasbon Aktif (.bd-callout) -->
                     @if ($activeCashAdvanceAlert && $activeCashAdvanceAlert['has_active'] && ! $isEditMode)
-                        <div class="alert alert-warning mb-3 d-flex align-items-center" style="border-left: 4px solid #ffc107; background-color: #fff8e1; border-color: #ffe082;">
-                            <i class="fas fa-exclamation-triangle fa-2x mr-3 text-warning"></i>
-                            <div>
-                                <h6 class="font-weight-bold mb-1 text-dark">Perhatian: Karyawan Memiliki Kasbon Aktif</h6>
-                                <p class="mb-0 small text-dark">
-                                    Karyawan ini masih memiliki kasbon aktif (<strong>{{ $activeCashAdvanceAlert['advances'][0]['reference_number'] ?? 'Kasbon Aktif' }}</strong>) dengan sisa kasbon <strong>{{ $activeCashAdvanceAlert['formatted_total_remaining'] }}</strong>. Pengajuan kasbon baru tetap dapat diproses dan akan meminta konfirmasi saat disimpan.
-                                </p>
+                        <div class="bd-callout bd-callout-warning mb-3" role="alert">
+                            <div class="d-flex align-items-center">
+                                <div class="bd-callout-icon mr-2.5">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                </div>
+                                <div class="bd-callout-body flex-grow-1">
+                                    <div class="bd-callout-title">
+                                        Kasbon Aktif: {{ $activeCashAdvanceAlert['advances'][0]['reference_number'] ?? 'Kasbon Aktif' }} &bull; Sisa {{ $activeCashAdvanceAlert['formatted_total_remaining'] }}
+                                    </div>
+                                    <div class="bd-callout-desc">
+                                        Masih ada tanggungan berjalan. Pengajuan baru tetap dapat diproses.
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     @endif
@@ -29,14 +35,22 @@
                         <div class="col-12">
                             <div class="form-group">
                                 <label for="form_employee_id">Karyawan <span class="text-danger">*</span></label>
-                                <div wire:ignore>
-                                    <select id="form_employee_id" class="form-control select2 @error('form.employee_id') is-invalid @enderror">
-                                        <option value="">-- Pilih Karyawan --</option>
-                                        @foreach ($employees as $emp)
-                                            <option value="{{ $emp->id }}">{{ $emp->full_name }} ({{ $emp->department?->name ?? 'Tanpa Cabang' }})</option>
-                                        @endforeach
-                                    </select>
-                                </div>
+                                @if (auth()->user()?->hasRole('karyawan'))
+                                    @php
+                                        $empAuth = auth()->user()->getEmployeeRecord();
+                                    @endphp
+                                    <input type="text" class="form-control" value="{{ $empAuth?->full_name }} ({{ $empAuth?->department?->name ?? 'Tanpa Departemen' }})" readonly disabled>
+                                    <input type="hidden" wire:model="form.employee_id">
+                                @else
+                                    <div wire:ignore>
+                                        <select id="form_employee_id" class="form-control select2 @error('form.employee_id') is-invalid @enderror">
+                                            <option value="">-- Pilih Karyawan --</option>
+                                            @foreach ($employees as $emp)
+                                                <option value="{{ $emp->id }}">{{ $emp->full_name }} ({{ $emp->department?->name ?? 'Tanpa Cabang' }})</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @endif
                                 @error('form.employee_id')
                                     <div class="text-danger text-xs mt-1">{{ $message }}</div>
                                 @enderror
@@ -57,9 +71,27 @@
                         <div class="col-md-6 col-12">
                             <div class="form-group">
                                 <label for="form_amount">Nominal Kasbon (Rp) <span class="text-danger">*</span></label>
-                                <input type="number" id="form_amount" wire:model.live="form.amount" min="10000" step="1000" placeholder="Contoh: 1500000" class="form-control @error('form.amount') is-invalid @enderror">
+                                <div class="input-group" x-data>
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text font-weight-500">Rp</span>
+                                    </div>
+                                    <input type="text"
+                                           id="form_amount"
+                                           inputmode="numeric"
+                                           x-on:input="
+                                               let raw = $el.value.replace(/\D/g, '');
+                                               $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                           "
+                                           x-on:input.debounce.350ms="$wire.set('form.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                           x-on:change="$wire.set('form.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                           x-on:blur="$wire.set('form.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                           value="{{ !empty($form->amount) ? number_format((float) $form->amount, 0, ',', '.') : '' }}"
+                                           class="form-control text-right @error('form.amount') is-invalid @enderror"
+                                           placeholder="0"
+                                           autocomplete="off">
+                                </div>
                                 @error('form.amount')
-                                    <div class="invalid-feedback">{{ $message }}</div>
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
                                 @enderror
                             </div>
                         </div>
@@ -187,6 +219,52 @@
 </div>
 
 <style>
+    /* Bootstrap Callout (.bd-callout) Component */
+    .bd-callout {
+        padding: 0.75rem 1rem !important;
+        margin-top: 0;
+        margin-bottom: 1.25rem !important;
+        background-color: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-left-width: 4px !important;
+        border-radius: 8px !important;
+        box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04) !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+
+    .bd-callout-warning {
+        border-left-color: #f59e0b !important;
+        background: linear-gradient(90deg, rgba(245, 158, 11, 0.06) 0%, rgba(255, 255, 255, 0.98) 20%, #ffffff 100%) !important;
+    }
+
+    .bd-callout .bd-callout-icon {
+        font-size: 16px !important;
+        line-height: 1 !important;
+        flex-shrink: 0 !important;
+        color: #f59e0b !important;
+    }
+
+    .bd-callout .bd-callout-title {
+        font-size: 13.5px !important;
+        font-weight: 700 !important;
+        line-height: 1.35 !important;
+        margin-bottom: 2px !important;
+        letter-spacing: -0.15px !important;
+        color: #92400e !important;
+    }
+
+    .bd-callout .bd-callout-desc {
+        font-size: 12px !important;
+        color: #475569 !important;
+        line-height: 1.45 !important;
+        margin-bottom: 0 !important;
+    }
+
+    .bd-callout .bd-callout-desc strong {
+        font-weight: 600 !important;
+        color: #1e293b !important;
+    }
+
     .stepper-action-btn {
         width: 44px;
         height: 100%;

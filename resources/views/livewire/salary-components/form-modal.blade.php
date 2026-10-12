@@ -74,9 +74,36 @@
                         <div class="col-md-6">
                             <div class="form-group mb-3">
                                 <label for="comp_default_value">Nilai Default {{ $form->calculation_type === 'persen_gaji_pokok' ? '(%)' : '(Rp)' }}</label>
-                                <input type="number" step="0.01" min="0" id="comp_default_value" wire:model="form.default_value" class="form-control @error('form.default_value') is-invalid @enderror" placeholder="{{ $form->calculation_type === 'persen_gaji_pokok' ? 'Contoh: 1 atau 2' : 'Contoh: 500000' }}">
+                                @if ($form->calculation_type === 'persen_gaji_pokok')
+                                    <div class="input-group">
+                                        <input type="number" step="0.01" min="0" max="100" id="comp_default_value" wire:model="form.default_value" class="form-control text-right @error('form.default_value') is-invalid @enderror" placeholder="Contoh: 1 atau 2">
+                                        <div class="input-group-append">
+                                            <span class="input-group-text font-weight-500">%</span>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="input-group" x-data>
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text font-weight-500">Rp</span>
+                                        </div>
+                                        <input type="text"
+                                               id="comp_default_value"
+                                               inputmode="numeric"
+                                               x-on:input="
+                                                   let raw = $el.value.replace(/\D/g, '');
+                                                   $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                               "
+                                               x-on:input.debounce.350ms="$wire.set('form.default_value', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                               x-on:change="$wire.set('form.default_value', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                               x-on:blur="$wire.set('form.default_value', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                               value="{{ !empty($form->default_value) ? number_format((float) $form->default_value, 0, ',', '.') : '' }}"
+                                               class="form-control text-right @error('form.default_value') is-invalid @enderror"
+                                               placeholder="0"
+                                               autocomplete="off">
+                                    </div>
+                                @endif
                                 @error('form.default_value')
-                                    <div class="invalid-feedback">{{ $message }}</div>
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
                                 @enderror
                             </div>
                         </div>

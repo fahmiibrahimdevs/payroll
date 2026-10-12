@@ -145,6 +145,20 @@ class PayrollPeriod extends Model
         );
     }
 
+    protected function totalGrossSalary(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => (float) $this->total_basic_salary + (float) $this->total_allowances
+        );
+    }
+
+    protected function formattedTotalGrossSalary(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => 'Rp '.number_format((float) $this->total_gross_salary, 0, ',', '.')
+        );
+    }
+
     protected function formattedTotalDeductions(): Attribute
     {
         return Attribute::make(

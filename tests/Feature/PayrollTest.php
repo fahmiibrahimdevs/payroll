@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\CashAdvancePaymentStatus;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\InstallmentStatus;
@@ -63,6 +64,43 @@ class PayrollTest extends TestCase
     {
         $this->get(route('payrolls.index'))->assertRedirect(route('login'));
         $this->get(route('company-profile.index'))->assertRedirect(route('login'));
+    }
+
+    public function test_admin_can_view_payroll_index_with_chart_and_three_nine_column_layout(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $period = PayrollPeriod::create([
+            'reference_number' => 'PR-202610',
+            'name' => 'Penggajian Periode Oktober 2026',
+            'month' => 10,
+            'year' => 2026,
+            'start_date' => Carbon::create(2026, 10, 1),
+            'end_date' => Carbon::create(2026, 10, 31),
+            'status' => PayrollPeriodStatus::DRAFT,
+            'total_basic_salary' => 10000000,
+            'total_allowances' => 2000000,
+            'total_deductions' => 500000,
+            'total_net_salary' => 11500000,
+            'employee_count' => 3,
+        ]);
+
+        Livewire::test(PayrollIndex::class)
+            ->assertOk()
+            ->assertSee('col-12 col-lg-3 col-md-4 mb-4', false)
+            ->assertSee('col-12 col-lg-9 col-md-8 mb-4', false)
+            ->assertSee('Total biaya perusahaan')
+            ->assertSee('Total THP ditransfer')
+            ->assertSee('Total setoran')
+            ->assertSee('Sisa kasbon')
+            ->assertSee('Rekap payroll')
+            ->assertSee('Rata-rata / bulan')
+            ->assertSee('Biaya / orang / bulan')
+            ->assertSee('Uang gaji dipakai untuk apa')
+            ->assertSee('Biaya per departemen')
+            ->assertSee('Export rekap tahunan (PDF)')
+            ->assertSee('Daftar Riwayat Periode');
     }
 
     public function test_admin_can_update_company_profile(): void
@@ -158,6 +196,70 @@ class PayrollTest extends TestCase
         $this->assertNotNull($advanceLine);
         $this->assertEquals(500000, (float) $advanceLine->amount);
         $this->assertEquals(5500000, (float) $item->net_salary);
+    }
+
+    public function test_admin_cannot_create_duplicate_payroll_period_for_same_month_and_year(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        PayrollPeriod::create([
+            'reference_number' => 'PR-202608',
+            'name' => 'Penggajian Periode Agustus 2026',
+            'month' => 8,
+            'year' => 2026,
+            'start_date' => Carbon::create(2026, 8, 1),
+            'end_date' => Carbon::create(2026, 8, 31),
+            'status' => PayrollPeriodStatus::DRAFT,
+            'employee_count' => 1,
+            'created_by' => $admin->id,
+        ]);
+
+        // Attempting to create duplicate period via Livewire component
+        Livewire::test(PayrollIndex::class)
+            ->set('newYear', 2026)
+            ->set('newMonth', 8)
+            ->set('newName', 'Penggajian Periode Agustus 2026 Duplikat')
+            ->call('storePeriod')
+            ->assertHasErrors(['newMonth']);
+
+        // Attempting to create duplicate period via PayrollService directly
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Periode penggajian untuk bulan Agustus 2026 sudah ada.');
+
+        app(PayrollService::class)->createPeriod([
+            'month' => 8,
+            'year' => 2026,
+            'name' => 'Penggajian Periode Agustus 2026 Duplikat',
+        ], $admin);
+    }
+
+    public function test_admin_can_delete_draft_payroll_period(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $period = PayrollPeriod::create([
+            'reference_number' => 'PR-202609',
+            'name' => 'Penggajian Periode September 2026',
+            'month' => 9,
+            'year' => 2026,
+            'start_date' => Carbon::create(2026, 9, 1),
+            'end_date' => Carbon::create(2026, 9, 30),
+            'status' => PayrollPeriodStatus::DRAFT,
+            'employee_count' => 0,
+            'created_by' => $admin->id,
+        ]);
+
+        Livewire::test(PayrollIndex::class)
+            ->call('confirmDelete', $period->id)
+            ->assertDispatched('swal:confirm-delete')
+            ->call('deletePeriod', $period->id)
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseMissing('payroll_periods', [
+            'id' => $period->id,
+        ]);
     }
 
     public function test_admin_can_add_custom_allowance_and_submit_to_director(): void
@@ -512,6 +614,15 @@ class PayrollTest extends TestCase
 
         $item = $period->items()->where('employee_id', $employee->id)->first();
         $this->assertNotNull($item);
+
+        $period->items()->where('employee_id', '!=', $employee->id)->delete();
+        $period->update([
+            'employee_count' => 1,
+            'total_basic_salary' => $item->basic_salary,
+            'total_allowances' => 0,
+            'total_deductions' => 0,
+            'total_net_salary' => $item->basic_salary,
+        ]);
 
         $component = Livewire::test(PayrollManageItem::class, [
             'period' => $period,
@@ -1054,6 +1165,46 @@ class PayrollTest extends TestCase
         $editResponse->assertSee('Ratna Sari');
     }
 
+    public function test_payroll_show_groups_items_by_department_and_orders_by_position_hierarchy(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $dept = Department::firstOrCreate(['name' => 'Mikrokontroler'], ['description' => 'Mikro']);
+        $posSupervisor = Position::firstOrCreate(['name' => 'Supervisor'], ['description' => 'SPV']);
+        $posStaff = Position::firstOrCreate(['name' => 'Staff'], ['description' => 'Staff']);
+
+        $empStaff = Employee::create([
+            'department_id' => $dept->id,
+            'position_id' => $posStaff->id,
+            'full_name' => 'Arif Staff',
+            'join_date' => Carbon::now()->subMonths(2),
+            'status' => EmployeeStatus::ACTIVE,
+            'basic_salary' => 5000000,
+        ]);
+
+        $empSpv = Employee::create([
+            'department_id' => $dept->id,
+            'position_id' => $posSupervisor->id,
+            'full_name' => 'Fahmi Supervisor',
+            'join_date' => Carbon::now()->subMonths(10),
+            'status' => EmployeeStatus::ACTIVE,
+            'basic_salary' => 8000000,
+        ]);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'year' => 2028,
+            'month' => 3,
+            'name' => 'Penggajian Periode Maret 2028',
+        ], $admin);
+
+        $response = $this->get(route('payrolls.show', $period));
+        $response->assertOk();
+        $response->assertSee('DEPARTEMEN MIKROKONTROLER');
+        $response->assertSee('Subtotal Ditransfer:');
+    }
+
     public function test_director_can_approve_individual_payroll_item(): void
     {
         $admin = $this->createAdminUser();
@@ -1089,6 +1240,9 @@ class PayrollTest extends TestCase
 
         $item1 = $period->items()->where('employee_id', $employee1->id)->first();
         $item2 = $period->items()->where('employee_id', $employee2->id)->first();
+
+        $period->items()->whereNotIn('employee_id', [$employee1->id, $employee2->id])->delete();
+        $period->update(['employee_count' => 2]);
 
         $this->actingAs($director);
 
@@ -1990,6 +2144,22 @@ class PayrollTest extends TestCase
             'total_basic_salary' => 0,
         ]);
 
+        foreach (Employee::where('status', EmployeeStatus::ACTIVE)->get() as $existingEmp) {
+            $period->items()->create([
+                'employee_id' => $existingEmp->id,
+                'payslip_number' => 'SLIP-TEST-'.$existingEmp->id,
+                'basic_salary' => $existingEmp->basic_salary ?? 5000000,
+                'net_salary' => $existingEmp->basic_salary ?? 5000000,
+                'payment_status' => 'unpaid',
+            ]);
+        }
+        $period->update([
+            'employee_count' => $period->items()->count(),
+            'total_basic_salary' => $period->items()->sum('basic_salary'),
+        ]);
+        $initialCount = $period->employee_count;
+        $initialSalary = (int) $period->total_basic_salary;
+
         // Create a new employee joined on 15 Oct 2026
         $newEmp = Employee::factory()->active()->withDetail()->create([
             'full_name' => 'Karyawan Baru Prorata',
@@ -2001,7 +2171,7 @@ class PayrollTest extends TestCase
 
         // Test Livewire Show detects the missing employee
         $test = Livewire::test(Show::class, ['period' => $period])
-            ->assertSee('Karyawan Baru Terdeteksi')
+            ->assertSee('Karyawan Aktif Belum Masuk Draf')
             ->assertSee('Karyawan Baru Prorata')
             ->assertSee('15 dari 27 hari kerja')
             ->call('syncMissingEmployees')
@@ -2015,12 +2185,79 @@ class PayrollTest extends TestCase
 
         // After syncing, banner should no longer appear
         Livewire::test(Show::class, ['period' => $period->fresh()])
-            ->assertDontSee('Karyawan Baru Terdeteksi');
+            ->assertDontSee('Karyawan Aktif Belum Masuk Draf');
 
         // Period employee count and basic salary should be updated
         $period->refresh();
-        $this->assertEquals(1, $period->employee_count);
-        $this->assertEquals(3333333, (int) $period->total_basic_salary);
+        $this->assertEquals($initialCount + 1, $period->employee_count);
+        $this->assertEquals($initialSalary + 3333333, (int) $period->total_basic_salary);
+    }
+
+    public function test_reactivated_employee_is_auto_detected_in_draft_payroll_period(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $period = PayrollPeriod::create([
+            'reference_number' => 'PR-TEST-REACTIVATED',
+            'name' => 'Payroll Test Reactivated',
+            'month' => 10,
+            'year' => 2026,
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-10-31',
+            'payment_date' => '2026-10-31',
+            'status' => PayrollPeriodStatus::DRAFT,
+            'created_by' => $admin->id,
+            'employee_count' => 0,
+            'total_basic_salary' => 0,
+        ]);
+
+        // Put all currently active employees into the period
+        foreach (Employee::where('status', EmployeeStatus::ACTIVE)->get() as $existingEmp) {
+            $period->items()->create([
+                'employee_id' => $existingEmp->id,
+                'payslip_number' => 'SLIP-REACT-'.$existingEmp->id,
+                'basic_salary' => $existingEmp->basic_salary ?? 5000000,
+                'net_salary' => $existingEmp->basic_salary ?? 5000000,
+                'payment_status' => 'unpaid',
+            ]);
+        }
+        $period->update([
+            'employee_count' => $period->items()->count(),
+            'total_basic_salary' => $period->items()->sum('basic_salary'),
+        ]);
+
+        // Karyawan A is initially inactive
+        $employeeA = Employee::factory()->inactive()->withDetail()->create([
+            'full_name' => 'Karyawan A Nonaktif',
+            'basic_salary' => 5000000,
+            'join_date' => '2026-01-01',
+        ]);
+
+        // While Karyawan A is inactive, draft period does not show Karyawan A in missing banner
+        Livewire::test(Show::class, ['period' => $period])
+            ->assertDontSee('Karyawan A Nonaktif');
+
+        // Now Karyawan A is reactivated by HRD
+        $employeeA->update(['status' => EmployeeStatus::ACTIVE]);
+
+        // Draft period immediately auto-detects Karyawan A
+        Livewire::test(Show::class, ['period' => $period])
+            ->assertSee('Karyawan Aktif Belum Masuk Draf')
+            ->assertSee('Karyawan A Nonaktif')
+            ->call('syncMissingEmployees')
+            ->assertDispatched('swal:alert');
+
+        // Confirm Karyawan A is now added to period items
+        $this->assertDatabaseHas('payroll_items', [
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employeeA->id,
+            'basic_salary' => 5000000,
+        ]);
+
+        // Banner disappears
+        Livewire::test(Show::class, ['period' => $period->fresh()])
+            ->assertDontSee('Karyawan Aktif Belum Masuk Draf');
     }
 
     public function test_handles_soft_deleted_employee_gracefully_in_payroll_show(): void
@@ -2399,5 +2636,184 @@ class PayrollTest extends TestCase
         $dbCompKes = $item->lines()->where('type', PayrollLineType::COMPANY_CONTRIBUTION)->where('name', 'like', 'BPJS Kesehatan%')->first();
         $this->assertNotNull($dbCompKes);
         $this->assertGreaterThan(0, (float) $dbCompKes->amount);
+    }
+
+    public function test_can_customize_cash_advance_deduction_amount_and_deducts_properly_on_payout(): void
+    {
+        $admin = $this->createAdminUser();
+        $direktur = $this->createDirectorUser();
+        $this->actingAs($admin);
+
+        $emp = Employee::factory()->create([
+            'status' => EmployeeStatus::ACTIVE,
+            'basic_salary' => 5_000_000,
+        ]);
+        $emp->detail()->create([
+            'tax_method' => TaxMethod::GROSS,
+            'ptkp_status' => PtkpStatus::TK_0,
+            'has_npwp' => true,
+        ]);
+
+        $ca = CashAdvance::create([
+            'reference_number' => 'KB-202610-CUSTOM-DED',
+            'employee_id' => $emp->id,
+            'amount' => 1_000_000,
+            'remaining_amount' => 1_000_000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 2,
+            'monthly_installment' => 500_000,
+            'disbursement_date' => '2026-10-01',
+            'reason' => 'Kasbon cicilan',
+            'status' => CashAdvanceStatus::ACTIVE->value,
+            'submitted_by' => $admin->id,
+            'approved_by' => $direktur->id,
+            'approved_at' => Carbon::now(),
+        ]);
+
+        $inst1 = CashAdvanceInstallment::create([
+            'cash_advance_id' => $ca->id,
+            'installment_number' => 1,
+            'due_date' => '2026-10-31',
+            'amount' => 500_000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING->value,
+        ]);
+
+        CashAdvanceInstallment::create([
+            'cash_advance_id' => $ca->id,
+            'installment_number' => 2,
+            'due_date' => '2026-11-30',
+            'amount' => 500_000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING->value,
+        ]);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'name' => 'Payroll Custom Kasbon Period',
+            'year' => 2026,
+            'month' => 10,
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-10-31',
+            'payment_date' => '2026-10-31',
+        ], $admin);
+
+        $item = $period->items()->where('employee_id', $emp->id)->first();
+        $this->assertNotNull($item);
+
+        $lw = Livewire::test(PayrollManageItem::class, [
+            'period' => $period,
+            'item' => $item,
+        ]);
+
+        $deductionRows = $lw->get('deductionRows');
+        $caIdx = collect($deductionRows)->search(
+            fn ($row) => ($row['cash_advance_installment_id'] ?? null) === $inst1->id
+        );
+        $this->assertNotFalse($caIdx, 'Cash advance row must be found in deductionRows');
+
+        // Test resetting cash advance deduction
+        $lw->set("deductionRows.{$caIdx}.amount", 200000);
+        $lw->call('resetKasbonDeduction', $caIdx);
+        $this->assertEquals(500000.0, (float) $lw->get("deductionRows.{$caIdx}.amount"));
+
+        // Customize deduction to 300,000
+        $lw->set("deductionRows.{$caIdx}.amount", 300000)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertDispatched('swal:alert');
+
+        $item->refresh();
+        $caLine = $item->lines()->where('cash_advance_installment_id', $inst1->id)->first();
+        $this->assertNotNull($caLine);
+        $this->assertEquals(300000.0, (float) $caLine->amount);
+
+        // Submit and Direktur approves period
+        $service->submitPeriod($period, $admin);
+        $this->actingAs($direktur);
+        $service->approvePeriod($period, $direktur);
+
+        $item->refresh();
+
+        // Pay item by admin
+        $this->actingAs($admin);
+        $service->markItemAsPaid($item, [
+            'payment_date' => '2026-10-31',
+            'payment_method' => 'bank_transfer',
+        ], $admin);
+
+        // Check payment record created
+        $payment = CashAdvancePayment::where('cash_advance_id', $ca->id)->first();
+        $this->assertNotNull($payment);
+        $this->assertEquals(300000.0, (float) $payment->amount);
+        $this->assertEquals(CashAdvancePaymentStatus::APPROVED, $payment->status);
+        $this->assertEquals($admin->id, $payment->approved_by);
+
+        // Check installment 1 is partially paid (300k of 500k)
+        $inst1->refresh();
+        $this->assertEquals(InstallmentStatus::PARTIALLY_PAID, $inst1->status);
+        $this->assertEquals(300000.0, (float) $inst1->paid_amount);
+
+        // Check cash advance balance is 700,000
+        $ca->refresh();
+        $this->assertEquals(700000.0, (float) $ca->remaining_amount);
+        $this->assertEquals(CashAdvanceStatus::ACTIVE, $ca->status);
+    }
+
+    public function test_director_does_not_see_approval_buttons_in_draft_and_sees_them_when_submitted(): void
+    {
+        $admin = $this->createAdminUser();
+        $director = $this->createDirectorUser();
+
+        $dept = Department::firstOrCreate(['name' => 'HR Dept'], ['description' => 'HR']);
+        $pos = Position::firstOrCreate(['name' => 'HR Staff'], ['description' => 'Staff']);
+
+        $emp = Employee::create([
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'full_name' => 'Bambang Sudirman',
+            'join_date' => Carbon::now()->subMonths(6),
+            'status' => EmployeeStatus::ACTIVE,
+            'basic_salary' => 5000000,
+        ]);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'year' => 2027,
+            'month' => 5,
+            'name' => 'Penggajian Periode Mei 2027',
+        ], $admin);
+
+        $this->assertEquals(PayrollPeriodStatus::DRAFT, $period->status);
+
+        // Direktur views during DRAFT (Tahap 1, not yet submitted in Tahap 2)
+        $this->actingAs($director);
+        Livewire::test(PayrollShow::class, ['period' => $period])
+            ->assertDontSee('Setujui Semua')
+            ->assertDontSee('title="Setujui (ACC)"', false)
+            ->assertDontSee('wire:model.live="selectAll"', false);
+
+        // Admin submits to Direktur (Tahap 2 done -> SUBMITTED)
+        $service->submitPeriod($period, $admin);
+        $period->refresh();
+        $this->assertEquals(PayrollPeriodStatus::SUBMITTED, $period->status);
+
+        // Direktur views during SUBMITTED (Tahap 3)
+        Livewire::test(PayrollShow::class, ['period' => $period])
+            ->assertSee('Setujui Semua')
+            ->assertSee('title="Setujui (ACC)"', false)
+            ->assertSee('wire:model.live="selectAll"', false);
+    }
+
+    public function test_admin_can_view_yearly_payroll_summary_print(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $response = $this->get(route('payrolls.yearly-summary.print', 2026));
+
+        $response->assertOk()
+            ->assertSee('REKAPITULASI PAYROLL')
+            ->assertSee('Tahun Anggaran 2026');
     }
 }

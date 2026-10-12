@@ -25,6 +25,7 @@ class Employee extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'user_id',
         'department_id',
         'position_id',
         'full_name',
@@ -51,6 +52,14 @@ class Employee extends Model
             'basic_salary' => 'decimal:2',
             'total_cash_receipt' => 'decimal:2',
         ];
+    }
+
+    /**
+     * Get the user account linked to the employee.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     /**
@@ -91,6 +100,96 @@ class Employee extends Model
     public function payrollItems(): HasMany
     {
         return $this->hasMany(PayrollItem::class);
+    }
+
+    /**
+     * Get the most recent payroll item for the employee.
+     */
+    public function latestPayrollItem(): HasOne
+    {
+        return $this->hasOne(PayrollItem::class)->latestOfMany();
+    }
+
+    /**
+     * Get the salary change history for the employee.
+     */
+    public function salaryHistories(): HasMany
+    {
+        return $this->hasMany(EmployeeSalaryHistory::class)
+            ->orderBy('effective_date', 'desc')
+            ->orderBy('id', 'desc');
+    }
+
+    /**
+     * Get the most recent salary history.
+     */
+    public function latestSalaryHistory(): HasOne
+    {
+        return $this->hasOne(EmployeeSalaryHistory::class)
+            ->ofMany(['effective_date' => 'max', 'id' => 'max']);
+    }
+
+    /**
+     * Get the date of the last salary change / increase.
+     */
+    protected function lastSalaryChangeDate(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                $latest = $this->relationLoaded('salaryHistories')
+                    ? $this->salaryHistories->first()
+                    : $this->salaryHistories()->first();
+
+                return $latest?->effective_date ?? $this->join_date;
+            }
+        );
+    }
+
+    /**
+     * Get progression status alert for salary increases.
+     *
+     * @return array{label: string, badge_class: string, months: int, note: string}
+     */
+    protected function salaryProgressionStatus(): Attribute
+    {
+        return Attribute::make(
+            get: function (): array {
+                $refDate = $this->last_salary_change_date ?? $this->join_date ?? now();
+                $diffMonths = (int) $refDate->diffInMonths(now());
+
+                if ($diffMonths <= 3) {
+                    return [
+                        'status' => 'recently_raised',
+                        'label' => 'Baru Naik Gaji',
+                        'badge_class' => 'badge badge-success',
+                        'months' => $diffMonths,
+                        'note' => $diffMonths === 0 ? 'Bulan ini baru disesuaikan' : "{$diffMonths} bulan lalu disesuaikan",
+                    ];
+                }
+
+                if ($diffMonths >= 12) {
+                    $years = floor($diffMonths / 12);
+                    $rem = $diffMonths % 12;
+                    $timeStr = $years > 0 ? "{$years} thn ".($rem > 0 ? "{$rem} bln" : '') : "{$diffMonths} bln";
+
+                    return [
+                        'status' => 'stagnant',
+                        'label' => 'Belum Naik Gaji > 1 Thn',
+                        'badge_class' => 'badge badge-warning',
+                        'months' => $diffMonths,
+                        'note' => "Sudah {$timeStr} belum ada penyesuaian gaji",
+                    ];
+                }
+
+                return [
+                    'status' => 'normal',
+                    'label' => 'Terakhir Naik: '.$diffMonths.' bln lalu',
+                    'badge_class' => 'badge badge-light border text-dark',
+                    'months' => $diffMonths,
+                    'note' => "{$diffMonths} bulan sejak penyesuaian terakhir",
+                ];
+            }
+        );
     }
 
     /**

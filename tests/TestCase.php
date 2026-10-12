@@ -20,4 +20,17 @@ abstract class TestCase extends BaseTestCase
 
         return $user;
     }
+
+    protected function createDirectorUser(): User
+    {
+        $role = Role::firstOrCreate(
+            ['name' => 'direktur'],
+            ['display_name' => 'Direktur', 'description' => 'Direktur Perusahaan'],
+        );
+
+        $user = User::factory()->create(['is_active' => true]);
+        $user->syncRoles([$role]);
+
+        return $user;
+    }
 }

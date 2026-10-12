@@ -35,22 +35,27 @@
 
         <!-- Right Side: Employee Data (Desktop: 9 cols / col-lg-9 col-md-8 col-12) -->
         <div class="col-lg-9 col-md-8 col-12">
-            <!-- Row 1: Header & Controls Card (Data Karyawan, Show Entries & Search Bar) -->
-            <div class="card mb-3">
-                <div class="card-header">
-                    <h4>Data Karyawan</h4>
-                    <div class="card-header-action">
-                        <div class="btn-group btn-group-sm" role="group" aria-label="Mode Tampilan">
-                            <button type="button" wire:click="setViewMode('card')" wire:loading.attr="disabled" wire:target="setViewMode('card')" class="btn {{ $viewMode === 'card' ? 'btn-primary' : 'btn-outline-primary' }}" title="Mode Kartu"><i class="fas fa-th-large mr-1"></i> Kartu</button>
-                            <button type="button" wire:click="setViewMode('table')" wire:loading.attr="disabled" wire:target="setViewMode('table')" class="btn {{ $viewMode === 'table' ? 'btn-primary' : 'btn-outline-primary' }}" title="Mode Tabel"><i class="fas fa-table mr-1"></i> Tabel</button>
-                        </div>
+            <!-- Unified Main Card (Matching Kasbon: Header, Search/Entries, Table, Footer in ONE Card) -->
+            <div class="card cash-advance-main-card mb-0">
+                <!-- Row 1: Header & Controls Card -->
+                <div class="cash-advance-top-card">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 12px;">
+                        <h4 class="mb-0">Data Karyawan</h4>
+                        @if (auth()->user()->hasRole('admin'))
+                            <button type="button" wire:click="create" wire:loading.attr="disabled" wire:target="create" class="btn btn-sm btn-primary font-weight-bold shadow-sm" style="border-radius: 8px;">
+                                <i wire:loading.remove wire:target="create" class="fas fa-plus mr-1.5"></i>
+                                <i wire:loading wire:target="create" class="fas fa-spinner fa-spin mr-1.5"></i>
+                                Tambah Karyawan
+                            </button>
+                        @endif
                     </div>
-                </div>
-                <div class="card-body p-0">
+
+                    <!-- Controls: Show Entries & Search Bar -->
                     <div class="dt-control-wrapper">
                         <div class="dt-show-entries">
                             Show
                             <select wire:model.live="perPage" class="dt-select-entries">
+                                <option value="10">10</option>
                                 <option value="20">20</option>
                                 <option value="40">40</option>
                                 <option value="80">80</option>
@@ -67,212 +72,159 @@
 
                         <!-- Mobile Filter Button (Under Search, Full Width, BG Primary, Tanpa Outline) -->
                         <div class="d-md-none w-100">
-                            <button type="button" class="btn btn-primary btn-block shadow-none" data-toggle="modal" data-target="#employeeFilterMobileModal"><i class="fas fa-filter mr-1.5"></i> Filter Karyawan @if ($filterDepartment || $filterPosition || $filterStatus || $filterEmploymentStatus)<span class="badge badge-light text-primary ml-1 py-0.5 px-1.5 text-xs font-weight-bold">Aktif</span>@endif</button>
+                            <button type="button" class="btn btn-primary btn-block shadow-none" data-toggle="modal" data-target="#employeeFilterMobileModal">
+                                <i class="fas fa-filter mr-1.5"></i> Filter Karyawan 
+                                @if ($filterDepartment || $filterPosition || $filterStatus || $filterEmploymentStatus)
+                                    <span class="badge badge-light text-primary ml-1 py-0.5 px-1.5 text-xs font-weight-bold">Aktif</span>
+                                @endif
+                            </button>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            @if ($viewMode === 'table')
-                <!-- Mode Tabel: Clean Responsive Data Table -->
-                <div class="card mb-0">
-                    <div class="table-responsive">
-                        <table class="table table-clean">
-                            <thead class="bg-gray-100">
-                                <tr>
-                                    <th class="text-center text-nowrap" style="width: 50px;">NO</th>
-                                    <th class="text-nowrap">KARYAWAN</th>
-                                    <th class="text-nowrap" style="width: 140px;">STATUS KERJA</th>
-                                    <th class="text-nowrap" style="width: 140px;">TANGGAL MASUK</th>
-                                    <th class="text-nowrap" style="width: 130px;">SISA KONTRAK</th>
-                                    <th class="text-nowrap" style="width: 100px;">STATUS AKUN</th>
-                                    <th class="text-nowrap" style="width: 120px;">TELEPON</th>
-                                    <th class="text-center text-nowrap" style="width: 120px;"><i class="fas fa-cog text-muted" title="Aksi"></i></th>
+                <!-- Row 2: Full-Width Data Table -->
+                <div class="table-responsive">
+                    <table class="table table-clean mb-0">
+                        <thead>
+                            <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                                <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 50px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">NO</th>
+                                <th class="text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">KARYAWAN</th>
+                                <th class="text-nowrap !px-3 !py-2.5" style="width: 140px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">STATUS KERJA</th>
+                                <th class="text-nowrap !px-3 !py-2.5" style="width: 140px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">TANGGAL MASUK</th>
+                                <th class="text-nowrap !px-3 !py-2.5" style="width: 130px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">SISA KONTRAK</th>
+                                <th class="text-nowrap !px-3 !py-2.5" style="width: 100px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">STATUS AKUN</th>
+                                <th class="text-nowrap !px-3 !py-2.5" style="width: 120px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">TELEPON</th>
+                                <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 120px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;"><i class="fas fa-cog text-muted" title="Aksi"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @php
+                                $rowNumber = 0;
+                                $groupedEmployees = $employees->groupBy(fn ($e) => $e->department?->name ?: 'Tanpa Department');
+                                if ($groupedEmployees->has('Tanpa Department')) {
+                                    $unassigned = $groupedEmployees->pull('Tanpa Department');
+                                    $groupedEmployees->put('Tanpa Department', $unassigned);
+                                }
+                            @endphp
+
+                            @forelse ($groupedEmployees as $departmentName => $deptEmployees)
+                                @php
+                                    $isOfficialDept = $departmentName !== 'Tanpa Department';
+                                @endphp
+                                <!-- Baris Sub-Header Group Departemen (Sesuai Desain Payroll) -->
+                                <tr class="table-group-header" style="background-color: {{ $isOfficialDept ? '#f0f6ff' : '#fffdf5' }}; border-top: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }}; border-bottom: 1px solid {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }};">
+                                    <td colspan="8" class="!py-2.5 !px-3.5" style="border-left: 4px solid {{ $isOfficialDept ? '#0b52aa' : '#f59e0b' }} !important;">
+                                        <div class="d-flex align-items-center justify-content-between flex-wrap" style="gap: 10px;">
+                                            <div class="d-flex align-items-center">
+                                                <span class="d-inline-flex align-items-center justify-content-center mr-2" style="width: 26px; height: 26px; border-radius: 6px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; font-size: 12px; flex-shrink: 0;">
+                                                    @if ($isOfficialDept)
+                                                        <i class="fas fa-building" style="color: #0b52aa;"></i>
+                                                    @else
+                                                        <i class="fas fa-exclamation-triangle" style="color: #b45309;"></i>
+                                                    @endif
+                                                </span>
+                                                <div>
+                                                    <span class="font-weight-bold" style="font-size: 13px; letter-spacing: 0.3px; color: #0f172a;">
+                                                        DEPARTEMEN {{ strtoupper($departmentName) }}
+                                                    </span>
+                                                    <span class="badge ml-2 font-weight-700" style="font-size: 11px; padding: 2.5px 8px; border-radius: 12px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; color: {{ $isOfficialDept ? '#1e40af' : '#92400e' }}; border: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }};">
+                                                        {{ $deptEmployees->count() }} Karyawan
+                                                    </span>
+                                                    @if (! $isOfficialDept)
+                                                        <span class="badge ml-1 font-weight-700" style="font-size: 10.5px; padding: 2.5px 7px; border-radius: 12px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
+                                                            Perlu Dilengkapi
+                                                        </span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                @php $rowNumber = 0; @endphp
-                                @forelse ($employees->groupBy(fn ($e) => $e->department?->name ?: 'Tanpa Department') as $departmentName => $deptEmployees)
-                                    <tr class="bg-gray-50 border-top" wire:key="dept-header-{{ Str::slug($departmentName) }}-{{ $loop->index }}">
-                                        <td colspan="8" class="text-dark font-weight-600 bg-gray-50 align-middle py-2 px-4 text-nowrap">
-                                            {{ $departmentName === 'Tanpa Department' ? 'Tanpa Department' : 'Department: ' . $departmentName }}
+
+                                @foreach ($deptEmployees as $employee)
+                                    @php $rowNumber++; @endphp
+                                    <tr wire:key="employee-table-{{ $employee->id }}" class="payroll-table-row" style="border-bottom: 1px solid #f1f5f9;">
+                                        <td class="text-center font-weight-700 align-middle !px-3 !py-2.5 text-nowrap" style="color: #334155; font-size: 12.5px;">
+                                            {{ $employees->firstItem() + $rowNumber - 1 }}
                                         </td>
-                                    </tr>
-                                    @foreach ($deptEmployees as $employee)
-                                        @php $rowNumber++; @endphp
-                                        <tr wire:key="employee-table-{{ $employee->id }}">
-                                            <td class="text-center text-muted align-middle text-nowrap">
-                                                {{ $employees->firstItem() + $rowNumber - 1 }}
-                                            </td>
-                                            <td class="align-middle text-nowrap">
-                                                <div class="d-flex align-items-center text-nowrap">
-                                                    <img src="{{ $employee->photo_url }}" alt="{{ $employee->full_name }}" class="rounded-circle mr-2.5" style="width: 38px; height: 38px; object-fit: cover; border: 1px solid #e2e8f0; flex-shrink: 0;">
-                                                    <div class="text-nowrap">
-                                                        <div class="text-dark text-nowrap" style="font-size: 13px; line-height: 1.3;">{{ $employee->full_name }}</div>
-                                                        <div class="text-muted text-nowrap" style="font-size: 11.5px; line-height: 1.3;">
-                                                            {{ $employee->position?->name ?: 'Tanpa Jabatan' }}
-                                                        </div>
+                                        <td class="align-middle text-nowrap !px-3 !py-2.5">
+                                            <div class="d-flex align-items-center text-nowrap">
+                                                <img src="{{ $employee->photo_url }}" alt="{{ $employee->full_name }}" class="rounded-circle mr-2.5" style="width: 38px; height: 38px; object-fit: cover; border: 1.5px solid #cbd5e1; flex-shrink: 0;">
+                                                <div class="text-nowrap">
+                                                    <div class="font-weight-700 leading-tight" style="color: #0f172a; font-size: 13.5px;">{{ $employee->full_name }}</div>
+                                                    <div class="leading-tight mt-1" style="font-size: 12px; color: #334155; font-weight: 600;">
+                                                        {{ $employee->position?->name ?: 'Tanpa Jabatan' }}
                                                     </div>
                                                 </div>
-                                            </td>
-                                            <td class="align-middle text-nowrap">
-                                                <span class="{{ $employee->employment_status_badge_class }} text-xs">
-                                                    {{ $employee->employment_status_label }}
-                                                </span>
-                                            </td>
-                                            <td class="align-middle text-nowrap" style="font-size: 12.5px;">
-                                                <div class="text-dark">{{ $employee->join_date ? $employee->join_date->format('d M Y') : '-' }}</div>
-                                                @if ($employee->join_date)
-                                                    <div class="text-muted" style="font-size: 11px; line-height: 1.2;">{{ $employee->tenure_label }}</div>
-                                                @endif
-                                            </td>
-                                            <td class="align-middle text-nowrap" style="font-size: 12.5px;">
-                                                {{ $employee->remaining_contract_label }}
-                                            </td>
-                                            <td class="align-middle text-nowrap">
-                                                <span class="{{ $employee->status_badge_class }} text-xs">
-                                                    {{ $employee->status_label }}
-                                                </span>
-                                            </td>
-                                            <td class="align-middle text-nowrap" style="font-size: 12.5px;">
-                                                {{ $employee->detail?->phone ?: '-' }}
-                                            </td>
-                                            <td class="text-center align-middle text-nowrap">
-                                                <button type="button" wire:click="showDetail({{ $employee->id }})" wire:loading.attr="disabled" wire:target="showDetail({{ $employee->id }})" class="btn btn-info btn-action mr-1" title="Lihat Profil"><i wire:loading wire:target="showDetail({{ $employee->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="showDetail({{ $employee->id }})" class="fas fa-eye"></i></button>
-                                                @if (auth()->user()->hasRole('admin'))
-                                                    <button type="button" wire:click="edit({{ $employee->id }})" wire:loading.attr="disabled" wire:target="edit({{ $employee->id }})" class="btn btn-primary btn-action mr-1" title="Edit Data"><i wire:loading wire:target="edit({{ $employee->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="edit({{ $employee->id }})" class="fas fa-pencil-alt"></i></button>
-                                                    <button type="button" wire:click="confirmDelete({{ $employee->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $employee->id }})" class="btn btn-danger btn-action" title="Hapus Data"><i wire:loading wire:target="confirmDelete({{ $employee->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="confirmDelete({{ $employee->id }})" class="fas fa-trash"></i></button>
-                                                @endif
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                @empty
-                                    <tr>
-                                        <td colspan="8" class="text-center py-5 text-muted">
-                                            <div class="py-4">
-                                                <i class="fas fa-folder-open text-muted mb-2" style="font-size: 36px;"></i>
-                                                <div class="font-weight-600 text-dark mt-2">Tidak ada data karyawan ditemukan</div>
-                                                <small class="text-muted d-block mt-1">
-                                                    @if($search || $filterDepartment || $filterPosition || $filterStatus || $filterEmploymentStatus)
-                                                        Tidak ada karyawan yang sesuai dengan kriteria filter pencarian.
-                                                    @else
-                                                        Belum ada data master karyawan yang tersedia.
-                                                    @endif
-                                                </small>
                                             </div>
                                         </td>
+                                        <td class="align-middle text-nowrap !px-3 !py-2.5">
+                                            <span class="{{ $employee->employment_status_badge_class }} text-xs font-weight-600">
+                                                {{ $employee->employment_status_label }}
+                                            </span>
+                                        </td>
+                                        <td class="align-middle text-nowrap !px-3 !py-2.5">
+                                            <div class="font-weight-600" style="color: #1e293b; font-size: 12.5px;">{{ $employee->join_date ? $employee->join_date->format('d M Y') : '-' }}</div>
+                                            @if ($employee->join_date)
+                                                <span class="badge font-weight-700 px-2.5 py-1 mt-0.5" style="font-size: 11px; border-radius: 6px; background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1;">
+                                                    {{ $employee->tenure_label }}
+                                                </span>
+                                            @endif
+                                        </td>
+                                        <td class="align-middle text-nowrap !px-3 !py-2.5" style="font-size: 12.5px; color: #1e293b; font-weight: 600;">
+                                            {{ $employee->remaining_contract_label }}
+                                        </td>
+                                        <td class="align-middle text-nowrap !px-3 !py-2.5">
+                                            <span class="{{ $employee->status_badge_class }} text-xs font-weight-600">
+                                                {{ $employee->status_label }}
+                                            </span>
+                                        </td>
+                                        <td class="align-middle text-nowrap !px-3 !py-2.5" style="font-size: 12.5px; color: #1e293b; font-weight: 600;">
+                                            {{ $employee->detail?->phone ?: '-' }}
+                                        </td>
+                                        <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
+                                            <a href="{{ route('employees.show', $employee) }}" class="btn btn-info btn-action mr-1" title="Lihat Profil"><i class="fas fa-eye"></i></a>
+                                            @if (auth()->user()->hasRole('admin'))
+                                                <button type="button" wire:click="edit({{ $employee->id }})" wire:loading.attr="disabled" wire:target="edit({{ $employee->id }})" class="btn btn-primary btn-action mr-1" title="Edit Data"><i wire:loading wire:target="edit({{ $employee->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="edit({{ $employee->id }})" class="fas fa-pencil-alt"></i></button>
+                                                <button type="button" wire:click="confirmDelete({{ $employee->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $employee->id }})" class="btn btn-danger btn-action" title="Hapus Data"><i wire:loading wire:target="confirmDelete({{ $employee->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="confirmDelete({{ $employee->id }})" class="fas fa-trash"></i></button>
+                                            @endif
+                                        </td>
                                     </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            @else
-                <!-- Row 2: Centered Employee Card Grid (Modern CSS Grid: 4 cards on desktop, 2 on tablet, 1 on mobile with equal gap-x & gap-y) -->
-                <div class="emp-card-grid">
-                    @forelse ($employees as $employee)
-                        <div class="card h-100 mb-0" wire:key="employee-card-{{ $employee->id }}">
-                            <div class="card-body p-3 d-flex flex-column justify-content-between text-center">
-                                <!-- Top: Avatar, Name, & Badges (Centered) -->
-                                <div>
-                                    <div class="d-flex justify-content-center mb-2">
-                                        <img src="{{ $employee->photo_url }}" alt="{{ $employee->full_name }}" class="emp-profile-avatar-center" style="width: 56px; height: 56px;">
-                                    </div>
-                                    <div class="emp-profile-name text-center" title="{{ $employee->full_name }}">
-                                        {{ $employee->full_name }}
-                                    </div>
-                                    <div class="emp-profile-role text-center mb-2.5">
-                                        {{ $employee->department?->name ?: 'Tanpa Departemen' }} &bull; {{ $employee->position?->name ?: 'Tanpa Jabatan' }}
-                                    </div>
-
-                                    <!-- Badges Strip (Centered) -->
-                                    <div class="d-flex align-items-center justify-content-center flex-wrap gap-1 mb-3">
-                                        <span class="{{ $employee->employment_status_badge_class }} text-xs">
-                                            {{ $employee->employment_status_label }}
-                                        </span>
-                                        <span class="{{ $employee->status_badge_class }} text-xs">
-                                            {{ $employee->status_label }}
-                                        </span>
-                                    </div>
-
-                                    <!-- Operational Info: Flutter-Style ListTile Group (Telepon, Sisa Kontrak, Kasbon) -->
-                                    <div class="emp-tile-group mb-1">
-                                        <div class="emp-tile-row">
-                                            <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-phone"></i></div>
-                                                <span>Telepon</span>
+                                @endforeach
+                            @empty
+                                <tr>
+                                    <td colspan="8" class="text-center py-5 text-muted">
+                                        <div class="empty-state py-4">
+                                            <div class="empty-state-icon bg-light text-muted mx-auto mb-3" style="width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                                                <i class="fas fa-users"></i>
                                             </div>
-                                            <div class="emp-tile-right">
-                                                {{ $employee->detail?->phone ?: '-' }}
-                                            </div>
-                                        </div>
-                                        <div class="emp-tile-row">
-                                            <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-calendar-times"></i></div>
-                                                <span>Sisa Kontrak</span>
-                                            </div>
-                                            <div class="emp-tile-right">
-                                                {{ $employee->remaining_contract_label }}
-                                            </div>
-                                        </div>
-                                        <div class="emp-tile-row">
-                                            <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-hand-holding-usd"></i></div>
-                                                <span>Total Kasbon</span>
-                                            </div>
-                                            <div class="emp-tile-right">
-                                                @if (auth()->user()->hasRole('admin'))
-                                                    {{ $employee->formatted_total_cash_receipt }}
+                                            <h5 class="font-weight-bold text-dark mb-1">Tidak Ada Data Karyawan</h5>
+                                            <p class="text-muted small mb-0">
+                                                @if ($search || $filterDepartment || $filterPosition || $filterStatus || $filterEmploymentStatus)
+                                                    Tidak ada karyawan yang sesuai dengan kriteria filter pencarian.
                                                 @else
-                                                    <span class="text-muted">Terbatas</span>
+                                                    Belum ada data master karyawan yang tersedia.
                                                 @endif
-                                            </div>
+                                            </p>
                                         </div>
-                                    </div>
-                                </div>
-
-                                <!-- Bottom: Action Buttons -->
-                                <div class="d-flex align-items-center justify-content-center -mt-1 lg:mt-2">
-                                    <button type="button" wire:click="showDetail({{ $employee->id }})" wire:loading.attr="disabled" wire:target="showDetail({{ $employee->id }})" class="btn btn-info btn-action mr-1" title="Lihat Profil"><i wire:loading wire:target="showDetail({{ $employee->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="showDetail({{ $employee->id }})" class="fas fa-eye"></i></button>
-                                    @if (auth()->user()->hasRole('admin'))
-                                        <button type="button" wire:click="edit({{ $employee->id }})" wire:loading.attr="disabled" wire:target="edit({{ $employee->id }})" class="btn btn-primary btn-action mr-1" title="Edit Data"><i wire:loading wire:target="edit({{ $employee->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="edit({{ $employee->id }})" class="fas fa-pencil-alt"></i></button>
-                                        <button type="button" wire:click="confirmDelete({{ $employee->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $employee->id }})" class="btn btn-danger btn-action" title="Hapus Data"><i wire:loading wire:target="confirmDelete({{ $employee->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="confirmDelete({{ $employee->id }})" class="fas fa-trash"></i></button>
-                                    @endif
-                                </div>
-                            </div>
-                        </div>
-                    @empty
-                        <div class="card grid-column-span-full">
-                            <div class="card-body text-center py-5 text-muted">
-                                <div class="py-4">
-                                    <i class="fas fa-folder-open text-muted mb-2" style="font-size: 36px;"></i>
-                                    <div class="font-weight-600 text-dark mt-2">Tidak ada data karyawan ditemukan</div>
-                                    <small class="text-muted d-block mt-1">
-                                        @if($search || $filterDepartment || $filterPosition || $filterStatus || $filterEmploymentStatus)
-                                            Tidak ada karyawan yang sesuai dengan kriteria filter pencarian.
-                                        @else
-                                            Belum ada data master karyawan yang tersedia.
-                                        @endif
-                                    </small>
-                                </div>
-                            </div>
-                        </div>
-                    @endforelse
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
                 </div>
-            @endif
 
-            <!-- Row 3: Pagination Card -->
-            <div class="card mt-2">
-                <div class="card-body p-0">
+                <!-- Footer: Info & Pagination (Inside the Same Card) -->
+                @if ($employees && $employees->total() > 0)
                     <div class="dt-footer-wrapper">
-                        <div>
-                            Showing {{ $employees->total() > 0 ? $employees->firstItem() : 0 }} to {{ $employees->total() > 0 ? $employees->lastItem() : 0 }} of {{ $employees->total() }} entries
+                        <div class="dt-info">
+                            Showing {{ $employees->firstItem() ?? 0 }} to {{ $employees->lastItem() ?? 0 }} of {{ $employees->total() }} entries
                         </div>
-                        <div>
+                        <div class="dt-pagination">
                             {{ $employees->links('livewire.custom-pagination') }}
                         </div>
                     </div>
-                </div>
+                @endif
             </div>
         </div>
     </div>

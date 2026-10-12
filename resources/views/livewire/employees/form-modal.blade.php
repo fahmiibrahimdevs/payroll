@@ -37,7 +37,7 @@
                                 <div class="col-md-12">
                                     <div class="form-group mb-2">
                                         <label for="full_name">Nama Lengkap <span class="text-danger">*</span></label>
-                                        <input type="text" id="full_name" wire:model="form.full_name" class="form-control @error('form.full_name') is-invalid @enderror" placeholder="Contoh: Muhammad Fahmi Ibrahim" autocomplete="off">
+                                        <input type="text" id="full_name" wire:model.live.debounce.400ms="form.full_name" class="form-control @error('form.full_name') is-invalid @enderror" placeholder="Contoh: Muhammad Fahmi Ibrahim" autocomplete="off">
                                         @error('form.full_name')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
@@ -136,9 +136,27 @@
                                 <div class="col-md-6">
                                     <div class="form-group mb-2">
                                         <label for="basic_salary">Gaji Pokok (Rp) <span class="text-danger">*</span></label>
-                                        <input type="number" id="basic_salary" wire:model="form.basic_salary" min="0" step="1000" class="form-control @error('form.basic_salary') is-invalid @enderror" placeholder="0">
+                                        <div class="input-group" x-data>
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text font-weight-500">Rp</span>
+                                            </div>
+                                            <input type="text"
+                                                   id="basic_salary"
+                                                   inputmode="numeric"
+                                                   x-on:input="
+                                                       let raw = $el.value.replace(/\D/g, '');
+                                                       $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                                   "
+                                                   x-on:input.debounce.350ms="$wire.set('form.basic_salary', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                                   x-on:change="$wire.set('form.basic_salary', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                                   x-on:blur="$wire.set('form.basic_salary', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                                   value="{{ !empty($form->basic_salary) ? number_format((float) $form->basic_salary, 0, ',', '.') : '' }}"
+                                                   class="form-control text-right @error('form.basic_salary') is-invalid @enderror"
+                                                   placeholder="0"
+                                                   autocomplete="off">
+                                        </div>
                                         @error('form.basic_salary')
-                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
                                         @enderror
                                     </div>
                                 </div>
@@ -245,8 +263,16 @@
                                 <!-- Email -->
                                 <div class="col-md-6">
                                     <div class="form-group mb-2">
-                                        <label for="email">Alamat Email</label>
-                                        <input type="email" id="email" wire:model="form.email" class="form-control @error('form.email') is-invalid @enderror" placeholder="karyawan@perusahaan.com" autocomplete="off">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <label for="email" class="mb-0">Alamat Email</label>
+                                            <button type="button" wire:click="generateEmailFromName" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size: 11px;" title="Generate email otomatis dari nama karyawan">
+                                                <i class="fas fa-magic mr-1"></i> Auto
+                                            </button>
+                                        </div>
+                                        <input type="email" id="email" wire:model.live.debounce.400ms="form.email" class="form-control @error('form.email') is-invalid @enderror" placeholder="karyawan@perusahaan.com" autocomplete="off">
+                                        <small class="form-text text-muted mt-1" style="font-size: 11px;">
+                                            <i class="fas fa-info-circle mr-1"></i> Otomatis dibuat dari nama karyawan & domain profil perusahaan.
+                                        </small>
                                         @error('form.email')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror

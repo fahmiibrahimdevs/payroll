@@ -6,6 +6,7 @@ use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
 use App\Enums\Gender;
 use App\Livewire\Employees\Index;
+use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Position;
@@ -311,7 +312,7 @@ class EmployeeCrudTest extends TestCase
         $this->assertEquals('Testing Kasbon Readonly Updated', $employee->full_name);
     }
 
-    public function test_view_mode_can_switch_between_card_and_table(): void
+    public function test_view_mode_renders_unified_table_mode(): void
     {
         $user = $this->createAdminUser();
         $employee = Employee::factory()->withDetail()->create([
@@ -322,24 +323,12 @@ class EmployeeCrudTest extends TestCase
 
         $test = Livewire::test(Index::class);
 
-        // Default should be table mode
+        // Should render unified table mode without card grid
         $test->assertSet('viewMode', 'table')
             ->assertDontSeeHtml('emp-card-grid')
             ->assertSeeHtml('table-clean')
             ->assertSee('Budi Santoso')
-            ->assertSee('Department:');
-
-        // Switch to card mode
-        $test->call('setViewMode', 'card')
-            ->assertSet('viewMode', 'card')
-            ->assertSeeHtml('emp-card-grid')
-            ->assertDontSeeHtml('table-clean')
-            ->assertSee('Budi Santoso');
-
-        // Switch back to table mode
-        $test->call('setViewMode', 'table')
-            ->assertSet('viewMode', 'table')
-            ->assertSeeHtml('table-clean');
+            ->assertSee('DEPARTEMEN');
     }
 
     public function test_table_mode_groups_employees_by_department(): void
@@ -361,8 +350,8 @@ class EmployeeCrudTest extends TestCase
 
         Livewire::test(Index::class)
             ->assertSet('viewMode', 'table')
-            ->assertSee('Department: Divisi Teknologi')
-            ->assertSee('Department: Divisi Operasional')
+            ->assertSee('DEPARTEMEN DIVISI TEKNOLOGI')
+            ->assertSee('DEPARTEMEN DIVISI OPERASIONAL')
             ->assertSee('Fahmi Ibrahim')
             ->assertSee('Syafiq Aziz');
     }
@@ -370,10 +359,10 @@ class EmployeeCrudTest extends TestCase
     public function test_table_mode_sorting_hierarchy_and_removed_kasbon_column(): void
     {
         $user = $this->createAdminUser();
-        $dept = Department::factory()->create(['name' => 'Divisi Rekayasa']);
-        $posManager = Position::factory()->create(['name' => 'Manager']);
-        $posMagang = Position::factory()->create(['name' => 'Magang']);
-        $posStaff = Position::factory()->create(['name' => 'Staff']);
+        $dept = Department::firstOrCreate(['name' => 'Divisi Rekayasa']);
+        $posManager = Position::firstOrCreate(['name' => 'Manager']);
+        $posMagang = Position::firstOrCreate(['name' => 'Magang']);
+        $posStaff = Position::firstOrCreate(['name' => 'Staff']);
 
         Employee::factory()->withDetail()->create([
             'full_name' => 'Karyawan Magang',
@@ -412,7 +401,7 @@ class EmployeeCrudTest extends TestCase
             ->assertSet('viewMode', 'table')
             ->assertDontSeeHtml('TOTAL KASBON')
             ->assertSee('TANGGAL MASUK')
-            ->assertSee('Department: Divisi Rekayasa');
+            ->assertSee('DEPARTEMEN DIVISI REKAYASA');
 
         $html = $test->html();
         $posMgr = strpos($html, 'Karyawan Manager');
@@ -423,5 +412,32 @@ class EmployeeCrudTest extends TestCase
         $this->assertTrue($posMgr < $posStaffUrg, 'Manager should appear before Staff');
         $this->assertTrue($posStaffUrg < $posStaffLat, 'Contract expiring sooner should appear before later contract');
         $this->assertTrue($posStaffLat < $posMg, 'Staff should appear before Magang');
+    }
+
+    public function test_auto_generates_employee_email_from_full_name_and_company_domain(): void
+    {
+        $profile = CompanyProfile::getProfile();
+        $profile->update(['email_domain' => 'namaperusahaan.com']);
+
+        $user = $this->createAdminUser();
+        $department = Department::factory()->create(['name' => 'IT Department']);
+        $position = Position::factory()->create(['name' => 'Software Engineer']);
+
+        $this->actingAs($user);
+
+        Livewire::test(Index::class)
+            ->call('create')
+            ->set('form.full_name', 'Budi Santoso Gunawan')
+            ->assertSet('form.email', 'budi.santoso.gunawan@namaperusahaan.com')
+            ->set('form.department_id', $department->id)
+            ->set('form.position_id', $position->id)
+            ->set('form.join_date', '2026-02-01')
+            ->set('form.basic_salary', 7000000)
+            ->call('store')
+            ->assertHasNoErrors();
+
+        $employee = Employee::where('full_name', 'Budi Santoso Gunawan')->first();
+        $this->assertNotNull($employee);
+        $this->assertSame('budi.santoso.gunawan@namaperusahaan.com', $employee->detail->email);
     }
 }

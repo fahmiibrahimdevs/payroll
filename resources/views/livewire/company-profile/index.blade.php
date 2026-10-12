@@ -130,6 +130,23 @@
                                     @enderror
                                 </div>
                             </div>
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label class="font-weight-600">Domain Email Karyawan</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text bg-light font-weight-600 text-primary">@</span>
+                                        </div>
+                                        <input type="text" wire:model="email_domain" class="form-control @error('email_domain') is-invalid @enderror" placeholder="Contoh: namaperusahaan.com">
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        Domain ini digunakan sebagai akhiran otomatis saat membuat email karyawan (contoh: <code>arif.fahmi.abdillah@{{ $email_domain ?: 'namaperusahaan.com' }}</code>).
+                                    </small>
+                                    @error('email_domain')
+                                        <div class="invalid-feedback d-block">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            </div>
                         </div>
 
                         <div class="form-group">
@@ -185,13 +202,26 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label class="font-weight-600">Plafon Maksimal BPJS Pensiun (JP)</label>
-                                    <div class="input-group">
-                                        <div class="input-group-prepend"><span class="input-group-text">Rp</span></div>
-                                        <input type="number" wire:model="bpjs_jp_cap" class="form-control @error('bpjs_jp_cap') is-invalid @enderror" placeholder="10042300">
+                                    <div class="input-group" x-data>
+                                        <div class="input-group-prepend"><span class="input-group-text font-weight-500">Rp</span></div>
+                                        <input type="text"
+                                               id="bpjs_jp_cap"
+                                               inputmode="numeric"
+                                               x-on:input="
+                                                   let raw = $el.value.replace(/\D/g, '');
+                                                   $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                               "
+                                               x-on:input.debounce.350ms="$wire.set('bpjs_jp_cap', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : 0)"
+                                               x-on:change="$wire.set('bpjs_jp_cap', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : 0)"
+                                               x-on:blur="$wire.set('bpjs_jp_cap', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : 0)"
+                                               value="{{ !empty($bpjs_jp_cap) ? number_format((float) $bpjs_jp_cap, 0, ',', '.') : '' }}"
+                                               class="form-control text-right @error('bpjs_jp_cap') is-invalid @enderror"
+                                               placeholder="0"
+                                               autocomplete="off">
                                     </div>
                                     <small class="text-muted">Batas maksimal dasar upah JP tahun berjalan.</small>
                                     @error('bpjs_jp_cap')
-                                        <div class="invalid-feedback">{{ $message }}</div>
+                                        <div class="invalid-feedback d-block">{{ $message }}</div>
                                     @enderror
                                 </div>
                             </div>

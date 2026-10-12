@@ -9,11 +9,17 @@ class CashAdvancePolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->hasAccess($user, 'cash_advances-read', 'admin', 'direktur');
+        return $this->hasAccess($user, 'cash_advances-read', 'admin', 'direktur', 'karyawan');
     }
 
     public function view(User $user, CashAdvance $cashAdvance): bool
     {
+        if ($user->hasRole('karyawan')) {
+            $employee = $user->getEmployeeRecord();
+
+            return $employee !== null && (int) $cashAdvance->employee_id === (int) $employee->id;
+        }
+
         return $this->viewAny($user);
     }
 
@@ -23,7 +29,7 @@ class CashAdvancePolicy
             return false;
         }
 
-        return $this->hasAccess($user, 'cash_advances-create', 'admin');
+        return $this->hasAccess($user, 'cash_advances-create', 'admin', 'karyawan');
     }
 
     public function update(User $user, CashAdvance $cashAdvance): bool
@@ -56,12 +62,20 @@ class CashAdvancePolicy
 
     public function recordPayment(User $user, CashAdvance $cashAdvance): bool
     {
-        return $this->hasAccess($user, 'cash_advances-create', 'admin');
+        if ($user->hasRole('karyawan') || $user->hasRole('direktur')) {
+            return false;
+        }
+
+        return $user->hasRole('admin');
     }
 
     public function recordEarlySettlement(User $user): bool
     {
-        return $this->hasAccess($user, 'cash_advances-create', 'admin');
+        if ($user->hasRole('karyawan') || $user->hasRole('direktur')) {
+            return false;
+        }
+
+        return $user->hasRole('admin');
     }
 
     private function hasAccess(User $user, string $permission, string ...$roles): bool

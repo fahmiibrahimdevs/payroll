@@ -410,10 +410,10 @@
                             </div>
                             <div class="flex-grow-1">
                                 <div class="bd-callout-title">
-                                    Karyawan Baru Terdeteksi ({{ $missingCount }} Belum Masuk Draf)
+                                    Karyawan Aktif Belum Masuk Draf ({{ $missingCount }} Karyawan)
                                 </div>
                                 <div class="bd-callout-desc">
-                                    Terdapat karyawan berstatus aktif yang belum terdaftar di draf slip gaji periode ini:
+                                    Terdapat karyawan berstatus aktif (karyawan baru atau baru diaktifkan kembali) yang belum terdaftar di draf slip gaji periode ini:
                                     <ul class="mb-2 mt-1.5 pl-3 list-unstyled">
                                         @foreach ($this->missingEmployees as $emp)
                                             @php
@@ -469,7 +469,7 @@
         <div class="cash-advance-top-card">
             <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 12px;">
                 <h4 class="mb-0">Rincian Gaji - <span class="text-primary font-weight-bold">{{ $period->period_label }}</span></h4>
-                @if (auth()->user()?->hasRole('direktur') && in_array($period->status->value, ['submitted', 'draft', 'rejected']))
+                @if (auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted')
                     <button type="button" 
                         wire:click="$dispatch('swal:confirm', {
                             title: 'Setujui Seluruh Gaji?',
@@ -504,7 +504,7 @@
         </div>
 
         <!-- Dynamic Bulk Action Bar for Direktur -->
-        @if (auth()->user()?->hasRole('direktur') && count($selectedItems) > 0)
+        @if (auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted' && count($selectedItems) > 0)
             <div class="p-3 border-bottom d-flex align-items-center justify-content-between flex-wrap" style="background-color: #eff6ff !important; border-color: #bfdbfe !important; gap: 10px;">
                 <div class="d-flex align-items-center">
                     <span class="badge badge-primary px-3 py-1.5 mr-2.5 font-weight-bold" style="font-size: 12.5px; border-radius: 20px;">
@@ -526,88 +526,151 @@
             </div>
         @endif
 
-        <!-- Row 2: Full-Width Data Table (Clean, Human-Centric) -->
+        <!-- Row 2: Full-Width Data Table (Clean, Human-Centric, High-Contrast) -->
         <div class="table-responsive">
             <table class="table table-clean mb-0">
-                <thead class="bg-gray-100">
-                    <tr>
-                        @if (auth()->user()?->hasRole('direktur'))
-                            <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 40px;">
+                <thead>
+                    <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                        @if (auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted')
+                            <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 40px; color: #1e293b; font-size: 11.5px; font-weight: 800;">
                                 <input type="checkbox" wire:model.live="selectAll" style="width: 16px; height: 16px; cursor: pointer;" title="Pilih Semua">
                             </th>
                         @endif
-                        <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 45px;">NO</th>
-                        <th class="text-nowrap !px-3 !py-2.5" style="width: 135px;">NO. SLIP</th>
-                        <th class="text-nowrap !px-3 !py-2.5">KARYAWAN</th>
-                        <th class="text-nowrap !px-3 !py-2.5">TANGGAL BERGABUNG</th>
-                        <th class="text-nowrap !px-3 !py-2.5">LAMA KERJA</th>
-                        <th class="text-right text-nowrap !px-3 !py-2.5">GAJI KOTOR</th>
-                        <th class="text-right text-nowrap !px-3 !py-2.5">POTONGAN (-)</th>
-                        <th class="text-right text-nowrap !px-3 !py-2.5">GAJI BERSIH</th>
-                        <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 100px;">STATUS</th>
-                        <th class="text-center text-nowrap !px-3 !py-2.5" style="width: {{ auth()->user()?->hasRole('direktur') ? '130px' : '105px' }};"><i class="fas fa-cog text-muted mr-1" title="Aksi"></i> AKSI</th>
+                        <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 45px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">NO</th>
+                        <th class="text-nowrap !px-3 !py-2.5" style="width: 135px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">NO. SLIP</th>
+                        <th class="text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">KARYAWAN</th>
+                        <th class="text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">TANGGAL BERGABUNG</th>
+                        <th class="text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">LAMA KERJA</th>
+                        <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">GAJI KOTOR</th>
+                        <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">POTONGAN (-)</th>
+                        <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">GAJI BERSIH</th>
+                        <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 100px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">STATUS</th>
+                        <th class="text-center text-nowrap !px-3 !py-2.5" style="width: {{ auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted' ? '130px' : '105px' }}; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;"><i class="fas fa-cog text-muted mr-1" title="Aksi"></i> AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
+                    @php
+                        $currentDeptId = null;
+                        $totalColspan = (auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted') ? 11 : 10;
+                    @endphp
                     @forelse ($items as $idx => $item)
-                        <tr wire:key="item-{{ $item->id }}">
-                            @if (auth()->user()?->hasRole('direktur'))
+                        @php
+                            $itemDeptId = $item->employee?->department_id ?? 0;
+                            $deptName = $item->employee?->department?->name ?? 'Lainnya / Belum Ditetapkan';
+                            $deptSummary = $departmentSummaries[$itemDeptId] ?? null;
+                        @endphp
+
+                        @if ($currentDeptId !== $itemDeptId)
+                            @php
+                                $currentDeptId = $itemDeptId;
+                                $isOfficialDept = $itemDeptId > 0;
+                            @endphp
+                            <!-- Baris Sub-Header Group Departemen (Sesuai Gambar 1 & Konsep Subtotal Gambar 2) -->
+                            <tr class="table-group-header" style="background-color: {{ $isOfficialDept ? '#f0f6ff' : '#fffdf5' }}; border-top: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }}; border-bottom: 1px solid {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }};">
+                                <td colspan="{{ $totalColspan }}" class="!py-2.5 !px-3.5" style="border-left: 4px solid {{ $isOfficialDept ? '#0b52aa' : '#f59e0b' }} !important;">
+                                    <div class="d-flex align-items-center justify-content-between flex-wrap" style="gap: 10px;">
+                                        <div class="d-flex align-items-center">
+                                            <span class="d-inline-flex align-items-center justify-content-center mr-2" style="width: 26px; height: 26px; border-radius: 6px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; font-size: 12px; flex-shrink: 0;">
+                                                @if ($isOfficialDept)
+                                                    <i class="fas fa-building" style="color: #0b52aa;"></i>
+                                                @else
+                                                    <i class="fas fa-exclamation-triangle" style="color: #b45309;"></i>
+                                                @endif
+                                            </span>
+                                            <div>
+                                                <span class="font-weight-bold" style="font-size: 13px; letter-spacing: 0.3px; color: #0f172a;">
+                                                    DEPARTEMEN {{ strtoupper($deptName) }}
+                                                </span>
+                                                @if ($deptSummary)
+                                                    <span class="badge ml-2 font-weight-700" style="font-size: 11px; padding: 2.5px 8px; border-radius: 12px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; color: {{ $isOfficialDept ? '#1e40af' : '#92400e' }}; border: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }};">
+                                                        {{ $deptSummary['count'] }} Karyawan
+                                                    </span>
+                                                @endif
+                                                @if (! $isOfficialDept)
+                                                    <span class="badge ml-1 font-weight-700" style="font-size: 10.5px; padding: 2.5px 7px; border-radius: 12px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
+                                                        Perlu Dilengkapi
+                                                    </span>
+                                                @endif
+                                            </div>
+                                        </div>
+
+                                        @if ($deptSummary)
+                                            <div class="d-flex align-items-center flex-wrap" style="font-size: 12px; gap: 14px; padding-right: 4px;">
+                                                <span style="color: #334155; font-weight: 600;" class="d-none d-md-inline">
+                                                    Gaji Kotor: <strong style="color: #0f172a; font-weight: 700;">{{ $deptSummary['formatted_total_gross'] }}</strong>
+                                                </span>
+                                                <span class="px-2.5 py-1 rounded font-weight-700 shadow-none" style="background-color: #eff6ff; color: #0b52aa; border: 1px solid #bfdbfe; font-size: 12px;">
+                                                    Subtotal Ditransfer: {{ $deptSummary['formatted_total_net'] }}
+                                                </span>
+                                            </div>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                        @endif
+
+                        <tr wire:key="item-{{ $item->id }}" class="payroll-table-row" style="border-bottom: 1px solid #f1f5f9;">
+                            @if (auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted')
                                 <td class="text-center align-middle !px-3 !py-2.5">
                                     <input type="checkbox" wire:model.live="selectedItems" value="{{ $item->id }}" style="width: 16px; height: 16px; cursor: pointer;">
                                 </td>
                             @endif
-                            <td class="text-center font-weight-600 text-muted align-middle !px-3 !py-2.5">
+                            <td class="text-center font-weight-700 align-middle !px-3 !py-2.5" style="color: #334155; font-size: 12.5px;">
                                 {{ $items->firstItem() + $idx }}
                             </td>
                             <td class="align-middle text-nowrap !px-3 !py-2.5">
-                                <button type="button" wire:click="openPreviewSlip({{ $item->id }})" class="btn btn-link p-0 font-weight-600 text-primary text-decoration-none" style="font-size: 13px;" title="Lihat Slip Gaji">
+                                <button type="button" wire:click="openPreviewSlip({{ $item->id }})" class="btn btn-link p-0 font-weight-700 text-primary text-decoration-none" style="font-size: 13px;" title="Lihat Slip Gaji">
                                     {{ $item->payslip_number }}
                                 </button>
                             </td>
                             <td class="align-middle text-nowrap !px-3 !py-2.5">
                                 <div class="d-flex align-items-center">
                                     @if ($item->employee?->photo_path)
-                                        <img src="{{ $item->employee->photo_url }}" alt="{{ $item->employee->full_name }}" class="rounded-circle mr-2.5 flex-shrink-0" style="width: 36px; height: 36px; object-fit: cover; border: 1px solid #e2e8f0;">
+                                        <img src="{{ $item->employee->photo_url }}" alt="{{ $item->employee->full_name }}" class="rounded-circle mr-2.5 flex-shrink-0" style="width: 36px; height: 36px; object-fit: cover; border: 1.5px solid #cbd5e1;">
                                     @else
                                         <div class="rounded-circle mr-2.5 flex-shrink-0 d-flex align-items-center justify-content-center text-white font-weight-bold" style="width: 36px; height: 36px; background: linear-gradient(135deg, #0b52aa 0%, #2563eb 100%); font-size: 12.5px;">
                                             {{ strtoupper(substr($item->employee?->full_name ?? 'NA', 0, 2)) }}
                                         </div>
                                     @endif
                                     <div>
-                                        <div class="font-weight-600 text-dark leading-tight">
+                                        <div class="font-weight-700 leading-tight" style="color: #0f172a; font-size: 13.5px;">
                                             {{ $item->employee?->full_name ?? 'Karyawan Tidak Diketahui' }}
                                             @if ($item->employee?->trashed())
                                                 <span class="badge badge-light border text-danger ml-1 font-weight-600" style="font-size: 10px; padding: 2px 6px;" title="Karyawan telah dinonaktifkan/dihapus dari master">Dihapus</span>
                                             @endif
                                         </div>
-                                        <div class="text-[11px] text-muted leading-tight mt-0.5">
+                                        <div class="leading-tight mt-1" style="font-size: 12px; color: #334155; font-weight: 600;">
                                             {{ $item->employee?->position?->name ?? 'Tanpa Jabatan' }} &bull; {{ $item->employee?->department?->name ?? 'Tanpa Departemen' }}
                                         </div>
                                     </div>
                                 </div>
                             </td>
                             <td class="align-middle text-nowrap !px-3 !py-2.5">
-                                <span class="font-weight-500 text-dark">
+                                <span class="font-weight-600" style="color: #1e293b; font-size: 12.5px;">
                                     {{ $item->employee?->join_date ? $item->employee->join_date->format('d M Y') : '-' }}
                                 </span>
                             </td>
                             <td class="align-middle text-nowrap !px-3 !py-2.5">
-                                <span class="badge badge-light border text-muted font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px;">
+                                <span class="badge font-weight-700 px-2.5 py-1" style="font-size: 11.5px; border-radius: 6px; background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1;">
                                     {{ $item->employee?->tenure_label ?? '-' }}
                                 </span>
                             </td>
-                            <td class="text-right align-middle text-nowrap font-weight-500 text-dark !px-3 !py-2.5">
-                                <div>{{ $item->formatted_gross_salary }}</div>
+                            <td class="text-right align-middle text-nowrap !px-3 !py-2.5">
+                                <div class="font-weight-700" style="color: #0f172a; font-size: 13px;">{{ $item->formatted_gross_salary }}</div>
                                 @if ((float) $item->total_allowances > 0)
-                                    <div class="text-[10.5px] text-success leading-tight mt-0.5" title="Termasuk tunjangan {{ $item->formatted_total_allowances }}">
+                                    <div class="text-[11px] font-weight-600 text-success leading-tight mt-0.5" title="Termasuk tunjangan {{ $item->formatted_total_allowances }}">
                                         +{{ $item->formatted_total_allowances }}
                                     </div>
                                 @endif
                             </td>
-                            <td class="text-right align-middle text-nowrap font-weight-500 {{ (float) $item->total_deductions > 0 ? 'text-danger' : 'text-muted' }} !px-3 !py-2.5">
-                                {{ (float) $item->total_deductions > 0 ? '-' . $item->formatted_total_deductions : '-' }}
+                            <td class="text-right align-middle text-nowrap !px-3 !py-2.5">
+                                @if ((float) $item->total_deductions > 0)
+                                    <span class="font-weight-700 text-danger" style="font-size: 13px;">-{{ $item->formatted_total_deductions }}</span>
+                                @else
+                                    <span class="font-weight-600" style="color: #64748b; font-size: 13px;">-</span>
+                                @endif
                             </td>
-                            <td class="text-right align-middle text-nowrap font-weight-bold text-dark !px-3 !py-2.5" style="font-size: 13.5px;">
+                            <td class="text-right align-middle text-nowrap font-weight-800 !px-3 !py-2.5" style="font-size: 13.5px; color: #0f172a;">
                                 {{ $item->formatted_net_salary }}
                             </td>
                             <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
@@ -658,7 +721,7 @@
 
                                     <!-- Persetujuan Individual Per Karyawan untuk Direktur -->
                                     @if (auth()->user()?->hasRole('direktur'))
-                                        @if (! $item->isApproved())
+                                        @if ($period->status->value === 'submitted' && ! $item->isApproved())
                                             <button type="button" wire:click="approveItem({{ $item->id }})" class="btn btn-success btn-action" data-toggle="tooltip" title="Setujui (ACC)">
                                                 <i class="fas fa-check"></i>
                                             </button>
@@ -669,7 +732,7 @@
                                             <button type="button" wire:click="openPaymentDetailModal({{ $item->id }})" class="btn btn-info btn-action" data-toggle="tooltip" title="Lihat Bukti & Detail Pembayaran">
                                                 <i class="fas fa-receipt"></i>
                                             </button>
-                                        @else
+                                        @elseif ($item->isApproved())
                                             <span class="badge badge-light border text-success font-weight-600" style="font-size: 11px; padding: 6px 8px; border-radius: 6px;" title="Disetujui oleh {{ $item->approver?->name ?? 'Direktur' }}">
                                                 <i class="fas fa-check-double text-success"></i>
                                             </span>
@@ -1590,16 +1653,25 @@
                 color: #8b5cf6 !important;
             }
 
-            /* Table Row Hover */
-            .payroll-table-row:hover {
+            /* Table Row Hover & Group Header Styling */
+            .table.table-clean tbody tr.table-group-header td {
+                vertical-align: middle !important;
+            }
+            .table.table-clean tbody tr.payroll-table-row:hover td {
                 background-color: #f8fafc !important;
+            }
+            .table.table-clean thead th {
+                border-top: none !important;
+                border-bottom: 2px solid #cbd5e1 !important;
             }
 
             /* Sembunyikan batang scroll horizontal pada tabel */
+            .table-responsive,
             .cash-advance-main-card .table-responsive {
                 scrollbar-width: none !important; /* Firefox */
                 -ms-overflow-style: none !important; /* IE/Edge */
             }
+            .table-responsive::-webkit-scrollbar,
             .cash-advance-main-card .table-responsive::-webkit-scrollbar {
                 display: none !important; /* Chrome, Safari, Edge */
                 width: 0 !important;

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\CashAdvancePaymentStatus;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\InstallmentStatus;
@@ -60,9 +61,9 @@ class PayrollService
     /**
      * Get dashboard summary statistics.
      */
-    public function getStatistics(): array
+    public function getStatistics(?int $year = null): array
     {
-        $currentYear = (int) Carbon::now()->year;
+        $currentYear = $year ?? (int) Carbon::now()->year;
         $currentMonth = (int) Carbon::now()->month;
 
         $totalPaidThisYear = (float) PayrollPeriod::where('status', PayrollPeriodStatus::PAID->value)
@@ -103,6 +104,316 @@ class PayrollService
 
         $activeTotalBpjs = $activeBpjsKaryawan + $activeBpjsPerusahaan;
 
+        // Distribusi Pengeluaran Bulanan Tahun Berjalan
+        $yearlyPeriods = PayrollPeriod::where('year', $currentYear)
+            ->orderBy('month')
+            ->get();
+
+        $yearlyMonthlyData = [];
+        $totalYearlyExpense = 0;
+        $totalYearlyBasic = 0;
+        $totalYearlyAllowances = 0;
+        $totalYearlyDeductions = 0;
+        $totalYearlyCompanyContributions = 0;
+        $totalYearlyHeadcount = 0;
+
+        foreach ($yearlyPeriods as $period) {
+            $net = (float) $period->total_net_salary;
+            $basic = (float) $period->total_basic_salary;
+            $allowances = (float) $period->total_allowances;
+            $deductions = (float) $period->total_deductions;
+            $companyContributions = (float) $period->total_company_contributions;
+            $empCount = (int) $period->employee_count;
+
+            $totalYearlyExpense += $net;
+            $totalYearlyBasic += $basic;
+            $totalYearlyAllowances += $allowances;
+            $totalYearlyDeductions += $deductions;
+            $totalYearlyCompanyContributions += $companyContributions;
+            $totalYearlyHeadcount += $empCount;
+
+            $avgPerEmp = $empCount > 0 ? ($net / $empCount) : 0;
+
+            $yearlyMonthlyData[] = [
+                'id' => $period->id,
+                'reference_number' => $period->reference_number,
+                'name' => $period->name,
+                'month' => $period->month,
+                'month_name' => $period->month_name,
+                'year' => $period->year,
+                'net_salary' => $net,
+                'formatted_net_salary' => 'Rp '.number_format($net, 0, ',', '.'),
+                'basic_salary' => $basic,
+                'formatted_basic_salary' => 'Rp '.number_format($basic, 0, ',', '.'),
+                'allowances' => $allowances,
+                'formatted_allowances' => 'Rp '.number_format($allowances, 0, ',', '.'),
+                'deductions' => $deductions,
+                'formatted_deductions' => 'Rp '.number_format($deductions, 0, ',', '.'),
+                'employee_count' => $empCount,
+                'average_per_employee' => $avgPerEmp,
+                'formatted_average_per_employee' => 'Rp '.number_format($avgPerEmp, 0, ',', '.'),
+                'status' => $period->status,
+                'status_label' => $period->status_label,
+                'status_badge_class' => $period->status_badge_class,
+            ];
+        }
+
+        $averageMonthlyExpense = count($yearlyMonthlyData) > 0
+            ? $totalYearlyExpense / count($yearlyMonthlyData)
+            : 0;
+
+        $averageCostPerEmployee = $totalYearlyHeadcount > 0
+            ? $totalYearlyExpense / $totalYearlyHeadcount
+            : 0;
+
+        $totalYearlyGross = $totalYearlyBasic + $totalYearlyAllowances;
+        $basicPercentage = $totalYearlyGross > 0 ? round(($totalYearlyBasic / $totalYearlyGross) * 100, 1) : 0;
+        $allowancesPercentage = $totalYearlyGross > 0 ? round(($totalYearlyAllowances / $totalYearlyGross) * 100, 1) : 0;
+
+        $compactYearlyTotal = $totalYearlyExpense >= 1000000000
+            ? 'Rp '.number_format($totalYearlyExpense / 1000000000, 1, ',', '.').' M'
+            : ($totalYearlyExpense >= 1000000
+                ? 'Rp '.number_format($totalYearlyExpense / 1000000, 1, ',', '.').' jt'
+                : 'Rp '.number_format($totalYearlyExpense, 0, ',', '.'));
+
+        // 1. Total Biaya Perusahaan Periode Aktif
+        $activeCompanyCost = $activeNetSalary + $activeTotalBpjs + $activePph21;
+        $activeEmpCount = $activePeriod?->employee_count ?? 0;
+        $activeAvgCostPerPerson = $activeEmpCount > 0 ? round($activeCompanyCost / $activeEmpCount) : 0;
+
+        $compactCompanyCost = $activeCompanyCost >= 1000000000
+            ? 'Rp '.number_format($activeCompanyCost / 1000000000, 1, ',', '.').' M'
+            : ($activeCompanyCost >= 1000000
+                ? 'Rp '.number_format($activeCompanyCost / 1000000, 1, ',', '.').' jt'
+                : 'Rp '.number_format($activeCompanyCost, 0, ',', '.'));
+
+        // 2. Tren vs Bulan Lalu
+        $trendText = 'Stabil vs periode lalu';
+        $trendIsUp = true;
+        if ($activePeriod) {
+            $prevPeriod = PayrollPeriod::where(function ($q) use ($activePeriod) {
+                $q->where('year', '<', $activePeriod->year)
+                    ->orWhere(function ($sub) use ($activePeriod) {
+                        $sub->where('year', $activePeriod->year)
+                            ->where('month', '<', $activePeriod->month);
+                    });
+            })->orderByDesc('year')->orderByDesc('month')->first();
+
+            if ($prevPeriod) {
+                $prevItemIds = $prevPeriod->items()->pluck('id');
+                $prevNet = (float) $prevPeriod->total_net_salary;
+                $prevBpjs = (float) $prevPeriod->total_company_contributions + (float) PayrollItemLine::whereIn('payroll_item_id', $prevItemIds)->where('category', PayrollLineCategory::BPJS)->sum('amount');
+                $prevPph = (float) $prevPeriod->items()->sum('pph21_amount');
+                $prevCost = $prevNet + $prevBpjs + $prevPph;
+
+                if ($prevCost > 0) {
+                    $diffPct = round((($activeCompanyCost - $prevCost) / $prevCost) * 100, 1);
+                    $trendIsUp = $diffPct >= 0;
+                    $trendText = ($diffPct >= 0 ? '↗ +'.$diffPct.'%' : '↘ '.$diffPct.'%').' vs '.$prevPeriod->month_name;
+                }
+            }
+        }
+
+        // 3. Uang Gaji Dipakai Untuk Apa (% Alokasi)
+        $allocBase = $activeCompanyCost > 0 ? $activeCompanyCost : 1;
+        $thpPct = round(($activeNetSalary / $allocBase) * 100);
+        $bpjsPct = round(($activeTotalBpjs / $allocBase) * 100);
+        $pphPct = max(0, 100 - $thpPct - $bpjsPct);
+
+        // 4. Biaya per Departemen
+        $departmentBreakdown = [];
+        if ($activePeriod) {
+            $periodItems = $activePeriod->items()->with('employee.department')->get();
+            if ($periodItems->isNotEmpty()) {
+                $deptGrouped = $periodItems->groupBy(fn ($item) => $item->employee?->department?->name ?? 'Umum');
+                $maxDeptCost = 0;
+                foreach ($deptGrouped as $dName => $dItems) {
+                    $dItemIds = $dItems->pluck('id');
+                    $dNet = (float) $dItems->sum('net_salary');
+                    $dPph = (float) $dItems->sum('pph21_amount');
+                    $dBpjs = (float) $dItems->sum('total_company_contributions') + (float) PayrollItemLine::whereIn('payroll_item_id', $dItemIds)->where('category', PayrollLineCategory::BPJS)->sum('amount');
+                    $dCost = $dNet + $dPph + $dBpjs;
+                    if ($dCost > $maxDeptCost) {
+                        $maxDeptCost = $dCost;
+                    }
+                    $departmentBreakdown[] = [
+                        'name' => $dName,
+                        'count' => $dItems->count(),
+                        'total_cost' => $dCost,
+                        'formatted_cost' => 'Rp '.number_format($dCost, 0, ',', '.'),
+                        'compact_cost' => $dCost >= 1000000000 ? 'Rp '.number_format($dCost / 1000000000, 1, ',', '.').' M' : ($dCost >= 1000000 ? 'Rp '.number_format($dCost / 1000000, 1, ',', '.').' jt' : 'Rp '.number_format($dCost, 0, ',', '.')),
+                    ];
+                }
+                usort($departmentBreakdown, fn ($a, $b) => $b['total_cost'] <=> $a['total_cost']);
+                foreach ($departmentBreakdown as &$dept) {
+                    $dept['bar_pct'] = $maxDeptCost > 0 ? max(15, round(($dept['total_cost'] / $maxDeptCost) * 100)) : 15;
+                }
+            }
+        }
+
+        // 5. Tren 6 Bulan (Total Biaya)
+        $monthNamesShort = [1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun', 7 => 'Jul', 8 => 'Agu', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des'];
+        $actMonth = $activePeriod?->month ?? $currentMonth;
+        $actYear = $activePeriod?->year ?? $currentYear;
+        $sixMonthsData = [];
+        $maxSixMonthCost = 0;
+
+        for ($i = 5; $i >= 0; $i--) {
+            $tDate = Carbon::createFromDate($actYear, $actMonth, 1)->subMonths($i);
+            $tMonth = (int) $tDate->month;
+            $tYear = (int) $tDate->year;
+            $p = PayrollPeriod::where('year', $tYear)->where('month', $tMonth)->first();
+            $pCost = 0;
+            if ($p) {
+                $pItemIds = $p->items()->pluck('id');
+                $pNet = (float) $p->total_net_salary;
+                $pBpjs = (float) $p->total_company_contributions + (float) PayrollItemLine::whereIn('payroll_item_id', $pItemIds)->where('category', PayrollLineCategory::BPJS)->sum('amount');
+                $pPph = (float) $p->items()->sum('pph21_amount');
+                $pCost = $pNet + $pBpjs + $pPph;
+            }
+            if ($pCost > $maxSixMonthCost) {
+                $maxSixMonthCost = $pCost;
+            }
+            $sixMonthsData[] = [
+                'month' => $tMonth,
+                'month_short' => $monthNamesShort[$tMonth] ?? (string) $tMonth,
+                'year' => $tYear,
+                'cost' => $pCost,
+                'is_active' => ($tMonth === $actMonth && $tYear === $actYear),
+            ];
+        }
+
+        foreach ($sixMonthsData as &$sm) {
+            $sm['height_pct'] = $maxSixMonthCost > 0 && $sm['cost'] > 0
+                ? max(25, round(($sm['cost'] / $maxSixMonthCost) * 100))
+                : 20;
+        }
+
+        // 6. Perlu Perhatian (Executive Alerts)
+        $missingBankCount = $activePeriod
+            ? $activePeriod->items()->where(function ($q) {
+                $q->whereNull('bank_account_number')->orWhere('bank_account_number', '');
+            })->count()
+            : 0;
+
+        $unpaidCashAdvances = CashAdvance::whereIn('status', [CashAdvanceStatus::APPROVED, CashAdvanceStatus::ACTIVE])
+            ->where('remaining_amount', '>', 0)
+            ->get();
+        $remainingKasbon = (float) $unpaidCashAdvances->sum('remaining_amount');
+        $kasbonPeopleCount = $unpaidCashAdvances->pluck('employee_id')->unique()->count();
+
+        // 7. Rekap Tahunan untuk 4 Kartu Statistik Atas & Card Rekap Payroll
+        $fullMonthNames = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ];
+
+        $yearlyDistinctPeriods = $yearlyPeriods->groupBy('month')->map(fn ($group) => $group->sortByDesc('id')->first());
+        $totalYearlyCompanyCost = 0;
+        $totalYearlyThp = 0;
+        $totalYearlyBpjs = 0;
+        $totalYearlyPph = 0;
+        $totalYearlySetoran = 0;
+
+        foreach ($yearlyDistinctPeriods as $p) {
+            $pNet = (float) $p->total_net_salary;
+            $pItemIds = $p->items()->pluck('id');
+            $pBpjs = (float) $p->total_company_contributions + (float) PayrollItemLine::whereIn('payroll_item_id', $pItemIds)->where('category', PayrollLineCategory::BPJS)->sum('amount');
+            $pPph = (float) $p->items()->sum('pph21_amount');
+
+            $totalYearlyThp += $pNet;
+            $totalYearlyBpjs += $pBpjs;
+            $totalYearlyPph += $pPph;
+            $totalYearlySetoran += ($pBpjs + $pPph);
+            $totalYearlyCompanyCost += ($pNet + $pBpjs + $pPph);
+        }
+
+        $formatCompact = function (float $amount, int $decimals = 1): string {
+            if ($amount >= 1000000000) {
+                return 'Rp '.number_format($amount / 1000000000, $decimals, ',', '.').' M';
+            }
+            if ($amount >= 1000000) {
+                return 'Rp '.number_format($amount / 1000000, $decimals, ',', '.').' jt';
+            }
+            if ($amount >= 1000) {
+                return 'Rp '.number_format($amount / 1000, 0, ',', '.').' rb';
+            }
+
+            return 'Rp '.number_format($amount, 0, ',', '.');
+        };
+
+        $compactYearlyCompanyCost = $formatCompact($totalYearlyCompanyCost, 1);
+        $compactYearlyThp = $formatCompact($totalYearlyThp, 2);
+        $compactYearlySetoran = $formatCompact($totalYearlySetoran, 1);
+        $compactRemainingKasbon = $formatCompact($remainingKasbon, 1);
+
+        $latestMonthInYear = $yearlyDistinctPeriods->keys()->max() ?? $currentMonth;
+        $latestMonthNameShort = $monthNamesShort[$latestMonthInYear] ?? 'Okt';
+        $yearlyCompanyCostSubtitle = "Jan sampai {$latestMonthNameShort} {$currentYear} (bruto + BPJS perusahaan)";
+
+        $paidCount = $yearlyDistinctPeriods->filter(fn ($p) => $p->status === PayrollPeriodStatus::PAID)->count();
+        $processedCount = $yearlyDistinctPeriods->count();
+        $periodsCountForThp = $paidCount > 0 ? $paidCount : max(1, $processedCount);
+        $avgMonthlyThp = $periodsCountForThp > 0 ? ($totalYearlyThp / $periodsCountForThp) : 0;
+        $periodLabelText = $paidCount > 0 ? "{$paidCount} periode dibayar" : "{$processedCount} periode dibayar";
+        $yearlyThpSubtitle = $periodLabelText.', rata-rata '.$formatCompact($avgMonthlyThp, 2).' per bulan';
+
+        $yearlySetoranSubtitle = 'PPh 21 dan BPJS tahun ini';
+        $remainingKasbonSubtitle = "Belum lunas, {$kasbonPeopleCount} orang";
+
+        // Metrics spesifik untuk Card Rekap Payroll
+        $latestMonthNameFull = $fullMonthNames[$latestMonthInYear] ?? 'Oktober';
+        $rekapPayrollSubtitle = "Januari sampai {$latestMonthNameFull} · {$processedCount} periode";
+
+        $yearlyAvgCostPerMonth = $processedCount > 0 ? round($totalYearlyCompanyCost / $processedCount) : 0;
+        $formattedYearlyAvgCostPerMonth = 'Rp '.number_format($yearlyAvgCostPerMonth, 0, ',', '.');
+
+        $totalHeadcount = $yearlyDistinctPeriods->sum('employee_count');
+        $yearlyAvgCostPerPerson = $totalHeadcount > 0 ? round($totalYearlyCompanyCost / $totalHeadcount) : 0;
+        $formattedYearlyAvgCostPerPerson = 'Rp '.number_format($yearlyAvgCostPerPerson, 0, ',', '.');
+
+        $yearlyAllocBase = $totalYearlyCompanyCost > 0 ? $totalYearlyCompanyCost : 1;
+        $yearlyThpPct = round(($totalYearlyThp / $yearlyAllocBase) * 100);
+        $yearlyBpjsPct = round(($totalYearlyBpjs / $yearlyAllocBase) * 100);
+        $yearlyPphPct = max(0, 100 - $yearlyThpPct - $yearlyBpjsPct);
+
+        // Tren 12 Bulan Penuh (J F M A M J J A S O N D)
+        $twelveMonthsInitials = [
+            1 => 'J', 2 => 'F', 3 => 'M', 4 => 'A', 5 => 'M', 6 => 'J',
+            7 => 'J', 8 => 'A', 9 => 'S', 10 => 'O', 11 => 'N', 12 => 'D',
+        ];
+        $twelveMonthsData = [];
+        $maxTwelveMonthCost = 0;
+        foreach (range(1, 12) as $m) {
+            $p = $yearlyDistinctPeriods->get($m);
+            $mCost = 0;
+            if ($p) {
+                $pItemIds = $p->items()->pluck('id');
+                $pNet = (float) $p->total_net_salary;
+                $pBpjs = (float) $p->total_company_contributions + (float) PayrollItemLine::whereIn('payroll_item_id', $pItemIds)->where('category', PayrollLineCategory::BPJS)->sum('amount');
+                $pPph = (float) $p->items()->sum('pph21_amount');
+                $mCost = $pNet + $pBpjs + $pPph;
+            }
+            if ($mCost > $maxTwelveMonthCost) {
+                $maxTwelveMonthCost = $mCost;
+            }
+            $twelveMonthsData[$m] = [
+                'month' => $m,
+                'initial' => $twelveMonthsInitials[$m],
+                'month_name' => $fullMonthNames[$m],
+                'cost' => $mCost,
+                'formatted_cost' => 'Rp '.number_format($mCost, 0, ',', '.'),
+                'has_data' => $mCost > 0,
+                'is_active' => ($m === $latestMonthInYear),
+            ];
+        }
+        foreach ($twelveMonthsData as &$tm) {
+            $tm['height_pct'] = $maxTwelveMonthCost > 0 && $tm['cost'] > 0
+                ? max(20, round(($tm['cost'] / $maxTwelveMonthCost) * 100))
+                : 0;
+        }
+
         return [
             'total_paid_this_year' => $totalPaidThisYear,
             'formatted_total_paid_this_year' => 'Rp '.number_format($totalPaidThisYear, 0, ',', '.'),
@@ -111,6 +422,40 @@ class PayrollService
             'total_active_employees' => $totalActiveEmployees,
             'current_period_status' => $activePeriod?->status->label() ?? 'Belum Dibuat',
             'current_period_badge' => $activePeriod?->status_badge_class ?? 'badge badge-secondary',
+
+            // Top 4 Annual Executive Stat Cards
+            'yearly_total_company_cost' => $totalYearlyCompanyCost,
+            'formatted_yearly_total_company_cost' => 'Rp '.number_format($totalYearlyCompanyCost, 0, ',', '.'),
+            'compact_yearly_company_cost' => $compactYearlyCompanyCost,
+            'yearly_company_cost_subtitle' => $yearlyCompanyCostSubtitle,
+
+            'yearly_total_thp' => $totalYearlyThp,
+            'formatted_yearly_total_thp' => 'Rp '.number_format($totalYearlyThp, 0, ',', '.'),
+            'compact_yearly_thp' => $compactYearlyThp,
+            'yearly_thp_subtitle' => $yearlyThpSubtitle,
+
+            'yearly_total_setoran' => $totalYearlySetoran,
+            'formatted_yearly_total_setoran' => 'Rp '.number_format($totalYearlySetoran, 0, ',', '.'),
+            'compact_yearly_setoran' => $compactYearlySetoran,
+            'yearly_setoran_subtitle' => $yearlySetoranSubtitle,
+
+            'compact_remaining_kasbon' => $compactRemainingKasbon,
+            'remaining_kasbon_subtitle' => $remainingKasbonSubtitle,
+
+            // Card Rekap Payroll Spesifik
+            'rekap_payroll_subtitle' => $rekapPayrollSubtitle,
+            'yearly_avg_cost_per_month' => $yearlyAvgCostPerMonth,
+            'formatted_yearly_avg_cost_per_month' => $formattedYearlyAvgCostPerMonth,
+            'yearly_avg_cost_per_person' => $yearlyAvgCostPerPerson,
+            'formatted_yearly_avg_cost_per_person' => $formattedYearlyAvgCostPerPerson,
+            'yearly_thp_pct' => $yearlyThpPct,
+            'yearly_bpjs_pct' => $yearlyBpjsPct,
+            'yearly_pph_pct' => $yearlyPphPct,
+            'yearly_total_bpjs' => $totalYearlyBpjs,
+            'formatted_yearly_total_bpjs' => 'Rp '.number_format($totalYearlyBpjs, 0, ',', '.'),
+            'yearly_total_pph' => $totalYearlyPph,
+            'formatted_yearly_total_pph' => 'Rp '.number_format($totalYearlyPph, 0, ',', '.'),
+            'twelve_months_data' => $twelveMonthsData,
 
             // HRD Operational Metrics
             'active_period' => $activePeriod,
@@ -123,6 +468,48 @@ class PayrollService
             'active_kasbon_count' => $activeKasbonCount,
             'active_total_bpjs' => $activeTotalBpjs,
             'formatted_active_total_bpjs' => 'Rp '.number_format($activeTotalBpjs, 0, ',', '.'),
+
+            // Executive Summary Card Metrics (Mockup Alignment)
+            'active_company_cost' => $activeCompanyCost,
+            'formatted_active_company_cost' => 'Rp '.number_format($activeCompanyCost, 0, ',', '.'),
+            'compact_total_company_cost' => $compactCompanyCost,
+            'active_avg_cost_per_person' => $activeAvgCostPerPerson,
+            'formatted_average_cost_per_person' => 'Rp '.number_format($activeAvgCostPerPerson, 0, ',', '.'),
+            'trend_text' => $trendText,
+            'trend_is_up' => $trendIsUp,
+            'thp_percentage' => $thpPct,
+            'bpjs_percentage' => $bpjsPct,
+            'pph_percentage' => $pphPct,
+            'department_breakdown' => $departmentBreakdown,
+            'six_months_data' => $sixMonthsData,
+            'missing_bank_count' => $missingBankCount,
+            'remaining_kasbon' => $remainingKasbon,
+            'formatted_remaining_kasbon' => 'Rp '.number_format($remainingKasbon, 0, ',', '.'),
+            'kasbon_people_count' => $kasbonPeopleCount,
+
+            // Yearly Monthly Metrics
+            'current_year' => $currentYear,
+            'yearly_monthly_data' => $yearlyMonthlyData,
+            'total_yearly_expense' => $totalYearlyExpense,
+            'formatted_total_yearly_expense' => 'Rp '.number_format($totalYearlyExpense, 0, ',', '.'),
+            'compact_total_yearly_expense' => $compactYearlyTotal,
+            'average_monthly_expense' => $averageMonthlyExpense,
+            'formatted_average_monthly_expense' => 'Rp '.number_format($averageMonthlyExpense, 0, ',', '.'),
+            'yearly_period_count' => count($yearlyMonthlyData),
+
+            // HR Executive Annual Metrics
+            'total_yearly_basic' => $totalYearlyBasic,
+            'formatted_total_yearly_basic' => 'Rp '.number_format($totalYearlyBasic, 0, ',', '.'),
+            'total_yearly_allowances' => $totalYearlyAllowances,
+            'formatted_total_yearly_allowances' => 'Rp '.number_format($totalYearlyAllowances, 0, ',', '.'),
+            'total_yearly_deductions' => $totalYearlyDeductions,
+            'formatted_total_yearly_deductions' => 'Rp '.number_format($totalYearlyDeductions, 0, ',', '.'),
+            'total_yearly_company_contributions' => $totalYearlyCompanyContributions,
+            'formatted_total_yearly_company_contributions' => 'Rp '.number_format($totalYearlyCompanyContributions, 0, ',', '.'),
+            'average_cost_per_employee' => $averageCostPerEmployee,
+            'formatted_average_cost_per_employee' => 'Rp '.number_format($averageCostPerEmployee, 0, ',', '.'),
+            'basic_percentage' => $basicPercentage,
+            'allowances_percentage' => $allowancesPercentage,
         ];
     }
 
@@ -190,16 +577,26 @@ class PayrollService
             throw new InvalidArgumentException('Bulan harus berada di antara 1 dan 12.');
         }
 
-        $date = Carbon::createFromDate($year, $month, 1)->startOfMonth();
-        $startDate = $date->copy()->startOfMonth();
-        $endDate = $date->copy()->endOfMonth();
-
         $monthNames = [
             1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
             5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
             9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
         ];
         $monthName = $monthNames[$month] ?? (string) $month;
+
+        $exists = PayrollPeriod::query()
+            ->where('month', $month)
+            ->where('year', $year)
+            ->exists();
+
+        if ($exists) {
+            throw new InvalidArgumentException("Periode penggajian untuk bulan {$monthName} {$year} sudah ada.");
+        }
+
+        $date = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+        $startDate = $date->copy()->startOfMonth();
+        $endDate = $date->copy()->endOfMonth();
+
         $name = $data['name'] ?? "Penggajian Periode {$monthName} {$year}";
 
         return DB::transaction(function () use ($month, $year, $startDate, $endDate, $name, $data, $date, $user) {
@@ -392,6 +789,8 @@ class PayrollService
             return $existing;
         }
 
+        $employee->loadMissing(['detail', 'position', 'department']);
+
         return DB::transaction(function () use ($period, $employee) {
             $date = Carbon::createFromDate($period->year, $period->month, 1)->startOfMonth();
             $payslipNumber = $this->generatePayslipNumber($date);
@@ -479,6 +878,7 @@ class PayrollService
         $existingIds = $period->items()->pluck('employee_id')->all();
 
         $missingEmployees = Employee::query()
+            ->with(['detail', 'position', 'department'])
             ->where('status', EmployeeStatus::ACTIVE)
             ->whereNotIn('id', $existingIds)
             ->where(function ($q) use ($period) {
@@ -1552,41 +1952,61 @@ class PayrollService
                     continue;
                 }
 
-                $installmentRemaining = max(0.0, round((float) $installment->amount - (float) $installment->paid_amount, 2));
-                $deductionAmount = min((float) $line->amount, $installmentRemaining);
-                if ($deductionAmount <= 0) {
+                $totalToDeduct = min((float) $line->amount, (float) $cashAdvance->remaining_amount);
+                if ($totalToDeduct <= 0) {
                     continue;
                 }
 
-                // Generate payment number for cash advance payment using CashAdvanceService to avoid sequence collisions
-                $payNumber = app(CashAdvanceService::class)->generatePaymentNumber($paymentDate);
+                $leftToDeduct = $totalToDeduct;
+                $installmentsToPay = $cashAdvance->installments()
+                    ->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
+                    ->orderBy('installment_number', 'asc')
+                    ->lockForUpdate()
+                    ->get();
 
-                // Create CashAdvancePayment
-                CashAdvancePayment::create([
-                    'payment_number' => $payNumber,
-                    'cash_advance_id' => $cashAdvance->id,
-                    'cash_advance_installment_id' => $installment->id,
-                    'payment_date' => $paymentDate->toDateString(),
-                    'amount' => $deductionAmount,
-                    'payment_method' => PaymentMethod::SALARY_DEDUCTION,
-                    'notes' => "Potongan Gaji {$lockedPeriod->reference_number} ({$lockedPeriod->name})",
-                    'recorded_by' => $user->id,
-                ]);
+                $installmentsToPay = $installmentsToPay->sortBy(
+                    fn (CashAdvanceInstallment $inst): int => (int) $inst->id === (int) $installment->id ? 0 : 1
+                )->values();
 
-                // Update installment
-                $newPaid = round((float) $installment->paid_amount + $deductionAmount, 2);
-                $isInstallmentDone = ($newPaid >= (float) $installment->amount - 0.01);
+                foreach ($installmentsToPay as $inst) {
+                    if ($leftToDeduct <= 0) {
+                        break;
+                    }
 
-                $installment->update([
-                    'paid_amount' => $newPaid,
-                    'status' => $isInstallmentDone ? InstallmentStatus::PAID : InstallmentStatus::PARTIALLY_PAID,
-                    'paid_at' => $isInstallmentDone ? Carbon::now() : $installment->paid_at,
-                ]);
+                    $instRem = max(0.0, round((float) $inst->amount - (float) $inst->paid_amount, 2));
+                    $alloc = min($leftToDeduct, $instRem);
+                    if ($alloc <= 0) {
+                        continue;
+                    }
 
-                // Update cash advance remaining amount
-                $newRemaining = max(0.0, round((float) $cashAdvance->remaining_amount - $deductionAmount, 2));
+                    $payNumber = app(CashAdvanceService::class)->generatePaymentNumber($paymentDate);
+                    CashAdvancePayment::create([
+                        'payment_number' => $payNumber,
+                        'cash_advance_id' => $cashAdvance->id,
+                        'cash_advance_installment_id' => $inst->id,
+                        'payment_date' => $paymentDate->toDateString(),
+                        'amount' => $alloc,
+                        'payment_method' => PaymentMethod::SALARY_DEDUCTION,
+                        'status' => CashAdvancePaymentStatus::APPROVED,
+                        'approved_by' => $user->id,
+                        'approved_at' => Carbon::now(),
+                        'notes' => "Potongan Gaji {$lockedPeriod->reference_number} ({$lockedPeriod->name})",
+                        'recorded_by' => $user->id,
+                    ]);
+
+                    $newPaid = round((float) $inst->paid_amount + $alloc, 2);
+                    $isDone = ($newPaid >= (float) $inst->amount - 0.01);
+                    $inst->update([
+                        'paid_amount' => $newPaid,
+                        'status' => $isDone ? InstallmentStatus::PAID : InstallmentStatus::PARTIALLY_PAID,
+                        'paid_at' => $isDone ? Carbon::now() : $inst->paid_at,
+                    ]);
+
+                    $leftToDeduct = max(0.0, round($leftToDeduct - $alloc, 2));
+                }
+
+                $newRemaining = max(0.0, round((float) $cashAdvance->remaining_amount - $totalToDeduct, 2));
                 $newAdvanceStatus = ($newRemaining <= 0.01) ? CashAdvanceStatus::PAID : $cashAdvance->status;
-
                 $cashAdvance->update([
                     'remaining_amount' => $newRemaining,
                     'status' => $newAdvanceStatus,
@@ -1668,36 +2088,63 @@ class PayrollService
                     continue;
                 }
 
-                $installmentRemaining = max(0.0, round((float) $installment->amount - (float) $installment->paid_amount, 2));
-                $deductionAmount = min((float) $line->amount, $installmentRemaining);
-                if ($deductionAmount <= 0) {
+                $totalToDeduct = min((float) $line->amount, (float) $cashAdvance->remaining_amount);
+                if ($totalToDeduct <= 0) {
                     continue;
                 }
 
-                // Generate payment number for cash advance payment using CashAdvanceService
-                $payNumber = app(CashAdvanceService::class)->generatePaymentNumber($paymentDate);
+                $leftToDeduct = $totalToDeduct;
+                $installmentsToPay = $cashAdvance->installments()
+                    ->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
+                    ->orderBy('installment_number', 'asc')
+                    ->lockForUpdate()
+                    ->get();
 
-                CashAdvancePayment::create([
-                    'payment_number' => $payNumber,
-                    'cash_advance_id' => $cashAdvance->id,
-                    'cash_advance_installment_id' => $installment->id,
-                    'payment_date' => $paymentDate->toDateString(),
-                    'amount' => $deductionAmount,
-                    'payment_method' => PaymentMethod::SALARY_DEDUCTION,
-                    'notes' => "Potongan Gaji {$period->reference_number} ({$period->name})",
-                    'recorded_by' => $user->id,
-                ]);
+                $installmentsToPay = $installmentsToPay->sortBy(
+                    fn (CashAdvanceInstallment $inst): int => (int) $inst->id === (int) $installment->id ? 0 : 1
+                )->values();
 
-                $newPaid = round((float) $installment->paid_amount + $deductionAmount, 2);
-                $isInstallmentDone = ($newPaid >= (float) $installment->amount - 0.01);
+                foreach ($installmentsToPay as $inst) {
+                    if ($leftToDeduct <= 0) {
+                        break;
+                    }
 
-                $installment->update([
-                    'paid_amount' => $newPaid,
-                    'status' => $isInstallmentDone ? InstallmentStatus::PAID : InstallmentStatus::PARTIALLY_PAID,
-                    'paid_at' => $isInstallmentDone ? Carbon::now() : $installment->paid_at,
-                ]);
+                    $instRem = max(0.0, round((float) $inst->amount - (float) $inst->paid_amount, 2));
+                    $alloc = min($leftToDeduct, $instRem);
+                    if ($alloc <= 0) {
+                        continue;
+                    }
 
-                $newRemaining = max(0.0, round((float) $cashAdvance->remaining_amount - $deductionAmount, 2));
+                    // Generate payment number for cash advance payment using CashAdvanceService
+                    $payNumber = app(CashAdvanceService::class)->generatePaymentNumber($paymentDate);
+
+                    CashAdvancePayment::create([
+                        'payment_number' => $payNumber,
+                        'cash_advance_id' => $cashAdvance->id,
+                        'cash_advance_installment_id' => $inst->id,
+                        'payment_date' => $paymentDate->toDateString(),
+                        'amount' => $alloc,
+                        'payment_method' => PaymentMethod::SALARY_DEDUCTION,
+                        'status' => CashAdvancePaymentStatus::APPROVED,
+                        'approved_by' => $user->id,
+                        'approved_at' => Carbon::now(),
+                        'notes' => "Potongan Gaji {$period->reference_number} ({$period->name})",
+                        'recorded_by' => $user->id,
+                    ]);
+
+                    $newPaid = round((float) $inst->paid_amount + $alloc, 2);
+                    $isInstallmentDone = ($newPaid >= (float) $inst->amount - 0.01);
+
+                    $inst->update([
+                        'paid_amount' => $newPaid,
+                        'status' => $isInstallmentDone ? InstallmentStatus::PAID : InstallmentStatus::PARTIALLY_PAID,
+                        'paid_at' => $isInstallmentDone ? Carbon::now() : $inst->paid_at,
+                    ]);
+
+                    $leftToDeduct = max(0.0, round($leftToDeduct - $alloc, 2));
+                }
+
+                $newRemaining = max(0.0, round((float) $cashAdvance->remaining_amount - $totalToDeduct, 2));
                 $newAdvanceStatus = ($newRemaining <= 0.01) ? CashAdvanceStatus::PAID : $cashAdvance->status;
 
                 $cashAdvance->update([

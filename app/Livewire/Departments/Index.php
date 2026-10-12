@@ -34,7 +34,7 @@ class Index extends Component
 
     public function mount(): void
     {
-        abort_unless(auth()->user()?->hasRole('admin'), 403);
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
     }
 
     /**

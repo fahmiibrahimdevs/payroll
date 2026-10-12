@@ -146,4 +146,52 @@ class PositionCrudTest extends TestCase
             ->call('store')
             ->assertHasErrors(['form.name' => 'unique']);
     }
+
+    public function test_director_can_view_and_crud_positions(): void
+    {
+        $director = $this->createDirectorUser();
+
+        $response = $this->actingAs($director)->get(route('positions.index'));
+        $response->assertOk();
+
+        $this->actingAs($director);
+
+        // Director can create position
+        Livewire::test(Index::class)
+            ->call('create')
+            ->set('form.name', 'Chief Technology Officer')
+            ->set('form.description', 'Pimpinan divisi teknologi.')
+            ->call('store')
+            ->assertHasNoErrors()
+            ->assertDispatched('close-modal', id: 'positionModal')
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseHas('positions', [
+            'name' => 'Chief Technology Officer',
+        ]);
+
+        $position = Position::where('name', 'Chief Technology Officer')->first();
+
+        // Director can update position
+        Livewire::test(Index::class)
+            ->call('edit', $position->id)
+            ->set('form.name', 'Chief Technology & Product Officer')
+            ->call('update')
+            ->assertHasNoErrors()
+            ->assertDispatched('close-modal', id: 'positionModal');
+
+        $this->assertDatabaseHas('positions', [
+            'id' => $position->id,
+            'name' => 'Chief Technology & Product Officer',
+        ]);
+
+        // Director can delete position
+        Livewire::test(Index::class)
+            ->call('delete', $position->id)
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseMissing('positions', [
+            'id' => $position->id,
+        ]);
+    }
 }

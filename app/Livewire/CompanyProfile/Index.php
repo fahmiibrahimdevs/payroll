@@ -27,6 +27,8 @@ class Index extends Component
 
     public ?string $website = null;
 
+    public ?string $email_domain = null;
+
     public ?string $address = null;
 
     public ?string $tax_identification_number = null;
@@ -67,6 +69,8 @@ class Index extends Component
 
     public function mount(CompanyProfileService $service): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+
         $profile = $service->getProfile();
 
         $this->name = $profile->name;
@@ -74,6 +78,7 @@ class Index extends Component
         $this->email = $profile->email;
         $this->phone = $profile->phone;
         $this->website = $profile->website;
+        $this->email_domain = $profile->email_domain ?? $profile->getEmailDomain();
         $this->address = $profile->address;
         $this->tax_identification_number = $profile->tax_identification_number;
         $this->enable_pph21 = (bool) $profile->enable_pph21;
@@ -102,6 +107,7 @@ class Index extends Component
             'email' => 'nullable|email|max:100',
             'phone' => 'nullable|string|max:50',
             'website' => 'nullable|string|max:150',
+            'email_domain' => 'nullable|string|max:100',
             'address' => 'nullable|string|max:500',
             'tax_identification_number' => 'nullable|string|max:50',
             'enable_pph21' => 'boolean',
@@ -135,6 +141,8 @@ class Index extends Component
 
     public function save(CompanyProfileService $service): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+
         $this->validate();
 
         try {
@@ -144,6 +152,7 @@ class Index extends Component
                 'email' => $this->email,
                 'phone' => $this->phone,
                 'website' => $this->website,
+                'email_domain' => $this->email_domain,
                 'address' => $this->address,
                 'tax_identification_number' => $this->tax_identification_number,
                 'enable_pph21' => $this->enable_pph21,

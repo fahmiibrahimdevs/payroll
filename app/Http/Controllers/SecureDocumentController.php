@@ -13,7 +13,8 @@ class SecureDocumentController
     public function employeeCv(Employee $employee): Response
     {
         $user = auth()->user();
-        abort_unless($user?->hasRole('admin'), 403);
+        $isOwnCv = $user?->hasRole('karyawan') && (int) $user->getEmployeeRecord()?->id === (int) $employee->id;
+        abort_unless($user?->hasRole('admin') || $isOwnCv, 403);
 
         $employee->loadMissing('detail');
         $path = $employee->detail?->curriculum_vitae;

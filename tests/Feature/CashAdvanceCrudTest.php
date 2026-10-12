@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\CashAdvancePaymentStatus;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
@@ -579,6 +580,20 @@ class CashAdvanceCrudTest extends TestCase
             ->assertDispatched('swal:alert');
 
         $cashAdvance->refresh();
+        $this->assertEquals(2000000, $cashAdvance->remaining_amount);
+
+        $inst1->refresh();
+        $this->assertEquals(0, $inst1->paid_amount);
+
+        $payment1 = CashAdvancePayment::where('cash_advance_id', $cashAdvance->id)->first();
+        $this->assertNotNull($payment1);
+        $this->assertEquals(CashAdvancePaymentStatus::PENDING, $payment1->status);
+
+        // Direktur approves payment #1
+        $this->actingAs($this->direkturUser);
+        app(CashAdvanceService::class)->approvePayment($payment1, $this->direkturUser);
+
+        $cashAdvance->refresh();
         $this->assertEquals(1000000, $cashAdvance->remaining_amount);
         $this->assertEquals(CashAdvanceStatus::ACTIVE, $cashAdvance->status);
 
@@ -587,13 +602,13 @@ class CashAdvanceCrudTest extends TestCase
         $this->assertEquals(1000000, $inst1->paid_amount);
 
         $this->assertDatabaseHas('cash_advance_payments', [
-            'cash_advance_id' => $cashAdvance->id,
-            'amount' => 1000000,
-            'payment_method' => PaymentMethod::BANK_TRANSFER->value,
-            'recorded_by' => $this->adminUser->id,
+            'id' => $payment1->id,
+            'status' => CashAdvancePaymentStatus::APPROVED->value,
+            'approved_by' => $this->direkturUser->id,
         ]);
 
         // Pay 2nd installment to fully clear cash advance
+        $this->actingAs($this->adminUser);
         Livewire::test(Index::class)
             ->call('openPayment', $cashAdvance->id)
             ->set('paymentForm.amount', 1000000)
@@ -601,6 +616,16 @@ class CashAdvanceCrudTest extends TestCase
             ->set('paymentForm.payment_method', PaymentMethod::CASH->value)
             ->call('storePayment')
             ->assertHasNoErrors();
+
+        $payment2 = CashAdvancePayment::where('cash_advance_id', $cashAdvance->id)
+            ->where('id', '!=', $payment1->id)
+            ->first();
+        $this->assertNotNull($payment2);
+        $this->assertEquals(CashAdvancePaymentStatus::PENDING, $payment2->status);
+
+        // Direktur approves payment #2
+        $this->actingAs($this->direkturUser);
+        app(CashAdvanceService::class)->approvePayment($payment2, $this->direkturUser);
 
         $cashAdvance->refresh();
         $this->assertEquals(0, $cashAdvance->remaining_amount);
@@ -744,6 +769,14 @@ class CashAdvanceCrudTest extends TestCase
             ->set('paymentForm.payment_method', PaymentMethod::BANK_TRANSFER->value)
             ->call('storePayment')
             ->assertHasNoErrors();
+
+        $payment = CashAdvancePayment::where('cash_advance_id', $cashAdvance->id)->first();
+        $this->assertNotNull($payment);
+        $this->assertEquals(CashAdvancePaymentStatus::PENDING, $payment->status);
+
+        // Approve payment by Direktur
+        $this->actingAs($this->direkturUser);
+        app(CashAdvanceService::class)->approvePayment($payment, $this->direkturUser);
 
         $inst2->refresh();
         $this->assertEquals(InstallmentStatus::PAID, $inst2->status);
@@ -914,6 +947,14 @@ class CashAdvanceCrudTest extends TestCase
             ->assertDispatched('close-modal', id: 'earlyPaymentModal')
             ->assertDispatched('swal:alert');
 
+        $payments = CashAdvancePayment::where('cash_advance_id', $cashAdvance->id)->get();
+        $this->assertNotEmpty($payments);
+        foreach ($payments as $payment) {
+            $this->assertEquals(CashAdvancePaymentStatus::PENDING, $payment->status);
+            $this->actingAs($this->direkturUser);
+            app(CashAdvanceService::class)->approvePayment($payment, $this->direkturUser);
+        }
+
         $inst1->refresh();
         $inst2->refresh();
         $cashAdvance->refresh();
@@ -978,6 +1019,13 @@ class CashAdvanceCrudTest extends TestCase
             ->call('confirmEarlyPayment')
             ->assertDispatched('close-modal', id: 'earlyPaymentModal')
             ->assertDispatched('swal:alert');
+
+        $payment = CashAdvancePayment::where('cash_advance_id', $cashAdvance->id)->first();
+        $this->assertNotNull($payment);
+        $this->assertEquals(CashAdvancePaymentStatus::PENDING, $payment->status);
+
+        $this->actingAs($this->direkturUser);
+        app(CashAdvanceService::class)->approvePayment($payment, $this->direkturUser);
 
         $inst1->refresh();
         $inst2->refresh();
@@ -1093,6 +1141,14 @@ class CashAdvanceCrudTest extends TestCase
             ->assertDispatched('close-modal', id: 'earlyPaymentModal')
             ->assertDispatched('swal:alert');
 
+        $payments = CashAdvancePayment::where('cash_advance_id', $cashAdvance->id)->get();
+        $this->assertNotEmpty($payments);
+        foreach ($payments as $payment) {
+            $this->assertEquals(CashAdvancePaymentStatus::PENDING, $payment->status);
+            $this->actingAs($this->direkturUser);
+            app(CashAdvanceService::class)->approvePayment($payment, $this->direkturUser);
+        }
+
         $inst1->refresh();
         $inst2->refresh();
         $cashAdvance->refresh();
@@ -1180,6 +1236,14 @@ class CashAdvanceCrudTest extends TestCase
             ->assertDispatched('swal:confirm')
             ->call('confirmEarlyPayment')
             ->assertDispatched('close-modal', id: 'earlyPaymentModal');
+
+        $payments = CashAdvancePayment::where('cash_advance_id', $cashAdvance->id)->get();
+        $this->assertNotEmpty($payments);
+        foreach ($payments as $payment) {
+            $this->assertEquals(CashAdvancePaymentStatus::PENDING, $payment->status);
+            $this->actingAs($this->direkturUser);
+            app(CashAdvanceService::class)->approvePayment($payment, $this->direkturUser);
+        }
 
         $inst1->refresh();
         $inst2->refresh();
@@ -1329,6 +1393,63 @@ class CashAdvanceCrudTest extends TestCase
             ->assertDontSee('Disetujui oleh Direktur');
     }
 
+    public function test_employee_ledger_displays_pending_status_for_unapproved_payment(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        $adv = CashAdvance::create([
+            'reference_number' => 'KB-202610-LEDGER-PEND',
+            'employee_id' => $this->employee->id,
+            'amount' => 500000,
+            'remaining_amount' => 500000,
+            'repayment_scheme' => RepaymentScheme::SALARY_SINGLE->value,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'reason' => 'Pinjaman untuk tes status pending ledger',
+            'status' => CashAdvanceStatus::APPROVED->value,
+            'submitted_by' => $this->adminUser->id,
+            'approved_by' => $this->direkturUser->id,
+            'approved_at' => Carbon::now(),
+        ]);
+
+        $pay = CashAdvancePayment::create([
+            'payment_number' => 'PAY-KB-202610-PENDING',
+            'cash_advance_id' => $adv->id,
+            'payment_date' => Carbon::today()->toDateString(),
+            'amount' => 200000,
+            'payment_method' => PaymentMethod::CASH->value,
+            'status' => CashAdvancePaymentStatus::PENDING,
+            'recorded_by' => $this->adminUser->id,
+        ]);
+
+        $service = app(CashAdvanceService::class);
+        $ledger = $service->getEmployeeLedger($this->employee->id);
+        $items = collect($ledger->items());
+
+        $payItem = $items->firstWhere('reference_number', $pay->payment_number);
+        $this->assertNotNull($payItem);
+        $this->assertEquals('pending', $payItem['status']);
+        $this->assertEquals('Menunggu ACC', $payItem['status_label']);
+        $this->assertEquals('badge badge-warning', $payItem['status_badge']);
+
+        // Assert rendered Livewire shows Menunggu ACC badge in ledger
+        Livewire::test(Index::class)
+            ->set('selectedEmployeeId', $this->employee->id)
+            ->call('switchMainTab', 'ledger')
+            ->assertSee('Menunggu ACC')
+            ->assertSee('PAY-KB-202610-PENDING');
+
+        // When direktur approves, ledger updates to Disetujui
+        $this->actingAs($this->direkturUser);
+        $service->approvePayment($pay, $this->direkturUser);
+
+        $ledgerUpdated = $service->getEmployeeLedger($this->employee->id);
+        $itemsUpdated = collect($ledgerUpdated->items());
+        $payItemUpdated = $itemsUpdated->firstWhere('reference_number', $pay->payment_number);
+        $this->assertEquals('approved', $payItemUpdated['status']);
+        $this->assertEquals('Disetujui', $payItemUpdated['status_label']);
+        $this->assertEquals('badge badge-info', $payItemUpdated['status_badge']);
+    }
+
     public function test_default_view_shows_all_employees_recap_and_switches_to_specific_employee(): void
     {
         $this->actingAs($this->adminUser);
@@ -1412,5 +1533,168 @@ class CashAdvanceCrudTest extends TestCase
         $component->set('search', 'IT Department')
             ->assertSee('IT Department &bull; Developer', false)
             ->assertDontSee('Finance Dept &bull; Staff Accountant', false);
+    }
+
+    public function test_direktur_can_approve_pending_payment_via_livewire(): void
+    {
+        $cashAdvance = CashAdvance::create([
+            'reference_number' => 'KB-202610-APPV',
+            'employee_id' => $this->employee->id,
+            'amount' => 1000000,
+            'remaining_amount' => 1000000,
+            'repayment_scheme' => RepaymentScheme::SALARY_SINGLE->value,
+            'installment_count' => 1,
+            'monthly_installment' => 1000000,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'reason' => 'Pinjaman untuk disetujui bayar',
+            'status' => CashAdvanceStatus::ACTIVE->value,
+            'submitted_by' => $this->adminUser->id,
+            'approved_by' => $this->direkturUser->id,
+            'approved_at' => Carbon::now(),
+        ]);
+
+        $inst = CashAdvanceInstallment::create([
+            'cash_advance_id' => $cashAdvance->id,
+            'installment_number' => 1,
+            'due_date' => Carbon::today()->addMonth()->toDateString(),
+            'amount' => 1000000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING->value,
+        ]);
+
+        $payment = CashAdvancePayment::create([
+            'payment_number' => 'PAY-KB-202610-APPV',
+            'cash_advance_id' => $cashAdvance->id,
+            'cash_advance_installment_id' => $inst->id,
+            'payment_date' => Carbon::today()->toDateString(),
+            'amount' => 1000000,
+            'payment_method' => PaymentMethod::BANK_TRANSFER->value,
+            'status' => CashAdvancePaymentStatus::PENDING,
+            'notes' => 'Transfer manual',
+            'recorded_by' => $this->adminUser->id,
+        ]);
+
+        $this->actingAs($this->direkturUser);
+
+        Livewire::test(Index::class)
+            ->call('approvePayment', $payment->id)
+            ->assertDispatched('swal:alert');
+
+        $payment->refresh();
+        $this->assertEquals(CashAdvancePaymentStatus::APPROVED, $payment->status);
+        $this->assertEquals($this->direkturUser->id, $payment->approved_by);
+        $this->assertNotNull($payment->approved_at);
+
+        $cashAdvance->refresh();
+        $this->assertEquals(0, $cashAdvance->remaining_amount);
+        $this->assertEquals(CashAdvanceStatus::PAID, $cashAdvance->status);
+
+        $inst->refresh();
+        $this->assertEquals(InstallmentStatus::PAID, $inst->status);
+    }
+
+    public function test_direktur_can_reject_pending_payment_with_reason_via_livewire(): void
+    {
+        $cashAdvance = CashAdvance::create([
+            'reference_number' => 'KB-202610-REJ',
+            'employee_id' => $this->employee->id,
+            'amount' => 1000000,
+            'remaining_amount' => 1000000,
+            'repayment_scheme' => RepaymentScheme::SALARY_SINGLE->value,
+            'installment_count' => 1,
+            'monthly_installment' => 1000000,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'reason' => 'Pinjaman untuk ditolak bayar',
+            'status' => CashAdvanceStatus::ACTIVE->value,
+            'submitted_by' => $this->adminUser->id,
+            'approved_by' => $this->direkturUser->id,
+            'approved_at' => Carbon::now(),
+        ]);
+
+        $inst = CashAdvanceInstallment::create([
+            'cash_advance_id' => $cashAdvance->id,
+            'installment_number' => 1,
+            'due_date' => Carbon::today()->addMonth()->toDateString(),
+            'amount' => 1000000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING->value,
+        ]);
+
+        $payment = CashAdvancePayment::create([
+            'payment_number' => 'PAY-KB-202610-REJ',
+            'cash_advance_id' => $cashAdvance->id,
+            'cash_advance_installment_id' => $inst->id,
+            'payment_date' => Carbon::today()->toDateString(),
+            'amount' => 1000000,
+            'payment_method' => PaymentMethod::BANK_TRANSFER->value,
+            'status' => CashAdvancePaymentStatus::PENDING,
+            'notes' => 'Transfer manual mencurigakan',
+            'recorded_by' => $this->adminUser->id,
+        ]);
+
+        $this->actingAs($this->direkturUser);
+
+        Livewire::test(Index::class)
+            ->call('rejectPayment', $payment->id, 'Bukti transfer tidak valid atau tidak terverifikasi di mutasi')
+            ->assertDispatched('swal:alert');
+
+        $payment->refresh();
+        $this->assertEquals(CashAdvancePaymentStatus::REJECTED, $payment->status);
+        $this->assertEquals('Bukti transfer tidak valid atau tidak terverifikasi di mutasi', $payment->rejection_reason);
+        $this->assertNull($payment->approved_by);
+
+        // Balances must remain unchanged
+        $cashAdvance->refresh();
+        $this->assertEquals(1000000, $cashAdvance->remaining_amount);
+        $this->assertEquals(CashAdvanceStatus::ACTIVE, $cashAdvance->status);
+
+        $inst->refresh();
+        $this->assertEquals(InstallmentStatus::PENDING, $inst->status);
+        $this->assertEquals(0, $inst->paid_amount);
+    }
+
+    public function test_non_direktur_cannot_approve_or_reject_payment(): void
+    {
+        $cashAdvance = CashAdvance::create([
+            'reference_number' => 'KB-202610-FORBID',
+            'employee_id' => $this->employee->id,
+            'amount' => 1000000,
+            'remaining_amount' => 1000000,
+            'repayment_scheme' => RepaymentScheme::SALARY_SINGLE->value,
+            'installment_count' => 1,
+            'monthly_installment' => 1000000,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'reason' => 'Pinjaman tes otorisasi',
+            'status' => CashAdvanceStatus::ACTIVE->value,
+            'submitted_by' => $this->adminUser->id,
+            'approved_by' => $this->direkturUser->id,
+            'approved_at' => Carbon::now(),
+        ]);
+
+        $payment = CashAdvancePayment::create([
+            'payment_number' => 'PAY-KB-202610-FORBID',
+            'cash_advance_id' => $cashAdvance->id,
+            'payment_date' => Carbon::today()->toDateString(),
+            'amount' => 1000000,
+            'payment_method' => PaymentMethod::CASH->value,
+            'status' => CashAdvancePaymentStatus::PENDING,
+            'recorded_by' => $this->adminUser->id,
+        ]);
+
+        $this->actingAs($this->adminUser);
+
+        $this->expectException(AuthorizationException::class);
+        app(CashAdvanceService::class)->approvePayment($payment, $this->adminUser);
+    }
+
+    public function test_cash_advances_table_groups_employees_by_department(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        Livewire::test(Index::class)
+            ->assertOk()
+            ->assertSee('table-group-header')
+            ->assertSee('DEPARTEMEN MIKROKONTROLER')
+            ->assertSee('Karyawan', false);
     }
 }

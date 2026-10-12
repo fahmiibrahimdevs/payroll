@@ -30,6 +30,11 @@ return [
             'payrolls' => 'c,r,u,d',
             'receipts' => 'c,r,u,d',
         ],
+        'karyawan' => [
+            'employees' => 'r',
+            'cash_advances' => 'c,r',
+            'payrolls' => 'r',
+        ],
         'developer' => [
             'logs' => 'r',
         ],

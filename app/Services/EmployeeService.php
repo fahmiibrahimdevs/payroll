@@ -3,15 +3,20 @@
 namespace App\Services;
 
 use App\Enums\PayrollPeriodStatus;
+use App\Enums\SalaryAdjustmentType;
 use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmployeeSalaryHistory;
 use App\Models\PayrollItem;
 use App\Models\Position;
+use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 use Throwable;
 
 class EmployeeService
@@ -166,7 +171,7 @@ class EmployeeService
                     'birth_date' => ! empty($data['birth_date']) ? $data['birth_date'] : null,
                     'address' => $data['address'] ?? null,
                     'phone' => $data['phone'] ?? null,
-                    'email' => $data['email'] ?? null,
+                    'email' => ! empty($data['email']) ? $data['email'] : (! empty($data['full_name']) ? CompanyProfile::generateEmployeeEmail($data['full_name']) : null),
                     'bank_name' => $data['bank_name'] ?? null,
                     'bank_account_number' => $data['bank_account_number'] ?? null,
                     'bank_account_name' => $data['bank_account_name'] ?? null,
@@ -182,6 +187,20 @@ class EmployeeService
                 ];
 
                 $employee->detail()->create($detailData);
+
+                if ((float) $employee->basic_salary > 0) {
+                    EmployeeSalaryHistory::create([
+                        'employee_id' => $employee->id,
+                        'previous_salary' => 0,
+                        'new_salary' => (float) $employee->basic_salary,
+                        'change_amount' => (float) $employee->basic_salary,
+                        'percentage_change' => 0,
+                        'effective_date' => $employee->join_date ? Carbon::parse($employee->join_date) : Carbon::today(),
+                        'type' => SalaryAdjustmentType::INITIAL,
+                        'reason' => 'Gaji awal saat karyawan bergabung',
+                        'changed_by' => auth()->id(),
+                    ]);
+                }
 
                 $this->logger->info(
                     action: 'CREATE',
@@ -256,6 +275,9 @@ class EmployeeService
                     $cvPath = $newCvPath;
                 }
 
+                $oldBasicSalary = (float) $employee->basic_salary;
+                $newBasicSalary = isset($data['basic_salary']) ? (float) $data['basic_salary'] : $oldBasicSalary;
+
                 $employeeData = [
                     'department_id' => ! empty($data['department_id']) ? (int) $data['department_id'] : null,
                     'position_id' => ! empty($data['position_id']) ? (int) $data['position_id'] : null,
@@ -264,13 +286,37 @@ class EmployeeService
                     'contract_end_date' => ! empty($data['contract_end_date']) ? $data['contract_end_date'] : null,
                     'employment_status' => $data['employment_status'] ?? $employee->employment_status,
                     'status' => $data['status'] ?? $employee->status,
-                    'basic_salary' => isset($data['basic_salary']) ? (float) $data['basic_salary'] : $employee->basic_salary,
+                    'basic_salary' => $newBasicSalary,
                     'photo_path' => $photoPath,
                 ];
 
-                $oldValues = $employee->only(['full_name', 'department_id', 'position_id', 'status', 'employment_status']);
+                $oldValues = $employee->only(['full_name', 'department_id', 'position_id', 'status', 'employment_status', 'basic_salary']);
 
                 $employee->update($employeeData);
+
+                if (abs($newBasicSalary - $oldBasicSalary) >= 0.01) {
+                    $changeAmount = $newBasicSalary - $oldBasicSalary;
+                    $percentageChange = $oldBasicSalary > 0 ? round(($changeAmount / $oldBasicSalary) * 100, 2) : 0;
+                    $adjustmentType = isset($data['salary_adjustment_type'])
+                        ? ($data['salary_adjustment_type'] instanceof SalaryAdjustmentType
+                            ? $data['salary_adjustment_type']
+                            : SalaryAdjustmentType::tryFrom((string) $data['salary_adjustment_type']) ?? SalaryAdjustmentType::OTHER)
+                        : SalaryAdjustmentType::OTHER;
+                    $adjustmentReason = $data['salary_adjustment_reason'] ?? 'Penyesuaian gaji dari perubahan data profil karyawan';
+                    $effectiveDate = ! empty($data['salary_effective_date']) ? Carbon::parse($data['salary_effective_date']) : Carbon::today();
+
+                    EmployeeSalaryHistory::create([
+                        'employee_id' => $employee->id,
+                        'previous_salary' => $oldBasicSalary,
+                        'new_salary' => $newBasicSalary,
+                        'change_amount' => $changeAmount,
+                        'percentage_change' => $percentageChange,
+                        'effective_date' => $effectiveDate,
+                        'type' => $adjustmentType,
+                        'reason' => $adjustmentReason,
+                        'changed_by' => auth()->id(),
+                    ]);
+                }
 
                 $detailData = [
                     'employee_code' => ! empty($data['employee_code']) ? $data['employee_code'] : ($employee->detail?->employee_code ?? $this->generateEmployeeCode()),
@@ -453,5 +499,108 @@ class EmployeeService
 
             throw $e;
         }
+    }
+
+    /**
+     * Record a dedicated salary adjustment for an employee.
+     *
+     * @param  array<string, mixed>  $data
+     *
+     * @throws InvalidArgumentException|Throwable
+     */
+    public function recordSalaryAdjustment(Employee $employee, array $data, ?User $user = null): EmployeeSalaryHistory
+    {
+        $previousSalary = (float) $employee->basic_salary;
+        $newSalary = (float) ($data['new_salary'] ?? 0);
+
+        if ($newSalary < 0) {
+            throw new InvalidArgumentException('Gaji baru tidak boleh negatif.');
+        }
+
+        $changeAmount = $newSalary - $previousSalary;
+        $percentageChange = $previousSalary > 0
+            ? round(($changeAmount / $previousSalary) * 100, 2)
+            : 0;
+
+        $type = isset($data['type'])
+            ? ($data['type'] instanceof SalaryAdjustmentType
+                ? $data['type']
+                : SalaryAdjustmentType::tryFrom((string) $data['type']) ?? SalaryAdjustmentType::OTHER)
+            : SalaryAdjustmentType::OTHER;
+
+        $effectiveDate = ! empty($data['effective_date'])
+            ? Carbon::parse($data['effective_date'])
+            : Carbon::today();
+
+        $changedBy = $user?->id ?? auth()->id();
+
+        return DB::transaction(function () use ($employee, $previousSalary, $newSalary, $changeAmount, $percentageChange, $effectiveDate, $type, $data, $changedBy) {
+            $history = EmployeeSalaryHistory::create([
+                'employee_id' => $employee->id,
+                'previous_salary' => $previousSalary,
+                'new_salary' => $newSalary,
+                'change_amount' => $changeAmount,
+                'percentage_change' => $percentageChange,
+                'effective_date' => $effectiveDate,
+                'type' => $type,
+                'reason' => $data['reason'] ?? null,
+                'changed_by' => $changedBy,
+            ]);
+
+            // Update employee's basic salary
+            $employee->update(['basic_salary' => $newSalary]);
+
+            // Sinkronisasi otomatis slip gaji yang masih draf / revisi jika ada
+            $editablePayrollItems = PayrollItem::where('employee_id', $employee->id)
+                ->whereNull('approved_at')
+                ->whereHas('payrollPeriod', function ($q) {
+                    $q->whereIn('status', [
+                        PayrollPeriodStatus::DRAFT->value,
+                        PayrollPeriodStatus::REJECTED->value,
+                    ]);
+                })
+                ->with('payrollPeriod')
+                ->get();
+
+            if ($editablePayrollItems->isNotEmpty()) {
+                $employee->refresh();
+                $payrollService = app(PayrollService::class);
+                $company = CompanyProfile::getProfile();
+                $touchedPeriods = [];
+                foreach ($editablePayrollItems as $pItem) {
+                    $salaryInfo = $payrollService->calculateProratedSalary($employee, $pItem->payrollPeriod);
+                    $pItem->update([
+                        'basic_salary' => (float) $salaryInfo['basic_salary'],
+                    ]);
+                    $payrollService->recalculateItemTax($pItem, $company);
+                    $payrollService->recalculateItem($pItem);
+                    $touchedPeriods[$pItem->payroll_period_id] = $pItem->payrollPeriod;
+                }
+                foreach ($touchedPeriods as $period) {
+                    if ($period) {
+                        $payrollService->recalculatePeriod($period);
+                    }
+                }
+            }
+
+            $this->logger->info(
+                action: 'SALARY_ADJUSTMENT',
+                module: 'employees',
+                message: "Salary adjusted for employee #{$employee->id} ({$employee->full_name})",
+                context: [
+                    'employee_id' => $employee->id,
+                    'previous_salary' => $previousSalary,
+                    'new_salary' => $newSalary,
+                    'change_amount' => $changeAmount,
+                    'percentage_change' => $percentageChange,
+                    'effective_date' => $effectiveDate->toDateString(),
+                    'type' => $type->value,
+                    'reason' => $data['reason'] ?? null,
+                    'changed_by' => $changedBy,
+                ]
+            );
+
+            return $history;
+        });
     }
 }

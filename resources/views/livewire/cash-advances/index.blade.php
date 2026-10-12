@@ -130,54 +130,99 @@
             <!-- Row 2: Full-Width Data Table -->
             <div class="table-responsive">
                 <table class="table table-clean mb-0">
-                    <thead class="bg-gray-100">
-                        <tr>
-                            <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 45px;">NO</th>
-                            <th class="text-nowrap !px-3 !py-2.5">KARYAWAN</th>
-                            <th class="text-right text-nowrap !px-3 !py-2.5">TOTAL PINJAMAN</th>
-                            <th class="text-right text-nowrap !px-3 !py-2.5">SUDAH DIBAYAR</th>
-                            <th class="text-right text-nowrap !px-3 !py-2.5">SISA KASBON</th>
-                            <th class="text-right text-nowrap !px-3 !py-2.5">POTONGAN BULAN INI</th>
-                            <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 70px;"><i class="fas fa-cog text-muted" title="Aksi"></i></th>
+                    <thead>
+                        <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                            <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 50px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">NO</th>
+                            <th class="text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">KARYAWAN</th>
+                            <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">TOTAL PINJAMAN</th>
+                            <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">SUDAH DIBAYAR</th>
+                            <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">SISA KASBON</th>
+                            <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">POTONGAN BULAN INI</th>
+                            <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 70px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;"><i class="fas fa-cog text-muted" title="Aksi"></i></th>
                         </tr>
                     </thead>
                     <tbody>
                         @if ($recap && $recap->total() > 0)
-                            @foreach ($recap as $index => $row)
-                                <tr wire:key="recap-row-{{ $row['id'] }}">
-                                    <td class="text-center font-weight-600 text-muted align-middle !px-3 !py-2.5">
-                                        {{ $recap->firstItem() + $index }}
-                                    </td>
-                                    <td class="align-middle text-nowrap !px-3 !py-2.5">
-                                        <div class="d-flex align-items-center">
-                                            <img src="{{ $row['photo_url'] }}" alt="{{ $row['name'] }}" class="rounded-circle mr-2.5 flex-shrink-0" style="width: 36px; height: 36px; object-fit: cover;">
-                                            <div>
-                                                <div class="font-weight-600 text-dark leading-tight">{{ $row['name'] }}</div>
-                                                <div class="text-[11px] text-muted leading-tight mt-0.5">
-                                                    {{ $row['department'] }} &bull; {{ $row['position'] }}
+                            @php
+                                $rowNumber = 0;
+                                $groupedRecap = collect($recap->items())->groupBy(fn ($item) => $item['department'] ?: 'Tanpa Departemen');
+                                if ($groupedRecap->has('Tanpa Departemen')) {
+                                    $unassigned = $groupedRecap->pull('Tanpa Departemen');
+                                    $groupedRecap->put('Tanpa Departemen', $unassigned);
+                                }
+                            @endphp
+
+                            @foreach ($groupedRecap as $departmentName => $deptRows)
+                                @php
+                                    $isOfficialDept = $departmentName !== 'Tanpa Departemen';
+                                @endphp
+                                <!-- Baris Sub-Header Group Departemen (Sesuai Desain Halaman Karyawan) -->
+                                <tr class="table-group-header" style="background-color: {{ $isOfficialDept ? '#f0f6ff' : '#fffdf5' }}; border-top: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }}; border-bottom: 1px solid {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }};">
+                                    <td colspan="7" class="!py-2.5 !px-3.5" style="border-left: 4px solid {{ $isOfficialDept ? '#0b52aa' : '#f59e0b' }} !important;">
+                                        <div class="d-flex align-items-center justify-content-between flex-wrap" style="gap: 10px;">
+                                            <div class="d-flex align-items-center">
+                                                <span class="d-inline-flex align-items-center justify-content-center mr-2" style="width: 26px; height: 26px; border-radius: 6px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; font-size: 12px; flex-shrink: 0;">
+                                                    @if ($isOfficialDept)
+                                                        <i class="fas fa-building" style="color: #0b52aa;"></i>
+                                                    @else
+                                                        <i class="fas fa-exclamation-triangle" style="color: #b45309;"></i>
+                                                    @endif
+                                                </span>
+                                                <div>
+                                                    <span class="font-weight-bold" style="font-size: 13px; letter-spacing: 0.3px; color: #0f172a;">
+                                                        DEPARTEMEN {{ strtoupper($departmentName) }}
+                                                    </span>
+                                                    <span class="badge ml-2 font-weight-700" style="font-size: 11px; padding: 2.5px 8px; border-radius: 12px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; color: {{ $isOfficialDept ? '#1e40af' : '#92400e' }}; border: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }};">
+                                                        {{ $deptRows->count() }} Karyawan
+                                                    </span>
+                                                    @if (! $isOfficialDept)
+                                                        <span class="badge ml-1 font-weight-700" style="font-size: 10.5px; padding: 2.5px 7px; border-radius: 12px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
+                                                            Perlu Dilengkapi
+                                                        </span>
+                                                    @endif
                                                 </div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="text-right align-middle text-nowrap font-weight-500 text-dark !px-3 !py-2.5">
-                                        {{ $row['formatted_initial_amount'] }}
-                                    </td>
-                                    <td class="text-right align-middle text-nowrap font-weight-500 text-dark !px-3 !py-2.5">
-                                        {{ $row['formatted_paid_amount'] }}
-                                    </td>
-                                    <td class="text-right align-middle text-nowrap font-weight-bold text-dark !px-3 !py-2.5">
-                                        {{ $row['formatted_remaining_amount'] }}
-                                    </td>
-                                    <td class="text-right align-middle text-nowrap font-weight-500 text-dark !px-3 !py-2.5">
-                                        {{ $row['formatted_monthly_deduction'] }}
-                                    </td>
-                                    <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
-                                        <button type="button" wire:click="selectEmployee({{ $row['id'] }})" wire:loading.attr="disabled" wire:target="selectEmployee({{ $row['id'] }})" class="btn btn-primary btn-action" title="Lihat Tagihan & Buku Besar {{ $row['name'] }}">
-                                            <i wire:loading.remove wire:target="selectEmployee({{ $row['id'] }})" class="fas fa-eye"></i>
-                                            <i wire:loading wire:target="selectEmployee({{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
-                                        </button>
-                                    </td>
                                 </tr>
+
+                                @foreach ($deptRows as $row)
+                                    @php $rowNumber++; @endphp
+                                    <tr wire:key="recap-row-{{ $row['id'] }}" class="payroll-table-row" style="border-bottom: 1px solid #f1f5f9;">
+                                        <td class="text-center font-weight-700 align-middle !px-3 !py-2.5 text-nowrap" style="color: #334155; font-size: 12.5px;">
+                                            {{ $recap->firstItem() + $rowNumber - 1 }}
+                                        </td>
+                                        <td class="align-middle text-nowrap !px-3 !py-2.5">
+                                            <div class="d-flex align-items-center text-nowrap">
+                                                <img src="{{ $row['photo_url'] }}" alt="{{ $row['name'] }}" class="rounded-circle mr-2.5 flex-shrink-0" style="width: 38px; height: 38px; object-fit: cover; border: 1.5px solid #cbd5e1;">
+                                                <div class="text-nowrap">
+                                                    <div class="font-weight-700 leading-tight" style="color: #0f172a; font-size: 13.5px;">{{ $row['name'] }}</div>
+                                                    <div class="leading-tight mt-1" style="font-size: 12px; color: #334155; font-weight: 600;">
+                                                        {{ $row['department'] }} &bull; {{ $row['position'] }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="text-right align-middle text-nowrap font-weight-600 !px-3 !py-2.5" style="color: #334155; font-size: 13px;">
+                                            {{ $row['formatted_initial_amount'] }}
+                                        </td>
+                                        <td class="text-right align-middle text-nowrap font-weight-600 !px-3 !py-2.5" style="color: #059669; font-size: 13px;">
+                                            {{ $row['formatted_paid_amount'] }}
+                                        </td>
+                                        <td class="text-right align-middle text-nowrap font-weight-700 !px-3 !py-2.5" style="color: {{ $row['remaining_amount'] > 0 ? '#d97706' : '#64748b' }}; font-size: 13px;">
+                                            {{ $row['formatted_remaining_amount'] }}
+                                        </td>
+                                        <td class="text-right align-middle text-nowrap font-weight-600 !px-3 !py-2.5" style="color: {{ $row['monthly_deduction'] > 0 ? '#0b52aa' : '#334155' }}; font-size: 13px;">
+                                            {{ $row['formatted_monthly_deduction'] }}
+                                        </td>
+                                        <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
+                                            <button type="button" wire:click="selectEmployee({{ $row['id'] }})" wire:loading.attr="disabled" wire:target="selectEmployee({{ $row['id'] }})" class="btn btn-primary btn-action" title="Lihat Tagihan & Buku Besar {{ $row['name'] }}">
+                                                <i wire:loading.remove wire:target="selectEmployee({{ $row['id'] }})" class="fas fa-eye"></i>
+                                                <i wire:loading wire:target="selectEmployee({{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                @endforeach
                             @endforeach
                         @else
                             <tr>
@@ -297,6 +342,136 @@
                                 </div>
                             @endif
                         </div>
+
+                        <!-- Mini Grafik Pie Chart: Rasio Pelunasan Kasbon -->
+                        <div class="cash-advance-pie-box mt-3 pt-3 border-top text-left"
+                             wire:key="pie-card-{{ $currentEmployee?->id ?? 0 }}-{{ (int)($summary['total_paid'] ?? 0) }}-{{ (int)($summary['total_balance'] ?? 0) }}"
+                             x-data="{
+                                 chartInstance: null,
+                                 initChart() {
+                                     const hasData = {{ $summary['has_advances'] ? 'true' : 'false' }};
+                                     if (!hasData) return;
+
+                                     const empId = {{ (int) ($currentEmployee?->id ?? 0) }};
+                                     const paid = {{ (float) ($summary['total_paid'] ?? 0) }};
+                                     const remaining = {{ (float) ($summary['total_balance'] ?? 0) }};
+
+                                     const tryRender = () => {
+                                         const canvas = document.getElementById('caPieCanvas-' + empId);
+                                         if (!canvas) return;
+
+                                         if (typeof Chart === 'undefined') {
+                                             setTimeout(tryRender, 100);
+                                             return;
+                                         }
+
+                                         if (this.chartInstance) {
+                                             try { this.chartInstance.destroy(); } catch (e) {}
+                                             this.chartInstance = null;
+                                         }
+
+                                         this.chartInstance = new Chart(canvas, {
+                                             type: 'pie',
+                                             data: {
+                                                 labels: ['Sudah Dibayar', 'Sisa Tagihan'],
+                                                 datasets: [{
+                                                     data: [paid, remaining],
+                                                     backgroundColor: ['#10b981', '#f59e0b'],
+                                                     hoverBackgroundColor: ['#059669', '#d97706'],
+                                                     borderWidth: 2,
+                                                     borderColor: '#ffffff',
+                                                     hoverOffset: 4
+                                                 }]
+                                             },
+                                             options: {
+                                                 responsive: true,
+                                                 maintainAspectRatio: false,
+                                                 animation: {
+                                                     duration: 400
+                                                 },
+                                                 plugins: {
+                                                     legend: {
+                                                         display: false
+                                                     },
+                                                     tooltip: {
+                                                         backgroundColor: '#1e293b',
+                                                         titleColor: '#ffffff',
+                                                         bodyColor: '#ffffff',
+                                                         padding: 8,
+                                                         cornerRadius: 6,
+                                                         callbacks: {
+                                                             label: function(context) {
+                                                                 const val = context.raw || 0;
+                                                                 const total = paid + remaining;
+                                                                 const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                                                                 return ' ' + context.label + ': Rp ' + new Intl.NumberFormat('id-ID').format(val) + ' (' + pct + '%)';
+                                                             }
+                                                         }
+                                                     }
+                                                 }
+                                             }
+                                         });
+                                     };
+
+                                     this.$nextTick(() => {
+                                         tryRender();
+                                     });
+
+                                     if (typeof this.$cleanup === 'function') {
+                                         this.$cleanup(() => {
+                                             if (this.chartInstance) {
+                                                 try { this.chartInstance.destroy(); } catch (e) {}
+                                                 this.chartInstance = null;
+                                             }
+                                         });
+                                     }
+                                 }
+                             }"
+                             x-init="initChart()">
+
+                            <div class="d-flex align-items-center justify-content-between mb-0">
+                                <h2 class="section-title mt-0 mb-0">Rasio Pelunasan</h2>
+                                @if ($summary['has_advances'])
+                                    <span class="badge {{ $summary['paid_percentage'] >= 100 ? 'badge-success' : ($summary['paid_percentage'] > 0 ? 'badge-info' : 'badge-warning') }}" style="font-size: 11px; font-weight: 600; border-radius: 6px; padding: 3px 7px;">
+                                        {{ $summary['paid_percentage'] }}% Lunas
+                                    </span>
+                                @else
+                                    <span class="badge badge-light border text-muted" style="font-size: 11px; border-radius: 6px; padding: 3px 7px;">
+                                        0 Kasbon
+                                    </span>
+                                @endif
+                            </div>
+                            <p class="section-lead">Perbandingan total kasbon terbayar vs sisa tagihan.</p>
+
+                            @if ($summary['has_advances'])
+                                <div wire:ignore style="position: relative; height: 160px; width: 100%; display: flex; align-items: center; justify-content: center;">
+                                    <canvas id="caPieCanvas-{{ $currentEmployee?->id ?? 0 }}"></canvas>
+                                </div>
+
+                                <div class="mt-2.5 pt-2 border-top d-flex flex-column" style="gap: 5px;">
+                                    <div class="d-flex align-items-center justify-content-between" style="font-size: 11.5px;">
+                                        <div class="d-flex align-items-center">
+                                            <span style="width: 8px; height: 8px; border-radius: 50%; background-color: #10b981; display: inline-block; margin-right: 6px;"></span>
+                                            <span class="text-muted">Sudah Dibayar</span>
+                                        </div>
+                                        <span class="font-weight-600 text-dark">{{ $summary['formatted_total_paid'] }}</span>
+                                    </div>
+                                    <div class="d-flex align-items-center justify-content-between" style="font-size: 11.5px;">
+                                        <div class="d-flex align-items-center">
+                                            <span style="width: 8px; height: 8px; border-radius: 50%; background-color: #f59e0b; display: inline-block; margin-right: 6px;"></span>
+                                            <span class="text-muted">Sisa Tagihan</span>
+                                        </div>
+                                        <span class="font-weight-600 text-dark">{{ $summary['formatted_total_balance'] }}</span>
+                                    </div>
+                                </div>
+                            @else
+                                <div class="text-center py-3 px-2 bg-light rounded mt-2" style="border: 1px dashed #e2e8f0;">
+                                    <i class="fas fa-check-circle text-success mb-1" style="font-size: 20px;"></i>
+                                    <div class="font-weight-600 text-dark" style="font-size: 12.5px;">Tidak Ada Tanggungan</div>
+                                    <div class="text-muted text-xs">Karyawan ini sedang tidak memiliki kasbon aktif.</div>
+                                </div>
+                            @endif
+                        </div>
                     </div>
                 </div>
             </div>
@@ -308,17 +483,19 @@
                     <div class="cash-advance-top-card">
                         <!-- Card Header: Native Template Title with Back Navigation -->
                         <div class="card-header">
-                            <div class="section-header-back">
-                                <button type="button" 
-                                        wire:click="clearSelectedEmployee" 
-                                        wire:loading.attr="disabled" 
-                                        wire:target="clearSelectedEmployee" 
-                                        class="btn btn-icon" 
-                                        title="Kembali ke Rekap Semua Karyawan">
-                                    <i wire:loading.remove wire:target="clearSelectedEmployee" class="fas fa-arrow-left"></i>
-                                    <i wire:loading wire:target="clearSelectedEmployee" class="fas fa-spinner fa-spin"></i>
-                                </button>
-                            </div>
+                            @if (! auth()->user()?->hasRole('karyawan'))
+                                <div class="section-header-back">
+                                    <button type="button" 
+                                            wire:click="clearSelectedEmployee" 
+                                            wire:loading.attr="disabled" 
+                                            wire:target="clearSelectedEmployee" 
+                                            class="btn btn-icon" 
+                                            title="Kembali ke Rekap Semua Karyawan">
+                                        <i wire:loading.remove wire:target="clearSelectedEmployee" class="fas fa-arrow-left"></i>
+                                        <i wire:loading wire:target="clearSelectedEmployee" class="fas fa-spinner fa-spin"></i>
+                                    </button>
+                                </div>
+                            @endif
                             <h4>Rincian Kasbon</h4>
                         </div>
 
@@ -639,6 +816,14 @@
                                                                     <i class="fas fa-file-image"></i>
                                                                 </a>
                                                             @endif
+                                                            @if ($row['status'] === 'pending' && auth()->user()?->hasRole('direktur'))
+                                                                <button type="button" onclick="confirmApprovePayment({{ $row['id'] }})" class="btn btn-success btn-action mr-1" title="Setujui Pembayaran (ACC)">
+                                                                    <i class="fas fa-check"></i>
+                                                                </button>
+                                                                <button type="button" onclick="confirmRejectPayment({{ $row['id'] }})" class="btn btn-danger btn-action mr-1" title="Tolak Pembayaran">
+                                                                    <i class="fas fa-times"></i>
+                                                                </button>
+                                                            @endif
                                                             <button type="button" wire:click="showDetail({{ $row['cash_advance_id'] }}, {{ $row['id'] }})" wire:loading.attr="disabled" wire:target="showDetail({{ $row['cash_advance_id'] }}, {{ $row['id'] }})" class="btn btn-info btn-action" title="Lihat Transaksi Pelunasan ({{ $row['reference_number'] }})">
                                                                 <i wire:loading.remove wire:target="showDetail({{ $row['cash_advance_id'] }}, {{ $row['id'] }})" class="fas fa-receipt"></i>
                                                                 <i wire:loading wire:target="showDetail({{ $row['cash_advance_id'] }}, {{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
@@ -709,7 +894,54 @@
     @include('livewire.cash-advances.early-payment-modal')
 </div>
 
+@push('styles')
+<style>
+    /* Section Title & Lead inside Cash Advance Pie Box */
+    .cash-advance-pie-box .section-title {
+        font-size: 13.5px !important;
+        color: #0f172a !important;
+        font-weight: 600 !important;
+        line-height: 1.35 !important;
+        position: relative;
+        margin: 0 !important;
+        display: inline-flex;
+        align-items: center;
+    }
+    .cash-advance-pie-box .section-title:before {
+        content: " ";
+        border-radius: 4px;
+        height: 4px !important;
+        width: 14px !important;
+        background-color: #0b52aa;
+        display: inline-block;
+        float: none !important;
+        margin-top: 0 !important;
+        margin-right: 7px !important;
+        flex-shrink: 0;
+    }
+    .cash-advance-pie-box .section-lead {
+        margin-top: 2px !important;
+        margin-left: 21px !important;
+        font-size: 11px !important;
+        color: #64748b !important;
+        line-height: 1.35 !important;
+        margin-bottom: 10px !important;
+        font-weight: 400 !important;
+        display: block;
+    }
+
+    /* Table Group Header & Row Hover Styling */
+    .table.table-clean tbody tr.table-group-header td {
+        vertical-align: middle !important;
+    }
+    .table.table-clean tbody tr.payroll-table-row:hover td {
+        background-color: #f8fafc !important;
+    }
+</style>
+@endpush
+
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     (function () {
         function initCashAdvanceScripts() {
@@ -884,6 +1116,50 @@
                 }).then((result) => {
                     if (result.isConfirmed) {
                         Livewire.dispatch('reject-cash-advance', { reason: result.value ? result.value.trim() : '' });
+                    }
+                });
+            };
+
+            window.confirmApprovePayment = function (paymentId) {
+                Swal.fire({
+                    title: 'Setujui Pembayaran Kasbon?',
+                    text: 'Pembayaran ini akan disahkan. Saldo kasbon dan cicilan karyawan akan berkurang secara otomatis.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#0b52aa',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Ya, Setujui Pembayaran',
+                    cancelButtonText: 'Batal',
+                    reverseButtons: true,
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Livewire.dispatch('approve-cash-advance-payment', { paymentId: paymentId });
+                    }
+                });
+            };
+
+            window.confirmRejectPayment = function (paymentId) {
+                Swal.fire({
+                    title: 'Tolak Pembayaran Kasbon?',
+                    text: 'Pembayaran kasbon ini akan ditolak dan saldo tidak akan berkurang.',
+                    icon: 'warning',
+                    input: 'textarea',
+                    inputLabel: 'Alasan Penolakan (Wajib Diisi)',
+                    inputPlaceholder: 'Tuliskan alasan penolakan pembayaran...',
+                    inputValidator: (value) => {
+                        if (!value || value.trim().length < 3) {
+                            return 'Alasan penolakan wajib diisi (minimal 3 karakter)!';
+                        }
+                    },
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Tolak Pembayaran',
+                    cancelButtonText: 'Batal',
+                    reverseButtons: true,
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Livewire.dispatch('reject-cash-advance-payment', { paymentId: paymentId, reason: result.value ? result.value.trim() : '' });
                     }
                 });
             };

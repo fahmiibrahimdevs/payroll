@@ -7,6 +7,7 @@ use App\Enums\EmploymentStatus;
 use App\Enums\Gender;
 use App\Enums\MaritalStatus;
 use App\Enums\TaxMethod;
+use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Services\EmployeeService;
 use Illuminate\Validation\Rule;
@@ -263,6 +264,10 @@ class EmployeeForm extends Form
      */
     public function store(EmployeeService $employeeService): Employee
     {
+        if (empty($this->email) && ! empty($this->full_name)) {
+            $this->email = CompanyProfile::generateEmployeeEmail($this->full_name);
+        }
+
         $validated = $this->validate();
 
         $photoFile = $this->photo instanceof TemporaryUploadedFile ? $this->photo : null;

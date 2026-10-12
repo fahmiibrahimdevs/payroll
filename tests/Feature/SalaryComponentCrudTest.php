@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Enums\SalaryCalculationType;
+use App\Enums\SalaryComponentCategory;
 use App\Enums\SalaryComponentType;
 use App\Livewire\SalaryComponents\Index;
 use App\Models\SalaryComponent;
@@ -398,5 +400,59 @@ class SalaryComponentCrudTest extends TestCase
         for ($i = 8; $i < count($items); $i++) {
             $this->assertFalse($items[$i]->is_active, "Item index {$i} ({$items[$i]->name}) should be inactive");
         }
+    }
+
+    public function test_director_can_view_and_crud_salary_components(): void
+    {
+        $director = $this->createDirectorUser();
+
+        $response = $this->actingAs($director)->get(route('salary-components.index'));
+        $response->assertOk();
+
+        $this->actingAs($director);
+
+        // Director can create salary component
+        Livewire::test(Index::class)
+            ->call('create')
+            ->set('form.name', 'Tunjangan Operasional Direksi')
+            ->set('form.type', SalaryComponentType::ALLOWANCE->value)
+            ->set('form.category', SalaryComponentCategory::FIXED_ALLOWANCE->value)
+            ->set('form.calculation_type', SalaryCalculationType::NOMINAL->value)
+            ->set('form.default_value', 1500000)
+            ->set('form.is_active', true)
+            ->set('form.is_taxable', true)
+            ->call('store')
+            ->assertHasNoErrors()
+            ->assertDispatched('close-modal', id: 'salaryComponentModal')
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseHas('salary_components', [
+            'name' => 'Tunjangan Operasional Direksi',
+            'default_value' => 1500000,
+        ]);
+
+        $comp = SalaryComponent::where('name', 'Tunjangan Operasional Direksi')->first();
+
+        // Director can update salary component
+        Livewire::test(Index::class)
+            ->call('edit', $comp->id)
+            ->set('form.default_value', 2000000)
+            ->call('update')
+            ->assertHasNoErrors()
+            ->assertDispatched('close-modal', id: 'salaryComponentModal');
+
+        $this->assertDatabaseHas('salary_components', [
+            'id' => $comp->id,
+            'default_value' => 2000000,
+        ]);
+
+        // Director can delete custom salary component
+        Livewire::test(Index::class)
+            ->call('delete', $comp->id)
+            ->assertDispatched('swal:alert');
+
+        $this->assertSoftDeleted('salary_components', [
+            'id' => $comp->id,
+        ]);
     }
 }

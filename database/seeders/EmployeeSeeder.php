@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeDetail;
 use App\Models\Position;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
@@ -84,7 +85,7 @@ class EmployeeSeeder extends Seeder
                 'dept' => 'Mikrokontroler',
                 'pos' => 'Staff',
                 'phone' => '082233445566',
-                'email' => 'arif.fahmi@larashiz.com',
+                'email' => 'karyawan@larashiz.com',
                 'gender' => Gender::MALE->value,
                 'code' => 'EMP-003',
                 'salary' => 6000000,
@@ -106,9 +107,12 @@ class EmployeeSeeder extends Seeder
         ];
 
         foreach ($employeeData as $data) {
+            $matchedUser = User::where('email', $data['email'])->first();
+
             $employee = Employee::firstOrCreate(
                 ['full_name' => $data['full_name']],
                 [
+                    'user_id' => $matchedUser?->id,
                     'department_id' => $departments[$data['dept']]->id,
                     'position_id' => $positions[$data['pos']]->id,
                     'join_date' => Carbon::now()->subMonths(12)->toDateString(),
@@ -120,6 +124,7 @@ class EmployeeSeeder extends Seeder
 
             // Update if existing to match new department/position/salary
             $employee->update([
+                'user_id' => $matchedUser?->id ?? $employee->user_id,
                 'department_id' => $departments[$data['dept']]->id,
                 'position_id' => $positions[$data['pos']]->id,
                 'employment_status' => $data['emp_status'],

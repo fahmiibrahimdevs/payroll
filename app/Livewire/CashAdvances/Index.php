@@ -8,6 +8,7 @@ use App\Enums\RepaymentScheme;
 use App\Livewire\Forms\CashAdvanceForm;
 use App\Livewire\Forms\CashAdvancePaymentForm;
 use App\Models\CashAdvance;
+use App\Models\CashAdvancePayment;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Services\CashAdvanceService;
@@ -111,6 +112,12 @@ class Index extends Component
     public function mount(): void
     {
         Gate::authorize('viewAny', CashAdvance::class);
+
+        if (auth()->user()?->hasRole('karyawan')) {
+            $emp = auth()->user()->getEmployeeRecord();
+            $this->selectedEmployeeId = $emp?->id;
+            $this->selectedDepartmentId = $emp?->department_id;
+        }
     }
 
     public function updatingSelectedDepartmentId(): void
@@ -132,6 +139,12 @@ class Index extends Component
 
     public function selectEmployee(int $id): void
     {
+        if (auth()->user()?->hasRole('karyawan')) {
+            $this->selectedEmployeeId = auth()->user()->getEmployeeRecord()?->id;
+
+            return;
+        }
+
         $this->selectedEmployeeId = $id;
         $this->resetPage();
         $this->statementSubTab = 'unpaid';
@@ -141,6 +154,12 @@ class Index extends Component
 
     public function clearSelectedEmployee(): void
     {
+        if (auth()->user()?->hasRole('karyawan')) {
+            $this->selectedEmployeeId = auth()->user()->getEmployeeRecord()?->id;
+
+            return;
+        }
+
         $this->selectedEmployeeId = null;
         $this->resetPage();
         $this->statementSubTab = 'unpaid';
@@ -220,6 +239,11 @@ class Index extends Component
         $this->activeCashAdvanceAlert = null;
         $this->form->resetForm();
 
+        if (auth()->user()?->hasRole('karyawan')) {
+            $emp = auth()->user()->getEmployeeRecord();
+            $this->selectedEmployeeId = $emp?->id;
+        }
+
         if ($this->selectedEmployeeId) {
             $this->form->employee_id = $this->selectedEmployeeId;
             $summary = $service->getActiveCashAdvanceSummaryByEmployee((int) $this->selectedEmployeeId);
@@ -246,6 +270,8 @@ class Index extends Component
      */
     public function createPelunasan(CashAdvanceService $service): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403, 'Hanya admin yang dapat mencatat pelunasan kasbon.');
+
         if (! $this->selectedEmployeeId) {
             $this->dispatch('swal:alert', [
                 'type' => 'warning',
@@ -291,6 +317,11 @@ class Index extends Component
         $this->validate([
             'approvalNotes' => ['nullable', 'string', 'max:500'],
         ]);
+
+        if (auth()->user()?->hasRole('karyawan')) {
+            $emp = auth()->user()->getEmployeeRecord();
+            $this->form->employee_id = $emp?->id;
+        }
 
         try {
             $this->form->validate();
@@ -652,6 +683,8 @@ class Index extends Component
      */
     public function storePayment(CashAdvanceService $service): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403, 'Hanya admin yang dapat mencatat pelunasan kasbon.');
+
         try {
             $user = auth()->user();
             $payment = $this->paymentForm->store($service, $user);
@@ -660,7 +693,7 @@ class Index extends Component
             $this->dispatch('swal:alert', [
                 'type' => 'success',
                 'title' => 'Pembayaran Berhasil Dicatat!',
-                'message' => "Transaksi {$payment->payment_number} sebesar {$payment->formatted_amount} berhasil dicatat.",
+                'message' => "Transaksi {$payment->payment_number} sebesar {$payment->formatted_amount} berhasil dicatat dan berstatus Menunggu Persetujuan Direktur.",
             ]);
         } catch (ValidationException $e) {
             throw $e;
@@ -669,6 +702,81 @@ class Index extends Component
                 'type' => 'error',
                 'title' => 'Gagal Mencatat Pembayaran!',
                 'message' => $this->safeErrorMessage($e, 'Terjadi kesalahan saat memproses pembayaran.'),
+            ]);
+        }
+    }
+
+    /**
+     * Approve a pending cash advance payment (Direktur only).
+     */
+    #[On('approve-cash-advance-payment')]
+    public function approvePayment(int $paymentId, ?CashAdvanceService $service = null): void
+    {
+        $service ??= app(CashAdvanceService::class);
+
+        try {
+            $payment = CashAdvancePayment::with('cashAdvance')->findOrFail($paymentId);
+            $user = auth()->user();
+
+            $service->approvePayment($payment, $user);
+
+            if ($this->selectedCashAdvanceId) {
+                $this->showDetail($this->selectedCashAdvanceId, $paymentId);
+            }
+
+            $this->dispatch('swal:alert', [
+                'type' => 'success',
+                'title' => 'Pembayaran Disetujui!',
+                'message' => "Pembayaran {$payment->payment_number} sebesar {$payment->formatted_amount} telah disetujui (ACC). Saldo dan cicilan kasbon telah diperbarui.",
+            ]);
+        } catch (Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Menyetujui!',
+                'message' => $this->safeErrorMessage($e, 'Terjadi kesalahan saat menyetujui pembayaran.'),
+            ]);
+        }
+    }
+
+    /**
+     * Reject a pending cash advance payment (Direktur only).
+     */
+    #[On('reject-cash-advance-payment')]
+    public function rejectPayment(int $paymentId, string $reason, ?CashAdvanceService $service = null): void
+    {
+        $service ??= app(CashAdvanceService::class);
+
+        $trimmedReason = trim($reason);
+        if ($trimmedReason === '') {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Alasan Wajib Diisi',
+                'message' => 'Silakan isi alasan penolakan pembayaran.',
+            ]);
+
+            return;
+        }
+
+        try {
+            $payment = CashAdvancePayment::with('cashAdvance')->findOrFail($paymentId);
+            $user = auth()->user();
+
+            $service->rejectPayment($payment, $trimmedReason, $user);
+
+            if ($this->selectedCashAdvanceId) {
+                $this->showDetail($this->selectedCashAdvanceId, $paymentId);
+            }
+
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Pembayaran Ditolak',
+                'message' => "Pembayaran {$payment->payment_number} telah ditolak.",
+            ]);
+        } catch (Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Menolak!',
+                'message' => $this->safeErrorMessage($e, 'Terjadi kesalahan saat menolak pembayaran.'),
             ]);
         }
     }
@@ -937,6 +1045,8 @@ class Index extends Component
      */
     public function openEarlyPaymentModal(?string $targetMonthKey = null, ?CashAdvanceService $service = null): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403, 'Hanya admin yang dapat mencatat pelunasan kasbon.');
+
         if (! $this->selectedEmployeeId) {
             $this->dispatch('swal:alert', [
                 'type' => 'warning',
@@ -1040,6 +1150,8 @@ class Index extends Component
      */
     public function storeEarlyPayment(CashAdvanceService $service, bool $confirmed = false): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403, 'Hanya admin yang dapat mencatat pelunasan kasbon.');
+
         if (! $this->selectedEmployeeId) {
             return;
         }
@@ -1223,6 +1335,8 @@ HTML;
     #[On('confirm-early-payment')]
     public function confirmEarlyPayment(CashAdvanceService $service): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403, 'Hanya admin yang dapat mencatat pelunasan kasbon.');
+
         $this->storeEarlyPayment($service, confirmed: true);
     }
 
@@ -1249,6 +1363,14 @@ HTML;
             ]);
         }
 
+        $isKaryawan = auth()->user()?->hasRole('karyawan');
+        $karyawanRecord = null;
+        if ($isKaryawan) {
+            $karyawanRecord = auth()->user()->getEmployeeRecord();
+            $this->selectedEmployeeId = $karyawanRecord?->id;
+            $this->selectedDepartmentId = $karyawanRecord?->department_id;
+        }
+
         $departments = Department::query()->orderBy('name', 'asc')->get();
 
         $employeesQuery = Employee::query()
@@ -1261,7 +1383,9 @@ HTML;
             ])
             ->orderBy('full_name', 'asc');
 
-        if ($this->selectedDepartmentId) {
+        if ($isKaryawan && $karyawanRecord) {
+            $employeesQuery->where('id', $karyawanRecord->id);
+        } elseif ($this->selectedDepartmentId) {
             $employeesQuery->where('department_id', $this->selectedDepartmentId);
         }
 
@@ -1271,7 +1395,30 @@ HTML;
             $this->selectedEmployeeId = null;
         }
 
-        $companyStats = $service->getSummaryStats();
+        if ($isKaryawan && $karyawanRecord) {
+            $approvedAdvances = CashAdvance::where('employee_id', $karyawanRecord->id)
+                ->whereIn('status', [CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::PAID->value]);
+            $totalApproved = (float) $approvedAdvances->sum('amount');
+            $totalRemaining = (float) $approvedAdvances->sum('remaining_amount');
+            $totalPaid = $totalApproved - $totalRemaining;
+            $approvedCount = $approvedAdvances->count();
+            $paidCount = CashAdvancePayment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id))->count();
+
+            $companyStats = [
+                'total_approved_amount' => $totalApproved,
+                'formatted_total_approved_amount' => 'Rp '.number_format($totalApproved, 0, ',', '.'),
+                'total_approved_count' => $approvedCount,
+                'total_paid_amount' => $totalPaid,
+                'formatted_total_paid_amount' => 'Rp '.number_format($totalPaid, 0, ',', '.'),
+                'total_paid_transactions_count' => $paidCount,
+                'total_remaining_balance' => $totalRemaining,
+                'formatted_total_remaining_balance' => 'Rp '.number_format($totalRemaining, 0, ',', '.'),
+                'total_employees_with_active_advances' => $totalRemaining > 0 ? 1 : 0,
+                'total_employees_count' => 1,
+            ];
+        } else {
+            $companyStats = $service->getSummaryStats();
+        }
 
         $recap = ! $this->selectedEmployeeId
             ? $service->getEmployeesCashAdvanceSummary(

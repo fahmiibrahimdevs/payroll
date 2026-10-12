@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\CashAdvancePaymentStatus;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\PaymentMethod;
@@ -9,6 +10,7 @@ use App\Enums\RepaymentScheme;
 use App\Models\CashAdvance;
 use App\Models\CashAdvanceInstallment;
 use App\Models\CashAdvancePayment;
+use App\Models\Department;
 use App\Models\Employee;
 use App\Models\PayrollItemLine;
 use App\Models\User;
@@ -132,15 +134,22 @@ class CashAdvanceService
         $totalApprovedAmount = (float) (clone $approvedQuery)->sum('amount');
         $totalApprovedCount = (clone $approvedQuery)->count();
 
-        $paymentsSum = (float) CashAdvancePayment::query()->sum('amount');
+        $paymentsSum = (float) CashAdvancePayment::query()
+            ->where('status', CashAdvancePaymentStatus::APPROVED->value)
+            ->sum('amount');
         $diffPaidSum = (float) (CashAdvance::query()
             ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::PAID->value])
             ->selectRaw('SUM(amount - remaining_amount) as paid')
             ->value('paid') ?? 0);
         $totalPaidAmount = max($paymentsSum, $diffPaidSum);
 
-        $paymentsCount = CashAdvancePayment::query()->count();
+        $paymentsCount = CashAdvancePayment::query()
+            ->where('status', CashAdvancePaymentStatus::APPROVED->value)
+            ->count();
         $totalPaidTransactionsCount = $paymentsCount > 0 ? $paymentsCount : (int) CashAdvance::query()->where('status', CashAdvanceStatus::PAID->value)->count();
+        $totalPendingPaymentsCount = CashAdvancePayment::query()
+            ->where('status', CashAdvancePaymentStatus::PENDING->value)
+            ->count();
 
         $totalEmployeesCount = Employee::query()->count();
 
@@ -151,6 +160,7 @@ class CashAdvanceService
             'total_remaining_balance' => $totalRemaining,
             'formatted_total_remaining_balance' => 'Rp '.number_format($totalRemaining, 0, ',', '.'),
             'total_pending_count' => $pendingCount,
+            'total_pending_payments_count' => $totalPendingPaymentsCount,
             'total_disbursed_this_month' => $disbursedThisMonth,
             'formatted_total_disbursed_this_month' => 'Rp '.number_format($disbursedThisMonth, 0, ',', '.'),
             'total_approved_amount' => $totalApprovedAmount,
@@ -574,6 +584,9 @@ class CashAdvanceService
                     )->values();
                 }
 
+                $isAutoSalary = ($paymentData['payment_method'] ?? null) === PaymentMethod::SALARY_DEDUCTION
+                    || ($paymentData['payment_method'] ?? null) === PaymentMethod::SALARY_DEDUCTION->value;
+
                 $payment = CashAdvancePayment::create([
                     'payment_number' => $paymentNumber,
                     'cash_advance_id' => $lockedCashAdvance->id,
@@ -581,61 +594,65 @@ class CashAdvanceService
                     'payment_date' => $paymentDate->toDateString(),
                     'amount' => $paymentAmount,
                     'payment_method' => $paymentData['payment_method'],
+                    'status' => $isAutoSalary ? CashAdvancePaymentStatus::APPROVED : CashAdvancePaymentStatus::PENDING,
                     'proof_document' => $storedProofPath,
                     'notes' => ! empty($paymentData['notes']) ? trim((string) $paymentData['notes']) : null,
                     'recorded_by' => $user->id,
+                    'approved_by' => $isAutoSalary ? $user->id : null,
+                    'approved_at' => $isAutoSalary ? Carbon::now() : null,
                 ]);
 
-                // Reduce remaining amount
-                $newRemaining = max(0, round($remaining - $paymentAmount, 2));
-                $newStatus = ($newRemaining <= 0.001) ? CashAdvanceStatus::PAID->value : $lockedCashAdvance->status->value;
+                if ($isAutoSalary) {
+                    // Reduce remaining amount
+                    $newRemaining = max(0, round($remaining - $paymentAmount, 2));
+                    $newStatus = ($newRemaining <= 0.001) ? CashAdvanceStatus::PAID->value : $lockedCashAdvance->status->value;
 
-                $lockedCashAdvance->update([
-                    'remaining_amount' => $newRemaining,
-                    'status' => $newStatus,
-                ]);
-
-                // Allocate payment to installments
-                $leftToAllocate = $paymentAmount;
-                foreach ($unpaidInstallments as $installment) {
-                    if ($leftToAllocate <= 0) {
-                        break;
-                    }
-
-                    $installmentRemaining = (float) $installment->amount - (float) $installment->paid_amount;
-                    $allocation = min($leftToAllocate, $installmentRemaining);
-
-                    $newPaidAmount = round((float) $installment->paid_amount + $allocation, 2);
-                    $installmentStatus = ($newPaidAmount >= (float) $installment->amount)
-                        ? InstallmentStatus::PAID->value
-                        : InstallmentStatus::PARTIALLY_PAID->value;
-
-                    $installment->update([
-                        'paid_amount' => $newPaidAmount,
-                        'status' => $installmentStatus,
-                        'paid_at' => ($installmentStatus === InstallmentStatus::PAID->value) ? Carbon::now() : $installment->paid_at,
+                    $lockedCashAdvance->update([
+                        'remaining_amount' => $newRemaining,
+                        'status' => $newStatus,
                     ]);
 
-                    $this->syncOpenPayrollLinesForInstallment($installment);
+                    // Allocate payment to installments
+                    $leftToAllocate = $paymentAmount;
+                    foreach ($unpaidInstallments as $installment) {
+                        if ($leftToAllocate <= 0) {
+                            break;
+                        }
 
-                    $leftToAllocate -= $allocation;
-                }
+                        $installmentRemaining = (float) $installment->amount - (float) $installment->paid_amount;
+                        $allocation = min($leftToAllocate, $installmentRemaining);
 
-                if ($unpaidInstallments->isNotEmpty() && $leftToAllocate > 0.001) {
-                    throw new InvalidArgumentException('Nominal pembayaran tidak dapat dialokasikan ke cicilan kasbon.');
+                        $newPaidAmount = round((float) $installment->paid_amount + $allocation, 2);
+                        $installmentStatus = ($newPaidAmount >= (float) $installment->amount)
+                            ? InstallmentStatus::PAID->value
+                            : InstallmentStatus::PARTIALLY_PAID->value;
+
+                        $installment->update([
+                            'paid_amount' => $newPaidAmount,
+                            'status' => $installmentStatus,
+                            'paid_at' => ($installmentStatus === InstallmentStatus::PAID->value) ? Carbon::now() : $installment->paid_at,
+                        ]);
+
+                        $this->syncOpenPayrollLinesForInstallment($installment);
+
+                        $leftToAllocate -= $allocation;
+                    }
+
+                    if ($unpaidInstallments->isNotEmpty() && $leftToAllocate > 0.001) {
+                        throw new InvalidArgumentException('Nominal pembayaran tidak dapat dialokasikan ke cicilan kasbon.');
+                    }
                 }
 
                 $this->logger->info(
-                    action: 'PAYMENT',
+                    action: $isAutoSalary ? 'PAYMENT' : 'PAYMENT_PENDING',
                     module: 'cash_advances',
-                    message: 'Cash advance payment recorded',
+                    message: $isAutoSalary ? 'Cash advance payment recorded' : 'Cash advance payment recorded (pending director approval)',
                     context: [
                         'cash_advance_id' => $lockedCashAdvance->id,
                         'payment_id' => $payment->id,
                         'payment_number' => $payment->payment_number,
                         'amount' => $paymentAmount,
-                        'remaining_amount' => $newRemaining,
-                        'is_fully_paid' => $newRemaining <= 0,
+                        'status' => $payment->status->value,
                     ]
                 );
 
@@ -658,6 +675,155 @@ class CashAdvanceService
 
             throw $e;
         }
+    }
+
+    /**
+     * Approve a pending cash advance payment (Direktur only).
+     *
+     * @throws Throwable
+     */
+    public function approvePayment(CashAdvancePayment $payment, User $user): CashAdvancePayment
+    {
+        Gate::forUser($user)->authorize('approve', $payment);
+
+        return DB::transaction(function () use ($payment, $user) {
+            $lockedPayment = CashAdvancePayment::query()
+                ->lockForUpdate()
+                ->findOrFail($payment->id);
+
+            if ($lockedPayment->status !== CashAdvancePaymentStatus::PENDING) {
+                throw new InvalidArgumentException('Hanya pembayaran berstatus Menunggu Persetujuan yang dapat disetujui.');
+            }
+
+            $lockedCashAdvance = CashAdvance::query()
+                ->lockForUpdate()
+                ->findOrFail($lockedPayment->cash_advance_id);
+
+            $paymentAmount = (float) $lockedPayment->amount;
+            $remaining = (float) $lockedCashAdvance->remaining_amount;
+
+            if ($paymentAmount > $remaining + 0.001) {
+                throw new InvalidArgumentException('Nominal pembayaran (Rp '.number_format($paymentAmount, 0, ',', '.').') melebihi sisa kasbon saat ini (Rp '.number_format($remaining, 0, ',', '.').').');
+            }
+
+            $targetInstallmentId = $lockedPayment->cash_advance_installment_id;
+            $unpaidInstallments = $lockedCashAdvance->installments()
+                ->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
+                ->orderBy('installment_number', 'asc')
+                ->lockForUpdate()
+                ->get();
+
+            if ($targetInstallmentId) {
+                $unpaidInstallments = $unpaidInstallments->sortBy(
+                    fn (CashAdvanceInstallment $installment): int => (int) $installment->id === (int) $targetInstallmentId ? 0 : 1
+                )->values();
+            }
+
+            // Reduce remaining amount
+            $newRemaining = max(0, round($remaining - $paymentAmount, 2));
+            $newStatus = ($newRemaining <= 0.001) ? CashAdvanceStatus::PAID->value : $lockedCashAdvance->status->value;
+
+            $lockedCashAdvance->update([
+                'remaining_amount' => $newRemaining,
+                'status' => $newStatus,
+            ]);
+
+            // Allocate payment to installments
+            $leftToAllocate = $paymentAmount;
+            foreach ($unpaidInstallments as $installment) {
+                if ($leftToAllocate <= 0) {
+                    break;
+                }
+
+                $installmentRemaining = (float) $installment->amount - (float) $installment->paid_amount;
+                $allocation = min($leftToAllocate, $installmentRemaining);
+
+                $newPaidAmount = round((float) $installment->paid_amount + $allocation, 2);
+                $installmentStatus = ($newPaidAmount >= (float) $installment->amount - 0.01)
+                    ? InstallmentStatus::PAID->value
+                    : InstallmentStatus::PARTIALLY_PAID->value;
+
+                $installment->update([
+                    'paid_amount' => $newPaidAmount,
+                    'status' => $installmentStatus,
+                    'paid_at' => ($installmentStatus === InstallmentStatus::PAID->value) ? Carbon::now() : $installment->paid_at,
+                ]);
+
+                $this->syncOpenPayrollLinesForInstallment($installment);
+
+                $leftToAllocate -= $allocation;
+            }
+
+            $lockedPayment->update([
+                'status' => CashAdvancePaymentStatus::APPROVED,
+                'approved_by' => $user->id,
+                'approved_at' => Carbon::now(),
+                'rejection_reason' => null,
+            ]);
+
+            $this->logger->info(
+                action: 'PAYMENT_APPROVED',
+                module: 'cash_advances',
+                message: 'Cash advance payment approved by Direktur',
+                context: [
+                    'cash_advance_id' => $lockedCashAdvance->id,
+                    'payment_id' => $lockedPayment->id,
+                    'payment_number' => $lockedPayment->payment_number,
+                    'amount' => $paymentAmount,
+                    'remaining_amount' => $newRemaining,
+                    'approved_by' => $user->id,
+                ]
+            );
+
+            return $lockedPayment;
+        });
+    }
+
+    /**
+     * Reject a pending cash advance payment (Direktur only).
+     *
+     * @throws Throwable
+     */
+    public function rejectPayment(CashAdvancePayment $payment, string $reason, User $user): CashAdvancePayment
+    {
+        Gate::forUser($user)->authorize('reject', $payment);
+
+        $trimmedReason = trim($reason);
+        if ($trimmedReason === '') {
+            throw new InvalidArgumentException('Alasan penolakan pembayaran wajib diisi.');
+        }
+
+        return DB::transaction(function () use ($payment, $trimmedReason, $user) {
+            $lockedPayment = CashAdvancePayment::query()
+                ->lockForUpdate()
+                ->findOrFail($payment->id);
+
+            if ($lockedPayment->status !== CashAdvancePaymentStatus::PENDING) {
+                throw new InvalidArgumentException('Hanya pembayaran berstatus Menunggu Persetujuan yang dapat ditolak.');
+            }
+
+            $lockedPayment->update([
+                'status' => CashAdvancePaymentStatus::REJECTED,
+                'rejection_reason' => $trimmedReason,
+                'approved_by' => null,
+                'approved_at' => null,
+            ]);
+
+            $this->logger->info(
+                action: 'PAYMENT_REJECTED',
+                module: 'cash_advances',
+                message: 'Cash advance payment rejected by Direktur',
+                context: [
+                    'cash_advance_id' => $lockedPayment->cash_advance_id,
+                    'payment_id' => $lockedPayment->id,
+                    'payment_number' => $lockedPayment->payment_number,
+                    'reason' => $trimmedReason,
+                    'rejected_by' => $user->id,
+                ]
+            );
+
+            return $lockedPayment;
+        });
     }
 
     /**
@@ -814,7 +980,19 @@ class CashAdvanceService
     /**
      * Get summary overview for a selected employee.
      *
-     * @return array{employee: Employee|null, total_balance: float, formatted_total_balance: string, active_advances_count: int}
+     * @return array{
+     *     employee: Employee|null,
+     *     total_balance: float,
+     *     formatted_total_balance: string,
+     *     active_advances_count: int,
+     *     total_advance_amount: float,
+     *     formatted_total_advance_amount: string,
+     *     total_paid: float,
+     *     formatted_total_paid: string,
+     *     paid_percentage: float,
+     *     remaining_percentage: float,
+     *     has_advances: bool
+     * }
      */
     public function getEmployeeSummary(?int $employeeId): array
     {
@@ -824,6 +1002,13 @@ class CashAdvanceService
                 'total_balance' => 0.0,
                 'formatted_total_balance' => 'Rp 0',
                 'active_advances_count' => 0,
+                'total_advance_amount' => 0.0,
+                'formatted_total_advance_amount' => 'Rp 0',
+                'total_paid' => 0.0,
+                'formatted_total_paid' => 'Rp 0',
+                'paid_percentage' => 0.0,
+                'remaining_percentage' => 0.0,
+                'has_advances' => false,
             ];
         }
 
@@ -835,16 +1020,43 @@ class CashAdvanceService
                 CashAdvanceStatus::APPROVED->value,
                 CashAdvanceStatus::ACTIVE->value,
             ])
-            ->where('remaining_amount', '>', 0);
+            ->where('remaining_amount', '>', 0)
+            ->get();
 
-        $totalBalance = (float) (clone $activeAdvances)->sum('remaining_amount');
-        $activeCount = (clone $activeAdvances)->count();
+        $totalBalance = (float) $activeAdvances->sum('remaining_amount');
+        $activeCount = $activeAdvances->count();
+
+        // Cari seluruh kasbon yang disetujui / aktif / lunas untuk rasio pelunasan
+        $allAdvances = CashAdvance::query()
+            ->where('employee_id', $employeeId)
+            ->whereIn('status', [
+                CashAdvanceStatus::APPROVED->value,
+                CashAdvanceStatus::ACTIVE->value,
+                CashAdvanceStatus::PAID->value,
+            ])
+            ->get();
+
+        $targetCollection = $activeAdvances->isNotEmpty() ? $activeAdvances : $allAdvances;
+        $totalAdvanceAmount = (float) $targetCollection->sum('amount');
+        $totalPaid = max(0, (float) $targetCollection->sum(fn ($a) => max(0, (float) $a->amount - (float) $a->remaining_amount)));
+        $paidPercentage = $totalAdvanceAmount > 0
+            ? round(($totalPaid / $totalAdvanceAmount) * 100, 1)
+            : 0.0;
+        $remainingPercentage = max(0, 100 - $paidPercentage);
+        $hasAdvances = $targetCollection->isNotEmpty() && $totalAdvanceAmount > 0;
 
         return [
             'employee' => $employee,
             'total_balance' => $totalBalance,
             'formatted_total_balance' => 'Rp '.number_format($totalBalance, 0, ',', '.'),
             'active_advances_count' => $activeCount,
+            'total_advance_amount' => $totalAdvanceAmount,
+            'formatted_total_advance_amount' => 'Rp '.number_format($totalAdvanceAmount, 0, ',', '.'),
+            'total_paid' => $totalPaid,
+            'formatted_total_paid' => 'Rp '.number_format($totalPaid, 0, ',', '.'),
+            'paid_percentage' => $paidPercentage,
+            'remaining_percentage' => $remainingPercentage,
+            'has_advances' => $hasAdvances,
         ];
     }
 
@@ -894,7 +1106,12 @@ class CashAdvanceService
             'position:id,name',
             'cashAdvances' => fn ($q) => $q->orderByDesc('id'),
             'cashAdvances.installments',
-        ])->orderBy('full_name', 'asc');
+        ])
+            ->orderByRaw('CASE WHEN employees.department_id IS NULL THEN 1 ELSE 0 END ASC')
+            ->orderBy(
+                Department::select('name')->whereColumn('departments.id', 'employees.department_id')
+            )
+            ->orderBy('employees.full_name', 'asc');
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -1026,8 +1243,13 @@ class CashAdvanceService
                 'cash_advance_payments.created_at as transaction_time',
                 'recorders.name as creator_name',
                 'cash_advance_payments.notes as description',
-                DB::raw("'paid' as status"),
-                DB::raw("'Disetujui' as status_label"),
+                'cash_advance_payments.status',
+                DB::raw("CASE cash_advance_payments.status
+                    WHEN 'approved' THEN 'Disetujui'
+                    WHEN 'pending' THEN 'Menunggu ACC'
+                    WHEN 'rejected' THEN 'Ditolak'
+                    ELSE cash_advance_payments.status
+                END as status_label"),
                 DB::raw('NULL as advance_amount'),
                 'cash_advance_payments.amount as payment_amount',
             ]);
@@ -1085,7 +1307,7 @@ class CashAdvanceService
         foreach ($allRows as $allRow) {
             if ($allRow->type === 'advance' && in_array($allRow->status, ['active', 'approved', 'paid'], true)) {
                 $runningBalance += (float) $allRow->advance_amount;
-            } elseif ($allRow->type === 'payment') {
+            } elseif ($allRow->type === 'payment' && $allRow->status === 'approved') {
                 $runningBalance = max(0.0, $runningBalance - (float) $allRow->payment_amount);
             }
 
@@ -1184,9 +1406,9 @@ class CashAdvanceService
                 'payment_amount' => (float) $payment->amount,
                 'formatted_payment_amount' => $payment->formatted_amount,
                 'description' => $payment->notes ?: $subBadgeLabel,
-                'status' => 'approved',
-                'status_label' => 'Disetujui',
-                'status_badge' => 'badge badge-info',
+                'status' => $payment->status instanceof CashAdvancePaymentStatus ? $payment->status->value : (string) ($payment->status ?? 'approved'),
+                'status_label' => $payment->status_label,
+                'status_badge' => $payment->status_badge_class,
                 'model' => $payment,
                 'cash_advance_id' => $payment->cash_advance_id,
                 'saldo_akhir' => $balanceByKey['payment:'.$row->id] ?? 0,
@@ -1537,59 +1759,48 @@ class CashAdvanceService
                 $monthLabels = implode(', ', $selectedMonthKeys);
                 $paymentNotes = $notes ?: "Pelunasan Tagihan Bulan [{$monthLabels}]";
 
-                foreach ($allocatedItems->groupBy(fn (array $item): int => $item['cash_advance']->id) as $items) {
+                foreach ($allocatedItems as $item) {
+                    $allocation = (float) $item['allocation'];
+                    if ($allocation <= 0.001) {
+                        continue;
+                    }
+
                     /** @var CashAdvance $advance */
-                    $advance = $items->first()['cash_advance'];
-                    $advancePaymentSum = (float) $items->sum('allocation');
+                    $advance = $item['cash_advance'];
+                    /** @var CashAdvanceInstallment $installment */
+                    $installment = $item['installment'];
                     $paymentNumber = $this->generatePaymentNumber($paymentDate);
-                    $firstInstallmentId = $items->first()['installment']->id;
+                    $installmentMonth = Carbon::parse($installment->due_date)->translatedFormat('F Y');
+                    $itemNotes = $notes ?: "Pelunasan Tagihan Bulan {$installmentMonth}";
 
                     $payment = CashAdvancePayment::create([
                         'payment_number' => $paymentNumber,
                         'cash_advance_id' => $advance->id,
-                        'cash_advance_installment_id' => count($items) === 1 ? $firstInstallmentId : null,
+                        'cash_advance_installment_id' => $installment->id,
                         'payment_date' => $paymentDate->toDateString(),
-                        'amount' => $advancePaymentSum,
+                        'amount' => $allocation,
                         'payment_method' => $paymentMethod,
+                        'status' => CashAdvancePaymentStatus::PENDING,
                         'proof_document' => $storedProofPath,
-                        'notes' => $paymentNotes,
+                        'notes' => $itemNotes,
                         'recorded_by' => $user->id,
                     ]);
 
-                    foreach ($items as $item) {
-                        /** @var CashAdvanceInstallment $installment */
-                        $installment = $item['installment'];
-                        $newPaidAmount = round((float) $installment->paid_amount + (float) $item['allocation'], 2);
-                        $isPaid = $newPaidAmount >= ((float) $installment->amount - 0.01);
-                        $installment->update([
-                            'paid_amount' => $newPaidAmount,
-                            'status' => $isPaid ? InstallmentStatus::PAID->value : InstallmentStatus::PARTIALLY_PAID->value,
-                            'paid_at' => $isPaid ? Carbon::now() : $installment->paid_at,
-                        ]);
-
-                        $this->syncOpenPayrollLinesForInstallment($installment);
-                    }
-
-                    $newRemaining = max(0.0, round((float) $advance->remaining_amount - $advancePaymentSum, 2));
-                    $advance->update([
-                        'remaining_amount' => $newRemaining,
-                        'status' => $newRemaining <= 0.001 ? CashAdvanceStatus::PAID->value : $advance->status->value,
-                    ]);
+                    $paymentsCreated[] = $payment;
 
                     $this->logger->info(
-                        action: 'MONTHLY_PAYMENT',
+                        action: 'MONTHLY_PAYMENT_PENDING',
                         module: 'cash_advances',
-                        message: 'Cash advance monthly payment recorded',
+                        message: 'Cash advance monthly payment recorded (pending director approval)',
                         context: [
                             'cash_advance_id' => $advance->id,
                             'payment_id' => $payment->id,
-                            'payment_number' => $paymentNumber,
-                            'amount' => $advancePaymentSum,
-                            'months' => $selectedMonthKeys,
-                        ]
+                            'payment_number' => $payment->payment_number,
+                            'amount' => $allocation,
+                            'installment_id' => $installment->id,
+                            'status' => $payment->status->value,
+                        ],
                     );
-
-                    $paymentsCreated[] = $payment;
                 }
 
                 return $paymentsCreated;
