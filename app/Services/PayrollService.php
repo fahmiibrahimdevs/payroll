@@ -5,12 +5,14 @@ namespace App\Services;
 use App\Enums\CashAdvancePaymentStatus;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\EmployeeStatus;
+use App\Enums\EmploymentStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PayrollLineCategory;
 use App\Enums\PayrollLineType;
 use App\Enums\PayrollPeriodStatus;
 use App\Enums\TaxMethod;
+use App\Enums\TaxRecipientType;
 use App\Models\CashAdvance;
 use App\Models\CashAdvanceInstallment;
 use App\Models\CashAdvancePayment;
@@ -617,6 +619,7 @@ class PayrollService
             // Pull active employees with details
             $activeEmployees = Employee::query()
                 ->where('status', EmployeeStatus::ACTIVE)
+                ->where('join_date', '<=', $endDate->toDateString())
                 ->with(['detail', 'cashAdvances.installments'])
                 ->orderBy('full_name')
                 ->get();
@@ -625,6 +628,7 @@ class PayrollService
             $totalAllowances = 0;
             $totalDeductions = 0;
             $totalNet = 0;
+            $company = CompanyProfile::getProfile();
 
             foreach ($activeEmployees as $employee) {
                 $payslipNumber = $this->generatePayslipNumber($date);
@@ -682,7 +686,6 @@ class PayrollService
                     }
                 }
 
-                $company = CompanyProfile::getProfile();
                 if ($employee->detail && $company->enable_pph21) {
                     $this->recalculateItemTax($item, $company);
                     $this->recalculateItem($item);
@@ -740,8 +743,18 @@ class PayrollService
 
         $joinDate = $employee->join_date ? Carbon::parse($employee->join_date)->startOfDay() : null;
 
+        if ($joinDate && $joinDate->gt($endDate)) {
+            return [
+                'basic_salary' => 0.0,
+                'full_salary' => $fullSalary,
+                'is_prorated' => true,
+                'worked_days' => 0,
+                'total_working_days' => $totalWorkingDays,
+            ];
+        }
+
         // Prorata only applies if employee joined during this period (startDate < joinDate <= endDate)
-        if (! $joinDate || $joinDate->lte($startDate) || $joinDate->gt($endDate)) {
+        if (! $joinDate || $joinDate->lte($startDate)) {
             return [
                 'basic_salary' => $fullSalary,
                 'full_salary' => $fullSalary,
@@ -782,6 +795,10 @@ class PayrollService
 
         if (! $period->status->isEditable()) {
             throw new InvalidArgumentException('Karyawan hanya dapat ditambahkan pada periode berstatus Draf atau Revisi.');
+        }
+
+        if ($employee->join_date && $employee->join_date->gt($period->end_date)) {
+            throw new InvalidArgumentException('Karyawan belum bergabung pada periode penggajian ini.');
         }
 
         $existing = $period->items()->where('employee_id', $employee->id)->first();
@@ -1311,54 +1328,86 @@ class PayrollService
             $isPphDisabled = true;
         }
 
-        $taxResult = $taxService->calculateMonthlyTax(
-            $employee,
-            $basicSalary,
-            $currentAllowanceLines,
-            $company,
-            $month,
-            $year,
-            $isPphExplicitlyEnabled
-        );
+        $supportsMonthlyTax = $taxService->supportsMonthlyEmployeeTax($employee);
+        $currentPensionDeduction = $supportsMonthlyTax && ($month === 12 || $item->is_final_tax_period)
+            ? $this->currentPensionDeduction($item, $company, $taxService, $basicSalary, $currentAllowanceLines, $disabledSystemCodes, $enabledSystemCodes)
+            : null;
 
-        // 1. Sync Gross-Up Tax Allowance Line
-        $taxAllowanceLine = $item->lines()
-            ->where('type', PayrollLineType::ALLOWANCE)
-            ->where('category', PayrollLineCategory::TAX)
-            ->first();
+        $taxResult = $supportsMonthlyTax
+            ? $taxService->calculateMonthlyTax(
+                $employee,
+                $basicSalary,
+                $currentAllowanceLines,
+                $company,
+                $month,
+                $year,
+                $isPphExplicitlyEnabled,
+                (bool) $item->is_final_tax_period,
+                $currentPensionDeduction
+            )
+            : null;
 
-        if (! $isPphDisabled && $taxResult['tax_method'] === TaxMethod::GROSS_UP && $taxResult['tax_allowance'] > 0) {
-            if ($taxAllowanceLine) {
-                $taxAllowanceLine->update([
-                    'name' => 'Tunjangan PPh 21 (Gross-Up)',
-                    'amount' => $taxResult['tax_allowance'],
-                    'notes' => 'Tunjangan pajak otomatis skema Gross-Up',
-                ]);
+        if ($taxResult !== null) {
+            // 1. Sync Gross-Up Tax Allowance Line
+            $taxAllowanceLine = $item->lines()
+                ->where('type', PayrollLineType::ALLOWANCE)
+                ->where('category', PayrollLineCategory::TAX)
+                ->first();
+
+            if (! $isPphDisabled && $taxResult['tax_method'] === TaxMethod::GROSS_UP && $taxResult['tax_allowance'] > 0) {
+                if ($taxAllowanceLine) {
+                    $taxAllowanceLine->update([
+                        'name' => 'Tunjangan PPh 21 (Gross-Up)',
+                        'amount' => $taxResult['tax_allowance'],
+                        'notes' => 'Tunjangan pajak otomatis skema Gross-Up',
+                    ]);
+                } else {
+                    $pph21AllowanceComp = SalaryComponent::where('code', 'TUNJ_PPH21')->first();
+                    PayrollItemLine::create([
+                        'payroll_item_id' => $item->id,
+                        'salary_component_id' => $pph21AllowanceComp?->id,
+                        'name' => 'Tunjangan PPh 21 (Gross-Up)',
+                        'type' => PayrollLineType::ALLOWANCE,
+                        'category' => PayrollLineCategory::TAX,
+                        'amount' => $taxResult['tax_allowance'],
+                        'notes' => 'Tunjangan pajak otomatis skema Gross-Up',
+                    ]);
+                }
             } else {
-                $pph21AllowanceComp = SalaryComponent::where('code', 'TUNJ_PPH21')->first();
-                PayrollItemLine::create([
-                    'payroll_item_id' => $item->id,
-                    'salary_component_id' => $pph21AllowanceComp?->id,
-                    'name' => 'Tunjangan PPh 21 (Gross-Up)',
-                    'type' => PayrollLineType::ALLOWANCE,
-                    'category' => PayrollLineCategory::TAX,
-                    'amount' => $taxResult['tax_allowance'],
-                    'notes' => 'Tunjangan pajak otomatis skema Gross-Up',
-                ]);
+                $taxAllowanceLine?->delete();
             }
-        } else {
-            $taxAllowanceLine?->delete();
-        }
 
-        // 2. Sync PPh 21 Deduction Line
-        if ($isPphDisabled) {
-            if ($isPphExplicitlyDisabled || ($pphDeductionLine && $pphDeductionLine->notes === 'Nonaktif')) {
+            // 2. Sync PPh 21 Deduction Line
+            if ($isPphDisabled) {
+                if ($isPphExplicitlyDisabled || ($pphDeductionLine && $pphDeductionLine->notes === 'Nonaktif')) {
+                    $pph21Comp = SalaryComponent::where('code', 'PPH21')->first();
+                    if ($pphDeductionLine) {
+                        $pphDeductionLine->update([
+                            'name' => 'PPh 21',
+                            'amount' => 0,
+                            'notes' => 'Nonaktif',
+                        ]);
+                    } else {
+                        PayrollItemLine::create([
+                            'payroll_item_id' => $item->id,
+                            'salary_component_id' => $pph21Comp?->id,
+                            'name' => 'PPh 21',
+                            'type' => PayrollLineType::DEDUCTION,
+                            'category' => PayrollLineCategory::TAX,
+                            'amount' => 0,
+                            'notes' => 'Nonaktif',
+                        ]);
+                    }
+                } else {
+                    $pphDeductionLine?->delete();
+                }
+            } elseif ($taxResult['pph21_amount'] > 0) {
                 $pph21Comp = SalaryComponent::where('code', 'PPH21')->first();
                 if ($pphDeductionLine) {
                     $pphDeductionLine->update([
                         'name' => 'PPh 21',
-                        'amount' => 0,
-                        'notes' => 'Nonaktif',
+                        'amount' => $taxResult['pph21_amount'],
+                        'notes' => $taxResult['notes'] ?? 'Potongan PPh 21 otomatis',
                     ]);
                 } else {
                     PayrollItemLine::create([
@@ -1367,55 +1416,34 @@ class PayrollService
                         'name' => 'PPh 21',
                         'type' => PayrollLineType::DEDUCTION,
                         'category' => PayrollLineCategory::TAX,
-                        'amount' => 0,
-                        'notes' => 'Nonaktif',
+                        'amount' => $taxResult['pph21_amount'],
+                        'notes' => $taxResult['notes'] ?? 'Potongan PPh 21 otomatis',
+                    ]);
+                }
+            } elseif ($taxResult['pph21_amount'] < 0) {
+                $pph21Comp = SalaryComponent::where('code', 'PPH21')->first();
+                $refundName = 'PPh 21 (Lebih Bayar)';
+                $refundNotes = 'Kelebihan potong PPh 21 masa sebelumnya dikembalikan ke karyawan';
+                if ($pphDeductionLine) {
+                    $pphDeductionLine->update([
+                        'name' => $refundName,
+                        'amount' => $taxResult['pph21_amount'],
+                        'notes' => $refundNotes,
+                    ]);
+                } else {
+                    PayrollItemLine::create([
+                        'payroll_item_id' => $item->id,
+                        'salary_component_id' => $pph21Comp?->id,
+                        'name' => $refundName,
+                        'type' => PayrollLineType::DEDUCTION,
+                        'category' => PayrollLineCategory::TAX,
+                        'amount' => $taxResult['pph21_amount'],
+                        'notes' => $refundNotes,
                     ]);
                 }
             } else {
                 $pphDeductionLine?->delete();
             }
-        } elseif ($taxResult['pph21_amount'] > 0) {
-            $pph21Comp = SalaryComponent::where('code', 'PPH21')->first();
-            if ($pphDeductionLine) {
-                $pphDeductionLine->update([
-                    'name' => 'PPh 21',
-                    'amount' => $taxResult['pph21_amount'],
-                    'notes' => $taxResult['notes'] ?? 'Potongan PPh 21 otomatis',
-                ]);
-            } else {
-                PayrollItemLine::create([
-                    'payroll_item_id' => $item->id,
-                    'salary_component_id' => $pph21Comp?->id,
-                    'name' => 'PPh 21',
-                    'type' => PayrollLineType::DEDUCTION,
-                    'category' => PayrollLineCategory::TAX,
-                    'amount' => $taxResult['pph21_amount'],
-                    'notes' => $taxResult['notes'] ?? 'Potongan PPh 21 otomatis',
-                ]);
-            }
-        } elseif ($taxResult['pph21_amount'] < 0) {
-            $pph21Comp = SalaryComponent::where('code', 'PPH21')->first();
-            $refundName = 'PPh 21 (Lebih Bayar)';
-            $refundNotes = 'Kelebihan potong PPh 21 Jan-Nov dikembalikan ke karyawan';
-            if ($pphDeductionLine) {
-                $pphDeductionLine->update([
-                    'name' => $refundName,
-                    'amount' => $taxResult['pph21_amount'],
-                    'notes' => $refundNotes,
-                ]);
-            } else {
-                PayrollItemLine::create([
-                    'payroll_item_id' => $item->id,
-                    'salary_component_id' => $pph21Comp?->id,
-                    'name' => $refundName,
-                    'type' => PayrollLineType::DEDUCTION,
-                    'category' => PayrollLineCategory::TAX,
-                    'amount' => $taxResult['pph21_amount'],
-                    'notes' => $refundNotes,
-                ]);
-            }
-        } else {
-            $pphDeductionLine?->delete();
         }
 
         // 3. Sync BPJS Employee Deductions (BPJS Kesehatan 1%, JHT 2%, JP 1%) based on Gaji Kotor
@@ -1591,17 +1619,100 @@ class PayrollService
         }
 
         // 4. Update snapshot columns on PayrollItem
-        $item->update([
-            'tax_method' => $taxResult['tax_method'],
-            'ptkp_status' => $taxResult['ptkp_status'],
-            'ter_category' => $taxResult['ter_category'],
-            'ter_rate' => $taxResult['ter_rate'],
-            'taxable_gross' => $taxResult['taxable_gross'],
-            'tax_allowance' => $isPphDisabled ? 0 : ($taxResult['tax_method'] === TaxMethod::GROSS_UP ? $taxResult['tax_allowance'] : 0),
-            'pph21_amount' => $isPphDisabled ? 0 : $taxResult['pph21_amount'],
-        ]);
+        if ($taxResult !== null) {
+            $item->update([
+                'tax_method' => $taxResult['tax_method'],
+                'tax_recipient_type' => $employee->detail?->tax_recipient_type
+                    ?? ($employee->employment_status === EmploymentStatus::TETAP ? TaxRecipientType::MonthlyEmployee : null),
+                'ptkp_status' => $taxResult['ptkp_status'],
+                'ter_category' => $taxResult['ter_category'],
+                'ter_rate' => $taxResult['ter_rate'],
+                'taxable_gross' => $taxResult['taxable_gross'],
+                'tax_allowance' => $isPphDisabled ? 0 : ($taxResult['tax_method'] === TaxMethod::GROSS_UP ? $taxResult['tax_allowance'] : 0),
+                'pph21_amount' => $isPphDisabled ? 0 : $taxResult['pph21_amount'],
+            ]);
+        } else {
+            $item->update([
+                'tax_recipient_type' => $employee->detail?->tax_recipient_type,
+            ]);
+        }
 
         return $item;
+    }
+
+    /**
+     * Determine the employee JHT and JP amounts that will actually be deducted.
+     *
+     * @param  Collection<int, PayrollItemLine>  $allowanceLines
+     * @param  array<string>|null  $disabledSystemCodes
+     * @param  array<string>|null  $enabledSystemCodes
+     */
+    protected function currentPensionDeduction(
+        PayrollItem $item,
+        CompanyProfile $company,
+        TaxCalculationService $taxService,
+        float $basicSalary,
+        Collection $allowanceLines,
+        ?array $disabledSystemCodes,
+        ?array $enabledSystemCodes
+    ): float {
+        $bpjs = $taxService->calculateBpjsBreakdown($basicSalary + (float) $allowanceLines->sum('amount'), $company);
+        $existingLines = $item->lines()
+            ->where('type', PayrollLineType::DEDUCTION)
+            ->where('category', PayrollLineCategory::BPJS)
+            ->get();
+        $total = 0.0;
+
+        foreach (['BPJS_JHT' => 'bpjs_jht', 'BPJS_JP' => 'bpjs_jp'] as $code => $key) {
+            $line = $existingLines->first(function (PayrollItemLine $line) use ($key) {
+                $name = strtolower(trim($line->name));
+
+                return $key === 'bpjs_jht'
+                    ? str_starts_with($name, 'bpjs jht')
+                    : str_starts_with($name, 'bpjs pensiun') || str_starts_with($name, 'bpjs jp');
+            });
+            $enabled = in_array($code, $enabledSystemCodes ?? [], true)
+                || (! in_array($code, $disabledSystemCodes ?? [], true)
+                    && $line?->notes !== 'Nonaktif'
+                    && $company->include_bpjs_in_tax);
+
+            if ($enabled) {
+                $total += (float) $bpjs['employee'][$key];
+            }
+        }
+
+        return $total;
+    }
+
+    /**
+     * Mark an earlier month as the employee's final PPh 21 period.
+     */
+    public function setFinalTaxPeriod(PayrollItem $item, bool $isFinal, User $user): PayrollItem
+    {
+        $period = $item->payrollPeriod;
+        Gate::forUser($user)->authorize('update', $period);
+
+        if ((! $period->status->isEditable() && ! $item->isRejected()) || $period->month === 12) {
+            throw new InvalidArgumentException('Masa pajak terakhir hanya dapat diubah pada slip draf/revisi sebelum Desember.');
+        }
+
+        if ($isFinal && PayrollItem::query()
+            ->where('employee_id', $item->employee_id)
+            ->whereHas('payrollPeriod', function (Builder $query) use ($period) {
+                $query->where('year', $period->year)
+                    ->where('month', '>', $period->month)
+                    ->where('status', PayrollPeriodStatus::PAID);
+            })->exists()) {
+            throw new InvalidArgumentException('Sudah ada payroll berikutnya yang dibayar untuk karyawan ini pada tahun yang sama.');
+        }
+
+        return DB::transaction(function () use ($item, $isFinal) {
+            $item->update(['is_final_tax_period' => $isFinal]);
+            $this->recalculateItemTax($item);
+            $this->recalculateItem($item);
+
+            return $item->fresh();
+        });
     }
 
     /**
@@ -1713,7 +1824,7 @@ class PayrollService
     /**
      * Submit a draft period to Direktur for approval.
      */
-    public function submitPeriod(PayrollPeriod $period, User $user, bool $requireVerification = false): PayrollPeriod
+    public function submitPeriod(PayrollPeriod $period, User $user): PayrollPeriod
     {
         Gate::forUser($user)->authorize('submit', $period);
 
@@ -1725,11 +1836,9 @@ class PayrollService
             throw new InvalidArgumentException('Periode penggajian tidak memiliki karyawan.');
         }
 
-        if ($requireVerification) {
-            $unverifiedCount = $period->items()->whereNull('verified_at')->count();
-            if ($unverifiedCount > 0) {
-                throw new InvalidArgumentException("Terdapat {$unverifiedCount} karyawan yang masih berstatus Draf dan belum diverifikasi HRD.");
-            }
+        $unverifiedCount = $period->items()->whereNull('verified_at')->count();
+        if ($unverifiedCount > 0) {
+            throw new InvalidArgumentException("Terdapat {$unverifiedCount} karyawan yang masih berstatus Draf dan belum diverifikasi HRD.");
         }
 
         $period->update([

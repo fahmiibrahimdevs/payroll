@@ -535,6 +535,18 @@ class Show extends Component
         return $this->period->items()->count();
     }
 
+    public function getPaidItemsCountProperty(): int
+    {
+        return $this->period->items()->where('payment_status', 'paid')->count();
+    }
+
+    public function getPaymentProgressPercentProperty(): int
+    {
+        $total = $this->totalItemsCount;
+
+        return $total > 0 ? (int) round(($this->paidItemsCount / $total) * 100) : 0;
+    }
+
     public function getAllVerifiedProperty(): bool
     {
         $total = $this->totalItemsCount;
@@ -552,11 +564,10 @@ class Show extends Component
     /**
      * Submit period for approval (Admin).
      */
+    #[On('submit-period-confirmed')]
     public function submitForApproval(PayrollService $service): void
     {
         try {
-            // Ensure all items are marked verified by current user upon submission
-            $service->verifyAllItems($this->period, auth()->user());
             $service->submitPeriod($this->period, auth()->user());
             $this->refreshPeriod();
 
@@ -577,6 +588,7 @@ class Show extends Component
     /**
      * Approve period (Direktur).
      */
+    #[On('approve-period-confirmed')]
     public function approvePeriod(PayrollService $service): void
     {
         try {
@@ -1115,6 +1127,7 @@ class Show extends Component
         }
     }
 
+    #[On('approve-all-items-confirmed')]
     public function approveAll(PayrollService $service): void
     {
         try {

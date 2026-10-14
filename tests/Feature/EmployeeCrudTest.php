@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
 use App\Enums\Gender;
+use App\Enums\TaxRecipientType;
 use App\Livewire\Employees\Index;
 use App\Models\CompanyProfile;
 use App\Models\Department;
@@ -52,6 +53,7 @@ class EmployeeCrudTest extends TestCase
             ->set('form.department_id', $department->id)
             ->set('form.position_id', $position->id)
             ->set('form.employment_status', EmploymentStatus::TETAP->value)
+            ->set('form.tax_recipient_type', TaxRecipientType::MonthlyEmployee->value)
             ->set('form.status', EmployeeStatus::ACTIVE->value)
             ->set('form.join_date', '2026-01-15')
             ->set('form.basic_salary', 8500000)
@@ -112,6 +114,7 @@ class EmployeeCrudTest extends TestCase
             ->set('form.full_name', 'Siti Nurhaliza')
             ->set('form.join_date', '2026-02-01')
             ->set('form.basic_salary', 7000000)
+            ->set('form.tax_recipient_type', TaxRecipientType::MonthlyEmployee->value)
             ->set('form.gender', Gender::FEMALE->value)
             ->set('form.photo', $photo)
             ->set('form.curriculum_vitae', $cv)
@@ -133,9 +136,11 @@ class EmployeeCrudTest extends TestCase
             'employee_code' => 'EMP-2026-0010',
             'email' => 'old.email@test.com',
             'phone' => '0811111111',
+            'tax_recipient_type' => TaxRecipientType::MonthlyEmployee->value,
         ])->create([
             'full_name' => 'Budi Santoso',
             'basic_salary' => 6000000,
+            'employment_status' => EmploymentStatus::TETAP->value,
             'status' => EmployeeStatus::ACTIVE,
         ]);
 
@@ -293,9 +298,12 @@ class EmployeeCrudTest extends TestCase
     public function test_total_cash_receipt_is_protected_and_cannot_be_manipulated_via_form(): void
     {
         $user = $this->createAdminUser();
-        $employee = Employee::factory()->withDetail()->create([
+        $employee = Employee::factory()->withDetail([
+            'tax_recipient_type' => TaxRecipientType::MonthlyEmployee->value,
+        ])->create([
             'full_name' => 'Testing Kasbon Readonly',
             'total_cash_receipt' => 1500000,
+            'employment_status' => EmploymentStatus::TETAP->value,
         ]);
 
         $this->actingAs($user);
@@ -431,6 +439,7 @@ class EmployeeCrudTest extends TestCase
             ->assertSet('form.email', 'budi.santoso.gunawan@namaperusahaan.com')
             ->set('form.department_id', $department->id)
             ->set('form.position_id', $position->id)
+            ->set('form.tax_recipient_type', TaxRecipientType::MonthlyEmployee->value)
             ->set('form.join_date', '2026-02-01')
             ->set('form.basic_salary', 7000000)
             ->call('store')

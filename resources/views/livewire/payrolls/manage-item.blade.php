@@ -176,6 +176,22 @@
         </div>
     @endif
 
+    @if ($taxConfigurationWarning !== '')
+        <div class="bd-callout bd-callout-warning mb-4" role="alert">
+            <div class="d-flex align-items-start">
+                <div class="bd-callout-icon mr-3 mt-0.5">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="bd-callout-title">PPh 21 Belum Dihitung Otomatis</div>
+                    <div class="bd-callout-desc">
+                        {{ $taxConfigurationWarning }} Periksa klasifikasi pajak pada data karyawan. Nilai PPh 21 yang sudah ada pada slip tidak diubah otomatis.
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <!-- Main Layout: 1 Row (Card 1: col-lg-3, Card 2: col-lg-9) -->
     <div class="row align-items-start">
         <!-- ================= CARD 1: INFORMASI KARYAWAN & RINGKASAN SLIP GAJI (COL-3) ================= -->
@@ -743,6 +759,17 @@
             <div class="card card-payroll-table mb-4 shadow-sm" style="border-radius: 12px; border: 1px solid #e2e8f0; background: #ffffff;">
                 <div class="card-header" style="border-top-left-radius: 12px; border-top-right-radius: 12px;">
                     <h4>Potongan</h4>
+                    @if ((int) ($item->payrollPeriod->month ?? 1) < 12)
+                        <div class="card-header-action">
+                            @if ($this->isEditable)
+                                <button type="button" wire:click="toggleFinalTaxPeriod" wire:loading.attr="disabled" wire:target="toggleFinalTaxPeriod" class="btn btn-sm {{ $item->is_final_tax_period ? 'btn-warning' : 'btn-outline-secondary' }}">
+                                    {{ $item->is_final_tax_period ? 'Masa pajak terakhir: Ya' : 'Tandai masa pajak terakhir' }}
+                                </button>
+                            @elseif ($item->is_final_tax_period)
+                                <span class="badge badge-info">Masa pajak terakhir</span>
+                            @endif
+                        </div>
+                    @endif
                 </div>
 
                 <div class="card-body p-0">
@@ -868,7 +895,7 @@
                                             $deductionCounter++;
                                             $isEnabled = $row['is_enabled'] ?? true;
                                             $rowTaxAmt = (float) ($row['amount'] ?? 0);
-                                            $isDecember = ((int) ($item->payrollPeriod->month ?? 1)) === 12;
+                                            $isFinalTaxPeriod = ((int) ($item->payrollPeriod->month ?? 1)) === 12 || (bool) $item->is_final_tax_period;
                                         @endphp
                                         <tr wire:key="deduction-row-tax-{{ $index }}" class="{{ ! $isEnabled ? 'payroll-row-disabled' : '' }}">
                                             <td class="text-center {{ $isEnabled ? 'text-muted' : 'payroll-text-disabled' }} align-middle !px-3 !py-2.5" style="font-size: 12.5px;">{{ $deductionCounter }}</td>
@@ -876,7 +903,7 @@
                                                 <div class="{{ $isEnabled ? 'text-dark' : 'payroll-text-disabled' }} d-flex align-items-center" style="font-weight: 500; font-size: 13px;">
                                                     {{ $row['name'] }}
                                                     @if ($isEnabled)
-                                                        @if ($isDecember)
+                                                        @if ($isFinalTaxPeriod)
                                                             @if ($rowTaxAmt < 0)
                                                                 <span class="badge badge-light border text-success ml-2 text-xs" style="font-weight: 500;">Lebih Bayar (Dikembalikan)</span>
                                                             @else

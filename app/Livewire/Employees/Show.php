@@ -330,6 +330,10 @@ class Show extends Component
 
     public function render(): View
     {
+        if ($this->activeTab === 'riwayat-gaji') {
+            $this->employee->loadMissing(['salaryHistories.changer']);
+        }
+
         return view('livewire.employees.show', [
             'salaryAdjustmentTypes' => collect(SalaryAdjustmentType::cases())
                 ->filter(fn ($type) => $type !== SalaryAdjustmentType::INITIAL)

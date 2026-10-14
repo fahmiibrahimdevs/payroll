@@ -219,6 +219,15 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
+                                            <div class="emp-tile-icon"><i class="fas fa-file-invoice-dollar text-primary"></i></div>
+                                            <span>Jenis Pajak Pegawai</span>
+                                        </div>
+                                        <div class="emp-tile-right">
+                                            {{ $selectedEmployee->detail?->tax_recipient_type?->label() ?? 'Belum diklasifikasikan' }}
+                                        </div>
+                                    </div>
+                                    <div class="emp-tile-row">
+                                        <div class="emp-tile-left">
                                             <div class="emp-tile-icon"><i class="fas fa-id-card text-primary"></i></div>
                                             <span>NIK KTP</span>
                                         </div>

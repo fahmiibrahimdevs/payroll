@@ -6,6 +6,7 @@ use App\Enums\Gender;
 use App\Enums\MaritalStatus;
 use App\Enums\PtkpStatus;
 use App\Enums\TaxMethod;
+use App\Enums\TaxRecipientType;
 use Database\Factories\EmployeeDetailFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -39,6 +40,7 @@ class EmployeeDetail extends Model
         'dependents_count',
         'ptkp_status',
         'tax_method',
+        'tax_recipient_type',
         'has_npwp',
         'npwp_number',
         'nik',
@@ -60,6 +62,7 @@ class EmployeeDetail extends Model
             'dependents_count' => 'integer',
             'ptkp_status' => PtkpStatus::class,
             'tax_method' => TaxMethod::class,
+            'tax_recipient_type' => TaxRecipientType::class,
             'has_npwp' => 'boolean',
         ];
     }

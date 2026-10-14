@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\CashAdvancePaymentStatus;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\EmployeeStatus;
+use App\Enums\EmploymentStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\MaritalStatus;
 use App\Enums\PaymentMethod;
@@ -17,6 +18,7 @@ use App\Enums\SalaryCalculationType;
 use App\Enums\SalaryComponentCategory;
 use App\Enums\SalaryComponentType;
 use App\Enums\TaxMethod;
+use App\Enums\TaxRecipientType;
 use App\Livewire\CompanyProfile\Index as CompanyProfileIndex;
 use App\Livewire\Payrolls\Index as PayrollIndex;
 use App\Livewire\Payrolls\ManageItem;
@@ -365,6 +367,7 @@ class PayrollTest extends TestCase
         ], $admin);
 
         // Admin submits
+        $service->verifyAllItems($period, $admin);
         $service->submitPeriod($period, $admin);
 
         // Direktur approves
@@ -430,6 +433,7 @@ class PayrollTest extends TestCase
             'name' => 'Penggajian Periode Januari 2027',
         ], $admin);
 
+        $service->verifyAllItems($period, $admin);
         $service->submitPeriod($period, $admin);
 
         $this->actingAs($director);
@@ -1118,7 +1122,7 @@ class PayrollTest extends TestCase
             });
     }
 
-    public function test_payroll_show_has_manage_components_button_for_admin_and_director_and_no_slip_button(): void
+    public function test_payroll_show_labels_admin_edit_and_director_review_actions_separately(): void
     {
         $admin = $this->createAdminUser();
         $director = $this->createDirectorUser();
@@ -1156,7 +1160,7 @@ class PayrollTest extends TestCase
         $this->actingAs($director);
         $responseDirector = $this->get(route('payrolls.show', $period));
         $responseDirector->assertOk();
-        $responseDirector->assertSee('Kelola Komponen Gaji');
+        $responseDirector->assertSee('Tinjau Slip');
         $responseDirector->assertSee(route('payrolls.items.edit', [$period, $item]));
         $responseDirector->assertDontSee('> Slip</button>', false);
 
@@ -1559,7 +1563,7 @@ class PayrollTest extends TestCase
         $this->assertCount($initialRowCount, $lw->get('allowanceRows'));
     }
 
-    public function test_rejected_payroll_item_is_editable_during_submitted_period(): void
+    public function test_rejected_payroll_item_can_be_edited_by_admin_but_not_director(): void
     {
         $admin = $this->createAdminUser();
         $director = $this->createDirectorUser();
@@ -1578,6 +1582,7 @@ class PayrollTest extends TestCase
         ], $admin);
 
         // Submit the period
+        $service->verifyAllItems($period, $admin);
         $service->submitPeriod($period, $admin);
         $this->assertEquals(PayrollPeriodStatus::SUBMITTED, $period->fresh()->status);
 
@@ -1606,15 +1611,48 @@ class PayrollTest extends TestCase
             ->assertDontSee('Periode penggajian ini berstatus Menunggu Approval sehingga komponen gaji tidak dapat diubah kembali')
             ->assertSee('Simpan Komponen Gaji');
 
-        // Test as Director
+        // Directors can review the rejection but edits remain with the Admin.
         $this->actingAs($director);
         $lwDir = Livewire::test(PayrollManageItem::class, [
             'period' => $period,
             'item' => $item,
         ]);
-        $this->assertTrue($lwDir->get('isEditable'));
+        $this->assertFalse($lwDir->get('isEditable'));
         $lwDir->assertSee('Catatan Revisi dari Direktur')
-            ->assertSee('Simpan Komponen Gaji');
+            ->assertDontSee('Simpan Komponen Gaji');
+    }
+
+    public function test_submit_confirmation_event_requires_prior_hrd_verification(): void
+    {
+        $admin = $this->createAdminUser();
+        $employee = Employee::factory()->active()->create([
+            'employment_status' => EmploymentStatus::TETAP,
+            'join_date' => '2025-01-01',
+        ]);
+        $period = app(PayrollService::class)->createPeriod([
+            'year' => 2027,
+            'month' => 9,
+            'name' => 'Penggajian Periode September 2027',
+        ], $admin);
+        $item = $period->items()->where('employee_id', $employee->id)->firstOrFail();
+
+        $this->actingAs($admin);
+
+        Livewire::test(PayrollShow::class, ['period' => $period])
+            ->dispatch('submit-period-confirmed')
+            ->assertDispatched('swal:alert');
+
+        $this->assertSame(PayrollPeriodStatus::DRAFT, $period->fresh()->status);
+        $this->assertNull($item->fresh()->verified_at);
+
+        app(PayrollService::class)->verifyAllItems($period->fresh(), $admin);
+
+        Livewire::test(PayrollShow::class, ['period' => $period->fresh()])
+            ->dispatch('submit-period-confirmed')
+            ->assertDispatched('swal:alert');
+
+        $this->assertSame(PayrollPeriodStatus::SUBMITTED, $period->fresh()->status);
+        $this->assertNotNull($item->fresh()->verified_at);
     }
 
     public function test_cash_advance_deduction_reflects_remaining_unpaid_balance_after_partial_payment(): void
@@ -1992,6 +2030,22 @@ class PayrollTest extends TestCase
             'approved_at' => now(),
         ]);
 
+        $secondEmployee = Employee::factory()->create([
+            'status' => EmployeeStatus::ACTIVE,
+        ]);
+        PayrollItem::create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $secondEmployee->id,
+            'payslip_number' => 'SLP-TEST-PAYER-02',
+            'basic_salary' => 4500000,
+            'total_allowances' => 0,
+            'total_deductions' => 0,
+            'net_salary' => 4500000,
+            'approval_status' => 'approved',
+            'approved_by' => $admin->id,
+            'approved_at' => now(),
+        ]);
+
         $service = app(PayrollService::class);
         $service->markItemAsPaid($item, [
             'payment_date' => '2026-10-31',
@@ -2009,6 +2063,7 @@ class PayrollTest extends TestCase
         $this->assertEquals($admin->name, $item->payer->name);
 
         Livewire::test(Show::class, ['period' => $period])
+            ->assertSee('1 dari 2 slip sudah dibayar (50%).')
             ->call('openPaymentDetailModal', $item->id)
             ->assertSeeHtml(e($admin->name));
     }
@@ -2558,6 +2613,7 @@ class PayrollTest extends TestCase
 
         $emp = Employee::factory()->create([
             'join_date' => Carbon::now()->subMonths(6),
+            'employment_status' => EmploymentStatus::TETAP,
             'status' => EmployeeStatus::ACTIVE,
             'basic_salary' => 10_000_000,
         ]);
@@ -2568,6 +2624,7 @@ class PayrollTest extends TestCase
             'dependents_count' => 0,
             'ptkp_status' => PtkpStatus::TK_0,
             'tax_method' => TaxMethod::GROSS,
+            'tax_recipient_type' => TaxRecipientType::MonthlyEmployee,
         ]);
 
         $service = app(PayrollService::class);
@@ -2730,6 +2787,7 @@ class PayrollTest extends TestCase
         $this->assertEquals(300000.0, (float) $caLine->amount);
 
         // Submit and Direktur approves period
+        $service->verifyAllItems($period, $admin);
         $service->submitPeriod($period, $admin);
         $this->actingAs($direktur);
         $service->approvePeriod($period, $direktur);
@@ -2795,6 +2853,7 @@ class PayrollTest extends TestCase
             ->assertDontSee('wire:model.live="selectAll"', false);
 
         // Admin submits to Direktur (Tahap 2 done -> SUBMITTED)
+        $service->verifyAllItems($period, $admin);
         $service->submitPeriod($period, $admin);
         $period->refresh();
         $this->assertEquals(PayrollPeriodStatus::SUBMITTED, $period->status);
@@ -2822,6 +2881,10 @@ class PayrollTest extends TestCase
     {
         $admin = $this->createAdminUser();
         $this->actingAs($admin);
+        Employee::factory()->active()->create([
+            'employment_status' => EmploymentStatus::TETAP,
+            'join_date' => '2025-01-01',
+        ]);
 
         $service = app(PayrollService::class);
         $period = $service->createPeriod([
@@ -2863,6 +2926,10 @@ class PayrollTest extends TestCase
     {
         $admin = $this->createAdminUser();
         $this->actingAs($admin);
+        Employee::factory()->active()->create([
+            'employment_status' => EmploymentStatus::TETAP,
+            'join_date' => '2025-01-01',
+        ]);
 
         $service = app(PayrollService::class);
         $period = $service->createPeriod([
@@ -2905,6 +2972,10 @@ class PayrollTest extends TestCase
     {
         $admin = $this->createAdminUser();
         $this->actingAs($admin);
+        Employee::factory()->active()->create([
+            'employment_status' => EmploymentStatus::TETAP,
+            'join_date' => '2025-01-01',
+        ]);
 
         $service = app(PayrollService::class);
         $period = $service->createPeriod([

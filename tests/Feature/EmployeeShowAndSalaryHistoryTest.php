@@ -92,6 +92,16 @@ class EmployeeShowAndSalaryHistoryTest extends TestCase
     {
         $admin = $this->createAdminUser();
         $employee = $this->createEmployeeWithDetail();
+        $employee->salaryHistories()->create([
+            'previous_salary' => 6000000,
+            'new_salary' => 6500000,
+            'change_amount' => 500000,
+            'percentage_change' => 8.33,
+            'effective_date' => '2026-10-01',
+            'type' => SalaryAdjustmentType::ANNUAL_ADJUSTMENT,
+            'reason' => 'Review gaji tahunan',
+            'changed_by' => $admin->id,
+        ]);
 
         $this->actingAs($admin);
 
@@ -102,7 +112,8 @@ class EmployeeShowAndSalaryHistoryTest extends TestCase
             ->assertSee('Data Pribadi')
             ->call('setTab', 'riwayat-gaji')
             ->assertSet('activeTab', 'riwayat-gaji')
-            ->assertSee('Riwayat Kenaikan');
+            ->assertSee('Riwayat Kenaikan')
+            ->assertSee($admin->name);
     }
 
     public function test_admin_can_record_salary_adjustment_and_it_updates_basic_salary(): void

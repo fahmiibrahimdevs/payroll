@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PtkpStatus;
 use App\Enums\TaxMethod;
+use App\Enums\TaxRecipientType;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,8 @@ class PayrollItem extends Model
         'total_deductions',
         'net_salary',
         'tax_method',
+        'tax_recipient_type',
+        'is_final_tax_period',
         'ptkp_status',
         'ter_category',
         'ter_rate',
@@ -57,6 +60,8 @@ class PayrollItem extends Model
             'total_deductions' => 'decimal:2',
             'net_salary' => 'decimal:2',
             'tax_method' => TaxMethod::class,
+            'tax_recipient_type' => TaxRecipientType::class,
+            'is_final_tax_period' => 'boolean',
             'ptkp_status' => PtkpStatus::class,
             'ter_rate' => 'decimal:4',
             'taxable_gross' => 'decimal:2',

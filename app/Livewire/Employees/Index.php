@@ -279,7 +279,7 @@ class Index extends Component
                     'employee_id', 'employee_code', 'gender', 'birth_place', 'birth_date',
                     'address', 'phone', 'email', 'bank_name', 'bank_account_number',
                     'bank_account_name', 'curriculum_vitae', 'marital_status', 'dependents_count',
-                    'ptkp_status', 'tax_method', 'has_npwp', 'npwp_number', 'nik',
+                    'ptkp_status', 'tax_method', 'tax_recipient_type', 'has_npwp', 'npwp_number', 'nik',
                     'bpjs_kesehatan_number', 'bpjs_ketenagakerjaan_number',
                 ]
                 : ['employee_id', 'employee_code', 'gender', 'birth_place', 'birth_date', 'phone', 'email', 'address'];

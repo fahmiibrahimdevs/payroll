@@ -2,14 +2,20 @@
 
 namespace App\Services;
 
+use App\Enums\EmploymentStatus;
 use App\Enums\MaritalStatus;
+use App\Enums\PayrollLineCategory;
+use App\Enums\PayrollLineType;
+use App\Enums\PayrollPeriodStatus;
 use App\Enums\PtkpStatus;
 use App\Enums\TaxMethod;
+use App\Enums\TaxRecipientType;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\PayrollItem;
 use App\Models\SalaryComponent;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 
 class TaxCalculationService
 {
@@ -33,6 +39,18 @@ class TaxCalculationService
 
     public const MAX_BIAYA_JABATAN_ANNUAL = 6_000_000.0;
 
+    public function supportsMonthlyEmployeeTax(Employee $employee): bool
+    {
+        if ($employee->employment_status === EmploymentStatus::MAGANG) {
+            return false;
+        }
+
+        $recipientType = $employee->detail?->tax_recipient_type;
+
+        return $recipientType === TaxRecipientType::MonthlyEmployee
+            || ($recipientType === null && $employee->employment_status === EmploymentStatus::TETAP);
+    }
+
     /**
      * Calculate monthly PPh 21 for an employee based on PP 58/2023 & PMK 168/2023.
      *
@@ -51,7 +69,9 @@ class TaxCalculationService
         ?CompanyProfile $company = null,
         int $month = 1,
         int $year = 2026,
-        bool $forceEnable = false
+        bool $forceEnable = false,
+        bool $isFinalTaxPeriod = false,
+        ?float $currentPensionDeduction = null
     ): array {
         $company = $company ?? CompanyProfile::getProfile();
 
@@ -68,8 +88,13 @@ class TaxCalculationService
                 'pph21_amount' => 0.0,
                 'bpjs_taxable_insurance' => 0.0,
                 'is_december' => $month === 12,
+                'is_final_tax_period' => $month === 12 || $isFinalTaxPeriod,
                 'notes' => 'PPh 21 dinonaktifkan secara global di pengaturan perusahaan.',
             ];
+        }
+
+        if (! $this->supportsMonthlyEmployeeTax($employee)) {
+            throw new InvalidArgumentException('Jenis penerima penghasilan untuk pajak belum didukung atau belum diklasifikasikan. Atur dahulu pada data karyawan.');
         }
 
         $detail = $employee->detail;
@@ -112,15 +137,17 @@ class TaxCalculationService
         // 4. Base monthly gross for tax
         $baseMonthlyCash = $basicSalary + $taxableCashAllowances + $taxableInsurance;
 
-        // 5. Check if December (Month 12) -> Annual Reconciliation
-        if ($month === 12) {
-            return $this->calculateDecemberReconciliation(
+        // The last tax period may occur before December when employment ends.
+        if ($month === 12 || $isFinalTaxPeriod) {
+            return $this->calculateFinalPeriodReconciliation(
                 $employee,
                 $baseMonthlyCash,
                 $taxMethod,
                 $ptkpStatus,
                 $terCategory,
                 $bpjs,
+                $currentPensionDeduction,
+                $month,
                 $year,
                 $company
             );
@@ -196,6 +223,7 @@ class TaxCalculationService
             'pph21_amount' => $tax,
             'bpjs_taxable_insurance' => $taxableInsurance,
             'is_december' => false,
+            'is_final_tax_period' => false,
             'is_non_npwp_penalized' => $isNonNpwpPenalized,
             'notes' => $note,
         ];
@@ -230,51 +258,119 @@ class TaxCalculationService
     }
 
     /**
-     * Calculate December Annual Tax Reconciliation (Pasal 17 UU HPP).
+     * Reconcile PPh 21 in December or the employee's earlier final tax period.
      */
-    protected function calculateDecemberReconciliation(
+    protected function calculateFinalPeriodReconciliation(
         Employee $employee,
-        float $decemberGross,
+        float $finalPeriodGross,
         TaxMethod $taxMethod,
         PtkpStatus $ptkpStatus,
         string $terCategory,
         array $bpjs,
+        ?float $currentPensionDeduction,
+        int $month,
         int $year,
         CompanyProfile $company
     ): array {
-        // Query previous months (Jan - Nov) for this employee in the same year
         $previousItems = PayrollItem::query()
             ->where('employee_id', $employee->id)
-            ->whereHas('payrollPeriod', function ($q) use ($year) {
+            ->whereHas('payrollPeriod', function ($q) use ($year, $month) {
                 $q->where('year', $year)
-                    ->where('month', '<', 12);
+                    ->where('month', '<', $month);
             })
-            ->get();
+            ->with(['payrollPeriod', 'lines.salaryComponent'])
+            ->get(['id', 'payroll_period_id', 'taxable_gross', 'pph21_amount']);
 
-        $taxPaidJanToNov = (float) $previousItems->sum('pph21_amount');
-        $grossJanToNov = (float) $previousItems->sum('taxable_gross');
+        if ($previousItems->contains(fn (PayrollItem $item) => $item->payrollPeriod?->status !== PayrollPeriodStatus::PAID)) {
+            throw new InvalidArgumentException('Payroll masa sebelumnya harus berstatus dibayar sebelum rekonsiliasi PPh 21 masa terakhir.');
+        }
 
-        // Annualized Gross
-        $annualGross = $grossJanToNov + $decemberGross;
+        $previousTaxPaid = (float) $previousItems->sum('pph21_amount');
+        $previousGross = (float) $previousItems->sum('taxable_gross');
+        $monthsWorked = $previousItems->count() + 1;
+        $jobExpenseCap = min(self::MAX_BIAYA_JABATAN_ANNUAL, $monthsWorked * self::MAX_BIAYA_JABATAN_MONTHLY);
+        $annualPensionDeduction = $this->sumPreviousPensionContributions($previousItems)
+            + ($currentPensionDeduction ?? ((float) $bpjs['employee']['bpjs_jht'] + (float) $bpjs['employee']['bpjs_jp']));
+        $isNonNpwpPenalized = $this->isSubjectToNonNpwpPenalty($employee);
 
-        // Biaya Jabatan (5% max 6jt/year)
-        $biayaJabatan = min($annualGross * self::BIAYA_JABATAN_RATE, self::MAX_BIAYA_JABATAN_ANNUAL);
+        $taxAllowance = 0.0;
+        $reconciliation = [];
+        $finalPeriodTax = 0.0;
 
-        // Iuran Pensiun / BPJS JHT & JP yang dibayar karyawan setahun
-        $annualEmployeeJht = (float) ($bpjs['employee']['bpjs_jht'] * 12);
-        $annualEmployeeJp = (float) ($bpjs['employee']['bpjs_jp'] * 12);
-        $annualPensionDeduction = $annualEmployeeJht + $annualEmployeeJp;
+        for ($attempt = 0; $attempt < 100; $attempt++) {
+            $annualGross = $previousGross + $finalPeriodGross + $taxAllowance;
+            $reconciliation = $this->calculateAnnualTax(
+                $annualGross,
+                $jobExpenseCap,
+                $annualPensionDeduction,
+                $ptkpStatus,
+                $isNonNpwpPenalized
+            );
+            $finalPeriodTax = round($reconciliation['total_annual_tax'] - $previousTaxPaid);
+            $requiredAllowance = $taxMethod === TaxMethod::GROSS_UP ? max(0.0, $finalPeriodTax) : 0.0;
 
-        // Net Annual Income
+            if ($requiredAllowance === $taxAllowance) {
+                break;
+            }
+
+            $taxAllowance = $requiredAllowance;
+        }
+
+        if ($taxMethod === TaxMethod::GROSS_UP && $taxAllowance !== max(0.0, $finalPeriodTax)) {
+            throw new InvalidArgumentException('Perhitungan tunjangan PPh 21 masa terakhir belum konvergen.');
+        }
+
+        return [
+            'is_enabled' => true,
+            'tax_method' => $taxMethod,
+            'ptkp_status' => $ptkpStatus,
+            'ter_category' => $terCategory,
+            'ter_rate' => 0.0,
+            'taxable_gross' => $finalPeriodGross + $taxAllowance,
+            'tax_allowance' => $taxAllowance,
+            'pph21_amount' => $finalPeriodTax,
+            'bpjs_taxable_insurance' => $company->include_bpjs_in_tax ? $bpjs['taxable_insurance'] : 0.0,
+            'is_december' => $month === 12,
+            'is_final_tax_period' => true,
+            'is_non_npwp_penalized' => $isNonNpwpPenalized,
+            'annual_reconciliation' => [
+                ...$reconciliation,
+                'annual_gross' => $previousGross + $finalPeriodGross + $taxAllowance,
+                'gross_jan_to_nov' => $previousGross,
+                'december_gross' => $finalPeriodGross + $taxAllowance,
+                'months_count_jan_to_nov' => $previousItems->count(),
+                'gross_before_final_period' => $previousGross,
+                'final_period_gross' => $finalPeriodGross + $taxAllowance,
+                'months_count_before_final_period' => $previousItems->count(),
+                'months_worked' => $monthsWorked,
+                'job_expense_cap' => $jobExpenseCap,
+                'pension_deduction' => $annualPensionDeduction,
+                'tax_paid_jan_to_nov' => $previousTaxPaid,
+                'december_tax' => $finalPeriodTax,
+                'tax_paid_before_final_period' => $previousTaxPaid,
+                'final_period_tax' => $finalPeriodTax,
+                'final_period_month' => $month,
+                'has_npwp' => ! $isNonNpwpPenalized,
+                'is_non_npwp_penalized' => $isNonNpwpPenalized,
+            ],
+            'notes' => 'PPh 21 Rekonsiliasi Masa Pajak Terakhir (Pasal 17 UU HPP)',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function calculateAnnualTax(
+        float $annualGross,
+        float $jobExpenseCap,
+        float $annualPensionDeduction,
+        PtkpStatus $ptkpStatus,
+        bool $isNonNpwpPenalized
+    ): array {
+        $biayaJabatan = min($annualGross * self::BIAYA_JABATAN_RATE, $jobExpenseCap);
         $annualNetIncome = max(0, $annualGross - $biayaJabatan - $annualPensionDeduction);
-
-        // PTKP
         $ptkp = $ptkpStatus->ptkpAmount();
-
-        // PKP (Pembulatan ribuan ke bawah)
         $pkp = max(0, floor(($annualNetIncome - $ptkp) / 1000) * 1000);
-
-        // Hitung Pajak Progresif Pasal 17 UU HPP
         $remainingPkp = $pkp;
         $totalAnnualTax = 0.0;
         $previousLimit = 0.0;
@@ -312,56 +408,48 @@ class TaxCalculationService
         $baseAnnualTax = $totalAnnualTax;
         $penaltyAmount = 0.0;
 
-        // Penalti non-NPWP (+20% / 120%)
-        $isNonNpwpPenalized = $this->isSubjectToNonNpwpPenalty($employee);
         if ($isNonNpwpPenalized && $totalAnnualTax > 0) {
             $penaltyAmount = $totalAnnualTax * 0.20;
             $totalAnnualTax *= 1.20;
         }
 
-        // PPh 21 Masa Desember = Pajak Setahun - Pajak Jan-Nov
-        $decemberTax = round($totalAnnualTax - $taxPaidJanToNov);
+        return [
+            'biaya_jabatan' => $biayaJabatan,
+            'net_income' => $annualNetIncome,
+            'ptkp' => $ptkp,
+            'pkp' => $pkp,
+            'brackets' => $bracketBreakdown,
+            'total_annual_tax_base' => $baseAnnualTax,
+            'non_npwp_penalty' => $penaltyAmount,
+            'total_annual_tax' => $totalAnnualTax,
+        ];
+    }
 
-        $taxAllowance = 0.0;
-        if ($taxMethod === TaxMethod::GROSS_UP) {
-            $taxAllowance = max(0, $decemberTax);
+    /**
+     * @param  Collection<int, PayrollItem>  $previousItems
+     */
+    protected function sumPreviousPensionContributions(Collection $previousItems): float
+    {
+        $total = 0.0;
+
+        foreach ($previousItems as $item) {
+            foreach ($item->lines as $line) {
+                if ($line->type !== PayrollLineType::DEDUCTION || $line->category !== PayrollLineCategory::BPJS) {
+                    continue;
+                }
+
+                $code = $line->salaryComponent?->code;
+                $name = strtolower(trim($line->name));
+                if (in_array($code, ['BPJS_JHT', 'BPJS_JP'], true)
+                    || str_starts_with($name, 'bpjs jht')
+                    || str_starts_with($name, 'bpjs pensiun')
+                    || str_starts_with($name, 'bpjs jp')) {
+                    $total += (float) $line->amount;
+                }
+            }
         }
 
-        return [
-            'is_enabled' => true,
-            'tax_method' => $taxMethod,
-            'ptkp_status' => $ptkpStatus,
-            'ter_category' => $terCategory,
-            'ter_rate' => 0.0,
-            'taxable_gross' => $decemberGross + $taxAllowance,
-            'tax_allowance' => $taxAllowance,
-            'pph21_amount' => $decemberTax,
-            'bpjs_taxable_insurance' => $company->include_bpjs_in_tax ? $bpjs['taxable_insurance'] : 0.0,
-            'is_december' => true,
-            'is_non_npwp_penalized' => $isNonNpwpPenalized,
-            'annual_reconciliation' => [
-                'annual_gross' => $annualGross,
-                'gross_jan_to_nov' => $grossJanToNov,
-                'december_gross' => $decemberGross,
-                'months_count_jan_to_nov' => $previousItems->count(),
-                'biaya_jabatan' => $biayaJabatan,
-                'pension_deduction' => $annualPensionDeduction,
-                'net_income' => $annualNetIncome,
-                'ptkp' => $ptkp,
-                'pkp' => $pkp,
-                'brackets' => $bracketBreakdown,
-                'total_annual_tax_base' => $baseAnnualTax,
-                'non_npwp_penalty' => $penaltyAmount,
-                'total_annual_tax' => $totalAnnualTax,
-                'tax_paid_jan_to_nov' => $taxPaidJanToNov,
-                'december_tax' => $decemberTax,
-                'has_npwp' => ! $isNonNpwpPenalized,
-                'is_non_npwp_penalized' => $isNonNpwpPenalized,
-            ],
-            'notes' => $isNonNpwpPenalized
-                ? 'PPh 21 Rekonsiliasi Tahunan (Pasal 17 UU HPP + 20% Non-NPWP)'
-                : 'PPh 21 Rekonsiliasi Tahunan (Pasal 17 UU HPP)',
-        ];
+        return $total;
     }
 
     /**
@@ -432,6 +520,14 @@ class TaxCalculationService
     protected function calculateTaxableAllowancesTotal(array|Collection $allowanceRows): float
     {
         $total = 0.0;
+        $componentIds = collect($allowanceRows)
+            ->map(fn ($row) => is_array($row) ? ($row['salary_component_id'] ?? null) : ($row->salary_component_id ?? null))
+            ->filter()
+            ->unique()
+            ->values();
+        $components = $componentIds->isEmpty()
+            ? collect()
+            : SalaryComponent::query()->whereIn('id', $componentIds)->get(['id', 'code', 'is_taxable'])->keyBy('id');
 
         foreach ($allowanceRows as $row) {
             $amount = 0.0;
@@ -459,7 +555,7 @@ class TaxCalculationService
             }
 
             if ($componentId) {
-                $comp = SalaryComponent::find($componentId);
+                $comp = $components->get($componentId);
                 if ($comp && ($comp->code === 'TUNJ_PPH21' || ! $comp->is_taxable)) {
                     continue;
                 }

@@ -3,6 +3,7 @@
 namespace App\Livewire\Payrolls;
 
 use App\Enums\CashAdvanceStatus;
+use App\Enums\EmploymentStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\PayrollLineCategory;
 use App\Enums\PayrollLineType;
@@ -12,6 +13,7 @@ use App\Enums\SalaryCalculationType;
 use App\Enums\SalaryComponentCategory;
 use App\Enums\SalaryComponentType;
 use App\Enums\TaxMethod;
+use App\Enums\TaxRecipientType;
 use App\Models\CashAdvanceInstallment;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
@@ -41,7 +43,7 @@ class ManageItem extends Component
     #[Computed]
     public function isEditable(): bool
     {
-        if ($this->period->status === PayrollPeriodStatus::PAID || $this->item->isApproved()) {
+        if (! auth()->user()?->hasRole('admin') || $this->period->status === PayrollPeriodStatus::PAID || $this->item->isApproved()) {
             return false;
         }
 
@@ -126,6 +128,8 @@ class ManageItem extends Component
 
     public ?string $lastSavedAt = null;
 
+    public string $taxConfigurationWarning = '';
+
     public function mount(PayrollPeriod $period, PayrollItem $item): void
     {
         if ($item->payroll_period_id !== $period->id) {
@@ -143,6 +147,7 @@ class ManageItem extends Component
             'approver',
             'verifier',
         ]);
+        $this->taxConfigurationWarning = $this->getTaxConfigurationWarning();
 
         $company = CompanyProfile::getProfile();
         $defaultBpjsState = (bool) $company->include_bpjs_in_tax;
@@ -220,7 +225,9 @@ class ManageItem extends Component
                         'bank_account_name' => $empDetail?->bank_account_name,
                     ]);
                 }
-                $service->recalculateItemTax($this->item);
+                if ($this->taxConfigurationWarning === '') {
+                    $service->recalculateItemTax($this->item);
+                }
                 $service->recalculateItem($this->item);
                 $service->recalculatePeriod($this->period);
                 $this->item->refresh();
@@ -1385,7 +1392,7 @@ class ManageItem extends Component
         }
 
         // 2. Sync PPh 21 based on Gaji Kotor
-        if ($this->item->employee?->detail && $basicSalary > 0) {
+        if ($this->taxConfigurationWarning === '' && $this->item->employee?->detail && $basicSalary > 0) {
             $pphRowIndex = null;
             $isPphEnabled = (bool) $company->enable_pph21;
             foreach ($this->deductionRows as $idx => $row) {
@@ -1411,7 +1418,9 @@ class ManageItem extends Component
                 $company,
                 $month,
                 $year,
-                $isPphEnabled
+                $isPphEnabled,
+                (bool) $this->item->is_final_tax_period,
+                $this->currentPensionDeductionFromRows()
             );
 
             if ($pphRowIndex !== null) {
@@ -1419,7 +1428,7 @@ class ManageItem extends Component
                 $this->deductionRows[$pphRowIndex]['amount'] = $taxAmt;
                 if ($taxAmt < 0 && $isPphEnabled) {
                     $this->deductionRows[$pphRowIndex]['name'] = 'PPh 21 (Lebih Bayar)';
-                    $this->deductionRows[$pphRowIndex]['notes'] = 'Kelebihan potong PPh 21 Jan-Nov dikembalikan ke karyawan';
+                    $this->deductionRows[$pphRowIndex]['notes'] = 'Kelebihan potong PPh 21 masa sebelumnya dikembalikan ke karyawan';
                 } elseif ($taxAmt >= 0 && $isPphEnabled) {
                     $this->deductionRows[$pphRowIndex]['name'] = 'PPh 21';
                     $this->deductionRows[$pphRowIndex]['notes'] = $taxResult['notes'] ?? 'Potongan PPh 21 otomatis';
@@ -1441,6 +1450,49 @@ class ManageItem extends Component
         }
     }
 
+    protected function currentPensionDeductionFromRows(): float
+    {
+        $total = 0.0;
+
+        foreach ($this->deductionRows as $row) {
+            if (($row['category'] ?? '') !== 'bpjs' || ! ($row['is_enabled'] ?? true)) {
+                continue;
+            }
+
+            $name = strtolower(trim((string) ($row['name'] ?? '')));
+            if (str_starts_with($name, 'bpjs jht')
+                || str_starts_with($name, 'bpjs pensiun')
+                || str_starts_with($name, 'bpjs jp')) {
+                $total += (float) ($row['amount'] ?? 0);
+            }
+        }
+
+        return $total;
+    }
+
+    protected function getTaxConfigurationWarning(): string
+    {
+        $employee = $this->item->employee;
+        if (! $employee) {
+            return '';
+        }
+
+        $recipientType = $employee->detail?->tax_recipient_type;
+        if ($employee->employment_status === EmploymentStatus::MAGANG) {
+            return 'PPh 21 otomatis belum mendukung pegawai berstatus Magang. Komponen pajak pada slip ini tidak dihitung ulang otomatis.';
+        }
+
+        if ($recipientType === TaxRecipientType::OutsideScope) {
+            return 'Jenis penerima penghasilan pegawai ini berada di luar cakupan perhitungan PPh 21 saat ini. Komponen pajak pada slip ini tidak dihitung ulang otomatis.';
+        }
+
+        if ($employee->employment_status !== EmploymentStatus::TETAP && $recipientType !== TaxRecipientType::MonthlyEmployee) {
+            return 'Jenis penerima penghasilan pajak pegawai ini belum ditetapkan. Atur klasifikasi pada Data Karyawan sebelum menghitung PPh 21; pegawai kontrak penuh waktu dapat memakai skema pegawai bulanan.';
+        }
+
+        return '';
+    }
+
     public function recalculateTax(PayrollService $service): void
     {
         if (! $this->isEditable) {
@@ -1456,7 +1508,7 @@ class ManageItem extends Component
         }
 
         try {
-            $this->persistItemLines($payrollService);
+            $this->persistItemLines($service);
             $this->loadComponentRows();
 
             $this->dispatch('swal:alert', [
@@ -1474,9 +1526,37 @@ class ManageItem extends Component
     }
 
     /**
-     * Build rich, transparent annual progressive reconciliation calculation detail for December payroll.
+     * Set an earlier payroll month as the last PPh 21 period for this employee.
      */
-    protected function buildDecemberTaxCalculationDetail(
+    public function toggleFinalTaxPeriod(PayrollService $service): void
+    {
+        if (! $this->isEditable) {
+            return;
+        }
+
+        try {
+            $this->item = $service->setFinalTaxPeriod($this->item, ! (bool) $this->item->is_final_tax_period, auth()->user());
+            $this->period->refresh();
+            $this->loadComponentRows();
+
+            $this->dispatch('swal:alert', [
+                'type' => 'success',
+                'title' => 'Masa Pajak Diperbarui',
+                'message' => 'Perhitungan PPh 21 berhasil diperbarui.',
+            ]);
+        } catch (Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Memperbarui Masa Pajak',
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Build the progressive reconciliation detail for the employee's final tax period.
+     */
+    protected function buildFinalTaxCalculationDetail(
         array $taxResult,
         float $grossSalary,
         string $ptkpStatus,
@@ -1485,31 +1565,32 @@ class ManageItem extends Component
         string $mode = 'ter_scheme'
     ): array {
         $recon = $taxResult['annual_reconciliation'] ?? null;
+        $periodName = $this->period->start_date?->locale('id')->translatedFormat('F') ?? 'Terakhir';
         if (! $recon) {
             return [
-                'title' => $mode === 'pph21' ? 'Rincian Perhitungan PPh 21 (Rekonsiliasi Desember)' : 'Dasar Skema Tarif PPh 21 (Masa Desember)',
+                'title' => $mode === 'pph21' ? 'Rincian Perhitungan PPh 21 (Masa Terakhir)' : 'Dasar Skema Tarif PPh 21 (Masa Terakhir)',
                 'rows' => [
                     [
                         'component' => 'Skema Masa Pajak Terakhir',
-                        'calc' => 'Bulan Desember',
+                        'calc' => 'Bulan '.$periodName,
                         'amount' => 'Pasal 17 UU HPP',
                         'is_bold' => true,
                     ],
                 ],
-                'summary_text' => 'Data rekonsiliasi tahunan Desember belum tersedia.',
+                'summary_text' => 'Data rekonsiliasi masa terakhir belum tersedia.',
             ];
         }
 
         $isNonNpwp = ! empty($taxResult['is_non_npwp_penalized']);
-        $decemberTax = (float) ($recon['december_tax'] ?? 0);
-        $taxPaidJanToNov = (float) ($recon['tax_paid_jan_to_nov'] ?? 0);
+        $finalPeriodTax = (float) ($recon['final_period_tax'] ?? 0);
+        $previousTaxPaid = (float) ($recon['tax_paid_before_final_period'] ?? 0);
         $totalAnnualTax = (float) ($recon['total_annual_tax'] ?? 0);
-        $monthsCount = (int) ($recon['months_count_jan_to_nov'] ?? 0);
+        $monthsCount = (int) ($recon['months_count_before_final_period'] ?? 0);
 
         $rows = [
             [
-                'component' => 'Skema Pajak Akhir Tahun',
-                'calc' => 'Masa Pajak Desember (Tahunan)',
+                'component' => 'Skema Pajak Masa Terakhir',
+                'calc' => 'Masa Pajak '.$periodName,
                 'amount' => 'Pasal 17 UU HPP',
                 'is_bold' => true,
                 'icon' => 'fas fa-balance-scale',
@@ -1522,29 +1603,29 @@ class ManageItem extends Component
                 'icon' => 'fas fa-user-shield',
             ],
             [
-                'component' => 'Penghasilan Bruto Masa Jan – Nov',
+                'component' => 'Penghasilan Bruto Masa Sebelumnya',
                 'calc' => $monthsCount.' Bulan masa pajak sebelumnya',
-                'amount' => 'Rp'.number_format($recon['gross_jan_to_nov'], 0, ',', '.'),
+                'amount' => 'Rp'.number_format($recon['gross_before_final_period'], 0, ',', '.'),
                 'is_bold' => false,
                 'icon' => 'fas fa-history',
             ],
             [
-                'component' => 'Penghasilan Bruto Masa Desember',
+                'component' => 'Penghasilan Bruto Masa '.$periodName,
                 'calc' => 'Gaji Pokok + Tunjangan + Premi Asuransi Kantor',
-                'amount' => 'Rp'.number_format($recon['december_gross'], 0, ',', '.'),
+                'amount' => 'Rp'.number_format($recon['final_period_gross'], 0, ',', '.'),
                 'is_bold' => false,
                 'icon' => 'fas fa-calendar-day',
             ],
             [
                 'component' => 'Total Penghasilan Bruto Setahun',
-                'calc' => 'Akumulasi Jan–Nov + Desember',
+                'calc' => 'Akumulasi masa sebelumnya + masa '.$periodName,
                 'amount' => 'Rp'.number_format($recon['annual_gross'], 0, ',', '.'),
                 'is_bold' => true,
                 'icon' => 'fas fa-money-bill-wave',
             ],
             [
                 'component' => 'Pengurang: Biaya Jabatan Setahun',
-                'calc' => '5% dari bruto setahun (Maks. Rp6.000.000/thn)',
+                'calc' => '5% dari bruto, batas '.$recon['months_worked'].' bulan × Rp500.000',
                 'amount' => '-Rp'.number_format($recon['biaya_jabatan'], 0, ',', '.'),
                 'is_bold' => false,
                 'icon' => 'fas fa-briefcase',
@@ -1631,60 +1712,60 @@ class ManageItem extends Component
         }
 
         $rows[] = [
-            'component' => 'Kredit Pajak (Jan – Nov)',
-            'calc' => 'PPh 21 yang telah dipotong selama Jan s.d. Nov',
-            'amount' => '-Rp'.number_format($taxPaidJanToNov, 0, ',', '.'),
+            'component' => 'Kredit Pajak Masa Sebelumnya',
+            'calc' => 'PPh 21 yang telah dipotong pada masa sebelumnya',
+            'amount' => '-Rp'.number_format($previousTaxPaid, 0, ',', '.'),
             'is_bold' => false,
             'icon' => 'fas fa-history',
         ];
 
-        if ($decemberTax > 0) {
+        if ($finalPeriodTax > 0) {
             $rows[] = [
-                'component' => 'PPh 21 Masa Desember (Kurang Bayar)',
-                'calc' => 'Pajak Setahun – Kredit Pajak Jan s.d. Nov',
-                'amount' => 'Rp'.number_format($decemberTax, 0, ',', '.'),
+                'component' => 'PPh 21 Masa '.$periodName.' (Kurang Bayar)',
+                'calc' => 'Pajak Setahun – Kredit Pajak Masa Sebelumnya',
+                'amount' => 'Rp'.number_format($finalPeriodTax, 0, ',', '.'),
                 'is_bold' => true,
                 'icon' => 'fas fa-receipt',
             ];
-        } elseif ($decemberTax < 0) {
+        } elseif ($finalPeriodTax < 0) {
             $rows[] = [
-                'component' => 'PPh 21 Masa Desember (Lebih Bayar)',
-                'calc' => 'Pajak Jan–Nov melebihi pajak setahun (Dikembalikan ke gaji)',
-                'amount' => '+Rp'.number_format(abs($decemberTax), 0, ',', '.'),
+                'component' => 'PPh 21 Masa '.$periodName.' (Lebih Bayar)',
+                'calc' => 'Pajak masa sebelumnya melebihi pajak setahun (Dikembalikan ke gaji)',
+                'amount' => '+Rp'.number_format(abs($finalPeriodTax), 0, ',', '.'),
                 'is_bold' => true,
                 'icon' => 'fas fa-hand-holding-usd',
             ];
         } else {
             $rows[] = [
-                'component' => 'PPh 21 Masa Desember (Nihil)',
-                'calc' => 'Pajak setahun telah lunas sesuai pemotongan Jan s.d. Nov',
+                'component' => 'PPh 21 Masa '.$periodName.' (Nihil)',
+                'calc' => 'Pajak setahun telah lunas sesuai pemotongan masa sebelumnya',
                 'amount' => 'Rp0',
                 'is_bold' => true,
                 'icon' => 'fas fa-check-circle',
             ];
         }
 
-        $statusLabel = $decemberTax > 0
-            ? '<span class="text-danger font-weight-600">Kurang Bayar sebesar Rp'.number_format($decemberTax, 0, ',', '.').'</span> (dipotong dari slip gaji Desember)'
-            : ($decemberTax < 0
-                ? '<span class="text-success font-weight-600">Lebih Bayar sebesar Rp'.number_format(abs($decemberTax), 0, ',', '.').'</span> (dikembalikan ke karyawan sebagai penambah take home pay di bulan Desember)'
+        $statusLabel = $finalPeriodTax > 0
+            ? '<span class="text-danger font-weight-600">Kurang Bayar sebesar Rp'.number_format($finalPeriodTax, 0, ',', '.').'</span> (dipotong dari slip gaji '.$periodName.')'
+            : ($finalPeriodTax < 0
+                ? '<span class="text-success font-weight-600">Lebih Bayar sebesar Rp'.number_format(abs($finalPeriodTax), 0, ',', '.').'</span> (dikembalikan ke karyawan pada bulan '.$periodName.')'
                 : '<span class="text-primary font-weight-600">Nihil (Rp0)</span> (seluruh pajak setahun telah terlunasi secara pas)');
 
-        $summary = 'Sesuai <strong>PP No. 58/2023</strong> dan <strong>PMK No. 168/2023 Pasal 13</strong>, pada masa pajak terakhir (Desember) pemotongan PPh 21 tidak lagi menggunakan tarif efektif bulanan (TER), melainkan dilakukan <strong>Rekonsiliasi Tahunan</strong> dengan <strong>Tarif Progresif Pasal 17 ayat (1) huruf a UU HPP</strong> atas seluruh penghasilan setahun:<br><br>'
-            .'1. <strong>Bruto Setahun:</strong> Rp'.number_format($recon['annual_gross'], 0, ',', '.').' (Akumulasi Jan–Nov Rp'.number_format($recon['gross_jan_to_nov'], 0, ',', '.').' + Desember Rp'.number_format($recon['december_gross'], 0, ',', '.').')<br>'
+        $summary = 'Sesuai <strong>PP No. 58/2023</strong> dan <strong>PMK No. 168/2023 Pasal 13</strong>, pada masa pajak terakhir ('.$periodName.') PPh 21 dihitung dengan <strong>Tarif Progresif Pasal 17</strong> atas penghasilan selama bekerja pada tahun ini:<br><br>'
+            .'1. <strong>Bruto:</strong> Rp'.number_format($recon['annual_gross'], 0, ',', '.').' (Masa sebelumnya Rp'.number_format($recon['gross_before_final_period'], 0, ',', '.').' + Masa '.$periodName.' Rp'.number_format($recon['final_period_gross'], 0, ',', '.').')<br>'
             .'2. <strong>Penghasilan Neto Setahun:</strong> Rp'.number_format($recon['net_income'], 0, ',', '.').' (setelah Biaya Jabatan Rp'.number_format($recon['biaya_jabatan'], 0, ',', '.').(($recon['pension_deduction'] ?? 0) > 0 ? ' dan Iuran BPJS Rp'.number_format($recon['pension_deduction'], 0, ',', '.') : '').')<br>'
             .'3. <strong>Penghasilan Kena Pajak (PKP):</strong> Rp'.number_format($recon['pkp'], 0, ',', '.').' (Neto dikurangi PTKP '.$ptkpStatus.' Rp'.number_format($recon['ptkp'], 0, ',', '.').')<br>'
             .'4. <strong>Total PPh 21 Setahun:</strong> Rp'.number_format($totalAnnualTax, 0, ',', '.').'<br>'
-            .'5. <strong>PPh 21 Telah Dipotong (Jan–Nov):</strong> Rp'.number_format($taxPaidJanToNov, 0, ',', '.').'<br>'
-            .'&rarr; <strong>PPh 21 Masa Desember:</strong> '.$statusLabel.'.';
+            .'5. <strong>PPh 21 Telah Dipotong:</strong> Rp'.number_format($previousTaxPaid, 0, ',', '.').'<br>'
+            .'&rarr; <strong>PPh 21 Masa '.$periodName.':</strong> '.$statusLabel.'.';
 
         if ($isNonNpwp) {
             $summary .= '<div class="mt-2 text-warning" style="font-size: 11.5px; border-top: 1px dashed #f59e0b; padding-top: 6px;"><i class="fas fa-exclamation-triangle mr-1"></i> <strong>Catatan Non-NPWP:</strong> Karyawan belum memiliki NPWP/NIK valid sehingga dikenakan tarif 20% lebih tinggi pada perhitungan pajak progresif tahunan.</div>';
         }
 
         $title = $mode === 'pph21'
-            ? 'Rincian Perhitungan PPh 21 (Rekonsiliasi Desember)'
-            : 'Dasar Skema Tarif PPh 21 (Masa Desember - UU HPP)';
+            ? 'Rincian Perhitungan PPh 21 (Masa '.$periodName.')'
+            : 'Dasar Skema Tarif PPh 21 (Masa '.$periodName.' - UU HPP)';
 
         return [
             'title' => $title,
@@ -1695,6 +1776,16 @@ class ManageItem extends Component
 
     public function showCalculationDetail(string $type): void
     {
+        if (in_array($type, ['pph21', 'ter_scheme'], true) && $this->taxConfigurationWarning !== '') {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Perhitungan PPh 21 Belum Tersedia',
+                'message' => $this->taxConfigurationWarning,
+            ]);
+
+            return;
+        }
+
         $company = CompanyProfile::getProfile();
         $employee = $this->item->employee;
         $basicSalary = (float) ($this->item->basic_salary ?? 0);
@@ -1729,10 +1820,12 @@ class ManageItem extends Component
                     $company,
                     $this->period->month ?? 1,
                     $this->period->year ?? 2026,
-                    true
+                    true,
+                    (bool) $this->item->is_final_tax_period,
+                    $this->currentPensionDeductionFromRows()
                 );
 
-                $isDecember = ((int) ($this->period->month ?? 1)) === 12;
+                $isFinalTaxPeriod = ! empty($taxResult['is_final_tax_period']);
                 $ptkpStatus = $taxResult['ptkp_status'] ?? ($employee?->detail?->ptkp_status instanceof PtkpStatus ? $employee->detail->ptkp_status->value : ($employee?->detail?->ptkp_status ?? 'TK/0'));
                 if ($ptkpStatus instanceof PtkpStatus) {
                     $ptkpStatus = $ptkpStatus->value;
@@ -1747,8 +1840,8 @@ class ManageItem extends Component
                 $isNonNpwp = ! empty($taxResult['is_non_npwp_penalized']);
                 $finalRate = $isNonNpwp ? round($baseTerRate * 1.2, 6) : $baseTerRate;
 
-                if ($isDecember) {
-                    $this->calculationDetail = $this->buildDecemberTaxCalculationDetail(
+                if ($isFinalTaxPeriod) {
+                    $this->calculationDetail = $this->buildFinalTaxCalculationDetail(
                         $taxResult,
                         $grossSalary,
                         $ptkpStatus,
@@ -1854,18 +1947,20 @@ class ManageItem extends Component
                     $company,
                     $this->period->month ?? 1,
                     $this->period->year ?? 2026,
-                    true
+                    true,
+                    (bool) $this->item->is_final_tax_period,
+                    $this->currentPensionDeductionFromRows()
                 );
 
-                $isDecember = ((int) ($this->period->month ?? 1)) === 12;
-                if ($isDecember) {
+                $isFinalTaxPeriod = ! empty($taxResult['is_final_tax_period']);
+                if ($isFinalTaxPeriod) {
                     $ptkpStatus = $taxResult['ptkp_status'] ?? ($employee?->detail?->ptkp_status instanceof PtkpStatus ? $employee->detail->ptkp_status->value : ($employee?->detail?->ptkp_status ?? 'TK/0'));
                     if ($ptkpStatus instanceof PtkpStatus) {
                         $ptkpStatus = $ptkpStatus->value;
                     }
                     $ptkpEnum = PtkpStatus::tryFrom((string) $ptkpStatus) ?? PtkpStatus::TK_0;
 
-                    $this->calculationDetail = $this->buildDecemberTaxCalculationDetail(
+                    $this->calculationDetail = $this->buildFinalTaxCalculationDetail(
                         $taxResult,
                         $grossSalary,
                         $ptkpStatus,
@@ -1931,7 +2026,7 @@ class ManageItem extends Component
                     ];
                 }
 
-                if (! empty($taxResult['is_december'])) {
+                if (! empty($taxResult['is_final_tax_period'])) {
                     $rows[] = [
                         'component' => 'Skema Pajak Akhir Tahun',
                         'calc' => 'Pasal 17 UU HPP',

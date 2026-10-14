@@ -309,8 +309,11 @@
                                     <span class="text-job font-weight-bold" style="color: #64748b;">Siap Dibayar</span>
                                 </div>
                                 <p class="mb-0" style="color: #475569;">
-                                    Penggajian disetujui, siap untuk ditransfer ke karyawan.
+                                    {{ $this->paidItemsCount }} dari {{ $this->totalItemsCount }} slip sudah dibayar ({{ $this->paymentProgressPercent }}%). Pembayaran diproses per karyawan.
                                 </p>
+                                <div class="progress mt-2" style="height: 6px; border-radius: 4px;" role="progressbar" aria-valuenow="{{ $this->paymentProgressPercent }}" aria-valuemin="0" aria-valuemax="100" aria-label="Progres pembayaran payroll">
+                                    <div class="progress-bar bg-primary" style="width: {{ $this->paymentProgressPercent }}%;"></div>
+                                </div>
                             </div>
                         @else
                             <div class="activity-icon activity-icon-pending">
@@ -362,27 +365,10 @@
                                     </button>
                                 @endif
 
-                                @if ($this->allVerified)
-                                    <button type="button" 
-                                        wire:click="$dispatch('swal:confirm', {
-                                            title: 'Ajukan ke Direktur?',
-                                            text: 'Seluruh ({{ $this->totalItemsCount }}) slip gaji telah diverifikasi HRD. Periode {{ $period->reference_number }} akan diajukan ke Direktur untuk mendapatkan persetujuan (ACC).',
-                                            action: 'submit-period-confirmed'
-                                            })" 
-                                        class="btn btn-primary payroll-action-btn shadow-sm"
-                                        data-toggle="tooltip"
-                                        title="Ajukan periode ke Direktur">
-                                        <i class="fas fa-paper-plane mr-1"></i> Ajukan ke Direktur
-                                    </button>
-                                @else
-                                    <button type="button" 
-                                        wire:click="submitForApproval" 
-                                        class="btn btn-secondary payroll-action-btn"
-                                        data-toggle="tooltip"
-                                        title="Verifikasi semua karyawan dahulu ({{ $this->verifiedCount }}/{{ $this->totalItemsCount }} terverifikasi)">
-                                        <i class="fas fa-lock mr-1"></i> Ajukan ke Direktur
-                                    </button>
-                                @endif
+                                <button type="button" wire:click="$dispatch('swal:confirm', { title: 'Ajukan ke Direktur?', text: 'Seluruh ({{ $this->totalItemsCount }}) slip gaji telah diverifikasi HRD. Periode {{ $period->reference_number }} akan diajukan ke Direktur untuk mendapatkan persetujuan (ACC).', action: 'submit-period-confirmed' })" wire:loading.attr="disabled" wire:target="submitForApproval" @disabled(! $this->allVerified) class="btn {{ $this->allVerified ? 'btn-primary shadow-sm' : 'btn-secondary' }} payroll-action-btn" data-toggle="tooltip" title="{{ $this->allVerified ? 'Ajukan periode ke Direktur' : 'Verifikasi semua slip dahulu (' . $this->verifiedCount . '/' . $this->totalItemsCount . ')' }}">
+                                    <span wire:loading.remove wire:target="submitForApproval"><i class="fas {{ $this->allVerified ? 'fa-paper-plane' : 'fa-lock' }} mr-1"></i> Ajukan ke Direktur</span>
+                                    <span wire:loading wire:target="submitForApproval"><i class="fas fa-spinner fa-spin mr-1"></i> Mengajukan...</span>
+                                </button>
                             </div>
                         @endif
 
@@ -714,9 +700,9 @@
                             </td>
                             <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
                                 <div class="d-inline-flex align-items-center" style="gap: 6px;">
-                                    <!-- Tombol Kelola Komponen Gaji -->
-                                    <a href="{{ route('payrolls.items.edit', [$period, $item]) }}" class="btn btn-primary btn-action" data-toggle="tooltip" title="Kelola Komponen Gaji">
-                                        <i class="fas fa-sliders-h"></i>
+                                    <!-- Admin mengelola komponen; Direktur meninjau dan memberi keputusan -->
+                                    <a href="{{ route('payrolls.items.edit', [$period, $item]) }}" class="btn btn-primary btn-action" data-toggle="tooltip" title="{{ auth()->user()?->hasRole('direktur') ? 'Tinjau Slip' : 'Kelola Komponen Gaji' }}">
+                                        <i class="fas {{ auth()->user()?->hasRole('direktur') ? 'fa-eye' : 'fa-sliders-h' }}"></i>
                                     </a>
 
                                     <!-- Tombol Verifikasi / Batal Verifikasi HRD (Untuk Admin saat Draf / Revisi) -->
@@ -1907,19 +1893,3 @@
         </style>
     @endpush
 </div>
-
-@script
-<script>
-    $wire.on('submit-period-confirmed', () => {
-        $wire.submitForApproval();
-    });
-
-    $wire.on('approve-period-confirmed', () => {
-        $wire.approvePeriod();
-    });
-
-    $wire.on('approve-all-items-confirmed', () => {
-        $wire.approveAll();
-    });
-</script>
-@endscript

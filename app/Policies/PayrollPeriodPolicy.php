@@ -26,7 +26,9 @@ class PayrollPeriodPolicy
     {
         $canUpdateStatus = $period->status->isEditable() || $period->items()->where('approval_status', 'rejected')->exists();
 
-        return $this->hasAccess($user, 'payrolls-update', 'admin', 'direktur') && $canUpdateStatus;
+        return ! $user->hasRole('direktur')
+            && $this->hasAccess($user, 'payrolls-update', 'admin')
+            && $canUpdateStatus;
     }
 
     public function delete(User $user, PayrollPeriod $period): bool

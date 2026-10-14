@@ -1694,7 +1694,7 @@ class CashAdvanceCrudTest extends TestCase
         Livewire::test(Index::class)
             ->assertOk()
             ->assertSee('table-group-header')
-            ->assertSee('DEPARTEMEN MIKROKONTROLER')
+            ->assertSee('DEPARTEMEN IT DEPARTMENT')
             ->assertSee('Karyawan', false);
     }
 

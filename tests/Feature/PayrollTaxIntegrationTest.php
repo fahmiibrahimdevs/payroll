@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Enums\EmployeeStatus;
+use App\Enums\EmploymentStatus;
 use App\Enums\MaritalStatus;
 use App\Enums\PayrollLineCategory;
 use App\Enums\PayrollLineType;
 use App\Enums\PtkpStatus;
 use App\Enums\TaxMethod;
+use App\Enums\TaxRecipientType;
 use App\Livewire\CompanyProfile\Index;
 use App\Livewire\Payrolls\ManageItem as PayrollManageItem;
 use App\Livewire\Payrolls\Show as PayrollShow;
@@ -104,6 +106,54 @@ class PayrollTaxIntegrationTest extends TestCase
         $this->assertEquals(9_800_000, (float) $item->net_salary);
     }
 
+    public function test_payroll_period_creation_keeps_out_of_scope_intern_without_calculating_pph21(): void
+    {
+        $company = CompanyProfile::getProfile();
+        $company->update([
+            'enable_pph21' => true,
+            'include_bpjs_in_tax' => true,
+        ]);
+
+        $department = Department::firstOrCreate(['name' => 'Demo Internship Dept']);
+        $position = Position::firstOrCreate(['name' => 'Demo Intern']);
+        $employee = Employee::create([
+            'department_id' => $department->id,
+            'position_id' => $position->id,
+            'full_name' => 'Intern Outside Tax Scope',
+            'join_date' => Carbon::now()->subMonths(2),
+            'employment_status' => EmploymentStatus::MAGANG,
+            'status' => EmployeeStatus::ACTIVE,
+            'basic_salary' => 3_000_000,
+        ]);
+
+        EmployeeDetail::create([
+            'employee_id' => $employee->id,
+            'marital_status' => MaritalStatus::TK,
+            'dependents_count' => 0,
+            'tax_method' => TaxMethod::GROSS,
+            'tax_recipient_type' => TaxRecipientType::OutsideScope,
+        ]);
+        $admin = $this->createAdminUser();
+
+        $period = app(PayrollService::class)->createPeriod([
+            'month' => 5,
+            'year' => 2030,
+        ], $admin);
+
+        $item = $period->items()->where('employee_id', $employee->id)->firstOrFail();
+
+        $this->assertSame(TaxRecipientType::OutsideScope, $item->tax_recipient_type);
+        $this->assertDatabaseMissing('payroll_item_lines', [
+            'payroll_item_id' => $item->id,
+            'category' => PayrollLineCategory::TAX->value,
+        ]);
+        $this->assertDatabaseHas('payroll_item_lines', [
+            'payroll_item_id' => $item->id,
+            'category' => PayrollLineCategory::BPJS->value,
+            'type' => PayrollLineType::DEDUCTION->value,
+        ]);
+    }
+
     public function test_payroll_period_creation_calculates_non_npwp_gross_pph21_with_penalty(): void
     {
         $company = CompanyProfile::getProfile();
@@ -119,7 +169,7 @@ class PayrollTaxIntegrationTest extends TestCase
             'department_id' => $dept->id,
             'position_id' => $pos->id,
             'full_name' => 'Jane Non-NPWP',
-            'join_date' => Carbon::now()->subMonths(6),
+            'join_date' => Carbon::parse('2025-01-01'),
             'status' => EmployeeStatus::ACTIVE,
             'basic_salary' => 10_000_000,
         ]);
@@ -525,7 +575,7 @@ class PayrollTaxIntegrationTest extends TestCase
             'department_id' => $dept->id,
             'position_id' => $pos->id,
             'full_name' => 'Budi Santoso',
-            'join_date' => Carbon::now()->subMonths(6),
+            'join_date' => Carbon::parse('2025-09-01'),
             'status' => EmployeeStatus::ACTIVE,
             'basic_salary' => 6_000_000,
         ]);
@@ -1101,7 +1151,7 @@ class PayrollTaxIntegrationTest extends TestCase
 
         // Check required progressive reconciliation rows
         $components = collect($calc['rows'])->pluck('component')->all();
-        $this->assertContains('Skema Pajak Akhir Tahun', $components);
+        $this->assertContains('Skema Pajak Masa Terakhir', $components);
         $this->assertContains('Status PTKP Karyawan', $components);
         $this->assertContains('Total Penghasilan Bruto Setahun', $components);
         $this->assertContains('Pengurang: Biaya Jabatan Setahun', $components);
@@ -1113,7 +1163,7 @@ class PayrollTaxIntegrationTest extends TestCase
         $test->call('showCalculationDetail', 'pph21');
         $calcPph = $test->get('calculationDetail');
         $this->assertNotNull($calcPph);
-        $this->assertEquals('Rincian Perhitungan PPh 21 (Rekonsiliasi Desember)', $calcPph['title']);
+        $this->assertEquals('Rincian Perhitungan PPh 21 (Masa Desember)', $calcPph['title']);
         $this->assertNotEmpty($calcPph['rows']);
     }
 }

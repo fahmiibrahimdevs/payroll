@@ -126,6 +126,7 @@
                                     <div class="form-group mb-2">
                                         <label for="contract_end_date">Tanggal Akhir Kontrak</label>
                                         <input type="date" id="contract_end_date" wire:model="form.contract_end_date" class="form-control @error('form.contract_end_date') is-invalid @enderror">
+                                        <small class="form-text text-muted">Jika pekerjaan berakhir sebelum Desember, tandai masa pajak terakhir pada slip bulan berhenti.</small>
                                         @error('form.contract_end_date')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
@@ -374,6 +375,21 @@
                                             <option value="3">3 Tanggungan (Maksimal)</option>
                                         </select>
                                         @error('form.dependents_count')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-group mb-2">
+                                        <label for="tax_recipient_type">Jenis Penerima Penghasilan untuk Pajak <span class="text-danger">*</span></label>
+                                        <select id="tax_recipient_type" wire:model="form.tax_recipient_type" class="form-control @error('form.tax_recipient_type') is-invalid @enderror">
+                                            <option value="">-- Pilih jenis pajak --</option>
+                                            <option value="monthly_employee">Pegawai Tetap PPh 21 (gaji bulanan, termasuk kontrak penuh waktu)</option>
+                                            <option value="outside_scope">Di luar cakupan saat ini (harian, borongan, magang)</option>
+                                        </select>
+                                        <small class="form-text text-muted">Kontrak penuh waktu bergaji bulanan termasuk Pegawai Tetap untuk PPh 21. Pilih di luar cakupan untuk harian, borongan, atau magang.</small>
+                                        @error('form.tax_recipient_type')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
                                     </div>

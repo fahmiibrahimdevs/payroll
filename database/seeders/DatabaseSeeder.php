@@ -23,63 +23,32 @@ class DatabaseSeeder extends Seeder
             SalaryComponentSeeder::class,
         ]);
 
-        $admin = User::firstOrCreate(
-            ['email' => 'fahmi@admin.com'],
-            [
-                'name' => 'Fahmi Admin',
-                'password' => '1',
-                'is_active' => true,
-                'email_verified_at' => now(),
-            ]
-        );
-        $admin->forceFill(['is_active' => true, 'email_verified_at' => $admin->email_verified_at ?? now()])->save();
-        $admin->syncRoles(['admin']);
+        User::query()
+            ->whereIn('email', [
+                'fahmi@admin.com',
+                'direktur@larashiz.com',
+                'developer@larashiz.com',
+                'fahmi@user.com',
+                'karyawan@larashiz.com',
+            ])
+            ->delete();
 
-        $direktur = User::firstOrCreate(
-            ['email' => 'direktur@larashiz.com'],
-            [
-                'name' => 'Direktur Utama',
-                'password' => 'password',
-                'is_active' => true,
-                'email_verified_at' => now(),
-            ]
-        );
-        $direktur->forceFill(['is_active' => true, 'email_verified_at' => $direktur->email_verified_at ?? now()])->save();
-        $direktur->syncRoles(['direktur']);
-
-        $developer = User::firstOrCreate(
-            ['email' => 'developer@larashiz.com'],
-            [
-                'name' => 'System Developer',
-                'password' => 'password',
-                'is_active' => true,
-                'email_verified_at' => now(),
-            ]
-        );
-        $developer->forceFill(['is_active' => true, 'email_verified_at' => $developer->email_verified_at ?? now()])->save();
-        $developer->syncRoles(['developer']);
-
-        $user = User::firstOrCreate(
-            ['email' => 'fahmi@user.com'],
-            [
-                'name' => 'Fahmi User',
-                'password' => '1',
-                'is_active' => false,
-            ]
-        );
-        $user->syncRoles(['user']);
-
-        $karyawan = User::firstOrCreate(
-            ['email' => 'karyawan@larashiz.com'],
-            [
-                'name' => 'Arif Fahmi Abdillah',
-                'password' => 'password',
-                'is_active' => true,
-                'email_verified_at' => now(),
-            ]
-        );
-        $karyawan->forceFill(['is_active' => true, 'email_verified_at' => $karyawan->email_verified_at ?? now()])->save();
-        $karyawan->syncRoles(['karyawan']);
+        foreach ([
+            ['role' => 'direktur', 'name' => 'Direktur Demo', 'email' => 'direktur@payroll.com'],
+            ['role' => 'admin', 'name' => 'Admin Demo', 'email' => 'admin@payroll.com'],
+            ['role' => 'karyawan', 'name' => 'Karyawan Demo', 'email' => 'karyawan@payroll.com'],
+        ] as $account) {
+            $user = User::updateOrCreate(
+                ['email' => $account['email']],
+                [
+                    'name' => $account['name'],
+                    'password' => '1',
+                    'is_active' => true,
+                    'email_verified_at' => now(),
+                ]
+            );
+            $user->syncRoles([$account['role']]);
+        }
 
         $this->call([
             EmployeeSeeder::class,

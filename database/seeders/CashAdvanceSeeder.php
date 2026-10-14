@@ -71,8 +71,8 @@ class CashAdvanceSeeder extends Seeder
             ]
         );
 
-        $admin = User::where('email', 'fahmi@admin.com')->first() ?? User::first();
-        $direktur = User::where('email', 'direktur@larashiz.com')->first() ?? $admin;
+        $admin = User::where('email', 'admin@payroll.com')->first() ?? User::first();
+        $direktur = User::where('email', 'direktur@payroll.com')->first() ?? $admin;
 
         if (! $admin) {
             return;

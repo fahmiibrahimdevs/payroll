@@ -7,6 +7,7 @@ use App\Enums\EmploymentStatus;
 use App\Enums\Gender;
 use App\Enums\MaritalStatus;
 use App\Enums\TaxMethod;
+use App\Enums\TaxRecipientType;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Services\EmployeeService;
@@ -69,6 +70,8 @@ class EmployeeForm extends Form
 
     public string $tax_method = 'gross';
 
+    public string $tax_recipient_type = '';
+
     public bool $has_npwp = false;
 
     public ?string $npwp_number = '';
@@ -112,6 +115,16 @@ class EmployeeForm extends Form
             'marital_status' => ['nullable', Rule::enum(MaritalStatus::class)],
             'dependents_count' => ['nullable', 'integer', 'min:0', 'max:3'],
             'tax_method' => ['nullable', Rule::enum(TaxMethod::class)],
+            'tax_recipient_type' => [
+                'required',
+                Rule::enum(TaxRecipientType::class),
+                ...($this->employment_status === EmploymentStatus::MAGANG->value
+                    ? [Rule::in([TaxRecipientType::OutsideScope->value])]
+                    : []),
+                ...($this->employment_status === EmploymentStatus::TETAP->value
+                    ? [Rule::in([TaxRecipientType::MonthlyEmployee->value])]
+                    : []),
+            ],
             'has_npwp' => ['nullable', 'boolean'],
             'npwp_number' => ['nullable', 'string', 'max:50'],
             'nik' => ['nullable', 'string', 'max:50'],
@@ -151,6 +164,7 @@ class EmployeeForm extends Form
             'marital_status' => 'Status Pernikahan',
             'dependents_count' => 'Jumlah Tanggungan',
             'tax_method' => 'Metode Pajak',
+            'tax_recipient_type' => 'Jenis Penerima Penghasilan untuk Pajak',
             'npwp_number' => 'Nomor NPWP',
             'nik' => 'NIK',
             'bpjs_kesehatan_number' => 'Nomor BPJS Kesehatan',
@@ -196,6 +210,8 @@ class EmployeeForm extends Form
         $this->marital_status = $detail?->marital_status instanceof MaritalStatus ? $detail->marital_status->value : (string) ($detail?->marital_status ?? 'tk');
         $this->dependents_count = (int) ($detail?->dependents_count ?? 0);
         $this->tax_method = $detail?->tax_method instanceof TaxMethod ? $detail->tax_method->value : (string) ($detail?->tax_method ?? 'gross');
+        $this->tax_recipient_type = $detail?->tax_recipient_type?->value
+            ?? ($employee->employment_status === EmploymentStatus::TETAP ? TaxRecipientType::MonthlyEmployee->value : '');
         $this->has_npwp = (bool) ($detail?->has_npwp ?? false);
         $this->npwp_number = $detail?->npwp_number ?? '';
         $this->nik = $detail?->nik ?? '';
@@ -236,6 +252,7 @@ class EmployeeForm extends Form
             'marital_status',
             'dependents_count',
             'tax_method',
+            'tax_recipient_type',
             'has_npwp',
             'npwp_number',
             'nik',

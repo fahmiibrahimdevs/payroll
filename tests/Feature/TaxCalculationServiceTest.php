@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\EmployeeStatus;
 use App\Enums\MaritalStatus;
 use App\Enums\TaxMethod;
+use App\Enums\TaxRecipientType;
 use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
@@ -55,6 +56,7 @@ class TaxCalculationServiceTest extends TestCase
             'marital_status' => $maritalStatus,
             'dependents_count' => $dependents,
             'tax_method' => $taxMethod,
+            'tax_recipient_type' => TaxRecipientType::MonthlyEmployee,
             'has_npwp' => $hasNpwp,
             'npwp_number' => $hasNpwp ? '12.345.678.9-012.000' : null,
             'nik' => $nik,
