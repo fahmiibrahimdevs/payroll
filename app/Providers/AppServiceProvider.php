@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Services\DashboardService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -22,5 +24,14 @@ class AppServiceProvider extends ServiceProvider
     {
         Model::preventLazyLoading(! app()->isProduction());
         Model::preventSilentlyDiscardingAttributes(! app()->isProduction());
+
+        View::composer('layouts.shizuefi.navbar', function ($view): void {
+            if (auth()->check() && (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur'))) {
+                $notifications = app(DashboardService::class)->getActionItems();
+                $view->with('navbarNotifications', $notifications);
+            } else {
+                $view->with('navbarNotifications', []);
+            }
+        });
     }
 }

@@ -78,6 +78,28 @@
                 @endif
             @endif
 
+            @if ($this->isEditable && auth()->user()?->hasRole('admin'))
+                @if ($item->isVerified())
+                    <button type="button" 
+                            wire:click="unverifyItem" 
+                            wire:loading.attr="disabled" 
+                            class="btn btn-success d-none d-md-inline-flex align-items-center font-weight-bold shadow-sm" 
+                            style="border-radius: 8px; padding: 9px 14px; font-size: 13px;"
+                            title="Diverifikasi oleh {{ $item->verifier?->name ?? 'Admin' }}. Klik untuk batalkan ke Draf.">
+                        <i class="fas fa-check-circle mr-1.5"></i> Verif HRD: {{ $item->verifier?->name ?? 'Admin' }}
+                    </button>
+                @else
+                    <button type="button" 
+                            wire:click="verifyItem" 
+                            wire:loading.attr="disabled" 
+                            class="btn btn-info d-none d-md-inline-flex align-items-center font-weight-bold shadow-sm" 
+                            style="border-radius: 8px; padding: 9px 14px; font-size: 13px;"
+                            title="Tandai slip ini sebagai terverifikasi HRD">
+                        <i class="fas fa-user-check mr-1.5"></i> Tandai Verif HRD
+                    </button>
+                @endif
+            @endif
+
             @if ($this->isEditable && (auth()->user()?->hasRole(['admin', 'direktur']) || auth()->user()?->can('update', $period)))
                 <button type="button" 
                         wire:click="save" 
@@ -813,7 +835,7 @@
                                             </td>
                                             <td class="text-center align-middle text-muted !px-3 !py-2.5">
                                                 @if ($this->isEditable)
-                                                    <button type="button" wire:click="resetKasbonDeduction({{ $index }})" class="btn btn-sm btn-outline-secondary" title="Reset ke tagihan normal">
+                                                    <button type="button" wire:click="resetKasbonDeduction({{ $index }})" class="btn btn-sm btn-secondary" title="Reset ke tagihan normal">
                                                         <i class="fas fa-undo"></i>
                                                     </button>
                                                 @else
@@ -841,10 +863,12 @@
 
                                 <!-- Potongan PPh 21 Otomatis -->
                                 @foreach ($deductionRows as $index => $row)
-                                    @if ((($row['category'] ?? '') === 'tax' || strcasecmp(trim($row['name'] ?? ''), 'pph 21') === 0) && empty($row['cash_advance_installment_id']))
+                                    @if ((($row['category'] ?? '') === 'tax' || str_starts_with(strtolower(trim($row['name'] ?? '')), 'pph 21')) && empty($row['cash_advance_installment_id']))
                                         @php
                                             $deductionCounter++;
                                             $isEnabled = $row['is_enabled'] ?? true;
+                                            $rowTaxAmt = (float) ($row['amount'] ?? 0);
+                                            $isDecember = ((int) ($item->payrollPeriod->month ?? 1)) === 12;
                                         @endphp
                                         <tr wire:key="deduction-row-tax-{{ $index }}" class="{{ ! $isEnabled ? 'payroll-row-disabled' : '' }}">
                                             <td class="text-center {{ $isEnabled ? 'text-muted' : 'payroll-text-disabled' }} align-middle !px-3 !py-2.5" style="font-size: 12.5px;">{{ $deductionCounter }}</td>
@@ -852,14 +876,28 @@
                                                 <div class="{{ $isEnabled ? 'text-dark' : 'payroll-text-disabled' }} d-flex align-items-center" style="font-weight: 500; font-size: 13px;">
                                                     {{ $row['name'] }}
                                                     @if ($isEnabled)
-                                                        <span class="badge badge-light border text-danger ml-2 text-xs" style="font-weight: 500;">PPh 21 Otomatis</span>
+                                                        @if ($isDecember)
+                                                            @if ($rowTaxAmt < 0)
+                                                                <span class="badge badge-light border text-success ml-2 text-xs" style="font-weight: 500;">Lebih Bayar (Dikembalikan)</span>
+                                                            @else
+                                                                <span class="badge badge-light border text-info ml-2 text-xs" style="font-weight: 500;">Pasal 17 Progresif</span>
+                                                            @endif
+                                                        @else
+                                                            <span class="badge badge-light border text-danger ml-2 text-xs" style="font-weight: 500;">PPh 21 Otomatis</span>
+                                                        @endif
                                                     @else
                                                         <span class="badge badge-light border text-muted ml-2 text-xs" style="font-weight: 500;">Nonaktif</span>
                                                     @endif
                                                 </div>
                                             </td>
-                                            <td class="text-right align-middle !px-3 !py-2.5 {{ $isEnabled ? 'text-danger' : 'payroll-amount-disabled' }}" style="font-weight: 600; font-size: 13px;">
-                                                -Rp {{ number_format((float) ($row['amount'] ?? 0), 0, ',', '.') }}
+                                            <td class="text-right align-middle !px-3 !py-2.5 {{ $isEnabled ? ($rowTaxAmt < 0 ? 'text-success' : 'text-danger') : 'payroll-amount-disabled' }}" style="font-weight: 600; font-size: 13px;">
+                                                @if ($rowTaxAmt < 0)
+                                                    +Rp {{ number_format(abs($rowTaxAmt), 0, ',', '.') }}
+                                                @elseif ($rowTaxAmt > 0)
+                                                    -Rp {{ number_format($rowTaxAmt, 0, ',', '.') }}
+                                                @else
+                                                    Rp 0
+                                                @endif
                                             </td>
                                             <td class="text-center align-middle !px-3 !py-2.5">
                                                 <button type="button"

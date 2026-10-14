@@ -1042,4 +1042,78 @@ class PayrollTaxIntegrationTest extends TestCase
         $item->refresh();
         $this->assertEquals(0.0, (float) $item->total_allowances);
     }
+
+    public function test_december_progressive_tax_calculation_details_modal(): void
+    {
+        $company = CompanyProfile::getProfile();
+        $company->update([
+            'enable_pph21' => true,
+            'include_bpjs_in_tax' => false,
+        ]);
+
+        $dept = Department::firstOrCreate(['name' => 'Accounting'], ['description' => 'Acc']);
+        $pos = Position::firstOrCreate(['name' => 'Tax Officer'], ['description' => 'TO']);
+
+        $employee = Employee::create([
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'full_name' => 'Siti Nurhaliza',
+            'join_date' => Carbon::now()->subMonths(12),
+            'status' => EmployeeStatus::ACTIVE,
+            'basic_salary' => 12_000_000,
+        ]);
+
+        EmployeeDetail::create([
+            'employee_id' => $employee->id,
+            'marital_status' => MaritalStatus::TK,
+            'dependents_count' => 0,
+            'ptkp_status' => PtkpStatus::TK_0,
+            'tax_method' => TaxMethod::GROSS,
+            'npwp_number' => '12.345.678.9-012.000',
+        ]);
+
+        $admin = $this->createAdminUser();
+        $service = app(PayrollService::class);
+
+        // Create December payroll period
+        $period = $service->createPeriod([
+            'month' => 12,
+            'year' => 2026,
+            'cutoff_start_date' => '2026-11-26',
+            'cutoff_end_date' => '2026-12-25',
+        ], $admin);
+
+        $item = $period->items()->where('employee_id', $employee->id)->first();
+        $this->actingAs($admin);
+
+        // Test showCalculationDetail('ter_scheme')
+        $test = Livewire::test(PayrollManageItem::class, [
+            'period' => $period,
+            'item' => $item,
+        ])
+            ->call('showCalculationDetail', 'ter_scheme');
+
+        $calc = $test->get('calculationDetail');
+        $this->assertNotNull($calc);
+        $this->assertEquals('Dasar Skema Tarif PPh 21 (Masa Desember - UU HPP)', $calc['title']);
+        $this->assertNotEmpty($calc['rows']);
+        $this->assertStringContainsString('Pasal 17', $calc['summary_text']);
+
+        // Check required progressive reconciliation rows
+        $components = collect($calc['rows'])->pluck('component')->all();
+        $this->assertContains('Skema Pajak Akhir Tahun', $components);
+        $this->assertContains('Status PTKP Karyawan', $components);
+        $this->assertContains('Total Penghasilan Bruto Setahun', $components);
+        $this->assertContains('Pengurang: Biaya Jabatan Setahun', $components);
+        $this->assertContains('Penghasilan Neto Setahun', $components);
+        $this->assertContains('Penghasilan Kena Pajak (PKP)', $components);
+        $this->assertContains('Total PPh 21 Terutang Setahun', $components);
+
+        // Test showCalculationDetail('pph21')
+        $test->call('showCalculationDetail', 'pph21');
+        $calcPph = $test->get('calculationDetail');
+        $this->assertNotNull($calcPph);
+        $this->assertEquals('Rincian Perhitungan PPh 21 (Rekonsiliasi Desember)', $calcPph['title']);
+        $this->assertNotEmpty($calcPph['rows']);
+    }
 }

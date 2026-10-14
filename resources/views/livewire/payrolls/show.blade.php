@@ -153,24 +153,42 @@
                 </div>
 
                 <div class="activities">
-                    <!-- Tahap 1: Draf Gaji -->
+                    <!-- Tahap 1: Verifikasi Draf HRD -->
                     <div class="activity">
-                        <div class="activity-icon bg-primary text-white shadow-primary">
-                            <i class="fas fa-pencil-alt"></i>
+                        <div class="activity-icon {{ $period->status->isEditable() ? 'bg-primary text-white shadow-primary' : 'bg-success text-white shadow-success' }}">
+                            <i class="{{ $period->status->isEditable() ? 'fas fa-pencil-alt' : 'fas fa-check' }}"></i>
                         </div>
                         <div class="activity-detail">
                             <div class="mb-1">
-                                <span class="text-job text-primary font-weight-bold">Tahap 1</span>
+                                <span class="text-job {{ $period->status->isEditable() ? 'text-primary' : 'text-success' }} font-weight-bold">Tahap 1</span>
                                 <span class="bullet"></span>
                                 <span class="text-job text-muted">{{ $period->created_at ? $period->created_at->format('d M Y') : '-' }}</span>
                             </div>
                             <p class="mb-0 text-dark">
-                                Draf penggajian dibuat oleh <strong>{{ $period->creator?->name ?? 'Admin' }}</strong>.
+                                Draf dibuat oleh <strong>{{ $period->creator?->name ?? 'Admin' }}</strong>.
                             </p>
+                            @if ($period->status->isEditable())
+                                <div class="mt-2 p-2 rounded" style="background-color: #f8fafc; border: 1px solid #e2e8f0;">
+                                    <div class="d-flex justify-content-between align-items-center mb-1" style="font-size: 11.5px;">
+                                        <span class="font-weight-bold text-dark"><i class="fas fa-clipboard-check mr-1 text-primary"></i> Verifikasi HRD</span>
+                                        <span class="font-weight-700 text-primary">{{ $this->verifiedCount }}/{{ $this->totalItemsCount }} ({{ $this->verificationPercent }}%)</span>
+                                    </div>
+                                    <div class="progress" style="height: 6px; border-radius: 4px; background-color: #e2e8f0;">
+                                        <div class="progress-bar bg-primary" role="progressbar" style="width: {{ $this->verificationPercent }}%;" aria-valuenow="{{ $this->verificationPercent }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <div class="mt-1" style="font-size: 10.5px;">
+                                        @if ($this->allVerified)
+                                            <span class="text-success font-weight-600"><i class="fas fa-check-circle mr-1"></i> Seluruh slip telah diverifikasi HRD.</span>
+                                        @else
+                                            <span class="text-muted">{{ $this->totalItemsCount - $this->verifiedCount }} karyawan masih berstatus Draf.</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
                         </div>
                     </div>
 
-                    <!-- Tahap 2: Pengajuan -->
+                    <!-- Tahap 2: Pengajuan ke Direktur -->
                     <div class="activity">
                         @if ($isRejected)
                             <div class="activity-icon bg-danger text-white shadow-danger">
@@ -211,7 +229,7 @@
                                     <span class="text-job activity-text-pending">Belum Diajukan</span>
                                 </div>
                                 <p class="mb-0 activity-desc-pending">
-                                    Menunggu pengajuan draf penggajian ke Direktur.
+                                    Menunggu seluruh verifikasi karyawan selesai sebelum diajukan.
                                 </p>
                             </div>
                         @endif
@@ -337,21 +355,34 @@
                                         wire:click="recalculateAllTaxes" 
                                         wire:loading.attr="disabled"
                                         class="btn btn-info payroll-action-btn"
+                                        data-toggle="tooltip"
                                         title="Hitung ulang PPh 21 untuk seluruh karyawan">
                                         <span wire:loading.remove wire:target="recalculateAllTaxes"><i class="fas fa-calculator mr-1"></i> Hitung Ulang Pajak</span>
                                         <span wire:loading wire:target="recalculateAllTaxes"><i class="fas fa-spinner fa-spin mr-1"></i> Menghitung...</span>
                                     </button>
                                 @endif
 
-                                <button type="button" 
-                                    wire:click="$dispatch('swal:confirm', {
-                                        title: 'Ajukan ke Direktur?',
-                                        text: 'Draf penggajian {{ $period->reference_number }} akan diajukan ke Direktur untuk mendapatkan persetujuan.',
-                                        action: 'submit-period-confirmed'
-                                        })" 
-                                    class="btn btn-primary payroll-action-btn">
-                                    <i class="fas fa-paper-plane mr-1"></i> Ajukan ke Direktur
-                                </button>
+                                @if ($this->allVerified)
+                                    <button type="button" 
+                                        wire:click="$dispatch('swal:confirm', {
+                                            title: 'Ajukan ke Direktur?',
+                                            text: 'Seluruh ({{ $this->totalItemsCount }}) slip gaji telah diverifikasi HRD. Periode {{ $period->reference_number }} akan diajukan ke Direktur untuk mendapatkan persetujuan (ACC).',
+                                            action: 'submit-period-confirmed'
+                                            })" 
+                                        class="btn btn-primary payroll-action-btn shadow-sm"
+                                        data-toggle="tooltip"
+                                        title="Ajukan periode ke Direktur">
+                                        <i class="fas fa-paper-plane mr-1"></i> Ajukan ke Direktur
+                                    </button>
+                                @else
+                                    <button type="button" 
+                                        wire:click="submitForApproval" 
+                                        class="btn btn-secondary payroll-action-btn"
+                                        data-toggle="tooltip"
+                                        title="Verifikasi semua karyawan dahulu ({{ $this->verifiedCount }}/{{ $this->totalItemsCount }} terverifikasi)">
+                                        <i class="fas fa-lock mr-1"></i> Ajukan ke Direktur
+                                    </button>
+                                @endif
                             </div>
                         @endif
 
@@ -469,18 +500,21 @@
         <div class="cash-advance-top-card">
             <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 12px;">
                 <h4 class="mb-0">Rincian Gaji - <span class="text-primary font-weight-bold">{{ $period->period_label }}</span></h4>
-                @if (auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted')
-                    <button type="button" 
-                        wire:click="$dispatch('swal:confirm', {
-                            title: 'Setujui Seluruh Gaji?',
-                            text: 'Apakah Anda ingin menyetujui seluruh slip gaji ({{ $items->total() }} karyawan) untuk periode ini sekaligus?',
-                            action: 'approve-all-items-confirmed',
-                            confirmButtonColor: '#28a745'
-                        })"
-                        class="btn btn-sm btn-success font-weight-bold shadow-sm" style="border-radius: 8px;">
-                        <i class="fas fa-check-double mr-1.5"></i> Setujui Semua
-                    </button>
-                @endif
+                <div class="d-flex align-items-center" style="gap: 8px;">
+
+                    @if (auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted')
+                        <button type="button" 
+                            wire:click="$dispatch('swal:confirm', {
+                                title: 'Setujui Seluruh Gaji?',
+                                text: 'Apakah Anda ingin menyetujui seluruh slip gaji ({{ $items->total() }} karyawan) untuk periode ini sekaligus?',
+                                action: 'approve-all-items-confirmed',
+                                confirmButtonColor: '#28a745'
+                            })"
+                            class="btn btn-sm btn-success font-weight-bold shadow-sm" style="border-radius: 8px;">
+                            <i class="fas fa-check-double mr-1.5"></i> Setujui Semua
+                        </button>
+                    @endif
+                </div>
             </div>
 
             <!-- Controls: Show Entries & Search Bar (Matching Kasbon) -->
@@ -516,7 +550,7 @@
                     <button type="button" wire:click="approveSelected" class="btn btn-sm btn-success font-weight-bold shadow-sm px-3" style="border-radius: 8px;">
                         <i class="fas fa-check mr-1"></i> Setujui Terpilih (ACC)
                     </button>
-                    <button type="button" wire:click="openRejectSelectedModal" class="btn btn-sm btn-outline-danger font-weight-bold px-3" style="border-radius: 8px;">
+                    <button type="button" wire:click="openRejectSelectedModal" class="btn btn-sm btn-danger font-weight-bold px-3" style="border-radius: 8px;">
                         <i class="fas fa-times mr-1"></i> Tolak / Revisi Terpilih
                     </button>
                     <button type="button" wire:click="$set('selectedItems', [])" class="btn btn-sm btn-light border text-muted" style="border-radius: 8px;">
@@ -544,8 +578,8 @@
                         <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">GAJI KOTOR</th>
                         <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">POTONGAN (-)</th>
                         <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">GAJI BERSIH</th>
-                        <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 100px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">STATUS</th>
-                        <th class="text-center text-nowrap !px-3 !py-2.5" style="width: {{ auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted' ? '130px' : '105px' }}; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;"><i class="fas fa-cog text-muted mr-1" title="Aksi"></i> AKSI</th>
+                        <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 140px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">STATUS</th>
+                        <th class="text-center text-nowrap !px-3 !py-2.5" style="width: {{ auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted' ? '130px' : ($period->status->isEditable() ? '145px' : '105px') }}; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;"><i class="fas fa-cog text-muted mr-1" title="Aksi"></i> AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -674,23 +708,9 @@
                                 {{ $item->formatted_net_salary }}
                             </td>
                             <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
-                                @if ($item->isRejected())
-                                    <span class="badge badge-danger px-2.5 py-1" style="font-size: 11px; font-weight: 600; border-radius: 12px;" title="Catatan: {{ $item->rejection_reason }}">
-                                        Ditolak
-                                    </span>
-                                @elseif (! $item->isApproved())
-                                    <span class="badge badge-warning text-dark px-2.5 py-1" style="font-size: 11px; font-weight: 600; border-radius: 12px;">
-                                        Menunggu
-                                    </span>
-                                @elseif ($item->isPaid())
-                                    <span class="badge badge-info px-2.5 py-1" style="font-size: 11px; font-weight: 600; border-radius: 12px;" title="Dibayar pada {{ $item->paid_at?->format('d M Y, H:i') }} &bull; Dikonfirmasi oleh {{ $item->payer?->name ?? 'Admin' }}">
-                                        Dibayar
-                                    </span>
-                                @else
-                                    <span class="badge badge-success px-2.5 py-1" style="font-size: 11px; font-weight: 600; border-radius: 12px;" title="Disetujui oleh {{ $item->approver?->name ?? 'Direktur' }}">
-                                        Disetujui
-                                    </span>
-                                @endif
+                                <span class="{{ $item->payroll_status_badge_class }} px-2.5 py-1 text-nowrap font-weight-600" title="{{ $item->payroll_status_tooltip }}" style="font-size: 11.5px; border-radius: 12px;">
+                                    <i class="{{ $item->payroll_status_icon }} mr-1"></i> {{ $item->payroll_status_label }}
+                                </span>
                             </td>
                             <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
                                 <div class="d-inline-flex align-items-center" style="gap: 6px;">
@@ -698,6 +718,21 @@
                                     <a href="{{ route('payrolls.items.edit', [$period, $item]) }}" class="btn btn-primary btn-action" data-toggle="tooltip" title="Kelola Komponen Gaji">
                                         <i class="fas fa-sliders-h"></i>
                                     </a>
+
+                                    <!-- Tombol Verifikasi / Batal Verifikasi HRD (Untuk Admin saat Draf / Revisi) -->
+                                    @if ($period->status->isEditable() && auth()->user()?->hasRole('admin'))
+                                        @if (! $item->isVerified())
+                                            <button type="button" wire:click="verifyItem({{ $item->id }})" wire:loading.attr="disabled" class="btn btn-info btn-action" data-toggle="tooltip" title="Tandai Verif HRD">
+                                                <span wire:loading.remove wire:target="verifyItem({{ $item->id }})"><i class="fas fa-check"></i></span>
+                                                <span wire:loading wire:target="verifyItem({{ $item->id }})"><i class="fas fa-spinner fa-spin"></i></span>
+                                            </button>
+                                        @else
+                                            <button type="button" wire:click="unverifyItem({{ $item->id }})" wire:loading.attr="disabled" class="btn btn-success btn-action" data-toggle="tooltip" title="Terverifikasi HRD (Klik untuk Batalkan)">
+                                                <span wire:loading.remove wire:target="unverifyItem({{ $item->id }})"><i class="fas fa-user-check"></i></span>
+                                                <span wire:loading wire:target="unverifyItem({{ $item->id }})"><i class="fas fa-spinner fa-spin"></i></span>
+                                            </button>
+                                        @endif
+                                    @endif
 
                                     <!-- Tombol Hapus dari Draf (hanya jika periode draf/revisi & bukan direktur) -->
                                     @if ($period->status->isEditable() && ! auth()->user()?->hasRole('direktur'))
@@ -1625,18 +1660,19 @@
                 align-items: center !important;
                 justify-content: center !important;
                 text-align: center !important;
-                padding: 9px 8px !important;
-                font-size: 12px !important;
-                font-weight: 600 !important;
-                line-height: 1.3 !important;
+                padding: 8px 6px !important;
+                font-size: 11.5px !important;
+                font-weight: 700 !important;
+                line-height: 1.25 !important;
                 border-radius: 8px !important;
                 margin: 0 !important;
-                white-space: normal !important;
-                word-break: break-word !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
             }
             .payroll-sidebar-actions .payroll-action-btn i {
-                font-size: 12px !important;
-                flex-shrink: 0;
+                font-size: 11.5px !important;
+                flex-shrink: 0 !important;
             }
 
             /* Custom Stat Icon & Badges (Matching Kasbon) */
@@ -1806,9 +1842,9 @@
 
             /* Bootstrap Callout (.bd-callout) Component */
             .bd-callout {
-                padding: 1rem 1.25rem !important;
+                padding: 0.85rem 1rem !important;
                 margin-top: 0 !important;
-                margin-bottom: 1.5rem !important;
+                margin-bottom: 1.25rem !important;
                 background-color: #ffffff !important;
                 border: 1px solid #e2e8f0 !important;
                 border-left-width: 4px !important;
@@ -1822,8 +1858,13 @@
                 background: linear-gradient(90deg, rgba(11, 82, 170, 0.05) 0%, rgba(255, 255, 255, 0.96) 18%, #ffffff 100%) !important;
             }
 
+            .bd-callout-warning {
+                border-left-color: #f59e0b !important;
+                background: linear-gradient(90deg, rgba(245, 158, 11, 0.08) 0%, rgba(255, 255, 255, 0.98) 20%, #ffffff 100%) !important;
+            }
+
             .bd-callout .bd-callout-icon {
-                font-size: 18px !important;
+                font-size: 16px !important;
                 line-height: 1 !important;
                 flex-shrink: 0 !important;
             }
@@ -1832,8 +1873,12 @@
                 color: #0b52aa !important;
             }
 
+            .bd-callout-warning .bd-callout-icon {
+                color: #d97706 !important;
+            }
+
             .bd-callout .bd-callout-title {
-                font-size: 14px !important;
+                font-size: 13.5px !important;
                 font-weight: 700 !important;
                 line-height: 1.35 !important;
                 margin-bottom: 3px !important;
@@ -1844,10 +1889,14 @@
                 color: #0b52aa !important;
             }
 
+            .bd-callout-warning .bd-callout-title {
+                color: #b45309 !important;
+            }
+
             .bd-callout .bd-callout-desc {
-                font-size: 12.5px !important;
+                font-size: 12px !important;
                 color: #475569 !important;
-                line-height: 1.55 !important;
+                line-height: 1.5 !important;
                 margin-bottom: 0 !important;
             }
 

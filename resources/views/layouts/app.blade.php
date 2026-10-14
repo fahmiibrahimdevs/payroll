@@ -200,6 +200,81 @@
                 $('#' + modalId).modal('hide');
             });
         });
+
+        // Global Chart.js Custom Floating HTML Tooltip (No Clipping, Auto-Fade Center Overlay)
+        window.customChartTooltip = function(context) {
+            const chart = context.chart;
+            const tooltip = context.tooltip;
+            const parent = chart && chart.canvas ? chart.canvas.parentNode : null;
+            if (!parent) return;
+
+            let tooltipEl = parent.querySelector('.custom-chartjs-tooltip');
+            if (!tooltipEl) {
+                tooltipEl = document.createElement('div');
+                tooltipEl.className = 'custom-chartjs-tooltip';
+                tooltipEl.style.position = 'absolute';
+                tooltipEl.style.background = '#0f172a';
+                tooltipEl.style.color = '#ffffff';
+                tooltipEl.style.borderRadius = '8px';
+                tooltipEl.style.padding = '8px 12px';
+                tooltipEl.style.fontSize = '11.5px';
+                tooltipEl.style.lineHeight = '1.35';
+                tooltipEl.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)';
+                tooltipEl.style.pointerEvents = 'none';
+                tooltipEl.style.zIndex = '50';
+                tooltipEl.style.whiteSpace = 'nowrap';
+                tooltipEl.style.opacity = '0';
+                tooltipEl.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+                parent.appendChild(tooltipEl);
+            }
+
+            const centerEl = parent.querySelector('.chart-center-overlay');
+
+            if (tooltip.opacity === 0) {
+                tooltipEl.style.opacity = '0';
+                if (centerEl) centerEl.style.opacity = '1';
+                return;
+            }
+
+            if (centerEl) centerEl.style.opacity = '0';
+
+            if (tooltip.body) {
+                const titleLines = tooltip.title || [];
+                const bodyLines = tooltip.body.map(function(b) { return b.lines; }).flat();
+
+                let innerHtml = '';
+                titleLines.forEach(function(title) {
+                    innerHtml += '<div style="font-weight: 700; color: #ffffff; margin-bottom: 2px;">' + title + '</div>';
+                });
+                bodyLines.forEach(function(body) {
+                    innerHtml += '<div style="font-weight: 500; color: #e2e8f0;">' + body + '</div>';
+                });
+                tooltipEl.innerHTML = innerHtml;
+            }
+
+            const canvas = chart.canvas;
+            const parentWidth = parent.offsetWidth;
+            const targetX = canvas.offsetLeft + tooltip.caretX;
+            const targetY = canvas.offsetTop + tooltip.caretY;
+
+            tooltipEl.style.opacity = '1';
+            const tipWidth = tooltipEl.offsetWidth || 140;
+            const tipHeight = tooltipEl.offsetHeight || 50;
+
+            const halfWidth = tipWidth / 2;
+            const margin = 8;
+            const clampedX = Math.max(halfWidth + margin, Math.min(parentWidth - halfWidth - margin, targetX));
+
+            if (targetY - tipHeight - 12 < 0) {
+                tooltipEl.style.transform = 'translate(-50%, 0)';
+                tooltipEl.style.top = (targetY + 12) + 'px';
+            } else {
+                tooltipEl.style.transform = 'translate(-50%, -100%)';
+                tooltipEl.style.top = (targetY - 10) + 'px';
+            }
+
+            tooltipEl.style.left = clampedX + 'px';
+        };
     </script>
 
     @stack('scripts')

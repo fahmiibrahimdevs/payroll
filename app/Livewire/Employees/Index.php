@@ -370,6 +370,8 @@ class Index extends Component
             includeSensitive: auth()->user()?->hasRole('admin') ?? false,
         );
 
+        $dashboardData = $employeeService->getEmployeeDashboardData();
+
         return view('livewire.employees.index', [
             'employees' => $employees,
             'departments' => Department::query()->select(['id', 'name'])->orderBy('name')->get(),
@@ -377,6 +379,9 @@ class Index extends Component
             'statuses' => EmployeeStatus::cases(),
             'employmentStatuses' => EmploymentStatus::cases(),
             'genders' => Gender::cases(),
+            'employeeStats' => $dashboardData['stats'],
+            'expiringEmployees' => $dashboardData['expiring_employees'],
+            'employeeCharts' => $dashboardData['charts'],
         ]);
     }
 }

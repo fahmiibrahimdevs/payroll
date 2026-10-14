@@ -6,11 +6,20 @@ use Database\Factories\DepartmentFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Department extends Model
 {
     /** @use HasFactory<DepartmentFactory> */
     use HasFactory;
+
+    /**
+     * Get the employees belonging to the department.
+     */
+    public function employees(): HasMany
+    {
+        return $this->hasMany(Employee::class);
+    }
 
     /**
      * The attributes that are mass assignable.

@@ -1472,8 +1472,8 @@ class CashAdvanceCrudTest extends TestCase
         $component = Livewire::test(Index::class)
             ->assertSet('selectedEmployeeId', null)
             ->assertSee('Semua Karyawan')
-            ->assertSee('Karyawan Berkasbon')
-            ->assertSee('Total Diajukan')
+            ->assertSee('Sisa kasbon aktif')
+            ->assertSee('ACC Pengajuan Kasbon')
             ->assertSee($this->employee->full_name)
             ->assertSee('IT Department')
             ->assertSee('Developer')
@@ -1491,7 +1491,7 @@ class CashAdvanceCrudTest extends TestCase
         $component->call('clearSelectedEmployee')
             ->assertSet('selectedEmployeeId', null)
             ->assertDispatched('employee-selected', id: null)
-            ->assertSee('Karyawan Berkasbon');
+            ->assertSee('Sisa kasbon aktif');
     }
 
     public function test_all_employees_recap_displays_totals_and_supports_department_position_search(): void
@@ -1696,5 +1696,336 @@ class CashAdvanceCrudTest extends TestCase
             ->assertSee('table-group-header')
             ->assertSee('DEPARTEMEN MIKROKONTROLER')
             ->assertSee('Karyawan', false);
+    }
+
+    public function test_summary_stats_calculates_4_metrics_and_renders_correctly(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        // Create pending advance
+        CashAdvance::create([
+            'reference_number' => 'KB-202610-PND1',
+            'employee_id' => $this->employee->id,
+            'amount' => 1500000,
+            'remaining_amount' => 1500000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 3,
+            'monthly_installment' => 500000,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'reason' => 'Pengajuan Test Pending',
+            'status' => CashAdvanceStatus::PENDING->value,
+            'submitted_by' => $this->adminUser->id,
+        ]);
+
+        $service = app(CashAdvanceService::class);
+        $stats = $service->getSummaryStats();
+
+        $this->assertEquals(1, $stats['total_pending_count']);
+        $this->assertEquals(1500000.0, $stats['pending_amount']);
+        $this->assertArrayHasKey('active_paid_percentage', $stats);
+        $this->assertArrayHasKey('payroll_deduction_this_month', $stats);
+        $this->assertArrayHasKey('attention_employees_count', $stats);
+        $this->assertArrayHasKey('attention_subtitle', $stats);
+
+        Livewire::test(Index::class)
+            ->assertOk()
+            ->assertSee('Sisa kasbon aktif')
+            ->assertSee('ACC Pengajuan Kasbon')
+            ->assertSee('ACC Pelunasan Kasbon')
+            ->assertSee('Perlu perhatian')
+            ->assertSee('1 pengajuan')
+            ->assertSee('Rp 1.500.000')
+            ->assertSee('Tinjau')
+            ->assertSeeHtml('id="pendingPaymentReviewModal"');
+    }
+
+    public function test_direktur_can_approve_cash_advance_directly_from_review_modal(): void
+    {
+        $advance = CashAdvance::create([
+            'reference_number' => 'KB-202610-PND2',
+            'employee_id' => $this->employee->id,
+            'amount' => 900000,
+            'remaining_amount' => 900000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 3,
+            'monthly_installment' => 300000,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'reason' => 'Butuh dana cepat',
+            'status' => CashAdvanceStatus::PENDING->value,
+            'submitted_by' => $this->adminUser->id,
+        ]);
+
+        $this->actingAs($this->direkturUser);
+
+        Livewire::test(Index::class)
+            ->assertSee('Diajukan oleh:')
+            ->assertSee($this->adminUser->name)
+            ->call('approveDirect', $advance->id, 'Disetujui langsung oleh direktur')
+            ->assertDispatched('swal:alert');
+
+        $this->assertEquals(CashAdvanceStatus::ACTIVE, $advance->fresh()->status);
+        $this->assertEquals($this->direkturUser->id, $advance->fresh()->approved_by);
+        $this->assertEquals(3, $advance->fresh()->installments()->count());
+    }
+
+    public function test_direktur_can_reject_cash_advance_directly_from_review_modal(): void
+    {
+        $advance = CashAdvance::create([
+            'reference_number' => 'KB-202610-PND3',
+            'employee_id' => $this->employee->id,
+            'amount' => 600000,
+            'remaining_amount' => 600000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 2,
+            'monthly_installment' => 300000,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'reason' => 'Pengajuan ditolak',
+            'status' => CashAdvanceStatus::PENDING->value,
+            'submitted_by' => $this->adminUser->id,
+        ]);
+
+        $this->actingAs($this->direkturUser);
+
+        Livewire::test(Index::class)
+            ->call('rejectDirect', $advance->id, 'Plafon belum mencukupi')
+            ->assertDispatched('swal:alert');
+
+        $this->assertEquals(CashAdvanceStatus::REJECTED, $advance->fresh()->status);
+        $this->assertEquals('Plafon belum mencukupi', $advance->fresh()->rejection_reason);
+    }
+
+    public function test_admin_cannot_approve_or_reject_cash_advance_directly(): void
+    {
+        $advance = CashAdvance::create([
+            'reference_number' => 'KB-202610-PND4',
+            'employee_id' => $this->employee->id,
+            'amount' => 500000,
+            'remaining_amount' => 500000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 1,
+            'monthly_installment' => 500000,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'reason' => 'Pengajuan admin test',
+            'status' => CashAdvanceStatus::PENDING->value,
+            'submitted_by' => $this->adminUser->id,
+        ]);
+
+        $this->actingAs($this->adminUser);
+
+        Livewire::test(Index::class)
+            ->call('approveDirect', $advance->id)
+            ->assertDispatched('swal:alert');
+
+        $this->assertEquals(CashAdvanceStatus::PENDING, $advance->fresh()->status);
+    }
+
+    public function test_recap_displays_charts_card_and_pelunasan_progress_bar_accurately(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        $advance = CashAdvance::create([
+            'reference_number' => 'KB-202610-CHART-1',
+            'employee_id' => $this->employee->id,
+            'amount' => 1000000,
+            'remaining_amount' => 750000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 4,
+            'monthly_installment' => 250000,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'reason' => 'Chart & Pelunasan Test',
+            'status' => CashAdvanceStatus::ACTIVE->value,
+            'submitted_by' => $this->adminUser->id,
+        ]);
+
+        // 1 installment paid, 3 pending
+        CashAdvanceInstallment::create([
+            'cash_advance_id' => $advance->id,
+            'installment_number' => 1,
+            'due_date' => Carbon::today()->subMonth()->toDateString(),
+            'amount' => 250000,
+            'paid_amount' => 250000,
+            'status' => InstallmentStatus::PAID->value,
+        ]);
+
+        for ($i = 2; $i <= 4; $i++) {
+            CashAdvanceInstallment::create([
+                'cash_advance_id' => $advance->id,
+                'installment_number' => $i,
+                'due_date' => Carbon::today()->addMonths($i - 1)->toDateString(),
+                'amount' => 250000,
+                'paid_amount' => 0,
+                'status' => InstallmentStatus::PENDING->value,
+            ]);
+        }
+
+        Livewire::test(Index::class)
+            ->assertSet('selectedEmployeeId', null)
+            ->assertSee('PELUNASAN')
+            ->assertSee('1 dari 4 cicilan')
+            ->assertSee('Analisis Kasbon')
+            ->assertSee('Diberikan vs Dibayar')
+            ->assertSee('Top 5 Kasbon Terbesar')
+            ->assertSee('Distribusi Departemen')
+            ->assertViewHas('chartData', function ($chartData) {
+                return isset($chartData['monthly'])
+                    && isset($chartData['top_debtors'])
+                    && isset($chartData['departments']);
+            });
+    }
+
+    public function test_overdue_card_has_tinjau_button_and_renders_overdue_review_modal(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        $advance = CashAdvance::create([
+            'reference_number' => 'KB-202610-OVERDUE-1',
+            'employee_id' => $this->employee->id,
+            'amount' => 1000000,
+            'remaining_amount' => 1000000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 2,
+            'monthly_installment' => 500000,
+            'disbursement_date' => Carbon::today()->subMonths(2)->toDateString(),
+            'reason' => 'Uji cicilan overdue',
+            'status' => CashAdvanceStatus::ACTIVE->value,
+            'submitted_by' => $this->adminUser->id,
+            'approved_by' => $this->adminUser->id,
+            'approved_at' => Carbon::now()->subMonths(2),
+        ]);
+
+        CashAdvanceInstallment::create([
+            'cash_advance_id' => $advance->id,
+            'installment_number' => 1,
+            'due_date' => Carbon::now()->subMonths(1)->startOfMonth()->toDateString(),
+            'amount' => 500000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING->value,
+        ]);
+
+        Livewire::test(Index::class)
+            ->assertSet('selectedEmployeeId', null)
+            ->assertSee('Perlu perhatian')
+            ->assertSee('overdueReviewModal')
+            ->assertSee('Tinjau Cicilan Terlewat')
+            ->assertSee('cicilan terlewat')
+            ->assertViewHas('overdueReviewAdvances', function ($overdue) {
+                return $overdue->isNotEmpty();
+            });
+    }
+
+    public function test_pending_payments_review_modal_and_acc_action(): void
+    {
+        $this->actingAs($this->direkturUser);
+
+        $advance = CashAdvance::create([
+            'reference_number' => 'KB-202610-PMP1',
+            'employee_id' => $this->employee->id,
+            'amount' => 1000000,
+            'remaining_amount' => 1000000,
+            'repayment_scheme' => RepaymentScheme::MANUAL->value,
+            'installment_count' => 1,
+            'monthly_installment' => 1000000,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'reason' => 'Pinjaman untuk uji ACC pembayaran',
+            'status' => CashAdvanceStatus::ACTIVE->value,
+            'submitted_by' => $this->adminUser->id,
+            'approved_by' => $this->direkturUser->id,
+            'approved_at' => Carbon::now(),
+        ]);
+
+        $payment = CashAdvancePayment::create([
+            'payment_number' => 'PAY-KB-202610-001',
+            'cash_advance_id' => $advance->id,
+            'payment_date' => Carbon::today()->toDateString(),
+            'amount' => 500000,
+            'payment_method' => PaymentMethod::BANK_TRANSFER->value,
+            'status' => CashAdvancePaymentStatus::PENDING->value,
+            'notes' => 'Transfer cicilan ke rekening BCA',
+            'recorded_by' => $this->adminUser->id,
+        ]);
+
+        $paymentWithProof = CashAdvancePayment::create([
+            'payment_number' => 'PAY-KB-202610-002',
+            'cash_advance_id' => $advance->id,
+            'payment_date' => Carbon::today()->toDateString(),
+            'amount' => 200000,
+            'payment_method' => PaymentMethod::BANK_TRANSFER->value,
+            'proof_document' => 'cash-advances/proofs/test-proof.jpg',
+            'status' => CashAdvancePaymentStatus::PENDING->value,
+            'notes' => 'Transfer cicilan ke rekening BCA dengan bukti',
+            'recorded_by' => $this->adminUser->id,
+        ]);
+
+        Livewire::test(Index::class)
+            ->assertSee('ACC Pelunasan Kasbon')
+            ->assertSee('2 pelunasan')
+            ->assertSee('Rp 700.000')
+            ->assertSee('pendingPaymentReviewModal')
+            ->assertSee('Transfer Bank')
+            ->assertSee('Catatan:')
+            ->assertSee('Lihat Bukti')
+            ->assertSee('Tidak ada Bukti')
+            ->assertSee('Diinput oleh:')
+            ->assertSee($this->adminUser->name)
+            ->call('approvePayment', $payment->id)
+            ->assertDispatched('swal:alert');
+
+        $this->assertEquals(CashAdvancePaymentStatus::APPROVED, $payment->fresh()->status);
+        $this->assertEquals(500000, $advance->fresh()->remaining_amount);
+    }
+
+    public function test_can_direct_navigate_to_ledger_transaction_and_highlights_overdue_statements(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        $advance = CashAdvance::create([
+            'reference_number' => 'KB-202609-OVERDUE',
+            'employee_id' => $this->employee->id,
+            'amount' => 1000000,
+            'remaining_amount' => 1000000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 1,
+            'monthly_installment' => 1000000,
+            'disbursement_date' => Carbon::parse('2026-08-01')->toDateString(),
+            'reason' => 'Pinjaman bulan lalu',
+            'status' => CashAdvanceStatus::ACTIVE->value,
+            'submitted_by' => $this->adminUser->id,
+            'approved_by' => $this->direkturUser->id,
+            'approved_at' => Carbon::now(),
+        ]);
+
+        $instOverdue = CashAdvanceInstallment::create([
+            'cash_advance_id' => $advance->id,
+            'installment_number' => 1,
+            'due_date' => Carbon::yesterday()->toDateString(),
+            'amount' => 1000000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING->value,
+        ]);
+
+        $pendingPayment = CashAdvancePayment::create([
+            'payment_number' => 'PAY-KB-202610-0099',
+            'cash_advance_id' => $advance->id,
+            'payment_date' => Carbon::today()->toDateString(),
+            'amount' => 500000,
+            'payment_method' => PaymentMethod::BANK_TRANSFER->value,
+            'status' => CashAdvancePaymentStatus::PENDING->value,
+            'notes' => 'Cicilan sebagian',
+            'recorded_by' => $this->adminUser->id,
+        ]);
+
+        Livewire::test(Index::class)
+            ->set('selectedEmployeeId', $this->employee->id)
+            ->assertSee('table-row-overdue')
+            ->assertSee('background-color: #fef2f2;')
+            ->assertSee("directToTransaction({$this->employee->id}, 'payment', {$pendingPayment->id})", false)
+            ->call('directToTransaction', $this->employee->id, 'advance', $advance->id)
+            ->assertSet('activeMainTab', 'ledger')
+            ->assertSet('selectedCashAdvanceId', $advance->id)
+            ->assertDispatched('scroll-to-ledger-row')
+            ->call('directToTransaction', $this->employee->id, 'payment', $pendingPayment->id)
+            ->assertSet('activeMainTab', 'ledger')
+            ->assertSet('highlightPaymentId', $pendingPayment->id)
+            ->assertDispatched('scroll-to-ledger-row');
     }
 }

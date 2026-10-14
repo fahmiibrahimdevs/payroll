@@ -15,83 +15,110 @@
 
     <!-- 4 Modern Summary Statistic Cards (Iconless & Compact on Mobile 2x2, Rich with Stat-Icon on Desktop 1x4) -->
     <div class="cash-advance-stat-grid">
-        <!-- 1. Total Diajukan -->
+        <!-- 1. Sisa Kasbon Aktif (Gambar 2: Sisa kasbon aktif, Rp 1.300.000, 3 karyawan · 32% sudah terbayar) -->
         <div class="card cash-advance-stat-card">
             <div class="card-body cash-advance-stat-body">
                 <div class="cash-advance-stat-icon cash-advance-stat-icon-blue">
-                    <i class="fas fa-file-invoice-dollar"></i>
-                </div>
-                <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Total Diajukan">Total Diajukan</div>
-                    <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-primary" title="{{ $companyStats['formatted_total_approved_amount'] ?? 'Rp 0' }}">
-                            {{ $companyStats['formatted_total_approved_amount'] ?? 'Rp 0' }}
-                        </div>
-                        <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
-                            <i class="fas fa-chart-line text-[10px]"></i>
-                        </span>
-                    </div>
-                    <div class="cash-advance-stat-subtext">{{ $companyStats['total_approved_count'] ?? 0 }} pengajuan</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 2. Total Dilunasi -->
-        <div class="card cash-advance-stat-card">
-            <div class="card-body cash-advance-stat-body">
-                <div class="cash-advance-stat-icon cash-advance-stat-icon-green">
-                    <i class="far fa-check-square"></i>
-                </div>
-                <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Total Dilunasi">Total Dilunasi</div>
-                    <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-success" title="{{ $companyStats['formatted_total_paid_amount'] ?? 'Rp 0' }}">
-                            {{ $companyStats['formatted_total_paid_amount'] ?? 'Rp 0' }}
-                        </div>
-                        <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
-                            <i class="fas fa-chart-line text-[10px]"></i>
-                        </span>
-                    </div>
-                    <div class="cash-advance-stat-subtext">{{ $companyStats['total_paid_transactions_count'] ?? 0 }} transaksi</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 3. Total Sisa Kasbon -->
-        <div class="card cash-advance-stat-card">
-            <div class="card-body cash-advance-stat-body">
-                <div class="cash-advance-stat-icon cash-advance-stat-icon-amber">
                     <i class="fas fa-wallet"></i>
                 </div>
                 <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Total Sisa Kasbon">Total Sisa Kasbon</div>
+                    <div class="cash-advance-stat-title" title="Sisa Kasbon Aktif">Sisa kasbon aktif</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-warning" title="{{ $companyStats['formatted_total_remaining_balance'] ?? 'Rp 0' }}">
+                        <div class="cash-advance-stat-value text-dark" title="{{ $companyStats['formatted_total_remaining_balance'] ?? 'Rp 0' }}">
                             {{ $companyStats['formatted_total_remaining_balance'] ?? 'Rp 0' }}
                         </div>
-                        <span class="cash-advance-stat-badge cash-advance-stat-badge-amber">
-                            <i class="fas fa-chart-line text-[10px]"></i>
+                        <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
+                            <i class="fas fa-chart-line"></i>
                         </span>
                     </div>
-                    <div class="cash-advance-stat-subtext">{{ $companyStats['total_employees_with_active_advances'] ?? 0 }} karyawan</div>
+                    <div class="progress mt-1 mb-1" style="height: 4px; background-color: #e2e8f0; border-radius: 9999px;">
+                        <div class="progress-bar bg-primary" role="progressbar" style="width: {{ min(100, max(0, $companyStats['active_paid_percentage'] ?? 0)) }}%; border-radius: 9999px;"></div>
+                    </div>
+                    <div class="cash-advance-stat-subtext">
+                        {{ $companyStats['total_employees_with_active_advances'] ?? 0 }} karyawan &bull; {{ $companyStats['active_paid_percentage'] ?? 0 }}% sudah terbayar
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- 4. Karyawan Berkasbon -->
+        <!-- 2. ACC Pengajuan Kasbon -->
+        <div class="card cash-advance-stat-card">
+            <div class="card-body cash-advance-stat-body">
+                <div class="cash-advance-stat-icon cash-advance-stat-icon-amber">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="cash-advance-stat-content">
+                    <div class="cash-advance-stat-title" title="ACC Pengajuan Kasbon">ACC Pengajuan Kasbon</div>
+                    <div class="cash-advance-stat-value-row">
+                        <div class="cash-advance-stat-value text-warning" title="{{ $companyStats['total_pending_count'] ?? 0 }} pengajuan">
+                            {{ $companyStats['total_pending_count'] ?? 0 }} pengajuan
+                        </div>
+                        <span class="cash-advance-stat-badge cash-advance-stat-badge-amber">
+                            <i class="fas fa-hourglass-half"></i>
+                        </span>
+                    </div>
+                    <div class="cash-advance-stat-subtext">
+                        {{ $companyStats['formatted_pending_amount'] ?? 'Rp 0' }} &bull;
+                        @if (($companyStats['total_pending_count'] ?? 0) > 0)
+                            <a href="javascript:void(0)" onclick="$('#pendingReviewModal').modal('show')" class="text-primary font-weight-bold ml-1">Tinjau</a>
+                        @else
+                            <span class="text-muted ml-1">Tinjau</span>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. ACC Pelunasan Kasbon -->
+        <div class="card cash-advance-stat-card">
+            <div class="card-body cash-advance-stat-body">
+                <div class="cash-advance-stat-icon cash-advance-stat-icon-green">
+                    <i class="fas fa-money-check-alt"></i>
+                </div>
+                <div class="cash-advance-stat-content">
+                    <div class="cash-advance-stat-title" title="ACC Pelunasan Kasbon">ACC Pelunasan Kasbon</div>
+                    <div class="cash-advance-stat-value-row">
+                        <div class="cash-advance-stat-value text-success" title="{{ $companyStats['total_pending_payments_count'] ?? 0 }} pelunasan">
+                            {{ $companyStats['total_pending_payments_count'] ?? 0 }} pelunasan
+                        </div>
+                        <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
+                            <i class="fas fa-clipboard-check"></i>
+                        </span>
+                    </div>
+                    <div class="cash-advance-stat-subtext">
+                        {{ $companyStats['formatted_pending_payments_amount'] ?? 'Rp 0' }} &bull;
+                        @if (($companyStats['total_pending_payments_count'] ?? 0) > 0)
+                            <a href="javascript:void(0)" onclick="$('#pendingPaymentReviewModal').modal('show')" class="text-primary font-weight-bold ml-1">Tinjau</a>
+                        @else
+                            <span class="text-muted ml-1">Tinjau</span>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Perlu Perhatian (Gambar 2: Perlu perhatian, 1 karyawan, Cicilan terlewat bulan lalu) -->
         <div class="card cash-advance-stat-card">
             <div class="card-body cash-advance-stat-body">
                 <div class="cash-advance-stat-icon cash-advance-stat-icon-purple">
-                    <i class="fas fa-users"></i>
+                    <i class="fas fa-exclamation-triangle"></i>
                 </div>
                 <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Karyawan Berkasbon">Karyawan Berkasbon</div>
+                    <div class="cash-advance-stat-title" title="Perlu Perhatian">Perlu perhatian</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-dark" title="{{ $companyStats['total_employees_with_active_advances'] ?? 0 }} Orang">
-                            {{ $companyStats['total_employees_with_active_advances'] ?? 0 }} Orang
+                        <div class="cash-advance-stat-value {{ ($companyStats['attention_employees_count'] ?? 0) > 0 ? 'text-danger' : 'text-dark' }}" title="{{ $companyStats['attention_employees_count'] ?? 0 }} karyawan">
+                            {{ $companyStats['attention_employees_count'] ?? 0 }} karyawan
                         </div>
+                        <span class="cash-advance-stat-badge {{ ($companyStats['attention_employees_count'] ?? 0) > 0 ? 'bg-danger text-white' : 'cash-advance-stat-badge-amber' }}">
+                            <i class="fas fa-bell"></i>
+                        </span>
                     </div>
-                    <div class="cash-advance-stat-subtext">dari {{ $companyStats['total_employees_count'] ?? 0 }} karyawan</div>
+                    <div class="cash-advance-stat-subtext">
+                        {{ $companyStats['attention_subtitle'] ?? 'Semua cicilan lancar' }}
+                        @if (($companyStats['attention_employees_count'] ?? 0) > 0)
+                            &bull; <a href="javascript:void(0)" onclick="$('#overdueReviewModal').modal('show')" class="text-danger font-weight-bold ml-1">Tinjau</a>
+                        @endif
+                    </div>
                 </div>
             </div>
         </div>
@@ -99,172 +126,196 @@
 
 
     @if (! $selectedEmployeeId)
-        <!-- ================= MODE 1: REKAP KASBON SEMUA KARYAWAN (FULL WIDTH) ================= -->
-        <div class="card cash-advance-main-card">
-            <!-- Row 1: Header & Controls Card (on mobile) -->
-            <div class="cash-advance-top-card">
-                <div class="card-header">
-                    <h4>Kasbon - <span class="text-primary font-weight-bold">Semua Karyawan</span></h4>
-                </div>
-
-                <!-- Controls: Show Entries & Search Bar -->
-                <div class="dt-control-wrapper">
-                    <div class="dt-show-entries">
-                        Show
-                        <select wire:model.live="perPage" class="dt-select-entries">
-                            <option value="10">10</option>
-                            <option value="25">25</option>
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                        </select>
-                        Entries
-                    </div>
-
-                    <div class="dt-search-wrapper">
-                        <span class="mr-1">Search:</span>
-                        <input type="text" wire:model.live.debounce.300ms="search" class="dt-search-input" placeholder="Cari nama, departemen, jabatan...">
-                    </div>
-                </div>
+        <!-- ================= MODE 1: REKAP KASBON SEMUA KARYAWAN & GRAFIK (SPLIT KIRI & KANAN) ================= -->
+        <div class="row">
+            <!-- Kolom Kiri: 1 Card Berisi 3 Grafik Langsung Tanpa Tab (col-12 col-lg-3) -->
+            <div class="col-12 col-lg-3 mb-4">
+                @include('livewire.cash-advances.charts-card')
             </div>
 
-            <!-- Row 2: Full-Width Data Table -->
-            <div class="table-responsive">
-                <table class="table table-clean mb-0">
-                    <thead>
-                        <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
-                            <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 50px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">NO</th>
-                            <th class="text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">KARYAWAN</th>
-                            <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">TOTAL PINJAMAN</th>
-                            <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">SUDAH DIBAYAR</th>
-                            <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">SISA KASBON</th>
-                            <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">POTONGAN BULAN INI</th>
-                            <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 70px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;"><i class="fas fa-cog text-muted" title="Aksi"></i></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if ($recap && $recap->total() > 0)
-                            @php
-                                $rowNumber = 0;
-                                $groupedRecap = collect($recap->items())->groupBy(fn ($item) => $item['department'] ?: 'Tanpa Departemen');
-                                if ($groupedRecap->has('Tanpa Departemen')) {
-                                    $unassigned = $groupedRecap->pull('Tanpa Departemen');
-                                    $groupedRecap->put('Tanpa Departemen', $unassigned);
-                                }
-                            @endphp
+            <!-- Kolom Kanan: Card Tabel Semua Karyawan (col-12 col-lg-9) -->
+            <div class="col-12 col-lg-9 mb-4">
+                <div class="card cash-advance-main-card mb-0">
+                    <!-- Row 1: Header & Controls Card (on mobile) -->
+                    <div class="cash-advance-top-card">
+                        <div class="card-header">
+                            <h4>Kasbon - <span class="text-primary font-weight-bold">Semua Karyawan</span></h4>
+                        </div>
 
-                            @foreach ($groupedRecap as $departmentName => $deptRows)
-                                @php
-                                    $isOfficialDept = $departmentName !== 'Tanpa Departemen';
-                                @endphp
-                                <!-- Baris Sub-Header Group Departemen (Sesuai Desain Halaman Karyawan) -->
-                                <tr class="table-group-header" style="background-color: {{ $isOfficialDept ? '#f0f6ff' : '#fffdf5' }}; border-top: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }}; border-bottom: 1px solid {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }};">
-                                    <td colspan="7" class="!py-2.5 !px-3.5" style="border-left: 4px solid {{ $isOfficialDept ? '#0b52aa' : '#f59e0b' }} !important;">
-                                        <div class="d-flex align-items-center justify-content-between flex-wrap" style="gap: 10px;">
-                                            <div class="d-flex align-items-center">
-                                                <span class="d-inline-flex align-items-center justify-content-center mr-2" style="width: 26px; height: 26px; border-radius: 6px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; font-size: 12px; flex-shrink: 0;">
-                                                    @if ($isOfficialDept)
-                                                        <i class="fas fa-building" style="color: #0b52aa;"></i>
-                                                    @else
-                                                        <i class="fas fa-exclamation-triangle" style="color: #b45309;"></i>
-                                                    @endif
-                                                </span>
-                                                <div>
-                                                    <span class="font-weight-bold" style="font-size: 13px; letter-spacing: 0.3px; color: #0f172a;">
-                                                        DEPARTEMEN {{ strtoupper($departmentName) }}
-                                                    </span>
-                                                    <span class="badge ml-2 font-weight-700" style="font-size: 11px; padding: 2.5px 8px; border-radius: 12px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; color: {{ $isOfficialDept ? '#1e40af' : '#92400e' }}; border: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }};">
-                                                        {{ $deptRows->count() }} Karyawan
-                                                    </span>
-                                                    @if (! $isOfficialDept)
-                                                        <span class="badge ml-1 font-weight-700" style="font-size: 10.5px; padding: 2.5px 7px; border-radius: 12px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
-                                                            Perlu Dilengkapi
-                                                        </span>
-                                                    @endif
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
+                        <!-- Controls: Show Entries & Search Bar -->
+                        <div class="dt-control-wrapper">
+                            <div class="dt-show-entries">
+                                Show
+                                <select wire:model.live="perPage" class="dt-select-entries">
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                Entries
+                            </div>
+
+                            <div class="dt-search-wrapper">
+                                <span class="mr-1">Search:</span>
+                                <input type="text" wire:model.live.debounce.300ms="search" class="dt-search-input" placeholder="Cari nama, departemen, jabatan...">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Full-Width Data Table -->
+                    <div class="table-responsive">
+                        <table class="table table-clean mb-0">
+                            <thead>
+                                <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                                    <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 50px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">NO</th>
+                                    <th class="text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">KARYAWAN</th>
+                                    <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">TOTAL PINJAMAN</th>
+                                    <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">SUDAH DIBAYAR</th>
+                                    <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">SISA KASBON</th>
+                                    <th class="text-right text-nowrap !px-3 !py-2.5" style="color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">POTONGAN BULAN INI</th>
+                                    <th class="text-left text-nowrap !px-3 !py-2.5" style="min-width: 130px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;">PELUNASAN</th>
+                                    <th class="text-center text-nowrap !px-3 !py-2.5" style="width: 70px; color: #1e293b; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;"><i class="fas fa-cog text-muted" title="Aksi"></i></th>
                                 </tr>
+                            </thead>
+                            <tbody>
+                                @if ($recap && $recap->total() > 0)
+                                    @php
+                                        $rowNumber = 0;
+                                        $groupedRecap = collect($recap->items())->groupBy(fn ($item) => $item['department'] ?: 'Tanpa Departemen');
+                                        if ($groupedRecap->has('Tanpa Departemen')) {
+                                            $unassigned = $groupedRecap->pull('Tanpa Departemen');
+                                            $groupedRecap->put('Tanpa Departemen', $unassigned);
+                                        }
+                                    @endphp
 
-                                @foreach ($deptRows as $row)
-                                    @php $rowNumber++; @endphp
-                                    <tr wire:key="recap-row-{{ $row['id'] }}" class="payroll-table-row" style="border-bottom: 1px solid #f1f5f9;">
-                                        <td class="text-center font-weight-700 align-middle !px-3 !py-2.5 text-nowrap" style="color: #334155; font-size: 12.5px;">
-                                            {{ $recap->firstItem() + $rowNumber - 1 }}
-                                        </td>
-                                        <td class="align-middle text-nowrap !px-3 !py-2.5">
-                                            <div class="d-flex align-items-center text-nowrap">
-                                                <img src="{{ $row['photo_url'] }}" alt="{{ $row['name'] }}" class="rounded-circle mr-2.5 flex-shrink-0" style="width: 38px; height: 38px; object-fit: cover; border: 1.5px solid #cbd5e1;">
-                                                <div class="text-nowrap">
-                                                    <div class="font-weight-700 leading-tight" style="color: #0f172a; font-size: 13.5px;">{{ $row['name'] }}</div>
-                                                    <div class="leading-tight mt-1" style="font-size: 12px; color: #334155; font-weight: 600;">
-                                                        {{ $row['department'] }} &bull; {{ $row['position'] }}
+                                    @foreach ($groupedRecap as $departmentName => $deptRows)
+                                        @php
+                                            $isOfficialDept = $departmentName !== 'Tanpa Departemen';
+                                        @endphp
+                                        <!-- Baris Sub-Header Group Departemen (Sesuai Desain Halaman Karyawan) -->
+                                        <tr class="table-group-header" style="background-color: {{ $isOfficialDept ? '#f0f6ff' : '#fffdf5' }}; border-top: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }}; border-bottom: 1px solid {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }};">
+                                            <td colspan="8" class="!py-2.5 !px-3.5" style="border-left: 4px solid {{ $isOfficialDept ? '#0b52aa' : '#f59e0b' }} !important;">
+                                                <div class="d-flex align-items-center justify-content-between flex-wrap" style="gap: 10px;">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="d-inline-flex align-items-center justify-content-center mr-2" style="width: 26px; height: 26px; border-radius: 6px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; font-size: 12px; flex-shrink: 0;">
+                                                            @if ($isOfficialDept)
+                                                                <i class="fas fa-building" style="color: #0b52aa;"></i>
+                                                            @else
+                                                                <i class="fas fa-exclamation-triangle" style="color: #b45309;"></i>
+                                                            @endif
+                                                        </span>
+                                                        <div>
+                                                            <span class="font-weight-bold" style="font-size: 13px; letter-spacing: 0.3px; color: #0f172a;">
+                                                                DEPARTEMEN {{ strtoupper($departmentName) }}
+                                                            </span>
+                                                            <span class="badge ml-2 font-weight-700" style="font-size: 11px; padding: 2.5px 8px; border-radius: 12px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; color: {{ $isOfficialDept ? '#1e40af' : '#92400e' }}; border: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }};">
+                                                                {{ $deptRows->count() }} Karyawan
+                                                            </span>
+                                                            @if (! $isOfficialDept)
+                                                                <span class="badge ml-1 font-weight-700" style="font-size: 10.5px; padding: 2.5px 7px; border-radius: 12px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
+                                                                    Perlu Dilengkapi
+                                                                </span>
+                                                            @endif
+                                                        </div>
                                                     </div>
                                                 </div>
+                                            </td>
+                                        </tr>
+
+                                        @foreach ($deptRows as $row)
+                                            @php $rowNumber++; @endphp
+                                            <tr wire:key="recap-row-{{ $row['id'] }}" class="payroll-table-row" style="border-bottom: 1px solid #f1f5f9;">
+                                                <td class="text-center font-weight-700 align-middle !px-3 !py-2.5 text-nowrap" style="color: #334155; font-size: 12.5px;">
+                                                    {{ $recap->firstItem() + $rowNumber - 1 }}
+                                                </td>
+                                                <td class="align-middle text-nowrap !px-3 !py-2.5">
+                                                    <div class="d-flex align-items-center text-nowrap">
+                                                        <img src="{{ $row['photo_url'] }}" alt="{{ $row['name'] }}" class="rounded-circle mr-2.5 flex-shrink-0" style="width: 38px; height: 38px; object-fit: cover; border: 1.5px solid #cbd5e1;">
+                                                        <div class="text-nowrap">
+                                                            <div class="font-weight-700 leading-tight" style="color: #0f172a; font-size: 13.5px;">{{ $row['name'] }}</div>
+                                                            <div class="leading-tight mt-1" style="font-size: 12px; color: #334155; font-weight: 600;">
+                                                                {{ $row['department'] }} &bull; {{ $row['position'] }}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td class="text-right align-middle text-nowrap font-weight-600 !px-3 !py-2.5" style="color: #334155; font-size: 13px;">
+                                                    {{ $row['formatted_initial_amount'] }}
+                                                </td>
+                                                <td class="text-right align-middle text-nowrap font-weight-600 !px-3 !py-2.5" style="color: #059669; font-size: 13px;">
+                                                    {{ $row['formatted_paid_amount'] }}
+                                                </td>
+                                                <td class="text-right align-middle text-nowrap font-weight-700 !px-3 !py-2.5" style="color: {{ $row['remaining_amount'] > 0 ? '#d97706' : '#64748b' }}; font-size: 13px;">
+                                                    {{ $row['formatted_remaining_amount'] }}
+                                                </td>
+                                                <td class="text-right align-middle text-nowrap font-weight-600 !px-3 !py-2.5" style="color: {{ $row['monthly_deduction'] > 0 ? '#0b52aa' : '#334155' }}; font-size: 13px;">
+                                                    {{ $row['formatted_monthly_deduction'] }}
+                                                </td>
+                                                <!-- Kolom Pelunasan dengan Progress Bar Sesuai Gambar 2 -->
+                                                <td class="text-left align-middle text-nowrap !px-3 !py-2.5" style="min-width: 130px;">
+                                                    @if ($row['has_active'])
+                                                        <div class="progress mb-1" style="height: 5px; background-color: #e2e8f0; border-radius: 9999px;">
+                                                            <div class="progress-bar bg-primary" role="progressbar" style="width: {{ $row['repayment_percentage'] }}%; border-radius: 9999px;" aria-valuenow="{{ $row['repayment_percentage'] }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                                        </div>
+                                                        <div class="text-muted" style="font-size: 11px; font-weight: 600;">
+                                                            {{ $row['repayment_text'] }}
+                                                        </div>
+                                                    @else
+                                                        <span class="text-muted" style="font-size: 12px;">-</span>
+                                                    @endif
+                                                </td>
+                                                <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
+                                                    <button type="button" wire:click="selectEmployee({{ $row['id'] }})" wire:loading.attr="disabled" wire:target="selectEmployee({{ $row['id'] }})" class="btn btn-primary btn-action" title="Lihat Tagihan & Buku Besar {{ $row['name'] }}">
+                                                        <i wire:loading.remove wire:target="selectEmployee({{ $row['id'] }})" class="fas fa-eye"></i>
+                                                        <i wire:loading wire:target="selectEmployee({{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    @endforeach
+                                @else
+                                    <tr>
+                                        <td colspan="8" class="text-center py-5 text-muted">
+                                            <div class="empty-state py-4">
+                                                <div class="empty-state-icon bg-light text-muted mx-auto mb-3" style="width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                                                    <i class="fas fa-users"></i>
+                                                </div>
+                                                <h5 class="font-weight-bold text-dark mb-1">Tidak Ada Data Karyawan</h5>
+                                                <p class="text-muted small mb-3">
+                                                    @if ($search)
+                                                        Tidak ada karyawan yang cocok dengan pencarian "{{ $search }}".
+                                                    @else
+                                                        Tidak ada data karyawan yang ditemukan.
+                                                    @endif
+                                                </p>
+                                                @can('create', \App\Models\CashAdvance::class)
+                                                    <button type="button" wire:click="createPengajuan" wire:loading.attr="disabled" wire:target="createPengajuan" class="btn btn-primary btn-sm font-weight-bold">
+                                                        <i wire:loading.remove wire:target="createPengajuan" class="fas fa-plus mr-1"></i>
+                                                        <i wire:loading wire:target="createPengajuan" class="fas fa-spinner fa-spin mr-1"></i>
+                                                        Buat Pengajuan Baru
+                                                    </button>
+                                                @endcan
                                             </div>
                                         </td>
-                                        <td class="text-right align-middle text-nowrap font-weight-600 !px-3 !py-2.5" style="color: #334155; font-size: 13px;">
-                                            {{ $row['formatted_initial_amount'] }}
-                                        </td>
-                                        <td class="text-right align-middle text-nowrap font-weight-600 !px-3 !py-2.5" style="color: #059669; font-size: 13px;">
-                                            {{ $row['formatted_paid_amount'] }}
-                                        </td>
-                                        <td class="text-right align-middle text-nowrap font-weight-700 !px-3 !py-2.5" style="color: {{ $row['remaining_amount'] > 0 ? '#d97706' : '#64748b' }}; font-size: 13px;">
-                                            {{ $row['formatted_remaining_amount'] }}
-                                        </td>
-                                        <td class="text-right align-middle text-nowrap font-weight-600 !px-3 !py-2.5" style="color: {{ $row['monthly_deduction'] > 0 ? '#0b52aa' : '#334155' }}; font-size: 13px;">
-                                            {{ $row['formatted_monthly_deduction'] }}
-                                        </td>
-                                        <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
-                                            <button type="button" wire:click="selectEmployee({{ $row['id'] }})" wire:loading.attr="disabled" wire:target="selectEmployee({{ $row['id'] }})" class="btn btn-primary btn-action" title="Lihat Tagihan & Buku Besar {{ $row['name'] }}">
-                                                <i wire:loading.remove wire:target="selectEmployee({{ $row['id'] }})" class="fas fa-eye"></i>
-                                                <i wire:loading wire:target="selectEmployee({{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
-                                            </button>
-                                        </td>
                                     </tr>
-                                @endforeach
-                            @endforeach
-                        @else
-                            <tr>
-                                <td colspan="7" class="text-center py-5 text-muted">
-                                    <div class="empty-state py-4">
-                                        <div class="empty-state-icon bg-light text-muted mx-auto mb-3" style="width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">
-                                            <i class="fas fa-users"></i>
-                                        </div>
-                                        <h5 class="font-weight-bold text-dark mb-1">Tidak Ada Data Karyawan</h5>
-                                        <p class="text-muted small mb-3">
-                                            @if ($search)
-                                                Tidak ada karyawan yang cocok dengan pencarian "{{ $search }}".
-                                            @else
-                                                Tidak ada data karyawan yang ditemukan.
-                                            @endif
-                                        </p>
-                                        @can('create', \App\Models\CashAdvance::class)
-                                            <button type="button" wire:click="createPengajuan" wire:loading.attr="disabled" wire:target="createPengajuan" class="btn btn-primary btn-sm font-weight-bold">
-                                                <i wire:loading.remove wire:target="createPengajuan" class="fas fa-plus mr-1"></i>
-                                                <i wire:loading wire:target="createPengajuan" class="fas fa-spinner fa-spin mr-1"></i>
-                                                Buat Pengajuan Baru
-                                            </button>
-                                        @endcan
-                                    </div>
-                                </td>
-                            </tr>
-                        @endif
-                    </tbody>
-                </table>
-            </div>
+                                @endif
+                            </tbody>
+                        </table>
+                    </div>
 
-            <!-- Footer: Info & Pagination -->
-            @if ($recap && $recap->total() > 0)
-                <div class="dt-footer-wrapper">
-                    <div class="dt-info">
-                        Showing {{ $recap->firstItem() ?? 0 }} to {{ $recap->lastItem() ?? 0 }} of {{ $recap->total() }} entries
-                    </div>
-                    <div class="dt-pagination">
-                        {{ $recap->links('livewire.custom-pagination') }}
-                    </div>
+                    <!-- Footer: Info & Pagination -->
+                    @if ($recap && $recap->total() > 0)
+                        <div class="dt-footer-wrapper">
+                            <div class="dt-info">
+                                Showing {{ $recap->firstItem() ?? 0 }} to {{ $recap->lastItem() ?? 0 }} of {{ $recap->total() }} entries
+                            </div>
+                            <div class="dt-pagination">
+                                {{ $recap->links('livewire.custom-pagination') }}
+                            </div>
+                        </div>
+                    @endif
                 </div>
-            @endif
+            </div>
         </div>
 
     @else
@@ -569,16 +620,19 @@
                                     <tbody>
                                         @if ($paginatedStatements && $paginatedStatements->total() > 0)
                                             @foreach ($paginatedStatements as $index => $st)
-                                                <tr wire:key="statement-row-{{ $st['month_key'] }}">
+                                                @php
+                                                    $isOverdue = ($st['is_overdue'] ?? false) || (! $st['is_paid'] && \Carbon\Carbon::parse($st['due_date'])->startOfDay()->isBefore(today()));
+                                                @endphp
+                                                <tr wire:key="statement-row-{{ $st['month_key'] }}" class="{{ $isOverdue ? 'table-row-overdue' : '' }}" style="{{ $isOverdue ? 'background-color: #fef2f2;' : '' }}">
                                                     <td class="text-center font-weight-600 text-muted align-middle !px-3 !py-2.5">
                                                         {{ $paginatedStatements->firstItem() + $index }}
                                                     </td>
                                                     <td class="align-middle text-nowrap !px-3 !py-2.5">
-                                                        <div class="font-weight-600 text-dark leading-tight">
+                                                        <div class="font-weight-600 {{ $isOverdue ? 'text-danger' : 'text-dark' }} leading-tight">
                                                             Tagihan {{ $st['month_name_full'] }}
                                                         </div>
                                                     </td>
-                                                    <td class="align-middle text-nowrap !px-3 !py-2.5 font-weight-500 text-dark">
+                                                    <td class="align-middle text-nowrap !px-3 !py-2.5 font-weight-500 {{ $isOverdue ? 'text-danger' : 'text-dark' }}">
                                                         {{ $st['formatted_due_date'] }}
                                                     </td>
                                                     <td class="text-center align-middle text-nowrap !px-3 !py-2.5 text-muted font-weight-500">
@@ -590,13 +644,17 @@
                                                     <td class="text-right align-middle text-nowrap font-weight-500 text-dark !px-3 !py-2.5">
                                                         {{ $st['formatted_paid_amount'] }}
                                                     </td>
-                                                    <td class="text-right align-middle text-nowrap font-weight-bold text-dark !px-3 !py-2.5">
+                                                    <td class="text-right align-middle text-nowrap font-weight-bold {{ $isOverdue ? 'text-danger' : 'text-dark' }} !px-3 !py-2.5">
                                                         {{ $st['formatted_remaining_amount'] }}
                                                     </td>
                                                     <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
                                                         @if ($st['is_paid'])
                                                             <span class="badge badge-success font-weight-bold" style="background-color: #d1fae5; color: #065f46; font-size: 11px; padding: 4px 8px;">
                                                                 Lunas
+                                                            </span>
+                                                        @elseif ($isOverdue)
+                                                            <span class="badge font-weight-bold" style="background-color: #fee2e2; color: #991b1b; font-size: 11px; padding: 4px 8px;">
+                                                                Belum Lunas
                                                             </span>
                                                         @else
                                                             <span class="badge badge-warning font-weight-bold" style="background-color: #fef3c7; color: #92400e; font-size: 11px; padding: 4px 8px;">
@@ -646,13 +704,23 @@
                                 @if ($paginatedStatements && $paginatedStatements->total() > 0)
                                     <div class="statement-mobile-list">
                                         @foreach ($paginatedStatements as $index => $st)
-                                            <div class="card statement-mobile-card {{ $st['is_paid'] ? 'statement-card-paid !border-l-[#10b981]' : 'statement-card-unpaid !border-l-[#f59e0b]' }}" wire:key="statement-card-{{ $st['month_key'] }}">
+                                            @php
+                                                $isOverdue = ($st['is_overdue'] ?? false) || (! $st['is_paid'] && \Carbon\Carbon::parse($st['due_date'])->startOfDay()->isBefore(today()));
+                                            @endphp
+                                            <div class="card statement-mobile-card {{ $st['is_paid'] ? 'statement-card-paid !border-l-[#10b981]' : ($isOverdue ? '!border-l-[#ef4444] !bg-[#fef2f2]' : 'statement-card-unpaid !border-l-[#f59e0b]') }}" wire:key="statement-card-{{ $st['month_key'] }}">
                                                 <div class="card-body">
                                                     <!-- Top Row: Title (Left) & Detail Button (Right) -->
                                                     <div class="d-flex align-items-center justify-content-between mb-1.5">
-                                                        <span class="font-bold text-slate-800 text-[13.5px] leading-tight truncate pr-2">
-                                                            Tagihan {{ $st['month_name_full'] }}
-                                                        </span>
+                                                        <div class="d-flex align-items-center gap-1.5 min-w-0 pr-2">
+                                                            <span class="font-bold {{ $isOverdue ? 'text-red-700' : 'text-slate-800' }} text-[13.5px] leading-tight truncate">
+                                                                Tagihan {{ $st['month_name_full'] }}
+                                                            </span>
+                                                            @if ($isOverdue)
+                                                                <span class="badge font-weight-bold shrink-0" style="background-color: #fee2e2; color: #991b1b; font-size: 10px; padding: 2px 6px;">
+                                                                    Terlewat
+                                                                </span>
+                                                            @endif
+                                                        </div>
                                                         <button type="button" 
                                                                 wire:click="showStatementDetail('{{ $st['month_key'] }}')" 
                                                                 wire:loading.attr="disabled" 
@@ -751,7 +819,7 @@
                                                     $isRowActive = ($row['type'] === 'payment' && (int) $highlightPaymentId === (int) $row['id'])
                                                         || ($row['type'] === 'advance' && ! $highlightPaymentId && (int) $selectedCashAdvanceId === (int) $row['id']);
                                                 @endphp
-                                                <tr wire:key="ledger-row-{{ $row['type'] }}-{{ $row['id'] }}" class="{{ $isRowActive ? '!bg-blue-50/60 transition-colors' : '' }}">
+                                                <tr wire:key="ledger-row-{{ $row['type'] }}-{{ $row['id'] }}" id="ledger-row-{{ $row['type'] }}-{{ $row['id'] }}" class="{{ $isRowActive ? 'table-row-active-highlight font-weight-500 !bg-blue-50/60 transition-colors' : '' }}">
                                                     <td class="text-center font-weight-600 text-muted align-middle !px-3 !py-2.5">
                                                         {{ $ledger->firstItem() + $index }}
                                                     </td>
@@ -892,6 +960,9 @@
     @include('livewire.cash-advances.payment-modal')
     @include('livewire.cash-advances.statement-modal')
     @include('livewire.cash-advances.early-payment-modal')
+    @include('livewire.cash-advances.pending-review-modal')
+    @include('livewire.cash-advances.overdue-review-modal')
+    @include('livewire.cash-advances.pending-payment-review-modal')
 </div>
 
 @push('styles')
@@ -936,6 +1007,33 @@
     }
     .table.table-clean tbody tr.payroll-table-row:hover td {
         background-color: #f8fafc !important;
+    }
+
+    /* Overdue Installment Row Styling (Soft Red) */
+    .table.table-clean tbody tr.table-row-overdue td {
+        background-color: #fef2f2 !important;
+    }
+    .table.table-clean tbody tr.table-row-overdue:hover td {
+        background-color: #fee2e2 !important;
+    }
+
+    /* Active Highlighted Ledger Row */
+    .table.table-clean tbody tr.table-row-active-highlight td {
+        background-color: #eff6ff !important;
+        border-top: 1px solid #bfdbfe !important;
+        border-bottom: 1px solid #bfdbfe !important;
+    }
+    .table.table-clean tbody tr.table-row-active-highlight:hover td {
+        background-color: #dbeafe !important;
+    }
+
+    @keyframes rowHighlightPulse {
+        0% { background-color: #bfdbfe; }
+        50% { background-color: #dbeafe; }
+        100% { background-color: #eff6ff; }
+    }
+    .table.table-clean tbody tr.table-row-highlight-pulse td {
+        animation: rowHighlightPulse 1.2s ease-in-out;
     }
 </style>
 @endpush
@@ -1007,6 +1105,23 @@
                 const data = Array.isArray(event) ? event[0] : event;
                 const empId = typeof data === 'object' && data !== null ? data.id : data;
                 $('#main_employee_selector').val(empId || '').trigger('change.select2');
+            });
+
+            // Listen direct navigation to ledger transaction row
+            Livewire.on('scroll-to-ledger-row', (event) => {
+                const data = Array.isArray(event) ? event[0] : event;
+                const type = data.type;
+                const id = data.id;
+                setTimeout(() => {
+                    const row = document.getElementById(`ledger-row-${type}-${id}`);
+                    if (row) {
+                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        row.classList.add('table-row-highlight-pulse');
+                        setTimeout(() => {
+                            row.classList.remove('table-row-highlight-pulse');
+                        }, 2500);
+                    }
+                }, 150);
             });
 
             // Listen open-modal event untuk sinkronisasi nilai Select2
@@ -1116,6 +1231,53 @@
                 }).then((result) => {
                     if (result.isConfirmed) {
                         Livewire.dispatch('reject-cash-advance', { reason: result.value ? result.value.trim() : '' });
+                    }
+                });
+            };
+
+            window.confirmApproveCashAdvanceDirect = function (advanceId) {
+                Swal.fire({
+                    title: 'Setujui Pengajuan Kasbon?',
+                    text: 'Pengajuan kasbon akan disetujui dan jadwal pemotongan gaji/cicilan akan dibuat secara otomatis.',
+                    icon: 'question',
+                    input: 'textarea',
+                    inputLabel: 'Catatan Persetujuan (Opsional)',
+                    inputPlaceholder: 'Tuliskan catatan bila ada...',
+                    showCancelButton: true,
+                    confirmButtonColor: '#0b52aa',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Setujui Kasbon',
+                    cancelButtonText: 'Batal',
+                    reverseButtons: true,
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Livewire.dispatch('approve-cash-advance-direct', { advanceId: advanceId, notes: result.value || null });
+                    }
+                });
+            };
+
+            window.confirmRejectCashAdvanceDirect = function (advanceId) {
+                Swal.fire({
+                    title: 'Tolak Pengajuan Kasbon?',
+                    text: 'Pengajuan kasbon ini akan ditolak.',
+                    icon: 'warning',
+                    input: 'textarea',
+                    inputLabel: 'Alasan Penolakan (Wajib Diisi)',
+                    inputPlaceholder: 'Tuliskan alasan penolakan kasbon...',
+                    inputValidator: (value) => {
+                        if (!value || value.trim().length < 3) {
+                            return 'Alasan penolakan wajib diisi (minimal 3 karakter)!';
+                        }
+                    },
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Tolak Pengajuan',
+                    cancelButtonText: 'Batal',
+                    reverseButtons: true,
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Livewire.dispatch('reject-cash-advance-direct', { advanceId: advanceId, reason: result.value ? result.value.trim() : '' });
                     }
                 });
             };

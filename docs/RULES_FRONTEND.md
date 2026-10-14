@@ -365,3 +365,24 @@ npm run build:shizuefi
 2. **Dilarang Mengubah Ukuran Shadow / Radius Card**:
    - ❌ **DILARANG**: Mengubah atau membedakan nilai shadow dan radius pada card apapun di seluruh sistem (jangan gunakan shadow tebal seperti `0 8px 20px rgba(0,0,0,0.08)`).
 
+---
+
+## 14. Standar Kontras Teks & Background Bersih (Anti-Washed-Out Standard)
+
+1. **Dilarang Teks Abu-abu Pudar di Atas Background Terang**:
+   - **DILARANG KERAS** menggunakan kombinasi teks abu-abu pudar (`.text-muted` tanpa penyesuaian kontras) di atas latar putih atau off-white (seperti pada card, modal body, dan modal footer) karena menyebabkan teks nyaru dan tidak terbaca.
+   - Gunakan warna slate/gelap yang tegas dan kontras tinggi (`#0f172a`, `#1e293b`, `#334155`, atau `#475569` untuk teks pendukung).
+2. **Dilarang Kotak Latar Abu-abu Kusam (No Dull Gray Boxes)**:
+   - Hindari membuat kotak berlatar abu-abu kusam (`.bg-light`, `.bg-whitesmoke`) di dalam elemen kartu atau modal. Gunakan latar putih bersih (`#ffffff`) dengan border tipis halus (`#e2e8f0` / `#f1f5f9`).
+
+---
+
+## 15. Standar Hierarki Tipografi Proporsional (Zero "All-Bold" Rule)
+
+1. **Dilarang Mem-bold Seluruh Teks Secara Serentak**:
+   - **DILARANG** memberikan `font-weight: 600` atau `700` pada semua elemen teks dalam satu kartu, notifikasi, atau modal. Tipografi harus memiliki variasi dan hierarki yang berimbang agar nyaman di mata.
+2. **Pedoman Pembagian Bobot Font**:
+   - **Semibold (`font-weight: 600`)**: Digunakan secara selektif HANYA untuk subjek/judul, nama, label utama (misal: `Alasan:`), dan nilai metrik penekanan.
+   - **Reguler / Medium (`font-weight: 400` / `500`)**: Digunakan untuk deskripsi, teks penjelasan, sub-informasi, tanggal, dan catatan tambahan.
+   - **Hindari Bold Tebal (700)**: Batasi penggunaan `font-weight: 700` hanya untuk judul halaman utama atau counter KPI angka besar.
+

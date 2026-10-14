@@ -43,6 +43,8 @@ class PayrollItem extends Model
         'approved_by',
         'approved_at',
         'rejection_reason',
+        'verified_by',
+        'verified_at',
         'notes',
         'updated_by',
     ];
@@ -63,6 +65,7 @@ class PayrollItem extends Model
             'total_company_contributions' => 'decimal:2',
             'paid_at' => 'datetime',
             'approved_at' => 'datetime',
+            'verified_at' => 'datetime',
         ];
     }
 
@@ -79,6 +82,16 @@ class PayrollItem extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function verifier(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    public function isVerified(): bool
+    {
+        return ! is_null($this->verified_at);
     }
 
     public function isApproved(): bool
@@ -269,6 +282,134 @@ class PayrollItem extends Model
                     'ewallet' => 'Transfer Bank / E-Wallet',
                     default => ucfirst(str_replace('_', ' ', (string) $this->payment_method)),
                 };
+            }
+        );
+    }
+
+    protected function payrollStatusBadgeClass(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if ($this->isPaid()) {
+                    return 'badge badge-info';
+                }
+
+                if ($this->isRejected()) {
+                    return 'badge badge-danger';
+                }
+
+                if ($this->isApproved()) {
+                    return 'badge badge-success';
+                }
+
+                $periodStatus = $this->relationLoaded('payrollPeriod') ? $this->payrollPeriod?->status?->value : null;
+                if ($periodStatus === 'submitted') {
+                    return 'badge badge-warning text-dark';
+                }
+
+                if ($this->isVerified()) {
+                    return 'badge badge-info';
+                }
+
+                return 'badge badge-secondary';
+            }
+        );
+    }
+
+    protected function payrollStatusLabel(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if ($this->isPaid()) {
+                    return 'Dibayar';
+                }
+
+                if ($this->isRejected()) {
+                    return 'Ditolak';
+                }
+
+                if ($this->isApproved()) {
+                    return 'Disetujui (ACC)';
+                }
+
+                $periodStatus = $this->relationLoaded('payrollPeriod') ? $this->payrollPeriod?->status?->value : null;
+                if ($periodStatus === 'submitted') {
+                    return 'Menunggu ACC';
+                }
+
+                if ($this->isVerified()) {
+                    $name = $this->relationLoaded('verifier') ? ($this->verifier?->name ?? 'Admin') : ($this->verifier?->name ?? 'Admin');
+
+                    return 'Verif HRD: '.$name;
+                }
+
+                return 'Draf';
+            }
+        );
+    }
+
+    protected function payrollStatusIcon(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if ($this->isPaid()) {
+                    return 'fas fa-check-circle';
+                }
+
+                if ($this->isRejected()) {
+                    return 'fas fa-times-circle';
+                }
+
+                if ($this->isApproved()) {
+                    return 'fas fa-check-double';
+                }
+
+                $periodStatus = $this->relationLoaded('payrollPeriod') ? $this->payrollPeriod?->status?->value : null;
+                if ($periodStatus === 'submitted') {
+                    return 'fas fa-clock';
+                }
+
+                if ($this->isVerified()) {
+                    return 'fas fa-user-check';
+                }
+
+                return 'fas fa-pencil-alt';
+            }
+        );
+    }
+
+    protected function payrollStatusTooltip(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if ($this->isPaid()) {
+                    return 'Dibayar pada '.($this->paid_at ? $this->paid_at->format('d/m/Y H:i') : '-');
+                }
+
+                if ($this->isRejected()) {
+                    return 'Alasan revisi: '.($this->rejection_reason ?: 'Perlu perbaikan');
+                }
+
+                if ($this->isApproved()) {
+                    $approverName = $this->relationLoaded('approver') ? ($this->approver?->name ?? 'Direktur') : 'Direktur';
+
+                    return 'Disetujui (ACC) oleh '.$approverName;
+                }
+
+                $periodStatus = $this->relationLoaded('payrollPeriod') ? $this->payrollPeriod?->status?->value : null;
+                if ($periodStatus === 'submitted') {
+                    $verifierName = $this->relationLoaded('verifier') ? ($this->verifier?->name ?? 'HRD') : 'HRD';
+
+                    return 'Menunggu ACC Direktur (Diverifikasi oleh '.$verifierName.')';
+                }
+
+                if ($this->isVerified()) {
+                    $verifierName = $this->relationLoaded('verifier') ? ($this->verifier?->name ?? 'HRD') : 'HRD';
+
+                    return 'Diverifikasi oleh '.$verifierName.($this->verified_at ? ' pada '.$this->verified_at->format('d/m/Y H:i') : '');
+                }
+
+                return 'Draf - Belum diperiksa & diverifikasi oleh HRD';
             }
         );
     }

@@ -1065,7 +1065,7 @@ class PayrollService
                 // Skip tax and BPJS deduction lines here; they will be synced by recalculateItemTax
                 if (($row['category'] ?? null) === PayrollLineCategory::TAX->value
                     || ($rowId && $existingLines->get($rowId)?->category === PayrollLineCategory::TAX)
-                    || $name === 'PPh 21'
+                    || str_starts_with($name, 'PPh 21')
                     || ($row['category'] ?? null) === PayrollLineCategory::BPJS->value
                     || ($rowId && $existingLines->get($rowId)?->category === PayrollLineCategory::BPJS)) {
                     if ($rowId) {
@@ -1160,8 +1160,12 @@ class PayrollService
             // 5. Recalculate totals
             $this->recalculateItem($item);
 
-            // 6. Track modifier
-            $item->update(['updated_by' => $user->id]);
+            // 6. Track modifier & auto-verify HRD
+            $item->update([
+                'updated_by' => $user->id,
+                'verified_by' => $user->id,
+                'verified_at' => Carbon::now(),
+            ]);
             $item->payrollPeriod->update(['updated_by' => $user->id]);
 
             return $item->fresh([
@@ -1387,6 +1391,27 @@ class PayrollService
                     'category' => PayrollLineCategory::TAX,
                     'amount' => $taxResult['pph21_amount'],
                     'notes' => $taxResult['notes'] ?? 'Potongan PPh 21 otomatis',
+                ]);
+            }
+        } elseif ($taxResult['pph21_amount'] < 0) {
+            $pph21Comp = SalaryComponent::where('code', 'PPH21')->first();
+            $refundName = 'PPh 21 (Lebih Bayar)';
+            $refundNotes = 'Kelebihan potong PPh 21 Jan-Nov dikembalikan ke karyawan';
+            if ($pphDeductionLine) {
+                $pphDeductionLine->update([
+                    'name' => $refundName,
+                    'amount' => $taxResult['pph21_amount'],
+                    'notes' => $refundNotes,
+                ]);
+            } else {
+                PayrollItemLine::create([
+                    'payroll_item_id' => $item->id,
+                    'salary_component_id' => $pph21Comp?->id,
+                    'name' => $refundName,
+                    'type' => PayrollLineType::DEDUCTION,
+                    'category' => PayrollLineCategory::TAX,
+                    'amount' => $taxResult['pph21_amount'],
+                    'notes' => $refundNotes,
                 ]);
             }
         } else {
@@ -1625,9 +1650,70 @@ class PayrollService
     }
 
     /**
+     * Verify a single payroll item by HRD / Admin.
+     */
+    public function verifyItem(PayrollItem $item, User $user): PayrollItem
+    {
+        Gate::forUser($user)->authorize('update', $item->payrollPeriod);
+
+        if (! $item->payrollPeriod->status->isEditable()) {
+            throw new InvalidArgumentException('Hanya draf atau revisi yang dapat diverifikasi oleh HRD.');
+        }
+
+        $now = Carbon::now();
+        $item->update([
+            'verified_by' => $user->id,
+            'verified_at' => $now,
+            'updated_by' => $user->id,
+        ]);
+
+        return $item;
+    }
+
+    /**
+     * Unverify a single payroll item back to draft.
+     */
+    public function unverifyItem(PayrollItem $item, User $user): PayrollItem
+    {
+        Gate::forUser($user)->authorize('update', $item->payrollPeriod);
+
+        if (! $item->payrollPeriod->status->isEditable()) {
+            throw new InvalidArgumentException('Hanya draf atau revisi yang dapat dibatalkan verifikasinya.');
+        }
+
+        $item->update([
+            'verified_by' => null,
+            'verified_at' => null,
+            'updated_by' => $user->id,
+        ]);
+
+        return $item;
+    }
+
+    /**
+     * Bulk verify all payroll items in a draft period.
+     */
+    public function verifyAllItems(PayrollPeriod $period, User $user): int
+    {
+        Gate::forUser($user)->authorize('update', $period);
+
+        if (! $period->status->isEditable()) {
+            throw new InvalidArgumentException('Hanya draf atau revisi yang dapat diverifikasi oleh HRD.');
+        }
+
+        $now = Carbon::now();
+
+        return $period->items()->whereNull('verified_at')->update([
+            'verified_by' => $user->id,
+            'verified_at' => $now,
+            'updated_by' => $user->id,
+        ]);
+    }
+
+    /**
      * Submit a draft period to Direktur for approval.
      */
-    public function submitPeriod(PayrollPeriod $period, User $user): PayrollPeriod
+    public function submitPeriod(PayrollPeriod $period, User $user, bool $requireVerification = false): PayrollPeriod
     {
         Gate::forUser($user)->authorize('submit', $period);
 
@@ -1637,6 +1723,13 @@ class PayrollService
 
         if ($period->items()->count() === 0) {
             throw new InvalidArgumentException('Periode penggajian tidak memiliki karyawan.');
+        }
+
+        if ($requireVerification) {
+            $unverifiedCount = $period->items()->whereNull('verified_at')->count();
+            if ($unverifiedCount > 0) {
+                throw new InvalidArgumentException("Terdapat {$unverifiedCount} karyawan yang masih berstatus Draf dan belum diverifikasi HRD.");
+            }
         }
 
         $period->update([

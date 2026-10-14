@@ -229,6 +229,18 @@ class Employee extends Model
     }
 
     /**
+     * Get the text color for the employment status.
+     */
+    protected function employmentStatusTextColor(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): string => $this->employment_status instanceof EmploymentStatus
+                ? $this->employment_status->textColor()
+                : '#475569',
+        );
+    }
+
+    /**
      * Get the display label for the employment status.
      */
     protected function employmentStatusLabel(): Attribute
@@ -268,7 +280,7 @@ class Employee extends Model
         return Attribute::make(
             get: function (): string {
                 if ($this->employment_status === EmploymentStatus::TETAP || ! $this->contract_end_date) {
-                    return 'Karyawan Tetap';
+                    return '-';
                 }
 
                 $today = now()->startOfDay();
@@ -289,13 +301,13 @@ class Employee extends Model
                 if ($diffInMonths >= 1) {
                     $remainingDays = $today->copy()->addMonths($diffInMonths)->diffInDays($endDate);
                     if ($remainingDays > 0) {
-                        return "{$diffInMonths} bln {$remainingDays} hari";
+                        return "{$diffInMonths} bln {$remainingDays} hari lagi";
                     }
 
-                    return "{$diffInMonths} bulan";
+                    return "{$diffInMonths} bulan lagi";
                 }
 
-                return "{$diffInDays} hari";
+                return "{$diffInDays} hari lagi";
             },
         );
     }

@@ -292,7 +292,7 @@
                 @if ($company->enable_pph21 && $item->employee?->detail)
                     <tr>
                         <td class="label">Status Pajak</td>
-                        <td class="value">: {{ $item->tax_method?->label() ?? 'Gross' }} / PTKP {{ $item->ptkp_status?->value ?? 'TK/0' }} ({{ $item->ter_category ? 'TER ' . $item->ter_category : 'TER A' }})</td>
+                        <td class="value">: {{ $item->tax_method?->label() ?? 'Gross' }} / PTKP {{ $item->ptkp_status?->value ?? 'TK/0' }} ({{ ($period->month ?? $item->payrollPeriod?->month) == 12 ? 'Pasal 17 UU HPP' : ($item->ter_category ? 'TER ' . $item->ter_category : 'TER A') }})</td>
                     </tr>
                 @endif
             </table>
@@ -356,7 +356,10 @@
             <div>
                 <div class="section-title">PEMOTONGAN (DEDUCTIONS)</div>
                 <table class="comp-table">
-                    @forelse ($item->deductionLines->filter(fn ($l) => (float) $l->amount > 0) as $line)
+                    @forelse ($item->deductionLines->filter(fn ($l) => (float) $l->amount != 0.0) as $line)
+                        @php
+                            $lineAmt = (float) $line->amount;
+                        @endphp
                         <tr>
                             <td>
                                 {{ $line->name }}
@@ -368,7 +371,9 @@
                                     <span style="font-size: 11px; color: #166534; font-weight: 600;">(BPJS)</span>
                                 @endif
                             </td>
-                            <td class="amount">-{{ $line->formatted_amount }}</td>
+                            <td class="amount" style="{{ $lineAmt < 0 ? 'color: #28a745;' : '' }}">
+                                {{ $lineAmt < 0 ? '+Rp ' . number_format(abs($lineAmt), 0, ',', '.') : '-' . $line->formatted_amount }}
+                            </td>
                         </tr>
                     @empty
                         <tr>
@@ -377,7 +382,9 @@
                     @endforelse
                     <tr class="total-row">
                         <td>Total Pemotongan (B)</td>
-                        <td class="amount" style="color: #dc3545;">-{{ $item->formatted_total_deductions }}</td>
+                        <td class="amount" style="{{ (float) $item->total_deductions < 0 ? 'color: #28a745;' : 'color: #dc3545;' }}">
+                            {{ (float) $item->total_deductions < 0 ? '+Rp ' . number_format(abs((float) $item->total_deductions), 0, ',', '.') : '-' . $item->formatted_total_deductions }}
+                        </td>
                     </tr>
                 </table>
             </div>

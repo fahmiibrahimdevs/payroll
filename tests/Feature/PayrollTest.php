@@ -19,6 +19,7 @@ use App\Enums\SalaryComponentType;
 use App\Enums\TaxMethod;
 use App\Livewire\CompanyProfile\Index as CompanyProfileIndex;
 use App\Livewire\Payrolls\Index as PayrollIndex;
+use App\Livewire\Payrolls\ManageItem;
 use App\Livewire\Payrolls\ManageItem as PayrollManageItem;
 use App\Livewire\Payrolls\Show;
 use App\Livewire\Payrolls\Show as PayrollShow;
@@ -2815,5 +2816,117 @@ class PayrollTest extends TestCase
         $response->assertOk()
             ->assertSee('REKAPITULASI PAYROLL')
             ->assertSee('Tahun Anggaran 2026');
+    }
+
+    public function test_newly_created_payroll_period_items_have_draft_status_badge_and_can_be_verified_by_hrd(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'year' => 2027,
+            'month' => 6,
+            'name' => 'Penggajian Periode Juni 2027',
+        ], $admin);
+
+        $this->assertEquals(PayrollPeriodStatus::DRAFT, $period->status);
+
+        $item = $period->items()->first();
+        $this->assertNotNull($item);
+        $this->assertFalse($item->isVerified());
+        $this->assertEquals('Draf', $item->payroll_status_label);
+        $this->assertEquals('badge badge-secondary', $item->payroll_status_badge_class);
+
+        // View in Livewire Show: verify status displays Draf
+        Livewire::test(PayrollShow::class, ['period' => $period])
+            ->assertSee('Draf')
+            ->assertSee('Verifikasi HRD')
+            ->assertSeeHtml('title="Tandai Verif HRD"')
+            // Verify single employee
+            ->call('verifyItem', $item->id)
+            ->assertDispatched('swal:alert');
+
+        $item->refresh();
+        $this->assertTrue($item->isVerified());
+        $this->assertEquals($admin->id, $item->verified_by);
+        $this->assertStringContainsString('Verif HRD: '.$admin->name, $item->payroll_status_label);
+        $this->assertEquals('badge badge-info', $item->payroll_status_badge_class);
+
+        // View in Livewire Show again: verify badge displays Verif HRD: {Nama}
+        Livewire::test(PayrollShow::class, ['period' => $period])
+            ->assertSee('Verif HRD: '.$admin->name)
+            ->assertSeeHtml('title="Terverifikasi HRD (Klik untuk Batalkan)"');
+    }
+
+    public function test_admin_can_toggle_verify_item_and_bulk_verify_all_items(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'year' => 2027,
+            'month' => 7,
+            'name' => 'Penggajian Periode Juli 2027',
+        ], $admin);
+
+        $item = $period->items()->first();
+
+        // 1. Verify item
+        $service->verifyItem($item, $admin);
+        $item->refresh();
+        $this->assertTrue($item->isVerified());
+
+        // 2. Unverify item
+        $service->unverifyItem($item, $admin);
+        $item->refresh();
+        $this->assertFalse($item->isVerified());
+        $this->assertEquals('Draf', $item->payroll_status_label);
+
+        // 3. Bulk verify all items
+        Livewire::test(PayrollShow::class, ['period' => $period])
+            ->call('verifyAllItems')
+            ->assertDispatched('swal:alert');
+
+        $unverifiedCount = $period->items()->whereNull('verified_at')->count();
+        $this->assertEquals(0, $unverifiedCount);
+
+        // Period can now be submitted
+        Livewire::test(PayrollShow::class, ['period' => $period])
+            ->call('submitForApproval')
+            ->assertDispatched('swal:alert');
+
+        $period->refresh();
+        $this->assertEquals(PayrollPeriodStatus::SUBMITTED, $period->status);
+    }
+
+    public function test_saving_components_in_manage_item_automatically_verifies_payroll_item_for_hrd(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'year' => 2027,
+            'month' => 8,
+            'name' => 'Penggajian Periode Agustus 2027',
+        ], $admin);
+
+        $item = $period->items()->first();
+        $this->assertFalse($item->isVerified());
+
+        // Manage Item: save components
+        Livewire::test(ManageItem::class, ['period' => $period, 'item' => $item])
+            ->set('allowanceRows', [
+                ['name' => 'Tunjangan Transportasi', 'amount' => 300000],
+            ])
+            ->call('save')
+            ->assertDispatched('swal:alert');
+
+        $item->refresh();
+        $this->assertTrue($item->isVerified());
+        $this->assertEquals($admin->id, $item->verified_by);
+        $this->assertStringContainsString('Verif HRD: '.$admin->name, $item->payroll_status_label);
     }
 }

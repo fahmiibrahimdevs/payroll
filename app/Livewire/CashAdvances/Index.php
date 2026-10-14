@@ -3,11 +3,13 @@
 namespace App\Livewire\CashAdvances;
 
 use App\Enums\CashAdvanceStatus;
+use App\Enums\InstallmentStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\RepaymentScheme;
 use App\Livewire\Forms\CashAdvanceForm;
 use App\Livewire\Forms\CashAdvancePaymentForm;
 use App\Models\CashAdvance;
+use App\Models\CashAdvanceInstallment;
 use App\Models\CashAdvancePayment;
 use App\Models\Department;
 use App\Models\Employee;
@@ -594,6 +596,73 @@ class Index extends Component
     }
 
     /**
+     * Approve cash advance directly from pending review modal.
+     */
+    #[On('approve-cash-advance-direct')]
+    public function approveDirect(int $advanceId, ?string $notes = null, ?CashAdvanceService $service = null): void
+    {
+        $service ??= app(CashAdvanceService::class);
+
+        try {
+            $cashAdvance = CashAdvance::findOrFail($advanceId);
+            $user = auth()->user();
+
+            $service->approveCashAdvance($cashAdvance, $user, $notes ?: null);
+
+            $this->dispatch('swal:alert', [
+                'type' => 'success',
+                'title' => 'Kasbon Disetujui!',
+                'message' => "Pengajuan kasbon {$cashAdvance->reference_number} telah disetujui dan jadwal cicilan telah digenerate.",
+            ]);
+        } catch (Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Menyetujui!',
+                'message' => $this->safeErrorMessage($e, 'Terjadi kesalahan saat menyetujui kasbon.'),
+            ]);
+        }
+    }
+
+    /**
+     * Reject cash advance directly from pending review modal.
+     */
+    #[On('reject-cash-advance-direct')]
+    public function rejectDirect(int $advanceId, string $reason, ?CashAdvanceService $service = null): void
+    {
+        $service ??= app(CashAdvanceService::class);
+
+        $cleanReason = trim($reason);
+        if (mb_strlen($cleanReason) < 3) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Menolak!',
+                'message' => 'Alasan penolakan wajib diisi (minimal 3 karakter).',
+            ]);
+
+            return;
+        }
+
+        try {
+            $cashAdvance = CashAdvance::findOrFail($advanceId);
+            $user = auth()->user();
+
+            $service->rejectCashAdvance($cashAdvance, $user, $cleanReason);
+
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Kasbon Ditolak',
+                'message' => "Pengajuan kasbon {$cashAdvance->reference_number} telah ditolak.",
+            ]);
+        } catch (Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Menolak!',
+                'message' => $this->safeErrorMessage($e, 'Terjadi kesalahan saat menolak kasbon.'),
+            ]);
+        }
+    }
+
+    /**
      * Open payment modal for recording manual cash advance repayments.
      */
     public function openPayment(int $id): void
@@ -855,6 +924,47 @@ class Index extends Component
             $this->activeMainTab = $tab;
             $this->resetPage();
         }
+    }
+
+    /**
+     * Direct navigate from review modal to employee's ledger transaction row.
+     */
+    public function directToTransaction(?int $employeeId, string $type, int $id): void
+    {
+        if (auth()->user()?->hasRole('karyawan')) {
+            $this->selectedEmployeeId = auth()->user()->getEmployeeRecord()?->id;
+        } elseif ($employeeId) {
+            $this->selectedEmployeeId = $employeeId;
+        }
+
+        $this->activeMainTab = 'ledger';
+        $this->search = '';
+
+        if ($type === 'advance') {
+            $this->selectedCashAdvanceId = $id;
+            $this->highlightPaymentId = null;
+        } else {
+            $this->highlightPaymentId = $id;
+            $payment = CashAdvancePayment::find($id);
+            $this->selectedCashAdvanceId = $payment?->cash_advance_id;
+            if (! $this->selectedEmployeeId && $payment?->cashAdvance?->employee_id) {
+                $this->selectedEmployeeId = $payment->cashAdvance->employee_id;
+            }
+        }
+
+        if ($this->selectedEmployeeId) {
+            $service = app(CashAdvanceService::class);
+            $targetPage = $service->getLedgerPageForTransaction($this->selectedEmployeeId, $type, $id, $this->perPage);
+            $this->setPage($targetPage);
+        } else {
+            $this->resetPage();
+        }
+
+        $this->dispatch('employee-selected', id: $this->selectedEmployeeId);
+        $this->dispatch('scroll-to-ledger-row', [
+            'type' => $type,
+            'id' => $id,
+        ]);
     }
 
     /**
@@ -1404,6 +1514,29 @@ HTML;
             $approvedCount = $approvedAdvances->count();
             $paidCount = CashAdvancePayment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id))->count();
 
+            $pendingAdvances = CashAdvance::where('employee_id', $karyawanRecord->id)
+                ->where('status', CashAdvanceStatus::PENDING->value);
+            $pendingCount = $pendingAdvances->count();
+            $pendingAmount = (float) $pendingAdvances->sum('amount');
+
+            $activePaidPct = $totalApproved > 0 ? (int) round(($totalPaid / $totalApproved) * 100) : 0;
+
+            $now = Carbon::now();
+            $startOfMonth = $now->copy()->startOfMonth()->toDateString();
+            $endOfMonth = $now->copy()->endOfMonth()->toDateString();
+
+            $myMonthlyInstallment = (float) CashAdvanceInstallment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id)->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value]))
+                ->whereDate('due_date', '>=', $startOfMonth)
+                ->whereDate('due_date', '<=', $endOfMonth)
+                ->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
+                ->selectRaw('SUM(amount - paid_amount) as remaining')
+                ->value('remaining') ?? 0.0;
+
+            $myOverdueCount = (int) CashAdvanceInstallment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id)->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value]))
+                ->whereDate('due_date', '<', $startOfMonth)
+                ->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
+                ->count();
+
             $companyStats = [
                 'total_approved_amount' => $totalApproved,
                 'formatted_total_approved_amount' => 'Rp '.number_format($totalApproved, 0, ',', '.'),
@@ -1413,8 +1546,19 @@ HTML;
                 'total_paid_transactions_count' => $paidCount,
                 'total_remaining_balance' => $totalRemaining,
                 'formatted_total_remaining_balance' => 'Rp '.number_format($totalRemaining, 0, ',', '.'),
+                'compact_total_remaining_balance' => $totalRemaining >= 1000000 ? 'Rp '.number_format($totalRemaining / 1000000, 1, ',', '.').' jt' : 'Rp '.number_format($totalRemaining, 0, ',', '.'),
                 'total_employees_with_active_advances' => $totalRemaining > 0 ? 1 : 0,
                 'total_employees_count' => 1,
+                'total_pending_count' => $pendingCount,
+                'active_paid_percentage' => $activePaidPct,
+                'pending_amount' => $pendingAmount,
+                'formatted_pending_amount' => 'Rp '.number_format($pendingAmount, 0, ',', '.'),
+                'payroll_deduction_this_month' => $myMonthlyInstallment,
+                'formatted_payroll_deduction_this_month' => 'Rp '.number_format($myMonthlyInstallment, 0, ',', '.'),
+                'payroll_deduction_employees_count' => $myMonthlyInstallment > 0 ? 1 : 0,
+                'current_month_short' => $now->translatedFormat('M'),
+                'attention_employees_count' => $myOverdueCount > 0 ? 1 : 0,
+                'attention_subtitle' => $myOverdueCount > 0 ? 'Cicilan terlewat bulan lalu' : 'Semua cicilan lancar',
             ];
         } else {
             $companyStats = $service->getSummaryStats();
@@ -1454,10 +1598,19 @@ HTML;
             ? $service->getActiveAdvanceByEmployee($this->selectedEmployeeId)
             : null;
 
+        $pendingReviewAdvances = $service->getPendingAdvancesForReview();
+        $pendingReviewPayments = $service->getPendingPaymentsForReview();
+        $overdueReviewAdvances = $service->getOverdueAdvancesForReview();
+        $chartData = $service->getRecapChartData();
+
         return view('livewire.cash-advances.index', [
             'departments' => $departments,
             'employees' => $employees,
             'companyStats' => $companyStats,
+            'pendingReviewAdvances' => $pendingReviewAdvances,
+            'pendingReviewPayments' => $pendingReviewPayments,
+            'overdueReviewAdvances' => $overdueReviewAdvances,
+            'chartData' => $chartData,
             'recap' => $recap,
             'summary' => $summary,
             'statements' => $statements,

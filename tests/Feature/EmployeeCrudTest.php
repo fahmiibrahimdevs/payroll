@@ -440,4 +440,53 @@ class EmployeeCrudTest extends TestCase
         $this->assertNotNull($employee);
         $this->assertSame('budi.santoso.gunawan@namaperusahaan.com', $employee->detail->email);
     }
+
+    public function test_employee_index_renders_stat_cards_department_chart_and_expiring_contracts_review_modal(): void
+    {
+        $user = $this->createAdminUser();
+        $dept = Department::factory()->create(['name' => 'Operasional']);
+        $pos = Position::factory()->create(['name' => 'Operator']);
+
+        // Karyawan tetap
+        Employee::factory()->withDetail()->create([
+            'full_name' => 'Karyawan Tetap 1',
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'status' => EmployeeStatus::ACTIVE,
+            'employment_status' => EmploymentStatus::TETAP,
+        ]);
+
+        // Karyawan kontrak akan segera berakhir dalam 10 hari
+        $expiringEmp = Employee::factory()->withDetail(['employee_code' => 'OPS-EXP-001'])->create([
+            'full_name' => 'Karyawan Kontrak Kritis',
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'status' => EmployeeStatus::ACTIVE,
+            'employment_status' => EmploymentStatus::KONTRAK,
+            'contract_end_date' => now()->addDays(10)->toDateString(),
+        ]);
+
+        $this->actingAs($user);
+
+        $component = Livewire::test(Index::class)
+            ->assertSee('Total Karyawan Aktif')
+            ->assertSee('Karyawan Tetap')
+            ->assertSee('Kontrak &amp; Magang', false)
+            ->assertSee('Perlu Perhatian Kontrak')
+            ->assertSee('Sebaran Departemen')
+            ->assertSee('orang ·', false)
+            ->assertSee('Tinjau')
+            ->assertSeeHtml('id="expiringContractsModal"')
+            ->assertSee('Tinjau Kontrak Karyawan')
+            ->assertSee('Karyawan Kontrak Kritis');
+
+        $html = $component->html();
+        preg_match('/<tr class="table-group-header".*?<\/tr>/s', $html, $matches);
+        $this->assertNotEmpty($matches);
+        $this->assertStringNotContainsString('Karyawan', $matches[0]);
+
+        $tetapEmp = Employee::where('full_name', 'Karyawan Tetap 1')->first();
+        $this->assertSame('-', $tetapEmp->remaining_contract_label);
+        $this->assertStringEndsWith('lagi', $expiringEmp->remaining_contract_label);
+    }
 }

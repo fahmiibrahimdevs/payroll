@@ -72,3 +72,15 @@ All user interface development, Blade templates, styling, data tables, modals, a
 - **Strict Single-Line UI Elements**: Field labels, form headers, nav pills, status badges, action buttons, and table headers MUST NOT wrap awkwardly into multiple lines on desktop or mobile screens.
 - **Concise & Clean Wording**: Keep label texts concise, crisp, and direct (e.g. `Total Kasbon`, `Kepegawaian & Gaji`). Avoid lengthy parenthesized helper notes inside label text that trigger awkward text wrapping.
 - **Responsive Pills & Tabs**: When using nav-pills or tabs in modals/forms, always enforce single horizontal row layout (`.nav-fill.flex-row.flex-nowrap`, `style="flex: 1 1 50%;"`, and `.text-nowrap`) to prevent pills from stacking or wrapping in mobile viewports.
+
+## 12. Anti-Washed-Out Contrast & Background Standard
+- **No Washed-Out Gray on Light Backgrounds**: STRICTLY PROHIBITED to use low-contrast gray text (`.text-muted` without high-contrast styling) on white or off-white backgrounds (cards, modal body, modal footers).
+- **Clear Slate/Dark Colors**: Always use readable, accessible dark slate colors (`#0f172a`, `#1e293b`, or `#334155`; secondary text `#475569`) to guarantee readability.
+- **No Dull Gray Boxes**: Avoid clunky gray boxes (`.bg-light`, `.bg-whitesmoke`) inside cards. Use clean white backgrounds (`#ffffff`) with subtle 1px borders (`#e2e8f0` / `#f1f5f9`) and soft shadows.
+
+## 13. Purposeful Typography Hierarchy (Zero "All-Bold" Rule)
+- **No Uniform Bold Everywhere**: NEVER apply `font-weight: 600` or `700` to all text elements in the same card or list item.
+- **Hierarchy Breakdown**:
+  - **Semibold (`font-weight: 600`)**: Strictly reserved for headings, names, primary metric amounts, and key field labels (e.g. `Alasan:`).
+  - **Regular / Medium (`font-weight: 400` / `500`)**: Used for descriptions, reason text, sub-labels, dates, and secondary notes.
+  - **Avoid Heavy 700**: Restrict heavy bold `700` only to primary page titles or large KPI counter values.

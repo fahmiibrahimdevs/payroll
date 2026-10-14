@@ -278,8 +278,9 @@ class TaxCalculationService
         $remainingPkp = $pkp;
         $totalAnnualTax = 0.0;
         $previousLimit = 0.0;
+        $bracketBreakdown = [];
 
-        foreach (self::PASAL_17_BRACKETS as $bracket) {
+        foreach (self::PASAL_17_BRACKETS as $index => $bracket) {
             if ($remainingPkp <= 0) {
                 break;
             }
@@ -288,14 +289,33 @@ class TaxCalculationService
             $taxableAmount = min($remainingPkp, $range);
             $taxForLayer = $taxableAmount * $bracket['rate'];
 
+            $rangeLabel = $previousLimit == 0
+                ? 's.d. Rp'.number_format($bracket['limit'], 0, ',', '.')
+                : ($bracket['limit'] === INF
+                    ? '> Rp'.number_format($previousLimit, 0, ',', '.')
+                    : 'Rp'.number_format($previousLimit, 0, ',', '.').' s.d. Rp'.number_format($bracket['limit'], 0, ',', '.'));
+
+            $bracketBreakdown[] = [
+                'layer' => $index + 1,
+                'rate' => $bracket['rate'],
+                'rate_percent' => ($bracket['rate'] * 100).'%',
+                'taxable_amount' => $taxableAmount,
+                'tax_amount' => $taxForLayer,
+                'range_label' => $rangeLabel,
+            ];
+
             $totalAnnualTax += $taxForLayer;
             $remainingPkp -= $taxableAmount;
             $previousLimit = $bracket['limit'];
         }
 
+        $baseAnnualTax = $totalAnnualTax;
+        $penaltyAmount = 0.0;
+
         // Penalti non-NPWP (+20% / 120%)
         $isNonNpwpPenalized = $this->isSubjectToNonNpwpPenalty($employee);
         if ($isNonNpwpPenalized && $totalAnnualTax > 0) {
+            $penaltyAmount = $totalAnnualTax * 0.20;
             $totalAnnualTax *= 1.20;
         }
 
@@ -321,13 +341,20 @@ class TaxCalculationService
             'is_non_npwp_penalized' => $isNonNpwpPenalized,
             'annual_reconciliation' => [
                 'annual_gross' => $annualGross,
+                'gross_jan_to_nov' => $grossJanToNov,
+                'december_gross' => $decemberGross,
+                'months_count_jan_to_nov' => $previousItems->count(),
                 'biaya_jabatan' => $biayaJabatan,
                 'pension_deduction' => $annualPensionDeduction,
                 'net_income' => $annualNetIncome,
                 'ptkp' => $ptkp,
                 'pkp' => $pkp,
+                'brackets' => $bracketBreakdown,
+                'total_annual_tax_base' => $baseAnnualTax,
+                'non_npwp_penalty' => $penaltyAmount,
                 'total_annual_tax' => $totalAnnualTax,
                 'tax_paid_jan_to_nov' => $taxPaidJanToNov,
+                'december_tax' => $decemberTax,
                 'has_npwp' => ! $isNonNpwpPenalized,
                 'is_non_npwp_penalized' => $isNonNpwpPenalized,
             ],

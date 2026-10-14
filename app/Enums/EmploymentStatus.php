@@ -25,4 +25,13 @@ enum EmploymentStatus: string
             self::MAGANG => 'badge badge-warning',
         };
     }
+
+    public function textColor(): string
+    {
+        return match ($this) {
+            self::TETAP => '#0b52aa',
+            self::KONTRAK => '#0284c7',
+            self::MAGANG => '#d97706',
+        };
+    }
 }

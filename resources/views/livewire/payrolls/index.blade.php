@@ -227,16 +227,15 @@
                                                          display: false
                                                      },
                                                      tooltip: {
-                                                         enabled: hasData,
-                                                         backgroundColor: '#0f172a',
-                                                         titleColor: '#ffffff',
-                                                         bodyColor: '#ffffff',
-                                                         padding: 10,
-                                                         cornerRadius: 8,
-                                                         displayColors: false,
+                                                         enabled: false,
+                                                         external: function(ctx) {
+                                                             if (typeof window.customChartTooltip === 'function') {
+                                                                 window.customChartTooltip(ctx);
+                                                             }
+                                                         },
                                                          callbacks: {
                                                              title: function(context) {
-                                                                 return context[0].label + ' ' + year;
+                                                                 return context && context.length ? (context[0].label + ' ' + year) : '';
                                                              },
                                                              label: function(context) {
                                                                  const val = context.raw || 0;
@@ -259,6 +258,8 @@
                                                  try { this.chartInstance.destroy(); } catch (e) {}
                                                  this.chartInstance = null;
                                              }
+                                             const tip = this.$el ? this.$el.querySelector('.custom-chartjs-tooltip') : null;
+                                             if (tip) tip.remove();
                                          });
                                      }
                                  }
@@ -270,7 +271,7 @@
                             <canvas id="payrollDoughnutCanvas-{{ $selectedYear }}" style="max-height: 180px; max-width: 180px;"></canvas>
 
                             <!-- Center Text Overlay -->
-                            <div class="position-absolute text-center d-flex flex-column justify-content-center align-items-center" style="pointer-events: none; max-width: 125px;">
+                            <div class="chart-center-overlay position-absolute text-center d-flex flex-column justify-content-center align-items-center" style="pointer-events: none; max-width: 125px; transition: opacity 0.2s ease;">
                                 <span style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase;">
                                     TOTAL {{ $selectedYear }}
                                 </span>

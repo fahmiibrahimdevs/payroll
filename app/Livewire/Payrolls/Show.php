@@ -453,11 +453,110 @@ class Show extends Component
     }
 
     /**
+     * Quick toggle or mark payroll item as verified by HRD.
+     */
+    public function verifyItem(int $itemId, PayrollService $service): void
+    {
+        try {
+            $item = PayrollItem::where('payroll_period_id', $this->period->id)->findOrFail($itemId);
+            $service->verifyItem($item, auth()->user());
+            $this->refreshPeriod();
+
+            $empName = $item->employee?->full_name ?? 'Karyawan';
+            $this->dispatch('swal:alert', [
+                'type' => 'success',
+                'title' => 'Verifikasi Berhasil',
+                'message' => "Slip gaji {$empName} berhasil ditandai sebagai Terverifikasi HRD.",
+            ]);
+        } catch (Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Memverifikasi',
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Cancel HRD verification back to draft.
+     */
+    public function unverifyItem(int $itemId, PayrollService $service): void
+    {
+        try {
+            $item = PayrollItem::where('payroll_period_id', $this->period->id)->findOrFail($itemId);
+            $service->unverifyItem($item, auth()->user());
+            $this->refreshPeriod();
+
+            $empName = $item->employee?->full_name ?? 'Karyawan';
+            $this->dispatch('swal:alert', [
+                'type' => 'info',
+                'title' => 'Verifikasi Dibatalkan',
+                'message' => "Status slip gaji {$empName} dikembalikan ke Draf.",
+            ]);
+        } catch (Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Membatalkan Verifikasi',
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Bulk verify all payroll items in this period.
+     */
+    public function verifyAllItems(PayrollService $service): void
+    {
+        try {
+            $count = $service->verifyAllItems($this->period, auth()->user());
+            $this->refreshPeriod();
+
+            $this->dispatch('swal:alert', [
+                'type' => 'success',
+                'title' => 'Semua Karyawan Terverifikasi',
+                'message' => "Sebanyak {$count} slip gaji karyawan berhasil diverifikasi oleh HRD.",
+            ]);
+        } catch (Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Memverifikasi Semua',
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function getVerifiedCountProperty(): int
+    {
+        return $this->period->items()->whereNotNull('verified_at')->count();
+    }
+
+    public function getTotalItemsCountProperty(): int
+    {
+        return $this->period->items()->count();
+    }
+
+    public function getAllVerifiedProperty(): bool
+    {
+        $total = $this->totalItemsCount;
+
+        return $total > 0 && $this->verifiedCount === $total;
+    }
+
+    public function getVerificationPercentProperty(): int
+    {
+        $total = $this->totalItemsCount;
+
+        return $total > 0 ? (int) round(($this->verifiedCount / $total) * 100) : 0;
+    }
+
+    /**
      * Submit period for approval (Admin).
      */
     public function submitForApproval(PayrollService $service): void
     {
         try {
+            // Ensure all items are marked verified by current user upon submission
+            $service->verifyAllItems($this->period, auth()->user());
             $service->submitPeriod($this->period, auth()->user());
             $this->refreshPeriod();
 
@@ -1051,7 +1150,7 @@ class Show extends Component
     public function render(): View
     {
         $items = $this->period->items()
-            ->with(['employee.department', 'employee.position', 'employee.detail', 'lines', 'approver', 'updater', 'payer'])
+            ->with(['payrollPeriod', 'employee.department', 'employee.position', 'employee.detail', 'lines', 'approver', 'verifier', 'updater', 'payer'])
             ->join('employees', 'payroll_items.employee_id', '=', 'employees.id')
             ->leftJoin('departments', 'employees.department_id', '=', 'departments.id')
             ->leftJoin('positions', 'employees.position_id', '=', 'positions.id')

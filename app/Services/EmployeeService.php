@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enums\EmployeeStatus;
+use App\Enums\EmploymentStatus;
 use App\Enums\PayrollPeriodStatus;
 use App\Enums\SalaryAdjustmentType;
 use App\Models\CompanyProfile;
@@ -602,5 +604,110 @@ class EmployeeService
 
             return $history;
         });
+    }
+
+    /**
+     * Get summary KPI statistics and chart metrics for the Employee management page.
+     *
+     * @return array{
+     *     stats: array{
+     *         total_active: int,
+     *         permanent_count: int,
+     *         permanent_percentage: float,
+     *         contract_count: int,
+     *         intern_count: int,
+     *         contract_and_intern_count: int,
+     *         expiring_contracts_count: int
+     *     },
+     *     charts: array{
+     *         departments: array{
+     *             labels: array<int, string>,
+     *             counts: array<int, int>,
+     *             colors: array<int, string>,
+     *             total: int,
+     *             has_data: bool
+     *         }
+     *     }
+     * }
+     */
+    public function getEmployeeDashboardData(): array
+    {
+        $totalActive = Employee::query()->where('status', EmployeeStatus::ACTIVE)->count();
+        $permanentCount = Employee::query()->where('status', EmployeeStatus::ACTIVE)->where('employment_status', EmploymentStatus::TETAP)->count();
+        $contractCount = Employee::query()->where('status', EmployeeStatus::ACTIVE)->where('employment_status', EmploymentStatus::KONTRAK)->count();
+        $internCount = Employee::query()->where('status', EmployeeStatus::ACTIVE)->where('employment_status', EmploymentStatus::MAGANG)->count();
+        $contractAndInternCount = $contractCount + $internCount;
+        $permanentPercentage = $totalActive > 0 ? round(($permanentCount / $totalActive) * 100, 1) : 0.0;
+
+        // Kontrak berakhir <= 30 hari ke depan atau sudah berakhir
+        $expiringEmployees = Employee::query()
+            ->with([
+                'department:id,name',
+                'position:id,name',
+                'detail:employee_id,employee_code,phone',
+            ])
+            ->where('status', EmployeeStatus::ACTIVE)
+            ->where('employment_status', '!=', EmploymentStatus::TETAP)
+            ->whereNotNull('contract_end_date')
+            ->where('contract_end_date', '<=', now()->addDays(30)->toDateString())
+            ->orderBy('contract_end_date', 'asc')
+            ->get();
+        $expiringContractsCount = $expiringEmployees->count();
+
+        // Sebaran Departemen (hanya karyawan aktif)
+        $departments = Department::query()
+            ->withCount(['employees' => fn ($q) => $q->where('status', EmployeeStatus::ACTIVE)])
+            ->having('employees_count', '>', 0)
+            ->orderByDesc('employees_count')
+            ->get();
+
+        $noDeptCount = Employee::query()
+            ->where('status', EmployeeStatus::ACTIVE)
+            ->whereNull('department_id')
+            ->count();
+
+        $palette = [
+            '#0b52aa', '#10b981', '#f59e0b', '#8b5cf6',
+            '#ef4444', '#06b6d4', '#ec4899', '#64748b',
+            '#14b8a6', '#f97316', '#6366f1', '#84cc16',
+        ];
+
+        $deptLabels = $departments->pluck('name')->all();
+        $deptCounts = $departments->pluck('employees_count')->map(fn ($c) => (int) $c)->all();
+
+        if ($noDeptCount > 0) {
+            $deptLabels[] = 'Tanpa Departemen';
+            $deptCounts[] = (int) $noDeptCount;
+        }
+
+        $colors = [];
+        $paletteCount = count($palette);
+        foreach ($deptLabels as $idx => $label) {
+            $colors[] = $palette[$idx % $paletteCount];
+        }
+
+        $hasData = count($deptCounts) > 0 && array_sum($deptCounts) > 0;
+
+        return [
+            'stats' => [
+                'total_active' => $totalActive,
+                'permanent_count' => $permanentCount,
+                'permanent_percentage' => $permanentPercentage,
+                'contract_count' => $contractCount,
+                'intern_count' => $internCount,
+                'contract_and_intern_count' => $contractAndInternCount,
+                'expiring_contracts_count' => $expiringContractsCount,
+            ],
+            'expiring_employees' => $expiringEmployees,
+            'charts' => [
+                'departments' => [
+                    'labels' => $deptLabels,
+                    'counts' => $deptCounts,
+                    'colors' => $colors,
+                    'total' => $totalActive,
+                    'has_data' => $hasData,
+                ],
+            ],
+        ];
     }
 }
