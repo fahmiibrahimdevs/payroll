@@ -108,48 +108,107 @@ class CashAdvanceService
         $startOfMonth = $now->copy()->startOfMonth()->toDateString();
         $endOfMonth = $now->copy()->endOfMonth()->toDateString();
 
-        $activeQuery = CashAdvance::query()
-            ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
-            ->where('remaining_amount', '>', 0);
+        $activeStatuses = [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value];
+        $approvedStatuses = [
+            CashAdvanceStatus::ACTIVE->value,
+            CashAdvanceStatus::APPROVED->value,
+            CashAdvanceStatus::PAID->value,
+        ];
+        $pendingInstallmentStatuses = [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value];
 
-        $totalRemaining = (float) (clone $activeQuery)->sum('remaining_amount');
-        $activeCount = (clone $activeQuery)->count();
-        $activeEmployeesCount = (clone $activeQuery)->distinct('employee_id')->count('employee_id');
+        $advanceStats = CashAdvance::query()
+            ->leftJoin('employees', 'cash_advances.employee_id', '=', 'employees.id')
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN cash_advances.status IN (?, ?) AND cash_advances.remaining_amount > 0 THEN cash_advances.remaining_amount ELSE 0 END), 0) as total_remaining',
+                $activeStatuses
+            )
+            ->selectRaw(
+                'COUNT(CASE WHEN cash_advances.status IN (?, ?) AND cash_advances.remaining_amount > 0 THEN 1 END) as active_count',
+                $activeStatuses
+            )
+            ->selectRaw(
+                'COUNT(DISTINCT CASE WHEN cash_advances.status IN (?, ?) AND cash_advances.remaining_amount > 0 THEN cash_advances.employee_id END) as active_employees_count',
+                $activeStatuses
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN cash_advances.status IN (?, ?) AND cash_advances.remaining_amount > 0 THEN cash_advances.amount ELSE 0 END), 0) as total_active_loan_amount',
+                $activeStatuses
+            )
+            ->selectRaw(
+                'COUNT(CASE WHEN cash_advances.status = ? THEN 1 END) as pending_count',
+                [CashAdvanceStatus::PENDING->value]
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN cash_advances.status = ? THEN cash_advances.amount ELSE 0 END), 0) as pending_amount',
+                [CashAdvanceStatus::PENDING->value]
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN cash_advances.status IN (?, ?, ?) AND cash_advances.disbursement_date >= ? AND cash_advances.disbursement_date <= ? THEN cash_advances.amount ELSE 0 END), 0) as disbursed_this_month',
+                [...$approvedStatuses, $startOfMonth, $endOfMonth]
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN cash_advances.status IN (?, ?, ?) THEN cash_advances.amount ELSE 0 END), 0) as total_approved_amount',
+                $approvedStatuses
+            )
+            ->selectRaw(
+                'COUNT(CASE WHEN cash_advances.status IN (?, ?, ?) THEN 1 END) as total_approved_count',
+                $approvedStatuses
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN cash_advances.status IN (?, ?, ?) THEN cash_advances.amount - cash_advances.remaining_amount ELSE 0 END), 0) as total_paid_from_advances',
+                $approvedStatuses
+            )
+            ->selectRaw(
+                'COUNT(CASE WHEN cash_advances.status = ? THEN 1 END) as paid_advance_count',
+                [CashAdvanceStatus::PAID->value]
+            )
+            ->selectRaw(
+                'COUNT(DISTINCT CASE WHEN cash_advances.status IN (?, ?) AND cash_advances.remaining_amount > 0 AND employees.status != ? THEN cash_advances.employee_id END) as inactive_with_debt_count',
+                [...$activeStatuses, EmployeeStatus::ACTIVE->value]
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN cash_advances.status IN (?, ?) AND cash_advances.remaining_amount > 0 THEN LEAST(cash_advances.remaining_amount, CASE WHEN cash_advances.monthly_installment > 0 THEN cash_advances.monthly_installment ELSE cash_advances.remaining_amount END) ELSE 0 END), 0) as fallback_deduction',
+                $activeStatuses
+            )
+            ->first();
 
-        // Total loan amount & paid percentage on active cash advances
-        $totalActiveLoanAmount = (float) (clone $activeQuery)->sum('amount');
+        $totalRemaining = (float) $advanceStats->total_remaining;
+        $activeCount = (int) $advanceStats->active_count;
+        $activeEmployeesCount = (int) $advanceStats->active_employees_count;
+        $totalActiveLoanAmount = (float) $advanceStats->total_active_loan_amount;
         $totalActivePaidAmount = max(0, $totalActiveLoanAmount - $totalRemaining);
         $activePaidPercentage = $totalActiveLoanAmount > 0
             ? (int) round(($totalActivePaidAmount / $totalActiveLoanAmount) * 100)
             : 0;
 
-        $pendingQuery = CashAdvance::query()
-            ->where('status', CashAdvanceStatus::PENDING->value);
-        $pendingCount = (clone $pendingQuery)->count();
-        $pendingAmount = (float) (clone $pendingQuery)->sum('amount');
+        $pendingCount = (int) $advanceStats->pending_count;
+        $pendingAmount = (float) $advanceStats->pending_amount;
 
         // 3. Potongan gaji bulan ini (jadwal cicilan yang jatuh tempo di bulan berjalan)
-        $monthlyInstallmentQuery = CashAdvanceInstallment::query()
-            ->whereHas('cashAdvance', function ($q) {
-                $q->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value]);
-            })
-            ->whereDate('cash_advance_installments.due_date', '>=', $startOfMonth)
-            ->whereDate('cash_advance_installments.due_date', '<=', $endOfMonth)
-            ->whereIn('cash_advance_installments.status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value]);
-
-        $payrollDeductionThisMonth = (float) (clone $monthlyInstallmentQuery)
-            ->selectRaw('SUM(cash_advance_installments.amount - cash_advance_installments.paid_amount) as remaining')
-            ->value('remaining') ?? 0.0;
-
-        $payrollDeductionEmployeesCount = (int) (clone $monthlyInstallmentQuery)
+        $installmentStats = CashAdvanceInstallment::query()
             ->join('cash_advances', 'cash_advances.id', '=', 'cash_advance_installments.cash_advance_id')
-            ->distinct('cash_advances.employee_id')
-            ->count('cash_advances.employee_id');
+            ->whereIn('cash_advances.status', $activeStatuses)
+            ->whereIn('cash_advance_installments.status', $pendingInstallmentStatuses)
+            ->where('cash_advance_installments.due_date', '<=', $endOfMonth)
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN cash_advance_installments.due_date >= ? AND cash_advance_installments.due_date <= ? THEN cash_advance_installments.amount - cash_advance_installments.paid_amount ELSE 0 END), 0) as payroll_deduction_this_month',
+                [$startOfMonth, $endOfMonth]
+            )
+            ->selectRaw(
+                'COUNT(DISTINCT CASE WHEN cash_advance_installments.due_date >= ? AND cash_advance_installments.due_date <= ? THEN cash_advances.employee_id END) as payroll_deduction_employees_count',
+                [$startOfMonth, $endOfMonth]
+            )
+            ->selectRaw(
+                'COUNT(DISTINCT CASE WHEN cash_advance_installments.due_date < ? THEN cash_advances.employee_id END) as overdue_employees_count',
+                [$startOfMonth]
+            )
+            ->first();
+
+        $payrollDeductionThisMonth = (float) $installmentStats->payroll_deduction_this_month;
+        $payrollDeductionEmployeesCount = (int) $installmentStats->payroll_deduction_employees_count;
 
         if ($payrollDeductionThisMonth <= 0 && $activeCount > 0) {
-            $fallbackDeduction = (float) (clone $activeQuery)
-                ->selectRaw('SUM(LEAST(remaining_amount, CASE WHEN monthly_installment > 0 THEN monthly_installment ELSE remaining_amount END)) as deduction')
-                ->value('deduction') ?? 0.0;
+            $fallbackDeduction = (float) $advanceStats->fallback_deduction;
             if ($fallbackDeduction > 0) {
                 $payrollDeductionThisMonth = $fallbackDeduction;
                 $payrollDeductionEmployeesCount = $activeEmployeesCount;
@@ -157,26 +216,8 @@ class CashAdvanceService
         }
 
         // 4. Perlu perhatian (cicilan terlewat jatuh tempo sebelum bulan ini atau karyawan non-aktif dengan sisa saldo)
-        $overdueInstallmentQuery = CashAdvanceInstallment::query()
-            ->whereHas('cashAdvance', function ($q) {
-                $q->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value]);
-            })
-            ->whereDate('cash_advance_installments.due_date', '<', $startOfMonth)
-            ->whereIn('cash_advance_installments.status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value]);
-
-        $overdueEmployeesCount = (int) (clone $overdueInstallmentQuery)
-            ->join('cash_advances', 'cash_advances.id', '=', 'cash_advance_installments.cash_advance_id')
-            ->distinct('cash_advances.employee_id')
-            ->count('cash_advances.employee_id');
-
-        $inactiveWithDebtCount = (int) CashAdvance::query()
-            ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
-            ->where('remaining_amount', '>', 0)
-            ->whereHas('employee', function ($q) {
-                $q->where('status', '!=', EmployeeStatus::ACTIVE->value);
-            })
-            ->distinct('employee_id')
-            ->count('employee_id');
+        $overdueEmployeesCount = (int) $installmentStats->overdue_employees_count;
+        $inactiveWithDebtCount = (int) $advanceStats->inactive_with_debt_count;
 
         $attentionEmployeesCount = max($overdueEmployeesCount, $inactiveWithDebtCount);
         $attentionSubtitle = $overdueEmployeesCount > 0
@@ -185,41 +226,36 @@ class CashAdvanceService
 
         $currentMonthShort = $now->translatedFormat('M');
 
-        $disbursedThisMonth = (float) CashAdvance::query()
-            ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::PAID->value])
-            ->whereDate('disbursement_date', '>=', $startOfMonth)
-            ->whereDate('disbursement_date', '<=', $endOfMonth)
-            ->sum('amount');
+        $disbursedThisMonth = (float) $advanceStats->disbursed_this_month;
+        $totalApprovedAmount = (float) $advanceStats->total_approved_amount;
+        $totalApprovedCount = (int) $advanceStats->total_approved_count;
 
-        $approvedQuery = CashAdvance::query()
-            ->whereIn('status', [
-                CashAdvanceStatus::ACTIVE->value,
-                CashAdvanceStatus::APPROVED->value,
-                CashAdvanceStatus::PAID->value,
-            ]);
+        $paymentStats = CashAdvancePayment::query()
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN status = ? THEN amount ELSE 0 END), 0) as approved_amount',
+                [CashAdvancePaymentStatus::APPROVED->value]
+            )
+            ->selectRaw(
+                'COUNT(CASE WHEN status = ? THEN 1 END) as approved_count',
+                [CashAdvancePaymentStatus::APPROVED->value]
+            )
+            ->selectRaw(
+                'COUNT(CASE WHEN status = ? THEN 1 END) as pending_count',
+                [CashAdvancePaymentStatus::PENDING->value]
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN status = ? THEN amount ELSE 0 END), 0) as pending_amount',
+                [CashAdvancePaymentStatus::PENDING->value]
+            )
+            ->first();
 
-        $totalApprovedAmount = (float) (clone $approvedQuery)->sum('amount');
-        $totalApprovedCount = (clone $approvedQuery)->count();
-
-        $paymentsSum = (float) CashAdvancePayment::query()
-            ->where('status', CashAdvancePaymentStatus::APPROVED->value)
-            ->sum('amount');
-        $diffPaidSum = (float) (CashAdvance::query()
-            ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::PAID->value])
-            ->selectRaw('SUM(amount - remaining_amount) as paid')
-            ->value('paid') ?? 0);
+        $paymentsSum = (float) $paymentStats->approved_amount;
+        $diffPaidSum = (float) $advanceStats->total_paid_from_advances;
         $totalPaidAmount = max($paymentsSum, $diffPaidSum);
-
-        $paymentsCount = CashAdvancePayment::query()
-            ->where('status', CashAdvancePaymentStatus::APPROVED->value)
-            ->count();
-        $totalPaidTransactionsCount = $paymentsCount > 0 ? $paymentsCount : (int) CashAdvance::query()->where('status', CashAdvanceStatus::PAID->value)->count();
-        $totalPendingPaymentsCount = CashAdvancePayment::query()
-            ->where('status', CashAdvancePaymentStatus::PENDING->value)
-            ->count();
-        $totalPendingPaymentsAmount = (float) CashAdvancePayment::query()
-            ->where('status', CashAdvancePaymentStatus::PENDING->value)
-            ->sum('amount');
+        $paymentsCount = (int) $paymentStats->approved_count;
+        $totalPaidTransactionsCount = $paymentsCount > 0 ? $paymentsCount : (int) $advanceStats->paid_advance_count;
+        $totalPendingPaymentsCount = (int) $paymentStats->pending_count;
+        $totalPendingPaymentsAmount = (float) $paymentStats->pending_amount;
 
         $totalEmployeesCount = Employee::query()->count();
 
@@ -1393,8 +1429,15 @@ class CashAdvanceService
         $query->with([
             'department:id,name',
             'position:id,name',
-            'cashAdvances' => fn ($q) => $q->orderByDesc('id'),
-            'cashAdvances.installments',
+            'cashAdvances' => fn ($q) => $q
+                ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
+                ->select(['id', 'employee_id', 'amount', 'remaining_amount', 'installment_count', 'monthly_installment'])
+                ->withCount([
+                    'installments',
+                    'installments as paid_installments_count' => fn ($installments) => $installments
+                        ->where('status', InstallmentStatus::PAID->value),
+                ])
+                ->orderByDesc('id'),
         ])
             ->orderByRaw('CASE WHEN employees.department_id IS NULL THEN 1 ELSE 0 END ASC')
             ->orderBy(
@@ -1404,43 +1447,45 @@ class CashAdvanceService
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
-        $currentMonthKey = Carbon::now()->format('Y-m');
+        $employeeIds = $paginator->getCollection()->modelKeys();
+        $endOfMonth = Carbon::now()->endOfMonth()->toDateString();
+        $monthlyDeductions = CashAdvanceInstallment::query()
+            ->join('cash_advances', 'cash_advances.id', '=', 'cash_advance_installments.cash_advance_id')
+            ->whereIn('cash_advances.employee_id', $employeeIds)
+            ->whereIn('cash_advances.status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
+            ->where('cash_advance_installments.due_date', '<=', $endOfMonth)
+            ->where('cash_advance_installments.status', '!=', InstallmentStatus::PAID->value)
+            ->selectRaw('cash_advances.employee_id')
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN cash_advance_installments.amount > cash_advance_installments.paid_amount THEN cash_advance_installments.amount - cash_advance_installments.paid_amount ELSE 0 END), 0) as monthly_deduction'
+            )
+            ->groupBy('cash_advances.employee_id')
+            ->pluck('monthly_deduction', 'employee_id');
 
-        $paginator->getCollection()->transform(function (Employee $emp) use ($currentMonthKey): array {
+        $paginator->getCollection()->transform(function (Employee $emp) use ($monthlyDeductions): array {
             $advances = $emp->cashAdvances;
-            $activeAdvances = $advances->filter(
-                fn ($a) => in_array($a->status->value, [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value], true)
-            );
-
-            $totalInitial = (float) $activeAdvances->sum('amount');
-            $totalRemaining = (float) $activeAdvances->sum('remaining_amount');
+            $totalInitial = (float) $advances->sum('amount');
+            $totalRemaining = (float) $advances->sum('remaining_amount');
             $totalPaid = max(0.0, round($totalInitial - $totalRemaining, 2));
 
-            $monthlyDeduction = 0.0;
-            $hasActive = $activeAdvances->isNotEmpty();
+            $monthlyDeduction = (float) ($monthlyDeductions->get($emp->id) ?? 0);
+            $hasActive = $advances->isNotEmpty();
             $totalInstallments = 0;
             $paidInstallments = 0;
 
-            foreach ($activeAdvances as $adv) {
-                if ($adv->installments && $adv->installments->isNotEmpty()) {
-                    $totalInstallments += $adv->installments->count();
-                    $paidInstallments += $adv->installments->where('status', InstallmentStatus::PAID)->count();
-                } elseif ($adv->installment_count > 0) {
-                    $totalInstallments += (int) $adv->installment_count;
-                    if ($adv->monthly_installment > 0) {
-                        $paidInstallments += (int) floor(($adv->amount - $adv->remaining_amount) / $adv->monthly_installment);
+            foreach ($advances as $advance) {
+                if ($advance->installments_count > 0) {
+                    $totalInstallments += (int) $advance->installments_count;
+                    $paidInstallments += (int) $advance->paid_installments_count;
+                } elseif ($advance->installment_count > 0) {
+                    $totalInstallments += (int) $advance->installment_count;
+                    if ($advance->monthly_installment > 0) {
+                        $paidInstallments += (int) floor(($advance->amount - $advance->remaining_amount) / $advance->monthly_installment);
                     }
                 } else {
                     $totalInstallments += 1;
-                    if ($adv->remaining_amount <= 0) {
+                    if ($advance->remaining_amount <= 0) {
                         $paidInstallments += 1;
-                    }
-                }
-
-                foreach ($adv->installments as $inst) {
-                    $instDueMonth = $inst->due_date ? Carbon::parse($inst->due_date)->format('Y-m') : null;
-                    if ($instDueMonth && $instDueMonth <= $currentMonthKey && $inst->status !== InstallmentStatus::PAID) {
-                        $monthlyDeduction += max(0.0, (float) $inst->amount - (float) $inst->paid_amount);
                     }
                 }
             }
@@ -2018,6 +2063,216 @@ class CashAdvanceService
             'formatted_total_paid_amount' => 'Rp '.number_format($totalPaid, 0, ',', '.'),
             'unpaid_count' => count($unpaidStatements),
             'paid_count' => $paidCount,
+        ];
+    }
+
+    /**
+     * Get a paginated, database-aggregated monthly statement list for the page table.
+     * Detailed installment rows are loaded separately when a user opens a statement.
+     *
+     * @return array{paginated_statements: LengthAwarePaginator}
+     */
+    public function getPaginatedEmployeeMonthlyStatementSummaries(
+        int $employeeId,
+        ?string $search = null,
+        int $perPage = 10,
+        int $page = 1
+    ): array {
+        $perPage = max(1, min($perPage, 100));
+        $page = max(1, $page);
+        $driver = DB::connection()->getDriverName();
+        $monthExpression = match ($driver) {
+            'sqlite' => "strftime('%Y-%m', cash_advance_installments.due_date)",
+            'pgsql' => "to_char(cash_advance_installments.due_date, 'YYYY-MM')",
+            default => "DATE_FORMAT(cash_advance_installments.due_date, '%Y-%m')",
+        };
+
+        $baseQuery = CashAdvanceInstallment::query()
+            ->join('cash_advances', 'cash_advances.id', '=', 'cash_advance_installments.cash_advance_id')
+            ->where('cash_advances.employee_id', $employeeId)
+            ->whereIn('cash_advances.status', [
+                CashAdvanceStatus::ACTIVE->value,
+                CashAdvanceStatus::APPROVED->value,
+                CashAdvanceStatus::PAID->value,
+            ]);
+
+        $monthlyRows = (clone $baseQuery)
+            ->selectRaw("{$monthExpression} as month_key")
+            ->selectRaw('MIN(cash_advance_installments.due_date) as first_due_date')
+            ->selectRaw('COUNT(*) as items_count')
+            ->selectRaw('COALESCE(SUM(cash_advance_installments.amount), 0) as total_amount')
+            ->selectRaw('COALESCE(SUM(cash_advance_installments.paid_amount), 0) as paid_amount')
+            ->groupByRaw($monthExpression)
+            ->orderBy('month_key')
+            ->get();
+
+        $statements = $monthlyRows->map(function ($row): array {
+            $dueDate = Carbon::parse($row->first_due_date);
+            $monthKey = (string) $row->month_key;
+            $totalAmount = (float) $row->total_amount;
+            $paidAmount = (float) $row->paid_amount;
+            $remaining = max(0.0, round($totalAmount - $paidAmount, 2));
+            $isPaid = $remaining <= 0.001;
+
+            return [
+                'month_key' => $monthKey,
+                'year' => $dueDate->format('Y'),
+                'month_name_short' => $dueDate->translatedFormat('M'),
+                'month_name_full' => $dueDate->translatedFormat('F Y'),
+                'due_date' => $dueDate->toDateString(),
+                'formatted_due_date' => $dueDate->translatedFormat('d M Y'),
+                'total_amount' => $totalAmount,
+                'formatted_total_amount' => 'Rp '.number_format($totalAmount, 0, ',', '.'),
+                'paid_amount' => $paidAmount,
+                'formatted_paid_amount' => 'Rp '.number_format($paidAmount, 0, ',', '.'),
+                'remaining_amount' => $remaining,
+                'formatted_remaining_amount' => 'Rp '.number_format($remaining, 0, ',', '.'),
+                'is_paid' => $isPaid,
+                'is_overdue' => ! $isPaid && $dueDate->copy()->startOfDay()->isBefore(Carbon::today()),
+                'status' => $isPaid ? 'paid' : 'unpaid',
+                'status_label' => $isPaid ? 'Lunas' : 'Belum Lunas',
+                'status_badge_class' => $isPaid ? 'badge badge-success' : 'badge badge-warning',
+                'items_count' => (int) $row->items_count,
+            ];
+        });
+
+        $searchTerm = mb_strtolower(trim((string) $search));
+        if ($searchTerm !== '') {
+            $matchedMonthKeys = (clone $baseQuery)
+                ->where(function ($query) use ($searchTerm) {
+                    $query->whereRaw('LOWER(cash_advances.reference_number) LIKE ?', ['%'.$searchTerm.'%'])
+                        ->orWhereRaw('LOWER(cash_advances.reason) LIKE ?', ['%'.$searchTerm.'%']);
+                })
+                ->selectRaw("DISTINCT {$monthExpression} as month_key")
+                ->pluck('month_key')
+                ->map(fn ($monthKey) => (string) $monthKey)
+                ->all();
+
+            $statements = $statements->filter(function (array $statement) use ($searchTerm, $matchedMonthKeys): bool {
+                foreach ([
+                    $statement['month_name_full'],
+                    $statement['formatted_due_date'],
+                    $statement['status_label'],
+                    $statement['formatted_total_amount'],
+                    $statement['formatted_remaining_amount'],
+                ] as $value) {
+                    if (str_contains(mb_strtolower($value), $searchTerm)) {
+                        return true;
+                    }
+                }
+
+                return in_array($statement['month_key'], $matchedMonthKeys, true);
+            })->values();
+        }
+
+        $total = $statements->count();
+        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
+            $statements->forPage($page, $perPage)->values(),
+            $total,
+            $perPage,
+            $page,
+            ['path' => \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPath(), 'pageName' => 'page']
+        );
+
+        return ['paginated_statements' => $paginated];
+    }
+
+    /**
+     * Get one month's statement details without loading the employee's other installments.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getEmployeeMonthlyStatementDetail(int $employeeId, string $monthKey): ?array
+    {
+        if (! preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $monthKey)) {
+            return null;
+        }
+
+        $month = Carbon::createFromFormat('!Y-m', $monthKey);
+        $installments = CashAdvanceInstallment::query()
+            ->with(['cashAdvance' => fn ($query) => $query->select([
+                'id',
+                'employee_id',
+                'reference_number',
+                'reason',
+                'installment_count',
+                'status',
+            ])])
+            ->whereHas('cashAdvance', function ($query) use ($employeeId) {
+                $query->where('employee_id', $employeeId)
+                    ->whereIn('status', [
+                        CashAdvanceStatus::ACTIVE->value,
+                        CashAdvanceStatus::APPROVED->value,
+                        CashAdvanceStatus::PAID->value,
+                    ]);
+            })
+            ->whereBetween('due_date', [$month->copy()->startOfMonth()->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+            ->orderBy('due_date')
+            ->orderBy('id')
+            ->get();
+
+        if ($installments->isEmpty()) {
+            return null;
+        }
+
+        $items = $installments->map(function (CashAdvanceInstallment $installment): array {
+            $advance = $installment->cashAdvance;
+            $remaining = max(0.0, round((float) $installment->amount - (float) $installment->paid_amount, 2));
+            $isPaid = $remaining <= 0.001;
+            $tenorInfo = "[{$installment->installment_number}/{$advance->installment_count}]";
+
+            return [
+                'id' => $installment->id,
+                'cash_advance_id' => $advance->id,
+                'reference_number' => $advance->reference_number,
+                'installment_number' => $installment->installment_number,
+                'total_installments' => $advance->installment_count,
+                'title' => $tenorInfo.' '.($advance->reason ?: 'Kasbon Karyawan'),
+                'reason' => $advance->reason,
+                'due_date' => $installment->due_date?->toDateString(),
+                'formatted_due_date' => $installment->due_date?->translatedFormat('d M Y'),
+                'amount' => (float) $installment->amount,
+                'formatted_amount' => 'Rp '.number_format((float) $installment->amount, 0, ',', '.'),
+                'paid_amount' => (float) $installment->paid_amount,
+                'formatted_paid_amount' => 'Rp '.number_format((float) $installment->paid_amount, 0, ',', '.'),
+                'remaining_amount' => $remaining,
+                'formatted_remaining_amount' => 'Rp '.number_format($remaining, 0, ',', '.'),
+                'is_paid' => $isPaid,
+                'status' => $installment->status instanceof InstallmentStatus
+                    ? $installment->status->value
+                    : (string) $installment->status,
+                'status_label' => $installment->status_label,
+                'status_badge_class' => $installment->status_badge_class,
+                'paid_at' => $installment->paid_at?->translatedFormat('d M Y H:i'),
+            ];
+        })->values()->all();
+
+        $firstDueDate = $installments->first()->due_date;
+        $totalAmount = (float) $installments->sum('amount');
+        $totalPaid = (float) $installments->sum('paid_amount');
+        $remaining = max(0.0, round($totalAmount - $totalPaid, 2));
+        $isPaid = $remaining <= 0.001;
+
+        return [
+            'month_key' => $monthKey,
+            'year' => $firstDueDate->format('Y'),
+            'month_name_short' => $firstDueDate->translatedFormat('M'),
+            'month_name_full' => $firstDueDate->translatedFormat('F Y'),
+            'due_date' => $firstDueDate->toDateString(),
+            'formatted_due_date' => $firstDueDate->translatedFormat('d M Y'),
+            'total_amount' => $totalAmount,
+            'formatted_total_amount' => 'Rp '.number_format($totalAmount, 0, ',', '.'),
+            'paid_amount' => $totalPaid,
+            'formatted_paid_amount' => 'Rp '.number_format($totalPaid, 0, ',', '.'),
+            'remaining_amount' => $remaining,
+            'formatted_remaining_amount' => 'Rp '.number_format($remaining, 0, ',', '.'),
+            'is_paid' => $isPaid,
+            'is_overdue' => ! $isPaid && $firstDueDate->copy()->startOfDay()->isBefore(Carbon::today()),
+            'status' => $isPaid ? 'paid' : 'unpaid',
+            'status_label' => $isPaid ? 'Lunas' : 'Belum Lunas',
+            'status_badge_class' => $isPaid ? 'badge badge-success' : 'badge badge-warning',
+            'items_count' => count($items),
+            'items' => $items,
         ];
     }
 

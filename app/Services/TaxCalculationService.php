@@ -12,13 +12,17 @@ use App\Enums\TaxMethod;
 use App\Enums\TaxRecipientType;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
-use App\Models\PayrollItem;
+use App\Models\PayrollItemLine;
 use App\Models\SalaryComponent;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class TaxCalculationService
 {
+    /** @var array<string, array{previous_tax_paid: float, previous_gross: float, months_count: int, pension_deduction: float, has_unpaid_period: bool}> */
+    private array $finalPeriodHistoryCache = [];
+
     /**
      * Pasal 17 UU HPP Annual Tax Brackets.
      */
@@ -49,6 +53,77 @@ class TaxCalculationService
 
         return $recipientType === TaxRecipientType::MonthlyEmployee
             || ($recipientType === null && $employee->employment_status === EmploymentStatus::TETAP);
+    }
+
+    /**
+     * Preload annual reconciliation inputs for a group of employees.
+     * Payroll period creation uses this to avoid one history query per employee.
+     *
+     * @param  array<int, int>  $employeeIds
+     */
+    public function preloadFinalPeriodHistory(array $employeeIds, int $year, int $finalMonth): void
+    {
+        $employeeIds = array_values(array_unique(array_filter(array_map('intval', $employeeIds))));
+        if ($employeeIds === []) {
+            return;
+        }
+
+        $previousItems = DB::table('payroll_items')
+            ->join('payroll_periods', 'payroll_periods.id', '=', 'payroll_items.payroll_period_id')
+            ->whereIn('payroll_items.employee_id', $employeeIds)
+            ->where('payroll_periods.year', $year)
+            ->where('payroll_periods.month', '<', $finalMonth)
+            ->get([
+                'payroll_items.employee_id',
+                'payroll_items.taxable_gross',
+                'payroll_items.pph21_amount',
+                'payroll_periods.status as period_status',
+            ]);
+
+        $history = [];
+        foreach ($employeeIds as $employeeId) {
+            $history[$employeeId] = [
+                'previous_tax_paid' => 0.0,
+                'previous_gross' => 0.0,
+                'months_count' => 0,
+                'pension_deduction' => 0.0,
+                'has_unpaid_period' => false,
+            ];
+        }
+
+        foreach ($previousItems as $item) {
+            $employeeId = (int) $item->employee_id;
+            $history[$employeeId]['previous_tax_paid'] += (float) $item->pph21_amount;
+            $history[$employeeId]['previous_gross'] += (float) $item->taxable_gross;
+            $history[$employeeId]['months_count']++;
+            $history[$employeeId]['has_unpaid_period'] = $history[$employeeId]['has_unpaid_period']
+                || $item->period_status !== PayrollPeriodStatus::PAID->value;
+        }
+
+        $pensionTotals = PayrollItemLine::query()
+            ->join('payroll_items', 'payroll_items.id', '=', 'payroll_item_lines.payroll_item_id')
+            ->join('payroll_periods', 'payroll_periods.id', '=', 'payroll_items.payroll_period_id')
+            ->leftJoin('salary_components', 'salary_components.id', '=', 'payroll_item_lines.salary_component_id')
+            ->whereIn('payroll_items.employee_id', $employeeIds)
+            ->where('payroll_periods.year', $year)
+            ->where('payroll_periods.month', '<', $finalMonth)
+            ->where('payroll_item_lines.type', PayrollLineType::DEDUCTION->value)
+            ->where('payroll_item_lines.category', PayrollLineCategory::BPJS->value)
+            ->where(function ($query) {
+                $query->whereIn('salary_components.code', ['BPJS_JHT', 'BPJS_JP'])
+                    ->orWhereRaw("LOWER(TRIM(payroll_item_lines.name)) LIKE 'bpjs jht%'")
+                    ->orWhereRaw("LOWER(TRIM(payroll_item_lines.name)) LIKE 'bpjs pensiun%'")
+                    ->orWhereRaw("LOWER(TRIM(payroll_item_lines.name)) LIKE 'bpjs jp%'");
+            })
+            ->selectRaw('payroll_items.employee_id, COALESCE(SUM(payroll_item_lines.amount), 0) as pension_deduction')
+            ->groupBy('payroll_items.employee_id')
+            ->pluck('pension_deduction', 'employee_id');
+
+        foreach ($employeeIds as $employeeId) {
+            $key = $this->finalPeriodHistoryKey($employeeId, $year, $finalMonth);
+            $history[$employeeId]['pension_deduction'] = (float) ($pensionTotals->get($employeeId) ?? 0);
+            $this->finalPeriodHistoryCache[$key] = $history[$employeeId];
+        }
     }
 
     /**
@@ -272,24 +347,16 @@ class TaxCalculationService
         int $year,
         CompanyProfile $company
     ): array {
-        $previousItems = PayrollItem::query()
-            ->where('employee_id', $employee->id)
-            ->whereHas('payrollPeriod', function ($q) use ($year, $month) {
-                $q->where('year', $year)
-                    ->where('month', '<', $month);
-            })
-            ->with(['payrollPeriod', 'lines.salaryComponent'])
-            ->get(['id', 'payroll_period_id', 'taxable_gross', 'pph21_amount']);
-
-        if ($previousItems->contains(fn (PayrollItem $item) => $item->payrollPeriod?->status !== PayrollPeriodStatus::PAID)) {
+        $history = $this->getFinalPeriodHistory($employee->id, $year, $month);
+        if ($history['has_unpaid_period']) {
             throw new InvalidArgumentException('Payroll masa sebelumnya harus berstatus dibayar sebelum rekonsiliasi PPh 21 masa terakhir.');
         }
 
-        $previousTaxPaid = (float) $previousItems->sum('pph21_amount');
-        $previousGross = (float) $previousItems->sum('taxable_gross');
-        $monthsWorked = $previousItems->count() + 1;
+        $previousTaxPaid = $history['previous_tax_paid'];
+        $previousGross = $history['previous_gross'];
+        $monthsWorked = $history['months_count'] + 1;
         $jobExpenseCap = min(self::MAX_BIAYA_JABATAN_ANNUAL, $monthsWorked * self::MAX_BIAYA_JABATAN_MONTHLY);
-        $annualPensionDeduction = $this->sumPreviousPensionContributions($previousItems)
+        $annualPensionDeduction = $history['pension_deduction']
             + ($currentPensionDeduction ?? ((float) $bpjs['employee']['bpjs_jht'] + (float) $bpjs['employee']['bpjs_jp']));
         $isNonNpwpPenalized = $this->isSubjectToNonNpwpPenalty($employee);
 
@@ -338,10 +405,10 @@ class TaxCalculationService
                 'annual_gross' => $previousGross + $finalPeriodGross + $taxAllowance,
                 'gross_jan_to_nov' => $previousGross,
                 'december_gross' => $finalPeriodGross + $taxAllowance,
-                'months_count_jan_to_nov' => $previousItems->count(),
+                'months_count_jan_to_nov' => $history['months_count'],
                 'gross_before_final_period' => $previousGross,
                 'final_period_gross' => $finalPeriodGross + $taxAllowance,
-                'months_count_before_final_period' => $previousItems->count(),
+                'months_count_before_final_period' => $history['months_count'],
                 'months_worked' => $monthsWorked,
                 'job_expense_cap' => $jobExpenseCap,
                 'pension_deduction' => $annualPensionDeduction,
@@ -426,30 +493,27 @@ class TaxCalculationService
     }
 
     /**
-     * @param  Collection<int, PayrollItem>  $previousItems
+     * @return array{previous_tax_paid: float, previous_gross: float, months_count: int, pension_deduction: float, has_unpaid_period: bool}
      */
-    protected function sumPreviousPensionContributions(Collection $previousItems): float
+    private function getFinalPeriodHistory(int $employeeId, int $year, int $finalMonth): array
     {
-        $total = 0.0;
-
-        foreach ($previousItems as $item) {
-            foreach ($item->lines as $line) {
-                if ($line->type !== PayrollLineType::DEDUCTION || $line->category !== PayrollLineCategory::BPJS) {
-                    continue;
-                }
-
-                $code = $line->salaryComponent?->code;
-                $name = strtolower(trim($line->name));
-                if (in_array($code, ['BPJS_JHT', 'BPJS_JP'], true)
-                    || str_starts_with($name, 'bpjs jht')
-                    || str_starts_with($name, 'bpjs pensiun')
-                    || str_starts_with($name, 'bpjs jp')) {
-                    $total += (float) $line->amount;
-                }
-            }
+        $key = $this->finalPeriodHistoryKey($employeeId, $year, $finalMonth);
+        if (! array_key_exists($key, $this->finalPeriodHistoryCache)) {
+            $this->preloadFinalPeriodHistory([$employeeId], $year, $finalMonth);
         }
 
-        return $total;
+        return $this->finalPeriodHistoryCache[$key] ?? [
+            'previous_tax_paid' => 0.0,
+            'previous_gross' => 0.0,
+            'months_count' => 0,
+            'pension_deduction' => 0.0,
+            'has_unpaid_period' => false,
+        ];
+    }
+
+    private function finalPeriodHistoryKey(int $employeeId, int $year, int $finalMonth): string
+    {
+        return "{$employeeId}:{$year}:{$finalMonth}";
     }
 
     /**

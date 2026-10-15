@@ -12,6 +12,7 @@ use App\Models\PayrollItem;
 use App\Models\PayrollPeriod;
 use App\Models\SalaryComponent;
 use App\Services\PayrollService;
+use App\Services\TaxCalculationService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
@@ -33,6 +34,8 @@ class Show extends Component
     protected string $paginationTheme = 'bootstrap';
 
     public PayrollPeriod $period;
+
+    protected ?array $payrollItemCountsCache = null;
 
     // Search, filter, and pagination
     public string $search = '';
@@ -135,6 +138,7 @@ class Show extends Component
         $this->period = PayrollPeriod::query()
             ->with(['creator', 'submitter', 'approver', 'updater'])
             ->findOrFail($this->period->id);
+        $this->payrollItemCountsCache = null;
     }
 
     /**
@@ -146,11 +150,9 @@ class Show extends Component
             return collect();
         }
 
-        $existingEmployeeIds = $this->period->items()->pluck('employee_id')->all();
-
         return Employee::query()
             ->where('status', EmployeeStatus::ACTIVE)
-            ->whereNotIn('id', $existingEmployeeIds)
+            ->whereDoesntHave('payrollItems', fn ($query) => $query->where('payroll_period_id', $this->period->id))
             ->where(function ($q) {
                 $q->whereNull('join_date')
                     ->orWhere('join_date', '<=', $this->period->end_date);
@@ -527,17 +529,39 @@ class Show extends Component
 
     public function getVerifiedCountProperty(): int
     {
-        return $this->period->items()->whereNotNull('verified_at')->count();
+        return $this->getPayrollItemCounts()['verified'];
     }
 
     public function getTotalItemsCountProperty(): int
     {
-        return $this->period->items()->count();
+        return $this->getPayrollItemCounts()['total'];
     }
 
     public function getPaidItemsCountProperty(): int
     {
-        return $this->period->items()->where('payment_status', 'paid')->count();
+        return $this->getPayrollItemCounts()['paid'];
+    }
+
+    /**
+     * @return array{total: int, verified: int, paid: int}
+     */
+    private function getPayrollItemCounts(): array
+    {
+        if ($this->payrollItemCountsCache === null) {
+            $counts = $this->period->items()
+                ->selectRaw('COUNT(*) as total')
+                ->selectRaw('COUNT(CASE WHEN verified_at IS NOT NULL THEN 1 END) as verified')
+                ->selectRaw('COUNT(CASE WHEN payment_status = ? THEN 1 END) as paid', ['paid'])
+                ->first();
+
+            $this->payrollItemCountsCache = [
+                'total' => (int) $counts->total,
+                'verified' => (int) $counts->verified,
+                'paid' => (int) $counts->paid,
+            ];
+        }
+
+        return $this->payrollItemCountsCache;
     }
 
     public function getPaymentProgressPercentProperty(): int
@@ -927,8 +951,13 @@ class Show extends Component
         try {
             $company = CompanyProfile::getProfile();
             $items = $this->period->items()->with(['employee.detail', 'lines'])->get();
+            $taxService = app(TaxCalculationService::class);
+            if ($this->period->month === 12 && $company->enable_pph21) {
+                $taxService->preloadFinalPeriodHistory($items->pluck('employee_id')->all(), $this->period->year, $this->period->month);
+            }
+
             foreach ($items as $item) {
-                $service->recalculateItemTax($item, $company);
+                $service->recalculateItemTax($item, $company, taxService: $taxService);
                 $service->recalculateItem($item);
             }
 
@@ -1197,19 +1226,25 @@ class Show extends Component
             ->paginate($this->perPage);
 
         $departmentSummaries = $this->period->items()
-            ->with(['employee.department'])
+            ->leftJoin('employees', 'payroll_items.employee_id', '=', 'employees.id')
             ->when($this->period->status->isEditable(), function ($query) {
-                $query->whereHas('employee', fn ($q) => $q->whereNull('deleted_at'));
+                $query->whereNotNull('employees.id')
+                    ->whereNull('employees.deleted_at');
             })
+            ->selectRaw('COALESCE(employees.department_id, 0) as department_id')
+            ->selectRaw('COUNT(*) as item_count')
+            ->selectRaw('COALESCE(SUM(payroll_items.basic_salary + payroll_items.total_allowances), 0) as total_gross')
+            ->selectRaw('COALESCE(SUM(payroll_items.net_salary), 0) as total_net')
+            ->groupByRaw('COALESCE(employees.department_id, 0)')
             ->get()
-            ->groupBy(fn ($item) => $item->employee?->department_id ?? 0)
-            ->map(function ($group) {
+            ->keyBy('department_id')
+            ->map(function ($summary) {
                 return [
-                    'count' => $group->count(),
-                    'total_gross' => (float) $group->sum('gross_salary'),
-                    'total_net' => (float) $group->sum('net_salary'),
-                    'formatted_total_gross' => 'Rp '.number_format($group->sum('gross_salary'), 0, ',', '.'),
-                    'formatted_total_net' => 'Rp '.number_format($group->sum('net_salary'), 0, ',', '.'),
+                    'count' => (int) $summary->item_count,
+                    'total_gross' => (float) $summary->total_gross,
+                    'total_net' => (float) $summary->total_net,
+                    'formatted_total_gross' => 'Rp '.number_format((float) $summary->total_gross, 0, ',', '.'),
+                    'formatted_total_net' => 'Rp '.number_format((float) $summary->total_net, 0, ',', '.'),
                 ];
             });
 

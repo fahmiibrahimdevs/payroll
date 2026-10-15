@@ -986,13 +986,7 @@ class Index extends Component
             return;
         }
 
-        $statements = $service->getEmployeeMonthlyStatements($this->selectedEmployeeId);
-        $all = array_merge(
-            $statements['unpaid_statements'],
-            ...array_values($statements['paid_statements'])
-        );
-
-        $found = collect($all)->firstWhere('month_key', $monthKey);
+        $found = $service->getEmployeeMonthlyStatementDetail($this->selectedEmployeeId, $monthKey);
 
         if ($found) {
             $this->selectedStatementDetail = $found;
@@ -1577,7 +1571,7 @@ HTML;
         $summary = $service->getEmployeeSummary($this->selectedEmployeeId);
 
         $statements = $this->selectedEmployeeId && $this->activeMainTab === 'statements'
-            ? $service->getEmployeeMonthlyStatements(
+            ? $service->getPaginatedEmployeeMonthlyStatementSummaries(
                 employeeId: $this->selectedEmployeeId,
                 search: $this->search ?: null,
                 perPage: $this->perPage,

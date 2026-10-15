@@ -80,37 +80,74 @@ class PayrollService
             ->where('month', $currentMonth)
             ->first() ?? PayrollPeriod::orderByDesc('year')->orderByDesc('month')->first();
 
+        $yearlyPeriods = PayrollPeriod::where('year', $currentYear)
+            ->orderBy('month')
+            ->get();
+        $actMonth = $activePeriod?->month ?? $currentMonth;
+        $actYear = $activePeriod?->year ?? $currentYear;
+        $trendEnd = Carbon::createFromDate($actYear, $actMonth, 1);
+        $trendStart = $trendEnd->copy()->subMonths(5);
+        $trendPeriods = PayrollPeriod::query()
+            ->where(function (Builder $query) use ($trendStart) {
+                $query->where('year', '>', $trendStart->year)
+                    ->orWhere(function (Builder $subQuery) use ($trendStart) {
+                        $subQuery->where('year', $trendStart->year)
+                            ->where('month', '>=', $trendStart->month);
+                    });
+            })
+            ->where(function (Builder $query) use ($trendEnd) {
+                $query->where('year', '<', $trendEnd->year)
+                    ->orWhere(function (Builder $subQuery) use ($trendEnd) {
+                        $subQuery->where('year', $trendEnd->year)
+                            ->where('month', '<=', $trendEnd->month);
+                    });
+            })
+            ->get();
+        $prevPeriod = $activePeriod
+            ? PayrollPeriod::query()
+                ->where(function (Builder $query) use ($activePeriod) {
+                    $query->where('year', '<', $activePeriod->year)
+                        ->orWhere(function (Builder $subQuery) use ($activePeriod) {
+                            $subQuery->where('year', $activePeriod->year)
+                                ->where('month', '<', $activePeriod->month);
+                        });
+                })
+                ->orderByDesc('year')
+                ->orderByDesc('month')
+                ->first()
+            : null;
+
+        $periodsForAggregates = $yearlyPeriods
+            ->concat($trendPeriods)
+            ->when($activePeriod, fn (Collection $periods) => $periods->push($activePeriod))
+            ->when($prevPeriod, fn (Collection $periods) => $periods->push($prevPeriod))
+            ->unique('id')
+            ->values();
+        $periodAggregates = $this->getStatisticsForPeriods($periodsForAggregates);
+        $getPeriodAggregates = fn (PayrollPeriod $period): array => $periodAggregates[$period->id] ?? [
+            'pph21' => 0.0,
+            'bpjs' => 0.0,
+            'cash_advance' => 0.0,
+            'cash_advance_count' => 0,
+        ];
+
         $activeNetSalary = (float) ($activePeriod?->total_net_salary ?? 0);
         $activePph21 = 0;
         $activeKasbon = 0;
         $activeBpjsKaryawan = 0;
         $activeBpjsPerusahaan = (float) ($activePeriod?->total_company_contributions ?? 0);
         $activeKasbonCount = 0;
-
         if ($activePeriod) {
-            $itemIds = $activePeriod->items()->pluck('id');
-            $activePph21 = (float) $activePeriod->items()->sum('pph21_amount');
-
-            $activeKasbon = (float) PayrollItemLine::whereIn('payroll_item_id', $itemIds)
-                ->where('category', PayrollLineCategory::CASH_ADVANCE)
-                ->sum('amount');
-
-            $activeKasbonCount = PayrollItemLine::whereIn('payroll_item_id', $itemIds)
-                ->where('category', PayrollLineCategory::CASH_ADVANCE)
-                ->count();
-
-            $activeBpjsKaryawan = (float) PayrollItemLine::whereIn('payroll_item_id', $itemIds)
-                ->where('category', PayrollLineCategory::BPJS)
-                ->sum('amount');
+            $activeAggregates = $getPeriodAggregates($activePeriod);
+            $activePph21 = $activeAggregates['pph21'];
+            $activeKasbon = $activeAggregates['cash_advance'];
+            $activeKasbonCount = $activeAggregates['cash_advance_count'];
+            $activeBpjsKaryawan = $activeAggregates['bpjs'];
         }
 
         $activeTotalBpjs = $activeBpjsKaryawan + $activeBpjsPerusahaan;
 
         // Distribusi Pengeluaran Bulanan Tahun Berjalan
-        $yearlyPeriods = PayrollPeriod::where('year', $currentYear)
-            ->orderBy('month')
-            ->get();
-
         $yearlyMonthlyData = [];
         $totalYearlyExpense = 0;
         $totalYearlyBasic = 0;
@@ -193,19 +230,11 @@ class PayrollService
         $trendText = 'Stabil vs periode lalu';
         $trendIsUp = true;
         if ($activePeriod) {
-            $prevPeriod = PayrollPeriod::where(function ($q) use ($activePeriod) {
-                $q->where('year', '<', $activePeriod->year)
-                    ->orWhere(function ($sub) use ($activePeriod) {
-                        $sub->where('year', $activePeriod->year)
-                            ->where('month', '<', $activePeriod->month);
-                    });
-            })->orderByDesc('year')->orderByDesc('month')->first();
-
             if ($prevPeriod) {
-                $prevItemIds = $prevPeriod->items()->pluck('id');
                 $prevNet = (float) $prevPeriod->total_net_salary;
-                $prevBpjs = (float) $prevPeriod->total_company_contributions + (float) PayrollItemLine::whereIn('payroll_item_id', $prevItemIds)->where('category', PayrollLineCategory::BPJS)->sum('amount');
-                $prevPph = (float) $prevPeriod->items()->sum('pph21_amount');
+                $prevAggregates = $getPeriodAggregates($prevPeriod);
+                $prevBpjs = (float) $prevPeriod->total_company_contributions + $prevAggregates['bpjs'];
+                $prevPph = $prevAggregates['pph21'];
                 $prevCost = $prevNet + $prevBpjs + $prevPph;
 
                 if ($prevCost > 0) {
@@ -225,22 +254,44 @@ class PayrollService
         // 4. Biaya per Departemen
         $departmentBreakdown = [];
         if ($activePeriod) {
-            $periodItems = $activePeriod->items()->with('employee.department')->get();
-            if ($periodItems->isNotEmpty()) {
-                $deptGrouped = $periodItems->groupBy(fn ($item) => $item->employee?->department?->name ?? 'Umum');
+            $departmentItems = $activePeriod->items()
+                ->leftJoin('employees', 'payroll_items.employee_id', '=', 'employees.id')
+                ->leftJoin('departments', 'employees.department_id', '=', 'departments.id')
+                ->selectRaw("COALESCE(departments.name, 'Umum') as department_name")
+                ->selectRaw('COUNT(*) as employee_count')
+                ->selectRaw('COALESCE(SUM(payroll_items.basic_salary + payroll_items.total_allowances), 0) as total_gross')
+                ->selectRaw('COALESCE(SUM(payroll_items.net_salary), 0) as total_net')
+                ->selectRaw('COALESCE(SUM(payroll_items.pph21_amount), 0) as total_pph21')
+                ->selectRaw('COALESCE(SUM(payroll_items.total_company_contributions), 0) as total_company_contributions')
+                ->groupByRaw("COALESCE(departments.name, 'Umum')")
+                ->get()
+                ->keyBy('department_name');
+
+            $departmentBpjs = PayrollItemLine::query()
+                ->join('payroll_items', 'payroll_item_lines.payroll_item_id', '=', 'payroll_items.id')
+                ->leftJoin('employees', 'payroll_items.employee_id', '=', 'employees.id')
+                ->leftJoin('departments', 'employees.department_id', '=', 'departments.id')
+                ->where('payroll_items.payroll_period_id', $activePeriod->id)
+                ->where('payroll_item_lines.category', PayrollLineCategory::BPJS)
+                ->selectRaw("COALESCE(departments.name, 'Umum') as department_name")
+                ->selectRaw('COALESCE(SUM(payroll_item_lines.amount), 0) as total_bpjs')
+                ->groupByRaw("COALESCE(departments.name, 'Umum')")
+                ->pluck('total_bpjs', 'department_name');
+
+            if ($departmentItems->isNotEmpty()) {
                 $maxDeptCost = 0;
-                foreach ($deptGrouped as $dName => $dItems) {
-                    $dItemIds = $dItems->pluck('id');
-                    $dNet = (float) $dItems->sum('net_salary');
-                    $dPph = (float) $dItems->sum('pph21_amount');
-                    $dBpjs = (float) $dItems->sum('total_company_contributions') + (float) PayrollItemLine::whereIn('payroll_item_id', $dItemIds)->where('category', PayrollLineCategory::BPJS)->sum('amount');
+                foreach ($departmentItems as $departmentName => $department) {
+                    $dNet = (float) $department->total_net;
+                    $dPph = (float) $department->total_pph21;
+                    $dBpjs = (float) $department->total_company_contributions
+                        + (float) ($departmentBpjs->get($departmentName) ?? 0);
                     $dCost = $dNet + $dPph + $dBpjs;
                     if ($dCost > $maxDeptCost) {
                         $maxDeptCost = $dCost;
                     }
                     $departmentBreakdown[] = [
-                        'name' => $dName,
-                        'count' => $dItems->count(),
+                        'name' => $departmentName,
+                        'count' => (int) $department->employee_count,
                         'total_cost' => $dCost,
                         'formatted_cost' => 'Rp '.number_format($dCost, 0, ',', '.'),
                         'compact_cost' => $dCost >= 1000000000 ? 'Rp '.number_format($dCost / 1000000000, 1, ',', '.').' M' : ($dCost >= 1000000 ? 'Rp '.number_format($dCost / 1000000, 1, ',', '.').' jt' : 'Rp '.number_format($dCost, 0, ',', '.')),
@@ -255,8 +306,10 @@ class PayrollService
 
         // 5. Tren 6 Bulan (Total Biaya)
         $monthNamesShort = [1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun', 7 => 'Jul', 8 => 'Agu', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des'];
-        $actMonth = $activePeriod?->month ?? $currentMonth;
-        $actYear = $activePeriod?->year ?? $currentYear;
+        $trendPeriodsByMonth = $trendPeriods
+            ->sortBy('id')
+            ->groupBy(fn (PayrollPeriod $period) => $period->year.'-'.$period->month)
+            ->map(fn (Collection $periods) => $periods->first());
         $sixMonthsData = [];
         $maxSixMonthCost = 0;
 
@@ -264,13 +317,13 @@ class PayrollService
             $tDate = Carbon::createFromDate($actYear, $actMonth, 1)->subMonths($i);
             $tMonth = (int) $tDate->month;
             $tYear = (int) $tDate->year;
-            $p = PayrollPeriod::where('year', $tYear)->where('month', $tMonth)->first();
+            $p = $trendPeriodsByMonth->get($tYear.'-'.$tMonth);
             $pCost = 0;
             if ($p) {
-                $pItemIds = $p->items()->pluck('id');
                 $pNet = (float) $p->total_net_salary;
-                $pBpjs = (float) $p->total_company_contributions + (float) PayrollItemLine::whereIn('payroll_item_id', $pItemIds)->where('category', PayrollLineCategory::BPJS)->sum('amount');
-                $pPph = (float) $p->items()->sum('pph21_amount');
+                $pAggregates = $getPeriodAggregates($p);
+                $pBpjs = (float) $p->total_company_contributions + $pAggregates['bpjs'];
+                $pPph = $pAggregates['pph21'];
                 $pCost = $pNet + $pBpjs + $pPph;
             }
             if ($pCost > $maxSixMonthCost) {
@@ -298,11 +351,14 @@ class PayrollService
             })->count()
             : 0;
 
-        $unpaidCashAdvances = CashAdvance::whereIn('status', [CashAdvanceStatus::APPROVED, CashAdvanceStatus::ACTIVE])
+        $unpaidCashAdvanceStats = CashAdvance::query()
+            ->whereIn('status', [CashAdvanceStatus::APPROVED, CashAdvanceStatus::ACTIVE])
             ->where('remaining_amount', '>', 0)
-            ->get();
-        $remainingKasbon = (float) $unpaidCashAdvances->sum('remaining_amount');
-        $kasbonPeopleCount = $unpaidCashAdvances->pluck('employee_id')->unique()->count();
+            ->selectRaw('COALESCE(SUM(remaining_amount), 0) as remaining_amount')
+            ->selectRaw('COUNT(DISTINCT employee_id) as employee_count')
+            ->first();
+        $remainingKasbon = (float) $unpaidCashAdvanceStats->remaining_amount;
+        $kasbonPeopleCount = (int) $unpaidCashAdvanceStats->employee_count;
 
         // 7. Rekap Tahunan untuk 4 Kartu Statistik Atas & Card Rekap Payroll
         $fullMonthNames = [
@@ -320,9 +376,9 @@ class PayrollService
 
         foreach ($yearlyDistinctPeriods as $p) {
             $pNet = (float) $p->total_net_salary;
-            $pItemIds = $p->items()->pluck('id');
-            $pBpjs = (float) $p->total_company_contributions + (float) PayrollItemLine::whereIn('payroll_item_id', $pItemIds)->where('category', PayrollLineCategory::BPJS)->sum('amount');
-            $pPph = (float) $p->items()->sum('pph21_amount');
+            $pAggregates = $getPeriodAggregates($p);
+            $pBpjs = (float) $p->total_company_contributions + $pAggregates['bpjs'];
+            $pPph = $pAggregates['pph21'];
 
             $totalYearlyThp += $pNet;
             $totalYearlyBpjs += $pBpjs;
@@ -391,10 +447,10 @@ class PayrollService
             $p = $yearlyDistinctPeriods->get($m);
             $mCost = 0;
             if ($p) {
-                $pItemIds = $p->items()->pluck('id');
                 $pNet = (float) $p->total_net_salary;
-                $pBpjs = (float) $p->total_company_contributions + (float) PayrollItemLine::whereIn('payroll_item_id', $pItemIds)->where('category', PayrollLineCategory::BPJS)->sum('amount');
-                $pPph = (float) $p->items()->sum('pph21_amount');
+                $pAggregates = $getPeriodAggregates($p);
+                $pBpjs = (float) $p->total_company_contributions + $pAggregates['bpjs'];
+                $pPph = $pAggregates['pph21'];
                 $mCost = $pNet + $pBpjs + $pPph;
             }
             if ($mCost > $maxTwelveMonthCost) {
@@ -516,6 +572,66 @@ class PayrollService
     }
 
     /**
+     * @param  Collection<int, PayrollPeriod>  $periods
+     * @return array<int, array{pph21: float, bpjs: float, cash_advance: float, cash_advance_count: int}>
+     */
+    private function getStatisticsForPeriods(Collection $periods): array
+    {
+        $periodIds = $periods->pluck('id')->all();
+        if ($periodIds === []) {
+            return [];
+        }
+
+        $aggregates = [];
+        foreach ($periodIds as $periodId) {
+            $aggregates[$periodId] = [
+                'pph21' => 0.0,
+                'bpjs' => 0.0,
+                'cash_advance' => 0.0,
+                'cash_advance_count' => 0,
+            ];
+        }
+
+        $taxAggregates = PayrollItem::query()
+            ->whereIn('payroll_period_id', $periodIds)
+            ->selectRaw('payroll_period_id, COALESCE(SUM(pph21_amount), 0) as pph21')
+            ->groupBy('payroll_period_id')
+            ->get();
+
+        foreach ($taxAggregates as $row) {
+            $aggregates[$row->payroll_period_id]['pph21'] = (float) $row->pph21;
+        }
+
+        $lineAggregates = PayrollItemLine::query()
+            ->join('payroll_items', 'payroll_item_lines.payroll_item_id', '=', 'payroll_items.id')
+            ->whereIn('payroll_items.payroll_period_id', $periodIds)
+            ->selectRaw('payroll_items.payroll_period_id')
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN payroll_item_lines.category = ? THEN payroll_item_lines.amount ELSE 0 END), 0) as bpjs',
+                [PayrollLineCategory::BPJS->value]
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN payroll_item_lines.category = ? THEN payroll_item_lines.amount ELSE 0 END), 0) as cash_advance',
+                [PayrollLineCategory::CASH_ADVANCE->value]
+            )
+            ->selectRaw(
+                'COUNT(CASE WHEN payroll_item_lines.category = ? THEN 1 END) as cash_advance_count',
+                [PayrollLineCategory::CASH_ADVANCE->value]
+            )
+            ->groupBy('payroll_items.payroll_period_id')
+            ->get();
+
+        foreach ($lineAggregates as $row) {
+            $periodId = $row->payroll_period_id;
+            $aggregates[$periodId]['bpjs'] = (float) $row->bpjs;
+            $aggregates[$periodId]['cash_advance'] = (float) $row->cash_advance;
+            $aggregates[$periodId]['cash_advance_count'] = (int) $row->cash_advance_count;
+        }
+
+        return $aggregates;
+    }
+
+    /**
      * Generate unique reference number for payroll period (e.g. PR-202610).
      */
     public function generatePeriodReferenceNumber(Carbon $date): string
@@ -552,16 +668,42 @@ class PayrollService
      */
     private function reserveSequenceNumber(string $sequenceKey, string $prefix): string
     {
-        $seq = PayrollSequence::query()
-            ->lockForUpdate()
-            ->firstOrCreate(
+        return $this->reserveSequenceNumbers($sequenceKey, $prefix, 1)[0];
+    }
+
+    /**
+     * Reserve a contiguous sequence range with one locked counter update.
+     * The unique sequence key and row lock keep concurrent reservations distinct.
+     *
+     * @return array<int, string>
+     */
+    private function reserveSequenceNumbers(string $sequenceKey, string $prefix, int $count): array
+    {
+        if ($count < 1) {
+            return [];
+        }
+
+        return DB::transaction(function () use ($sequenceKey, $prefix, $count): array {
+            $sequence = PayrollSequence::query()->firstOrCreate(
                 ['sequence_key' => $sequenceKey],
                 ['current_number' => 0]
             );
+            $sequence = PayrollSequence::query()
+                ->whereKey($sequence->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $seq->increment('current_number');
+            $firstNumber = $sequence->current_number + 1;
+            $sequence->current_number += $count;
+            $sequence->save();
 
-        return $prefix.str_pad((string) $seq->current_number, 4, '0', STR_PAD_LEFT);
+            $numbers = [];
+            for ($number = $firstNumber; $number < $firstNumber + $count; $number++) {
+                $numbers[] = $prefix.str_pad((string) $number, 4, '0', STR_PAD_LEFT);
+            }
+
+            return $numbers;
+        });
     }
 
     /**
@@ -620,18 +762,35 @@ class PayrollService
             $activeEmployees = Employee::query()
                 ->where('status', EmployeeStatus::ACTIVE)
                 ->where('join_date', '<=', $endDate->toDateString())
-                ->with(['detail', 'cashAdvances.installments'])
+                ->with('detail')
                 ->orderBy('full_name')
                 ->get();
 
-            $totalBasic = 0;
-            $totalAllowances = 0;
-            $totalDeductions = 0;
-            $totalNet = 0;
-            $company = CompanyProfile::getProfile();
+            $payslipNumbers = $this->reserveSequenceNumbers(
+                'SLP-'.$date->format('Ym'),
+                'SLP-'.$date->format('Ym').'-',
+                $activeEmployees->count()
+            );
 
-            foreach ($activeEmployees as $employee) {
-                $payslipNumber = $this->generatePayslipNumber($date);
+            $activeAdvancesByEmployee = CashAdvance::query()
+                ->whereIn('employee_id', $activeEmployees->modelKeys())
+                ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
+                ->with(['installments' => function ($query) use ($endDate) {
+                    $query->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
+                        ->where('due_date', '<=', $endDate->toDateString())
+                        ->orderBy('installment_number');
+                }])
+                ->get()
+                ->groupBy('employee_id');
+
+            $company = CompanyProfile::getProfile();
+            $taxService = app(TaxCalculationService::class);
+            if ($month === 12 && $company->enable_pph21) {
+                $taxService->preloadFinalPeriodHistory($activeEmployees->modelKeys(), $year, $month);
+            }
+
+            foreach ($activeEmployees as $index => $employee) {
+                $payslipNumber = $payslipNumbers[$index];
                 $salaryInfo = $this->calculateProratedSalary($employee, $period);
                 $basicSalary = (float) $salaryInfo['basic_salary'];
                 $prorateNote = $salaryInfo['is_prorated']
@@ -658,14 +817,7 @@ class PayrollService
                 $itemDeductions = 0;
 
                 // Active cash advances for this employee
-                $activeAdvances = $employee->cashAdvances()
-                    ->whereIn('status', ['active', 'approved'])
-                    ->with(['installments' => function ($q) use ($endDate) {
-                        $q->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
-                            ->where('due_date', '<=', $endDate->toDateString())
-                            ->orderBy('installment_number');
-                    }])
-                    ->get();
+                $activeAdvances = $activeAdvancesByEmployee->get($employee->id, collect());
 
                 foreach ($activeAdvances as $advance) {
                     $installment = $advance->installments->first();
@@ -687,9 +839,8 @@ class PayrollService
                 }
 
                 if ($employee->detail && $company->enable_pph21) {
-                    $this->recalculateItemTax($item, $company);
-                    $this->recalculateItem($item);
-                    $item->refresh();
+                    $this->recalculateItemTax($item, $company, taxService: $taxService);
+                    $this->recalculateItem($item, updatePeriodTotals: false);
                     $itemAllowances = (float) $item->total_allowances;
                     $itemDeductions = (float) $item->total_deductions;
                     $netSalary = (float) $item->net_salary;
@@ -702,19 +853,9 @@ class PayrollService
                     ]);
                 }
 
-                $totalBasic += $basicSalary;
-                $totalAllowances += $itemAllowances;
-                $totalDeductions += $itemDeductions;
-                $totalNet += $netSalary;
             }
 
-            $period->update([
-                'total_basic_salary' => $totalBasic,
-                'total_allowances' => $totalAllowances,
-                'total_deductions' => $totalDeductions,
-                'total_net_salary' => $totalNet,
-                'employee_count' => $activeEmployees->count(),
-            ]);
+            $this->recalculatePeriod($period);
 
             return $period;
         });
@@ -1286,7 +1427,8 @@ class PayrollService
         ?CompanyProfile $company = null,
         ?array $disabledSystemCodes = null,
         ?array $disabledCompanyBpjsKeys = null,
-        ?array $enabledSystemCodes = null
+        ?array $enabledSystemCodes = null,
+        ?TaxCalculationService $taxService = null
     ): PayrollItem {
         $company = $company ?? CompanyProfile::getProfile();
         $item->loadMissing(['employee.detail', 'lines', 'payrollPeriod']);
@@ -1296,7 +1438,7 @@ class PayrollService
             return $item;
         }
 
-        $taxService = app(TaxCalculationService::class);
+        $taxService ??= app(TaxCalculationService::class);
         $basicSalary = (float) $item->basic_salary;
         $month = (int) $item->payrollPeriod->month;
         $year = (int) $item->payrollPeriod->year;
@@ -1718,12 +1860,26 @@ class PayrollService
     /**
      * Recalculate item totals and update parent period totals.
      */
-    public function recalculateItem(PayrollItem $item): void
+    public function recalculateItem(PayrollItem $item, bool $updatePeriodTotals = true): void
     {
-        $lines = $item->lines()->get();
-        $totalAllowances = (float) $lines->where('type', PayrollLineType::ALLOWANCE)->sum('amount');
-        $totalDeductions = (float) $lines->where('type', PayrollLineType::DEDUCTION)->sum('amount');
-        $totalCompanyContributions = (float) $lines->where('type', PayrollLineType::COMPANY_CONTRIBUTION)->sum('amount');
+        $lineTotals = $item->lines()
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) as total_allowances',
+                [PayrollLineType::ALLOWANCE->value]
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) as total_deductions',
+                [PayrollLineType::DEDUCTION->value]
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) as total_company_contributions',
+                [PayrollLineType::COMPANY_CONTRIBUTION->value]
+            )
+            ->first();
+
+        $totalAllowances = (float) $lineTotals->total_allowances;
+        $totalDeductions = (float) $lineTotals->total_deductions;
+        $totalCompanyContributions = (float) $lineTotals->total_company_contributions;
         $basicSalary = (float) $item->basic_salary;
         $netSalary = max(0, round($basicSalary + $totalAllowances - $totalDeductions, 2));
 
@@ -1734,7 +1890,9 @@ class PayrollService
             'net_salary' => $netSalary,
         ]);
 
-        $this->recalculatePeriod($item->payrollPeriod);
+        if ($updatePeriodTotals) {
+            $this->recalculatePeriod($item->payrollPeriod);
+        }
     }
 
     /**
@@ -1742,21 +1900,22 @@ class PayrollService
      */
     public function recalculatePeriod(PayrollPeriod $period): void
     {
-        $items = $period->items()->get();
-
-        $totalBasic = (float) $items->sum('basic_salary');
-        $totalAllowances = (float) $items->sum('total_allowances');
-        $totalDeductions = (float) $items->sum('total_deductions');
-        $totalNet = (float) $items->sum('net_salary');
-        $totalCompanyContributions = (float) $items->sum('total_company_contributions');
+        $totals = $period->items()
+            ->selectRaw('COUNT(*) as employee_count')
+            ->selectRaw('COALESCE(SUM(basic_salary), 0) as total_basic_salary')
+            ->selectRaw('COALESCE(SUM(total_allowances), 0) as total_allowances')
+            ->selectRaw('COALESCE(SUM(total_deductions), 0) as total_deductions')
+            ->selectRaw('COALESCE(SUM(net_salary), 0) as total_net_salary')
+            ->selectRaw('COALESCE(SUM(total_company_contributions), 0) as total_company_contributions')
+            ->first();
 
         $period->update([
-            'total_basic_salary' => $totalBasic,
-            'total_allowances' => $totalAllowances,
-            'total_deductions' => $totalDeductions,
-            'total_net_salary' => $totalNet,
-            'total_company_contributions' => $totalCompanyContributions,
-            'employee_count' => $items->count(),
+            'total_basic_salary' => $totals->total_basic_salary,
+            'total_allowances' => $totals->total_allowances,
+            'total_deductions' => $totals->total_deductions,
+            'total_net_salary' => $totals->total_net_salary,
+            'total_company_contributions' => $totals->total_company_contributions,
+            'employee_count' => $totals->employee_count,
         ]);
     }
 

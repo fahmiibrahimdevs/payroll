@@ -1698,6 +1698,57 @@ class CashAdvanceCrudTest extends TestCase
             ->assertSee('Karyawan', false);
     }
 
+    public function test_employee_cash_advance_summary_aggregates_installments_without_loading_them(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-15 12:00:00'));
+
+        $advance = CashAdvance::create([
+            'reference_number' => 'KB-202610-SUMMARY',
+            'employee_id' => $this->employee->id,
+            'amount' => 1000000,
+            'remaining_amount' => 600000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 2,
+            'monthly_installment' => 500000,
+            'disbursement_date' => '2026-09-01',
+            'reason' => 'Kasbon untuk tes ringkasan',
+            'status' => CashAdvanceStatus::ACTIVE->value,
+            'submitted_by' => $this->adminUser->id,
+        ]);
+
+        CashAdvanceInstallment::create([
+            'cash_advance_id' => $advance->id,
+            'installment_number' => 1,
+            'due_date' => '2026-09-10',
+            'amount' => 400000,
+            'paid_amount' => 400000,
+            'status' => InstallmentStatus::PAID->value,
+            'paid_at' => Carbon::parse('2026-09-10'),
+        ]);
+
+        CashAdvanceInstallment::create([
+            'cash_advance_id' => $advance->id,
+            'installment_number' => 2,
+            'due_date' => '2026-10-10',
+            'amount' => 600000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING->value,
+        ]);
+
+        $summary = app(CashAdvanceService::class)
+            ->getEmployeesCashAdvanceSummary(filter: 'active_balance')
+            ->getCollection()
+            ->firstWhere('id', $this->employee->id);
+
+        $this->assertNotNull($summary);
+        $this->assertSame(1000000.0, $summary['initial_amount']);
+        $this->assertSame(400000.0, $summary['paid_amount']);
+        $this->assertSame(600000.0, $summary['remaining_amount']);
+        $this->assertSame(600000.0, $summary['monthly_deduction']);
+        $this->assertSame(1, $summary['paid_installments']);
+        $this->assertSame(2, $summary['total_installments']);
+    }
+
     public function test_summary_stats_calculates_4_metrics_and_renders_correctly(): void
     {
         $this->actingAs($this->adminUser);
