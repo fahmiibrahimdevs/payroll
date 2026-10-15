@@ -31,6 +31,15 @@ class ActivityLogService
         'pin',
         'otp',
         'credit_card',
+        'bank_account_number',
+        'bank_account_name',
+        'npwp_number',
+        'nik',
+        'bpjs_kesehatan_number',
+        'bpjs_ketenagakerjaan_number',
+        'address',
+        'birth_date',
+        'birth_place',
     ];
 
     /**
@@ -73,7 +82,7 @@ class ActivityLogService
         if ($exception instanceof Throwable) {
             $sanitizedContext['error'] = $this->maskSensitiveData([
                 'type' => get_class($exception),
-                'message' => $exception->getMessage(),
+                'message' => '[redacted]',
                 'file' => $exception->getFile(),
                 'line' => $exception->getLine(),
                 'stack' => Str::limit($exception->getTraceAsString(), 2048),

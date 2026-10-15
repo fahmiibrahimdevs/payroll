@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PayrollPeriodStatus;
 use App\Enums\PtkpStatus;
 use App\Enums\TaxMethod;
 use App\Enums\TaxRecipientType;
@@ -102,6 +103,15 @@ class PayrollItem extends Model
     public function isApproved(): bool
     {
         return $this->approval_status === 'approved';
+    }
+
+    public function isOfficiallyApproved(): bool
+    {
+        if ($this->isApproved() || $this->approved_at !== null) {
+            return true;
+        }
+
+        return in_array($this->payrollPeriod?->status, [PayrollPeriodStatus::APPROVED, PayrollPeriodStatus::PAID], true);
     }
 
     public function isRejected(): bool
@@ -415,6 +425,26 @@ class PayrollItem extends Model
                 }
 
                 return 'Draf - Belum diperiksa & diverifikasi oleh HRD';
+            }
+        );
+    }
+
+    protected function humanNotes(): Attribute
+    {
+        return Attribute::make(
+            get: function (): ?string {
+                if (empty($this->notes)) {
+                    return null;
+                }
+
+                $trimmed = trim((string) $this->notes);
+                if (str_starts_with($trimmed, '{')) {
+                    $meta = json_decode($trimmed, true);
+
+                    return ! empty($meta['text_note']) ? (string) $meta['text_note'] : null;
+                }
+
+                return $this->notes;
             }
         );
     }

@@ -426,9 +426,15 @@
                                             {{ $employee->remaining_contract_label }}
                                         </td>
                                         <td class="align-middle text-nowrap !px-3 !py-2.5">
-                                            <span class="{{ $employee->status_badge_class }} text-xs font-weight-500">
-                                                {{ $employee->status_label }}
-                                            </span>
+                                            @if ($employee->user?->hasRole('karyawan'))
+                                                <label class="custom-switch pl-0 m-0" title="{{ $employee->user->is_active ? 'Akun aktif' : 'Akun nonaktif' }}">
+                                                    <input type="checkbox" class="custom-switch-input" aria-label="Status akun {{ $employee->full_name }}" @checked($employee->user->is_active) @disabled(! auth()->user()->hasRole('admin')) wire:click.prevent="confirmToggleAccountStatus({{ $employee->id }})" wire:loading.attr="disabled" wire:target="confirmToggleAccountStatus({{ $employee->id }}),toggleEmployeeAccountStatus">
+                                                    <span class="custom-switch-indicator"></span>
+                                                    <span class="custom-switch-description">{{ $employee->user->is_active ? 'Aktif' : 'Nonaktif' }}</span>
+                                                </label>
+                                            @else
+                                                <span class="text-muted">Belum ada akun</span>
+                                            @endif
                                         </td>
                                         <td class="align-middle text-nowrap !px-3 !py-2.5" style="font-size: 12.5px; color: #475569; font-weight: 400; font-variant-numeric: tabular-nums;">
                                             {{ $employee->detail?->phone ?: '-' }}
@@ -579,11 +585,11 @@
                             });
                         }
 
-                        // Sidebar Desktop: Filter Status Akun
+                        // Sidebar Desktop: Filter Status Karyawan
                         if ($('#filterStatus_desktop').length) {
                             $('#filterStatus_desktop').select2({
                                 width: '100%',
-                                placeholder: 'Semua Status Akun',
+                                placeholder: 'Semua Status Karyawan',
                                 allowClear: true
                             }).off('change').on('change', function () {
                                 const val = $(this).val();
@@ -642,12 +648,12 @@
                             });
                         }
 
-                        // Mobile Modal: Filter Status Akun
+                        // Mobile Modal: Filter Status Karyawan
                         if ($('#filterStatus_mobile').length) {
                             $('#filterStatus_mobile').select2({
                                 dropdownParent: $('#employeeFilterMobileModal'),
                                 width: '100%',
-                                placeholder: 'Semua Status Akun',
+                                placeholder: 'Semua Status Karyawan',
                                 allowClear: true
                             }).off('change').on('change', function () {
                                 const val = $(this).val();
@@ -676,7 +682,12 @@
                             setTimeout(() => {
                                 $('#emp_department_id').val(data.department_id || '').trigger('change.select2');
                                 $('#emp_position_id').val(data.position_id || '').trigger('change.select2');
-                                $('#employment-tab').tab('show');
+                                const sectionTabs = {
+                                    kepegawaian: '#employment-tab',
+                                    pribadi: '#personal-tab',
+                                    pajak: '#tax-tab',
+                                };
+                                $(sectionTabs[data.section] || '#employment-tab').tab('show');
                             }, 50);
                         }
                         if (data && data.id === 'employeeDetailModal') {

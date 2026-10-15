@@ -90,9 +90,6 @@ new #[Layout('layouts.guest')] class extends Component
         </div>
     </div>
 
-    <div class="mt-4 text-muted text-center">
-        Belum punya akun? <a href="{{ route('register') }}" wire:navigate>Daftar Sekarang</a>
-    </div>
     <div class="simple-footer">
         Copyright &copy; {{ config('app.name', 'Larashiz') }} {{ date('Y') }}
     </div>

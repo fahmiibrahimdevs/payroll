@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\CompanyProfile;
 use App\Services\DashboardService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\View;
@@ -24,6 +25,12 @@ class AppServiceProvider extends ServiceProvider
     {
         Model::preventLazyLoading(! app()->isProduction());
         Model::preventSilentlyDiscardingAttributes(! app()->isProduction());
+
+        View::composer('layouts.shizuefi.sidebar', function ($view): void {
+            $companyProfile = auth()->check() ? CompanyProfile::getProfile() : null;
+
+            $view->with('sidebarCompanyProfile', $companyProfile);
+        });
 
         View::composer('layouts.shizuefi.navbar', function ($view): void {
             if (auth()->check() && (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur'))) {

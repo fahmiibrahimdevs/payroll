@@ -41,6 +41,9 @@ class CompanyProfileTest extends TestCase
         Livewire::test(Index::class)
             ->set('name', 'PT Larashiz Solusindo')
             ->set('email', 'corporate@larashiz.id')
+            ->set('city', 'Bandung')
+            ->set('province', 'Jawa Barat')
+            ->set('postal_code', '40115')
             ->call('save')
             ->assertHasNoErrors()
             ->assertDispatched('swal:alert');
@@ -48,6 +51,14 @@ class CompanyProfileTest extends TestCase
         $this->assertDatabaseHas('company_profiles', [
             'name' => 'PT Larashiz Solusindo',
             'email' => 'corporate@larashiz.id',
+            'city' => 'Bandung',
+            'province' => 'Jawa Barat',
+            'postal_code' => '40115',
+        ]);
+        $this->assertDatabaseHas('activity_logs', [
+            'user_id' => $admin->id,
+            'module' => 'company_profile',
+            'action' => 'PROFILE_UPDATED',
         ]);
     }
 

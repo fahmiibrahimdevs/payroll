@@ -2070,7 +2070,7 @@ class CashAdvanceService
      * Get a paginated, database-aggregated monthly statement list for the page table.
      * Detailed installment rows are loaded separately when a user opens a statement.
      *
-     * @return array{paginated_statements: LengthAwarePaginator}
+     * @return array{paginated_statements: LengthAwarePaginator, unpaid_statements: array<int, array<string, mixed>>}
      */
     public function getPaginatedEmployeeMonthlyStatementSummaries(
         int $employeeId,
@@ -2080,12 +2080,7 @@ class CashAdvanceService
     ): array {
         $perPage = max(1, min($perPage, 100));
         $page = max(1, $page);
-        $driver = DB::connection()->getDriverName();
-        $monthExpression = match ($driver) {
-            'sqlite' => "strftime('%Y-%m', cash_advance_installments.due_date)",
-            'pgsql' => "to_char(cash_advance_installments.due_date, 'YYYY-MM')",
-            default => "DATE_FORMAT(cash_advance_installments.due_date, '%Y-%m')",
-        };
+        $monthExpression = $this->cashAdvanceStatementMonthExpression();
 
         $baseQuery = CashAdvanceInstallment::query()
             ->join('cash_advances', 'cash_advances.id', '=', 'cash_advance_installments.cash_advance_id')
@@ -2136,6 +2131,13 @@ class CashAdvanceService
             ];
         });
 
+        // Keep the complete unpaid list for the payment modal, independent of
+        // the current table search and pagination state.
+        $unpaidStatements = $statements
+            ->filter(fn (array $statement): bool => ! $statement['is_paid'])
+            ->values()
+            ->all();
+
         $searchTerm = mb_strtolower(trim((string) $search));
         if ($searchTerm !== '') {
             $matchedMonthKeys = (clone $baseQuery)
@@ -2174,7 +2176,52 @@ class CashAdvanceService
             ['path' => \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPath(), 'pageName' => 'page']
         );
 
-        return ['paginated_statements' => $paginated];
+        return [
+            'paginated_statements' => $paginated,
+            'unpaid_statements' => $unpaidStatements,
+        ];
+    }
+
+    /**
+     * Get compact unpaid statement balances for the early-payment workflow.
+     * This intentionally returns monthly totals without hydrating installment models.
+     *
+     * @return array<int, array{month_key: string, total_amount: float, paid_amount: float, remaining_amount: float}>
+     */
+    public function getEmployeeUnpaidMonthlyStatementSummaries(int $employeeId): array
+    {
+        $monthExpression = $this->cashAdvanceStatementMonthExpression();
+        $rows = CashAdvanceInstallment::query()
+            ->join('cash_advances', 'cash_advances.id', '=', 'cash_advance_installments.cash_advance_id')
+            ->where('cash_advances.employee_id', $employeeId)
+            ->whereIn('cash_advances.status', [
+                CashAdvanceStatus::ACTIVE->value,
+                CashAdvanceStatus::APPROVED->value,
+                CashAdvanceStatus::PAID->value,
+            ])
+            ->selectRaw("{$monthExpression} as month_key")
+            ->selectRaw('COALESCE(SUM(cash_advance_installments.amount), 0) as total_amount')
+            ->selectRaw('COALESCE(SUM(cash_advance_installments.paid_amount), 0) as paid_amount')
+            ->groupByRaw($monthExpression)
+            ->orderBy('month_key')
+            ->get();
+
+        return $rows->map(function ($row): ?array {
+            $totalAmount = (float) $row->total_amount;
+            $paidAmount = (float) $row->paid_amount;
+            $remainingAmount = max(0.0, round($totalAmount - $paidAmount, 2));
+
+            if ($remainingAmount <= 0.001) {
+                return null;
+            }
+
+            return [
+                'month_key' => (string) $row->month_key,
+                'total_amount' => $totalAmount,
+                'paid_amount' => $paidAmount,
+                'remaining_amount' => $remainingAmount,
+            ];
+        })->filter()->values()->all();
     }
 
     /**
@@ -2350,10 +2397,10 @@ class CashAdvanceService
                 }
 
                 $totalRemainingDue = (float) $matchingInstallments->sum('remaining');
-                $maxAllowed = (float) ceil($totalRemainingDue);
+                $maxAllowed = $totalRemainingDue;
                 $customAmount = isset($paymentData['amount']) ? (float) $paymentData['amount'] : $totalRemainingDue;
 
-                if ($customAmount <= 0 || $customAmount > $maxAllowed + 0.01) {
+                if ($customAmount <= 0 || $customAmount > $maxAllowed + 0.001) {
                     throw new InvalidArgumentException('Nominal pembayaran tidak boleh melebihi total tagihan bulan terpilih (Rp '.number_format($maxAllowed, 0, ',', '.').').');
                 }
 
@@ -2377,7 +2424,7 @@ class CashAdvanceService
                     $leftToAllocate -= $allocation;
                 }
 
-                if ($leftToAllocate > 1.00) {
+                if ($leftToAllocate > 0.001) {
                     throw new InvalidArgumentException('Nominal pembayaran tidak dapat dialokasikan ke tagihan yang dipilih.');
                 }
 
@@ -2448,6 +2495,15 @@ class CashAdvanceService
 
             throw $e;
         }
+    }
+
+    private function cashAdvanceStatementMonthExpression(): string
+    {
+        return match (DB::connection()->getDriverName()) {
+            'sqlite' => "strftime('%Y-%m', cash_advance_installments.due_date)",
+            'pgsql' => "to_char(cash_advance_installments.due_date, 'YYYY-MM')",
+            default => "DATE_FORMAT(cash_advance_installments.due_date, '%Y-%m')",
+        };
     }
 
     /**

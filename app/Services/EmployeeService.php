@@ -12,6 +12,7 @@ use App\Models\Employee;
 use App\Models\EmployeeSalaryHistory;
 use App\Models\PayrollItem;
 use App\Models\Position;
+use App\Models\SalaryComponent;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -49,6 +50,8 @@ class EmployeeService
                 'department:id,name',
                 'position:id,name',
                 'detail:'.implode(',', $detailColumns),
+                'user:id,name,email,is_active',
+                'user.roles',
             ])
             ->when($search, fn ($q) => $q->search($search))
             ->when($departmentId, fn ($q) => $q->department($departmentId))
@@ -191,6 +194,16 @@ class EmployeeService
 
                 $employee->detail()->create($detailData);
 
+                $user = User::create([
+                    'name' => $employee->full_name,
+                    'email' => $detailData['email'],
+                    'password' => '1',
+                    'is_active' => $employee->status === EmployeeStatus::ACTIVE,
+                    'email_verified_at' => now(),
+                ]);
+                $user->syncRoles(['karyawan']);
+                $employee->update(['user_id' => $user->id]);
+
                 if ((float) $employee->basic_salary > 0) {
                     EmployeeSalaryHistory::create([
                         'employee_id' => $employee->id,
@@ -215,6 +228,8 @@ class EmployeeService
                         'employee_code' => $employeeCode,
                         'department_id' => $employee->department_id,
                         'position_id' => $employee->position_id,
+                        'account_user_id' => $user->id,
+                        'account_created' => true,
                     ]
                 );
 
@@ -234,7 +249,7 @@ class EmployeeService
                 module: 'employees',
                 message: 'Employee creation failed',
                 context: [
-                    'payload' => $data,
+                    'field_count' => count($data),
                 ],
                 exception: $e
             );
@@ -344,10 +359,25 @@ class EmployeeService
                     'bpjs_ketenagakerjaan_number' => ! empty($data['bpjs_ketenagakerjaan_number']) ? trim((string) $data['bpjs_ketenagakerjaan_number']) : null,
                 ];
 
+                $oldDetailValues = $employee->detail?->only(array_keys($detailData)) ?? [];
+                $changedDetailFields = collect($detailData)
+                    ->filter(fn ($value, $field): bool => ($oldDetailValues[$field] ?? null) != $value)
+                    ->keys()
+                    ->values()
+                    ->all();
+
                 $employee->detail()->updateOrCreate(
                     ['employee_id' => $employee->id],
                     $detailData
                 );
+
+                $employee->loadMissing('user');
+                if ($employee->user) {
+                    $employee->user->update([
+                        'name' => $employee->full_name,
+                        'email' => $detailData['email'],
+                    ]);
+                }
 
                 // Sinkronisasi otomatis slip gaji yang masih draf / revisi jika data karyawan (gaji pokok, ptkp, pajak, bank) berubah
                 $editablePayrollItems = PayrollItem::where('employee_id', $employee->id)
@@ -394,6 +424,7 @@ class EmployeeService
                         'employee_id' => $employee->id,
                         'old_values' => $oldValues,
                         'new_values' => $employee->only(['full_name', 'department_id', 'position_id', 'status', 'employment_status']),
+                        'changed_detail_fields' => $changedDetailFields,
                     ]
                 );
 
@@ -428,13 +459,52 @@ class EmployeeService
                 message: 'Employee update failed',
                 context: [
                     'employee_id' => $employee->id,
-                    'payload' => $data,
+                    'field_count' => count($data),
                 ],
                 exception: $e
             );
 
             throw $e;
         }
+    }
+
+    /**
+     * Delete a salary history entry and synchronize the employee's current salary.
+     */
+    public function deleteSalaryHistory(EmployeeSalaryHistory $history, User $user): Employee
+    {
+        if ($history->type === SalaryAdjustmentType::INITIAL) {
+            throw new InvalidArgumentException('Catatan gaji awal karyawan tidak dapat dihapus.');
+        }
+
+        return DB::transaction(function () use ($history, $user): Employee {
+            $employee = Employee::query()->lockForUpdate()->findOrFail($history->employee_id);
+            $historyId = $history->id;
+            $history->delete();
+
+            $latest = $employee->salaryHistories()
+                ->orderByDesc('effective_date')
+                ->orderByDesc('id')
+                ->first();
+
+            if ($latest) {
+                $employee->update(['basic_salary' => $latest->new_salary]);
+            }
+
+            $this->logger->info(
+                action: 'SALARY_HISTORY_DELETED',
+                module: 'employees',
+                message: 'Employee salary history deleted',
+                context: [
+                    'employee_id' => $employee->id,
+                    'salary_history_id' => $historyId,
+                    'salary_resynchronized' => (bool) $latest,
+                ],
+                userId: $user->id
+            );
+
+            return $employee->fresh();
+        });
     }
 
     /**
@@ -563,21 +633,26 @@ class EmployeeService
                         PayrollPeriodStatus::REJECTED->value,
                     ]);
                 })
-                ->with('payrollPeriod')
+                ->with(['payrollPeriod', 'lines'])
                 ->get();
 
             if ($editablePayrollItems->isNotEmpty()) {
-                $employee->refresh();
+                $employee->refresh()->loadMissing('detail');
                 $payrollService = app(PayrollService::class);
                 $company = CompanyProfile::getProfile();
+                $systemComponents = SalaryComponent::query()
+                    ->whereIn('code', ['PPH21', 'TUNJ_PPH21', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP'])
+                    ->get()
+                    ->keyBy('code');
                 $touchedPeriods = [];
                 foreach ($editablePayrollItems as $pItem) {
                     $salaryInfo = $payrollService->calculateProratedSalary($employee, $pItem->payrollPeriod);
                     $pItem->update([
                         'basic_salary' => (float) $salaryInfo['basic_salary'],
                     ]);
-                    $payrollService->recalculateItemTax($pItem, $company);
-                    $payrollService->recalculateItem($pItem);
+                    $pItem->setRelation('employee', $employee);
+                    $payrollService->recalculateItemTax($pItem, $company, systemComponents: $systemComponents);
+                    $payrollService->recalculateItem($pItem, updatePeriodTotals: false);
                     $touchedPeriods[$pItem->payroll_period_id] = $pItem->payrollPeriod;
                 }
                 foreach ($touchedPeriods as $period) {
@@ -590,16 +665,12 @@ class EmployeeService
             $this->logger->info(
                 action: 'SALARY_ADJUSTMENT',
                 module: 'employees',
-                message: "Salary adjusted for employee #{$employee->id} ({$employee->full_name})",
+                message: 'Employee salary adjusted',
                 context: [
                     'employee_id' => $employee->id,
-                    'previous_salary' => $previousSalary,
-                    'new_salary' => $newSalary,
-                    'change_amount' => $changeAmount,
-                    'percentage_change' => $percentageChange,
+                    'salary_history_id' => $history->id,
                     'effective_date' => $effectiveDate->toDateString(),
                     'type' => $type->value,
-                    'reason' => $data['reason'] ?? null,
                     'changed_by' => $changedBy,
                 ]
             );
@@ -634,15 +705,26 @@ class EmployeeService
      */
     public function getEmployeeDashboardData(): array
     {
-        $totalActive = Employee::query()->where('status', EmployeeStatus::ACTIVE)->count();
-        $permanentCount = Employee::query()->where('status', EmployeeStatus::ACTIVE)->where('employment_status', EmploymentStatus::TETAP)->count();
-        $contractCount = Employee::query()->where('status', EmployeeStatus::ACTIVE)->where('employment_status', EmploymentStatus::KONTRAK)->count();
-        $internCount = Employee::query()->where('status', EmployeeStatus::ACTIVE)->where('employment_status', EmploymentStatus::MAGANG)->count();
+        $activeEmployeeCounts = Employee::query()
+            ->where('status', EmployeeStatus::ACTIVE)
+            ->selectRaw('COUNT(*) as total_active')
+            ->selectRaw('SUM(CASE WHEN employment_status = ? THEN 1 ELSE 0 END) as permanent_count', [EmploymentStatus::TETAP->value])
+            ->selectRaw('SUM(CASE WHEN employment_status = ? THEN 1 ELSE 0 END) as contract_count', [EmploymentStatus::KONTRAK->value])
+            ->selectRaw('SUM(CASE WHEN employment_status = ? THEN 1 ELSE 0 END) as intern_count', [EmploymentStatus::MAGANG->value])
+            ->selectRaw('SUM(CASE WHEN department_id IS NULL THEN 1 ELSE 0 END) as no_department_count')
+            ->first();
+
+        $totalActive = (int) $activeEmployeeCounts->total_active;
+        $permanentCount = (int) $activeEmployeeCounts->permanent_count;
+        $contractCount = (int) $activeEmployeeCounts->contract_count;
+        $internCount = (int) $activeEmployeeCounts->intern_count;
         $contractAndInternCount = $contractCount + $internCount;
         $permanentPercentage = $totalActive > 0 ? round(($permanentCount / $totalActive) * 100, 1) : 0.0;
 
-        // Kontrak berakhir <= 30 hari ke depan atau sudah berakhir
+        // Kontrak berakhir <= 30 hari ke depan atau sudah berakhir.
+        // Keep this list paginated so the employee page does not hydrate every matching row.
         $expiringEmployees = Employee::query()
+            ->select(['id', 'full_name', 'department_id', 'position_id', 'employment_status', 'contract_end_date', 'photo_path'])
             ->with([
                 'department:id,name',
                 'position:id,name',
@@ -653,8 +735,8 @@ class EmployeeService
             ->whereNotNull('contract_end_date')
             ->where('contract_end_date', '<=', now()->addDays(30)->toDateString())
             ->orderBy('contract_end_date', 'asc')
-            ->get();
-        $expiringContractsCount = $expiringEmployees->count();
+            ->paginate(8, ['employees.id', 'employees.full_name', 'employees.department_id', 'employees.position_id', 'employees.employment_status', 'employees.contract_end_date', 'employees.photo_path'], 'expiringPage');
+        $expiringContractsCount = $expiringEmployees->total();
 
         // Sebaran Departemen (hanya karyawan aktif)
         $departments = Department::query()
@@ -663,10 +745,7 @@ class EmployeeService
             ->orderByDesc('employees_count')
             ->get();
 
-        $noDeptCount = Employee::query()
-            ->where('status', EmployeeStatus::ACTIVE)
-            ->whereNull('department_id')
-            ->count();
+        $noDeptCount = (int) $activeEmployeeCounts->no_department_count;
 
         $palette = [
             '#0b52aa', '#10b981', '#f59e0b', '#8b5cf6',

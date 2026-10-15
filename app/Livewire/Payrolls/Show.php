@@ -11,11 +11,12 @@ use App\Models\Employee;
 use App\Models\PayrollItem;
 use App\Models\PayrollPeriod;
 use App\Models\SalaryComponent;
+use App\Services\ActivityLogService;
 use App\Services\PayrollService;
-use App\Services\TaxCalculationService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
@@ -124,11 +125,25 @@ class Show extends Component
 
         if ($trashedItems->isNotEmpty()) {
             $service = app(PayrollService::class);
+            $removedItemIds = [];
             foreach ($trashedItems as $item) {
+                $removedItemIds[] = $item->id;
                 $item->lines()->delete();
                 $item->delete();
             }
             $service->recalculatePeriod($this->period);
+            app(ActivityLogService::class)->info(
+                action: 'ORPHANED_PAYSLIPS_CLEANED',
+                module: 'payrolls',
+                message: 'Orphaned payroll slips cleaned from editable period',
+                context: [
+                    'payroll_period_id' => $this->period->id,
+                    'reference_number' => $this->period->reference_number,
+                    'payroll_item_ids' => $removedItemIds,
+                    'removed_count' => count($removedItemIds),
+                ],
+                userId: auth()->id()
+            );
             $this->refreshPeriod();
         }
     }
@@ -153,10 +168,7 @@ class Show extends Component
         return Employee::query()
             ->where('status', EmployeeStatus::ACTIVE)
             ->whereDoesntHave('payrollItems', fn ($query) => $query->where('payroll_period_id', $this->period->id))
-            ->where(function ($q) {
-                $q->whereNull('join_date')
-                    ->orWhere('join_date', '<=', $this->period->end_date);
-            })
+            ->employedDuring($this->period->start_date->toDateString(), $this->period->end_date->toDateString())
             ->with(['detail', 'position', 'department'])
             ->orderBy('full_name')
             ->get();
@@ -949,17 +961,7 @@ class Show extends Component
         }
 
         try {
-            $company = CompanyProfile::getProfile();
-            $items = $this->period->items()->with(['employee.detail', 'lines'])->get();
-            $taxService = app(TaxCalculationService::class);
-            if ($this->period->month === 12 && $company->enable_pph21) {
-                $taxService->preloadFinalPeriodHistory($items->pluck('employee_id')->all(), $this->period->year, $this->period->month);
-            }
-
-            foreach ($items as $item) {
-                $service->recalculateItemTax($item, $company, taxService: $taxService);
-                $service->recalculateItem($item);
-            }
+            $service->recalculateTaxesForPeriod($this->period, auth()->user());
 
             $this->refreshPeriod();
 
@@ -1000,14 +1002,49 @@ class Show extends Component
             $this->refreshPeriod();
 
             $empName = $item->employee?->full_name ?? 'Karyawan';
-            $this->dispatch('swal:toast', [
+            $this->dispatch('swal:alert', [
                 'type' => 'success',
+                'title' => 'Slip Disetujui!',
                 'message' => "Slip gaji {$empName} berhasil disetujui (ACC).",
             ]);
         } catch (Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
                 'title' => 'Gagal Menyetujui!',
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    #[On('approve-payroll-item-from-menu')]
+    public function approveItemFromMenu(mixed $id, PayrollService $service): void
+    {
+        $itemId = is_array($id) ? (int) ($id['id'] ?? 0) : (int) $id;
+
+        $this->approveItem($itemId, $service);
+    }
+
+    #[On('unapprove-payroll-item')]
+    public function unapproveItem(mixed $id, PayrollService $service): void
+    {
+        $itemId = is_array($id) ? (int) ($id['id'] ?? 0) : (int) $id;
+
+        try {
+            $item = $this->period->items()->with('employee')->findOrFail($itemId);
+            $employeeName = $item->employee?->full_name ?? 'Karyawan';
+
+            $service->unapproveItem($item, auth()->user());
+            $this->refreshPeriod();
+
+            $this->dispatch('swal:alert', [
+                'type' => 'success',
+                'title' => 'Persetujuan Dibatalkan',
+                'message' => "Persetujuan slip gaji {$employeeName} dibatalkan dan dikembalikan ke Menunggu ACC.",
+            ]);
+        } catch (Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Membatalkan Persetujuan',
                 'message' => $e->getMessage(),
             ]);
         }
@@ -1062,12 +1099,41 @@ class Show extends Component
         }
     }
 
-    public function openRejectItemModal(int $itemId): void
+    #[On('open-payroll-reject-modal')]
+    public function openRejectItemModal(mixed $id = null): void
     {
+        $itemId = is_array($id) ? (int) ($id['id'] ?? 0) : (int) $id;
         $this->rejectingItemId = $itemId;
         $this->itemRejectionReason = '';
         $this->isBulkReject = false;
         $this->dispatch('open-modal', ['id' => 'rejectItemModal']);
+    }
+
+    #[On('reject-payroll-item-from-menu')]
+    public function rejectItemFromMenu(mixed $id, mixed $reason, PayrollService $service): void
+    {
+        $this->rejectingItemId = is_array($id) ? (int) ($id['id'] ?? 0) : (int) $id;
+        $this->itemRejectionReason = trim((string) $reason);
+        $this->isBulkReject = false;
+
+        try {
+            $this->validate([
+                'itemRejectionReason' => 'required|string|min:3|max:500',
+            ], [
+                'itemRejectionReason.required' => 'Alasan penolakan / revisi wajib diisi.',
+                'itemRejectionReason.min' => 'Alasan penolakan minimal 3 karakter.',
+            ]);
+        } catch (ValidationException $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Alasan Revisi Belum Valid',
+                'message' => $e->validator->errors()->first(),
+            ]);
+
+            return;
+        }
+
+        $this->confirmRejectItem($service);
     }
 
     public function openRejectSelectedModal(): void
@@ -1112,8 +1178,9 @@ class Show extends Component
             $this->dispatch('close-modal', ['id' => 'rejectItemModal']);
             $this->refreshPeriod();
 
-            $this->dispatch('swal:toast', [
+            $this->dispatch('swal:alert', [
                 'type' => 'info',
+                'title' => 'Slip Ditolak untuk Revisi',
                 'message' => $msg,
             ]);
         } catch (Throwable $e) {
@@ -1143,8 +1210,9 @@ class Show extends Component
             $this->selectAll = false;
             $this->refreshPeriod();
 
-            $this->dispatch('swal:toast', [
+            $this->dispatch('swal:alert', [
                 'type' => 'success',
+                'title' => 'Slip Disetujui!',
                 'message' => "{$count} slip gaji karyawan terpilih berhasil disetujui (ACC).",
             ]);
         } catch (Throwable $e) {

@@ -81,10 +81,8 @@
                                            x-on:input="
                                                let raw = $el.value.replace(/\D/g, '');
                                                $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                               $wire.$set('form.amount', raw ? parseFloat(raw) : '', false);
                                            "
-                                           x-on:input.debounce.350ms="$wire.set('form.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                           x-on:change="$wire.set('form.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                           x-on:blur="$wire.set('form.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
                                            value="{{ !empty($form->amount) ? number_format((float) $form->amount, 0, ',', '.') : '' }}"
                                            class="form-control text-right @error('form.amount') is-invalid @enderror"
                                            placeholder="0"
@@ -121,7 +119,7 @@
                                         <button type="button" class="stepper-action-btn" wire:click="decrementTenor" {{ (int) $form->installment_count <= 1 ? 'disabled' : '' }}>
                                             <i class="fas fa-minus"></i>
                                         </button>
-                                        <input type="number" id="form_installment_count" wire:model.live="form.installment_count" min="1" max="60" class="text-center font-weight-bold" style="flex: 1; width: 100%; height: 100%; border: none !important; border-radius: 0 !important; outline: none !important; box-shadow: none !important; background: transparent; font-size: 1.15rem; color: #191d21;">
+                                        <input type="number" id="form_installment_count" wire:model.lazy="form.installment_count" min="1" max="60" class="text-center font-weight-bold" style="flex: 1; width: 100%; height: 100%; border: none !important; border-radius: 0 !important; outline: none !important; box-shadow: none !important; background: transparent; font-size: 1.15rem; color: #191d21;">
                                         <button type="button" class="stepper-action-btn" wire:click="incrementTenor" {{ (int) $form->installment_count >= 60 ? 'disabled' : '' }}>
                                             <i class="fas fa-plus"></i>
                                         </button>

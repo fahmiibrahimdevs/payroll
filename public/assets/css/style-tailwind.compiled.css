@@ -363,6 +363,9 @@
   .-mx-3 {
     margin-inline: calc(var(--spacing) * -3);
   }
+  .mx-1 {
+    margin-inline: var(--spacing);
+  }
   .mx-auto {
     margin-inline: auto;
   }
@@ -859,8 +862,14 @@
   .\!border-l-\[\#10b981\] {
     border-left-color: #10b981 !important;
   }
+  .\!border-l-\[\#ef4444\] {
+    border-left-color: #ef4444 !important;
+  }
   .\!border-l-\[\#f59e0b\] {
     border-left-color: #f59e0b !important;
+  }
+  .\!bg-\[\#fef2f2\] {
+    background-color: #fef2f2 !important;
   }
   .\!bg-blue-50\/60 {
     background-color: color-mix(in srgb, oklch(97% 0.014 254.604) 60%, transparent) !important;

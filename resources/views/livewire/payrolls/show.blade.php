@@ -23,6 +23,7 @@
     @php
         $statusVal = $period->status->value;
         $isRejected = ($statusVal === 'rejected');
+        $step1Done = in_array($statusVal, ['submitted', 'approved', 'paid'], true);
         $step2Done = in_array($statusVal, ['submitted', 'approved', 'paid'], true);
         $step3Done = in_array($statusVal, ['approved', 'paid'], true);
         $step4Done = ($statusVal === 'paid');
@@ -155,12 +156,12 @@
                 <div class="activities">
                     <!-- Tahap 1: Verifikasi Draf HRD -->
                     <div class="activity">
-                        <div class="activity-icon {{ $period->status->isEditable() ? 'bg-primary text-white shadow-primary' : 'bg-success text-white shadow-success' }}">
-                            <i class="{{ $period->status->isEditable() ? 'fas fa-pencil-alt' : 'fas fa-check' }}"></i>
+                        <div class="activity-icon {{ $step1Done ? 'bg-success text-white shadow-success' : 'bg-primary text-white shadow-primary' }}">
+                            <i class="{{ $step1Done ? 'fas fa-check' : 'fas fa-pencil-alt' }}"></i>
                         </div>
                         <div class="activity-detail">
                             <div class="mb-1">
-                                <span class="text-job {{ $period->status->isEditable() ? 'text-primary' : 'text-success' }} font-weight-bold">Tahap 1</span>
+                                <span class="text-job {{ $step1Done ? 'text-success' : 'text-primary' }} font-weight-bold">Tahap 1</span>
                                 <span class="bullet"></span>
                                 <span class="text-job text-muted">{{ $period->created_at ? $period->created_at->format('d M Y') : '-' }}</span>
                             </div>
@@ -205,12 +206,12 @@
                                 </p>
                             </div>
                         @elseif ($step2Done)
-                            <div class="activity-icon bg-primary text-white shadow-primary">
-                                <i class="fas fa-paper-plane"></i>
+                            <div class="activity-icon bg-success text-white shadow-success">
+                                <i class="fas fa-check"></i>
                             </div>
                             <div class="activity-detail">
                                 <div class="mb-1">
-                                    <span class="text-job text-primary font-weight-bold">Tahap 2</span>
+                                    <span class="text-job text-success font-weight-bold">Tahap 2</span>
                                     <span class="bullet"></span>
                                     <span class="text-job text-muted">{{ $period->submitted_at ? $period->submitted_at->format('d M Y') : ($period->created_at ? $period->created_at->format('d M Y') : '-') }}</span>
                                 </div>
@@ -238,12 +239,12 @@
                     <!-- Tahap 3: Persetujuan (ACC) -->
                     <div class="activity">
                         @if ($step3Done)
-                            <div class="activity-icon bg-primary text-white shadow-primary">
+                            <div class="activity-icon bg-success text-white shadow-success">
                                 <i class="fas fa-check-double"></i>
                             </div>
                             <div class="activity-detail">
                                 <div class="mb-1">
-                                    <span class="text-job text-primary font-weight-bold">Tahap 3</span>
+                                    <span class="text-job text-success font-weight-bold">Tahap 3</span>
                                     <span class="bullet"></span>
                                     <span class="text-job text-muted">{{ $period->approved_at ? $period->approved_at->format('d M Y') : '-' }}</span>
                                 </div>
@@ -285,12 +286,12 @@
                     <!-- Tahap 4: Pembayaran Gaji -->
                     <div class="activity">
                         @if ($step4Done)
-                            <div class="activity-icon bg-primary text-white shadow-primary">
+                            <div class="activity-icon bg-success text-white shadow-success">
                                 <i class="fas fa-check-circle"></i>
                             </div>
                             <div class="activity-detail">
                                 <div class="mb-1">
-                                    <span class="text-job text-primary font-weight-bold">Tahap 4</span>
+                                    <span class="text-job text-success font-weight-bold">Tahap 4</span>
                                     <span class="bullet"></span>
                                     <span class="text-job text-muted">{{ $period->payment_date ? $period->payment_date->format('d M Y') : '-' }}</span>
                                 </div>
@@ -299,16 +300,16 @@
                                 </p>
                             </div>
                         @elseif ($statusVal === 'approved')
-                            <div class="activity-icon text-white" style="background-color: #64748b; box-shadow: 0 4px 8px rgba(100, 116, 139, 0.25);">
+                            <div class="activity-icon bg-primary text-white shadow-primary">
                                 <i class="fas fa-hand-holding-usd"></i>
                             </div>
                             <div class="activity-detail">
                                 <div class="mb-1">
-                                    <span class="text-job font-weight-bold" style="color: #64748b;">Tahap 4</span>
+                                    <span class="text-job text-primary font-weight-bold">Tahap 4</span>
                                     <span class="bullet"></span>
-                                    <span class="text-job font-weight-bold" style="color: #64748b;">Siap Dibayar</span>
+                                    <span class="text-job text-primary font-weight-bold">Siap Dibayar</span>
                                 </div>
-                                <p class="mb-0" style="color: #475569;">
+                                <p class="mb-0 text-primary">
                                     {{ $this->paidItemsCount }} dari {{ $this->totalItemsCount }} slip sudah dibayar ({{ $this->paymentProgressPercent }}%). Pembayaran diproses per karyawan.
                                 </p>
                                 <div class="progress mt-2" style="height: 6px; border-radius: 4px;" role="progressbar" aria-valuenow="{{ $this->paymentProgressPercent }}" aria-valuemin="0" aria-valuemax="100" aria-label="Progres pembayaran payroll">
@@ -335,9 +336,16 @@
 
                 <!-- Catatan Penolakan (Hanya muncul jika status ditolak Direktur) -->
                 @if ($period->status->value === 'rejected' && $period->rejection_reason)
-                    <div class="alert alert-danger mt-3 mb-0">
-                        <div class="alert-title">Catatan Revisi Direktur:</div>
-                        {{ $period->rejection_reason }}
+                    <div class="bd-callout bd-callout-danger mt-3 mb-0" role="alert">
+                        <div class="d-flex align-items-start">
+                            <div class="bd-callout-icon mr-3 mt-0.5">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="bd-callout-title">Catatan Revisi dari Direktur</div>
+                                <div class="bd-callout-desc">{{ $period->rejection_reason }}</div>
+                            </div>
+                        </div>
                     </div>
                 @endif
 
@@ -401,10 +409,16 @@
                         --}}
 
                         @if ($period->status->value === 'paid')
-                            <div class="text-center py-1">
-                                <span class="badge badge-info px-3 py-2">
-                                    <i class="fas fa-check-circle mr-1"></i> Telah Dibayar pada {{ $period->payment_date?->format('d/m/Y') }}
-                                </span>
+                            <div class="bd-callout bd-callout-success mt-3 mb-0" role="status">
+                                <div class="d-flex align-items-start">
+                                    <div class="bd-callout-icon mr-3 mt-0.5">
+                                        <i class="fas fa-check-circle"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="bd-callout-title">Penggajian Telah Dibayar</div>
+                                        <div class="bd-callout-desc">Pembayaran dikonfirmasi pada {{ $period->payment_date?->format('d/m/Y') ?? 'tanggal tidak tercatat' }}.</div>
+                                    </div>
+                                </div>
                             </div>
                         @endif
                     </div>
@@ -742,21 +756,14 @@
 
                                     <!-- Persetujuan Individual Per Karyawan untuk Direktur -->
                                     @if (auth()->user()?->hasRole('direktur'))
-                                        @if ($period->status->value === 'submitted' && ! $item->isApproved())
-                                            <button type="button" wire:click="approveItem({{ $item->id }})" class="btn btn-success btn-action" data-toggle="tooltip" title="Setujui (ACC)">
-                                                <i class="fas fa-check"></i>
-                                            </button>
-                                            <button type="button" wire:click="openRejectItemModal({{ $item->id }})" class="btn btn-danger btn-action" data-toggle="tooltip" title="Tolak">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        @elseif ($item->isPaid())
+                                        @if ($item->isPaid())
                                             <button type="button" wire:click="openPaymentDetailModal({{ $item->id }})" class="btn btn-info btn-action" data-toggle="tooltip" title="Lihat Bukti & Detail Pembayaran">
                                                 <i class="fas fa-receipt"></i>
                                             </button>
-                                        @elseif ($item->isApproved())
-                                            <span class="badge badge-light border text-success font-weight-600" style="font-size: 11px; padding: 6px 8px; border-radius: 6px;" title="Disetujui oleh {{ $item->approver?->name ?? 'Direktur' }}">
-                                                <i class="fas fa-check-double text-success"></i>
-                                            </span>
+                                        @elseif (in_array($period->status->value, ['submitted', 'approved'], true))
+                                            <button type="button" onclick="openPayrollApprovalMenu(this)" data-item-id="{{ $item->id }}" data-status="{{ $item->isApproved() ? 'approved' : ($item->isRejected() ? 'rejected' : 'pending') }}" data-employee="{{ $item->employee?->full_name ?? 'Karyawan' }}" data-approver="{{ $item->approver?->name ?? 'Direktur' }}" data-approved-at="{{ $item->approved_at?->format('d/m/Y H:i') ?? '' }}" data-rejection-reason="{{ $item->rejection_reason ?? '' }}" wire:loading.attr="disabled" wire:target="approveItemFromMenu,unapproveItem,confirmRejectItem" class="btn btn-{{ $item->isApproved() ? 'success' : ($item->isRejected() ? 'danger' : 'primary') }} btn-action" data-toggle="tooltip" title="Kelola persetujuan slip">
+                                                <i wire:loading.remove wire:target="approveItemFromMenu,unapproveItem,confirmRejectItem" class="fas {{ $item->isApproved() ? 'fa-check-circle' : ($item->isRejected() ? 'fa-exclamation-triangle' : 'fa-user-check') }}"></i><i wire:loading wire:target="approveItemFromMenu,unapproveItem,confirmRejectItem" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="approveItemFromMenu,unapproveItem,confirmRejectItem" class="fas fa-caret-down ml-1"></i>
+                                            </button>
                                         @endif
                                     @endif
                                 </div>
@@ -958,7 +965,7 @@
                                                             @php
                                                                 $prevFullSalary = (float) ($previewItem->employee?->basic_salary ?? 0);
                                                                 $prevIsProrated = $prevFullSalary > 0 && (float) $previewItem->basic_salary < $prevFullSalary;
-                                                                $prevNoteText = $previewItem->notes;
+                                                                $prevNoteText = $previewItem->human_notes;
                                                                 if ($prevIsProrated) {
                                                                     $fmtPBasic = 'Rp ' . number_format((float) $previewItem->basic_salary, 0, ',', '.');
                                                                     $fmtPFull = 'Rp ' . number_format($prevFullSalary, 0, ',', '.');
@@ -1529,8 +1536,185 @@
         </div>
     </div>
 
+    @push('scripts')
+        <script>
+            window.promptPayrollItemReject = function (itemId, currentReason = '') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Tolak & Minta Revisi',
+                    text: 'Tuliskan alasan revisi untuk slip gaji ini.',
+                    input: 'textarea',
+                    inputValue: currentReason === '-' ? '' : currentReason,
+                    inputPlaceholder: 'Jelaskan perbaikan yang perlu dilakukan...',
+                    inputAttributes: {
+                        maxlength: '500',
+                        'aria-label': 'Alasan revisi',
+                    },
+                    showCancelButton: true,
+                    confirmButtonText: 'Kirim untuk Revisi',
+                    confirmButtonColor: '#e3342f',
+                    cancelButtonText: 'Batal',
+                    reverseButtons: true,
+                    inputValidator: (value) => {
+                        const reason = (value || '').trim();
+                        if (!reason) {
+                            return 'Alasan revisi wajib diisi.';
+                        }
+                        if (reason.length < 3) {
+                            return 'Alasan revisi minimal 3 karakter.';
+                        }
+                        if (reason.length > 500) {
+                            return 'Alasan revisi maksimal 500 karakter.';
+                        }
+                    },
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Livewire.dispatch('reject-payroll-item-from-menu', {
+                            id: itemId,
+                            reason: result.value.trim(),
+                        });
+                    }
+                });
+            };
+
+            window.openPayrollApprovalMenu = function (button) {
+                if (typeof Swal === 'undefined' || Swal.isVisible()) {
+                    return;
+                }
+
+                const itemId = Number(button.dataset.itemId);
+                const status = button.dataset.status || 'pending';
+                const employee = $('<div>').text(button.dataset.employee || 'Karyawan').html();
+                const approver = $('<div>').text(button.dataset.approver || 'Direktur').html();
+                const approvedAt = $('<div>').text(button.dataset.approvedAt || '').html();
+                const rejectionReason = $('<div>').text(button.dataset.rejectionReason || '-').html();
+                let modal;
+
+                if (status === 'approved') {
+                    modal = {
+                        icon: 'success',
+                        title: 'Persetujuan Slip Gaji',
+                        html: `
+                            <div class="text-center mb-3">
+                                <p class="mb-2" style="font-size: 14px; color: #1e293b;">Slip <strong>${employee}</strong> disetujui oleh <strong>${approver}</strong> ${approvedAt ? `(${approvedAt})` : ''}.</p>
+                                <p class="mb-0" style="font-size: 13.5px; font-weight: 600; color: #334155;">Pilih tindakan persetujuan:</p>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-center flex-nowrap mt-3" style="gap: 10px;">
+                                <button type="button" id="payroll-menu-reject" class="btn btn-icon icon-left btn-danger flex-fill py-2 text-nowrap"><i class="fas fa-times-circle"></i> Tolak &amp; Minta Revisi</button>
+                                <button type="button" id="payroll-menu-unapprove" class="btn btn-icon icon-left btn-warning flex-fill py-2 text-nowrap"><i class="fas fa-undo"></i> Batalkan ACC</button>
+                            </div>
+                        `,
+                        didOpen: () => {
+                            $('#payroll-menu-reject').on('click', () => {
+                                Swal.close();
+                                window.setTimeout(() => window.promptPayrollItemReject(itemId), 100);
+                            });
+                            $('#payroll-menu-unapprove').on('click', () => {
+                                Swal.fire({
+                                    icon: 'warning',
+                                    title: 'Batalkan Persetujuan?',
+                                    text: 'Status slip gaji akan dikembalikan menjadi Menunggu ACC tanpa catatan revisi.',
+                                    showCancelButton: true,
+                                    confirmButtonText: 'Ya, Batalkan ACC',
+                                    confirmButtonColor: '#f59e0b',
+                                    cancelButtonText: 'Kembali',
+                                    reverseButtons: true,
+                                }).then((result) => {
+                                    if (result.isConfirmed) {
+                                        Livewire.dispatch('unapprove-payroll-item', { id: itemId });
+                                    }
+                                });
+                            });
+                        },
+                    };
+                } else if (status === 'rejected') {
+                    modal = {
+                        icon: 'warning',
+                        title: 'Persetujuan Slip Gaji',
+                        html: `
+                            <div class="text-center mb-3">
+                                <p class="mb-2" style="font-size: 14px; font-weight: 600; color: #334155;">Catatan revisi:</p>
+                                <div class="p-3 mb-3 text-left" style="background: #fff5f5; border: 1px solid #fecaca; border-radius: 8px; color: #1e293b;">${rejectionReason}</div>
+                                <p class="mb-0" style="font-size: 13.5px; font-weight: 600; color: #334155;">Pilih tindakan untuk ${employee}:</p>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-center flex-nowrap mt-3" style="gap: 10px;">
+                                <button type="button" id="payroll-menu-reject" class="btn btn-icon icon-left btn-danger flex-fill py-2 text-nowrap"><i class="fas fa-edit"></i> Minta Revisi Lagi</button>
+                                <button type="button" id="payroll-menu-approve" class="btn btn-icon icon-left btn-success flex-fill py-2 text-nowrap"><i class="fas fa-check-circle"></i> Setujui (ACC)</button>
+                            </div>
+                        `,
+                        didOpen: () => {
+                            $('#payroll-menu-reject').on('click', () => {
+                                Swal.close();
+                                window.setTimeout(() => window.promptPayrollItemReject(itemId, button.dataset.rejectionReason || ''), 100);
+                            });
+                            $('#payroll-menu-approve').on('click', () => {
+                                Swal.close();
+                                Livewire.dispatch('approve-payroll-item-from-menu', { id: itemId });
+                            });
+                        },
+                    };
+                } else {
+                    modal = {
+                        icon: 'question',
+                        title: 'Persetujuan Slip Gaji',
+                        html: `
+                            <div class="text-center mb-3">
+                                <p class="mb-2" style="font-size: 14px; color: #1e293b;">Slip <strong>${employee}</strong> berstatus <span class="badge badge-warning">Menunggu ACC</span></p>
+                                <p class="mb-0" style="font-size: 13.5px; font-weight: 600; color: #334155;">Silakan pilih tindakan persetujuan:</p>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-center flex-nowrap mt-3" style="gap: 10px;">
+                                <button type="button" id="payroll-menu-reject" class="btn btn-icon icon-left btn-danger flex-fill py-2 text-nowrap"><i class="fas fa-times-circle"></i> Tolak &amp; Minta Revisi</button>
+                                <button type="button" id="payroll-menu-approve" class="btn btn-icon icon-left btn-success flex-fill py-2 text-nowrap"><i class="fas fa-check-circle"></i> Setujui (ACC Slip)</button>
+                            </div>
+                        `,
+                        didOpen: () => {
+                            $('#payroll-menu-reject').on('click', () => {
+                                Swal.close();
+                                window.setTimeout(() => window.promptPayrollItemReject(itemId), 100);
+                            });
+                            $('#payroll-menu-approve').on('click', () => {
+                                Swal.close();
+                                Livewire.dispatch('approve-payroll-item-from-menu', { id: itemId });
+                            });
+                        },
+                    };
+                }
+
+                Swal.fire({
+                    ...modal,
+                    width: '490px',
+                    showCloseButton: true,
+                    showConfirmButton: false,
+                    showCancelButton: false,
+                    customClass: {
+                        popup: 'swal-actionsheet-popup',
+                    },
+                });
+            };
+        </script>
+    @endpush
+
     @push('styles')
         <style>
+            .swal2-popup.swal-actionsheet-popup {
+                border-radius: 16px !important;
+                padding: 24px 22px 20px !important;
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+            }
+
+            .swal2-popup.swal-actionsheet-popup .swal2-title {
+                font-size: 20px !important;
+                font-weight: 700 !important;
+                color: #1e293b !important;
+                padding-top: 4px !important;
+                margin-bottom: 8px !important;
+            }
+
+            .swal2-popup.swal-actionsheet-popup .swal2-icon {
+                margin: 8px auto 14px auto !important;
+                transform: scale(0.9) !important;
+            }
+
             /* 5 Kartu Statistik: Modern CSS Grid (Equal gap-x & gap-y di mobile/tablet, 5 Kolom sejajar di desktop) */
             .payroll-stat-grid {
                 display: grid;
@@ -1849,6 +2033,16 @@
                 background: linear-gradient(90deg, rgba(245, 158, 11, 0.08) 0%, rgba(255, 255, 255, 0.98) 20%, #ffffff 100%) !important;
             }
 
+            .bd-callout-danger {
+                border-left-color: #ef4444 !important;
+                background: linear-gradient(90deg, rgba(239, 68, 68, 0.07) 0%, rgba(255, 255, 255, 0.98) 20%, #ffffff 100%) !important;
+            }
+
+            .bd-callout-success {
+                border-left-color: #22c55e !important;
+                background: linear-gradient(90deg, rgba(34, 197, 94, 0.07) 0%, rgba(255, 255, 255, 0.98) 20%, #ffffff 100%) !important;
+            }
+
             .bd-callout .bd-callout-icon {
                 font-size: 16px !important;
                 line-height: 1 !important;
@@ -1861,6 +2055,14 @@
 
             .bd-callout-warning .bd-callout-icon {
                 color: #d97706 !important;
+            }
+
+            .bd-callout-danger .bd-callout-icon {
+                color: #dc2626 !important;
+            }
+
+            .bd-callout-success .bd-callout-icon {
+                color: #16a34a !important;
             }
 
             .bd-callout .bd-callout-title {
@@ -1877,6 +2079,14 @@
 
             .bd-callout-warning .bd-callout-title {
                 color: #b45309 !important;
+            }
+
+            .bd-callout-danger .bd-callout-title {
+                color: #b91c1c !important;
+            }
+
+            .bd-callout-success .bd-callout-title {
+                color: #15803d !important;
             }
 
             .bd-callout .bd-callout-desc {

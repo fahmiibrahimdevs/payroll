@@ -165,9 +165,10 @@ class KaryawanRoleAccessTest extends TestCase
                 'year' => 2026,
                 'start_date' => '2026-10-01',
                 'end_date' => '2026-10-31',
-                'status' => 'draft',
+                'status' => 'paid',
             ]
         );
+        $period->update(['status' => 'paid']);
 
         $ownItem = PayrollItem::create([
             'payroll_period_id' => $period->id,
@@ -175,6 +176,7 @@ class KaryawanRoleAccessTest extends TestCase
             'payslip_number' => 'SLIP-OWN-01',
             'basic_salary' => 7000000,
             'net_salary' => 7000000,
+            'approval_status' => 'approved',
         ]);
 
         $otherItem = PayrollItem::create([

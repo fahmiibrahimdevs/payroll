@@ -364,6 +364,19 @@
                             </div>
                         </div>
 
+                        <!-- Sisa Kasbon Karyawan -->
+                        @if ($this->employeeTotalRemainingCashAdvance > 0)
+                            <div class="emp-tile-row">
+                                <div class="emp-tile-left">
+                                    <div class="emp-tile-icon"><i class="fas fa-hand-holding-usd text-warning"></i></div>
+                                    <span>Total Sisa Kasbon</span>
+                                </div>
+                                <div class="emp-tile-right font-weight-600 text-danger text-right" style="font-size: 13px;">
+                                    Rp {{ number_format($this->employeeTotalRemainingCashAdvance, 0, ',', '.') }}
+                                </div>
+                            </div>
+                        @endif
+
                         <!-- Riwayat Data (Pembuat & Terakhir Diupdate) -->
                         <div class="emp-tile-row">
                             <div class="emp-tile-left">
@@ -509,7 +522,7 @@
                                 @php
                                     $empFullSalary = (float) ($item->employee?->basic_salary ?? 0);
                                     $isEmpProrated = $empFullSalary > 0 && (float) $item->basic_salary < $empFullSalary;
-                                    $prorateNoteText = $item->notes;
+                                    $prorateNoteText = $item->human_notes;
                                     if ($isEmpProrated) {
                                         $fmtBasic = 'Rp ' . number_format((float) $item->basic_salary, 0, ',', '.');
                                         $fmtFull = 'Rp ' . number_format($empFullSalary, 0, ',', '.');
@@ -690,7 +703,7 @@
                                                         @if (($row['calc_mode'] ?? 'nominal') === 'percentage')
                                                             <div class="d-flex align-items-center flex-grow-1 mr-2">
                                                                  <div class="input-group payroll-input-group mr-1.5" style="width: 110px; flex-shrink: 0;" title="Persentase dari Gaji Pokok">
-                                                                    <input type="text" inputmode="decimal" wire:model.live.debounce.400ms="allowanceRows.{{ $index }}.percentage" class="form-control text-right payroll-input payroll-pct-input" placeholder="0" autocomplete="off">
+                                                                    <input type="text" inputmode="decimal" wire:model.lazy="allowanceRows.{{ $index }}.percentage" class="form-control text-right payroll-input payroll-pct-input" placeholder="0" autocomplete="off">
                                                                     <div class="input-group-append">
                                                                         <span class="input-group-text payroll-addon">%</span>
                                                                     </div>
@@ -712,9 +725,9 @@
                                                                        x-on:input="
                                                                            let raw = $el.value.replace(/\D/g, '');
                                                                            $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                                                           $wire.$set('allowanceRows.{{ $index }}.amount', raw ? parseFloat(raw) : '', false);
                                                                        "
-                                                                       x-on:input.debounce.350ms="$wire.set('allowanceRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                                                       x-on:blur="$wire.set('allowanceRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                                                       x-on:change="$wire.$set('allowanceRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '', true)"
                                                                        value="{{ !empty($row['amount']) ? number_format((float) $row['amount'], 0, ',', '.') : '' }}"
                                                                        class="form-control text-right payroll-input"
                                                                        placeholder="0"
@@ -817,53 +830,124 @@
                                             $deductionCounter++;
                                             $rowAmt = (float) ($row['amount'] ?? 0);
                                             $paidAmt = (float) ($row['installment_paid_amount'] ?? 0);
+                                            $remAmt = (float) ($row['advance_remaining_amount'] ?? 0);
+                                            $totalAdvance = (float) ($row['advance_total_amount'] ?? 0);
+                                            $instNum = $row['installment_number'] ?? null;
+                                            $instCount = $row['advance_installment_count'] ?? null;
+
+                                            if ($remAmt <= 0 && ! empty($row['cash_advance_installment_id'])) {
+                                                $instModel = \App\Models\CashAdvanceInstallment::with('cashAdvance')->find($row['cash_advance_installment_id']);
+                                                if ($instModel?->cashAdvance) {
+                                                    $remAmt = (float) $instModel->cashAdvance->remaining_amount;
+                                                    $totalAdvance = (float) $instModel->cashAdvance->amount;
+                                                    $instNum = $instNum ?? $instModel->installment_number;
+                                                    $instCount = $instCount ?? $instModel->cashAdvance->installment_count;
+                                                }
+                                            }
+                                            $instTotal = (float) ($row['installment_total_amount'] ?? 0);
+                                            if ($instTotal <= 0 && ! empty($row['cash_advance_installment_id'])) {
+                                                $instModel = $instModel ?? \App\Models\CashAdvanceInstallment::with('cashAdvance')->find($row['cash_advance_installment_id']);
+                                                if ($instModel) {
+                                                    $instTotal = (float) $instModel->amount;
+                                                }
+                                            }
+                                            $normalInstallment = max(0.0, round($instTotal - $paidAmt, 2));
                                         @endphp
                                         <tr wire:key="deduction-row-kasbon-{{ $index }}">
                                             <td class="text-center text-muted align-middle !px-3 !py-2.5" style="font-size: 12.5px;">{{ $deductionCounter }}</td>
                                             <td class="align-middle !px-3 !py-2.5">
-                                                <div class="text-dark d-flex align-items-center flex-wrap" style="font-weight: 500; font-size: 13px; gap: 4px;">
-                                                    <span>{{ $row['name'] }}</span>
-                                                    @if ($rowAmt <= 0)
-                                                        <span class="badge badge-success text-xs" style="font-weight: 500;">
-                                                            <i class="fas fa-check-circle mr-1"></i>Sudah Lunas Lebih Awal
+                                                <div class="d-flex flex-column" style="gap: 2px;">
+                                                    <div class="d-flex align-items-center flex-wrap" style="gap: 6px;">
+                                                        <span class="text-dark font-weight-600" style="font-size: 13px;">{{ $row['name'] }}</span>
+                                                        @if ($rowAmt <= 0)
+                                                            <span class="badge badge-success text-xs" style="font-weight: 500;">
+                                                                <i class="fas fa-check-circle mr-1"></i>Sudah Lunas Lebih Awal
+                                                            </span>
+                                                        @elseif ($paidAmt > 0)
+                                                            <span class="badge badge-info text-xs" style="font-weight: 500;">
+                                                                <i class="fas fa-info-circle mr-1"></i>Sudah Bayar Awal Rp {{ number_format($paidAmt, 0, ',', '.') }}
+                                                            </span>
+                                                        @endif
+                                                    </div>
+
+                                                    <div class="d-flex align-items-center flex-wrap text-muted" style="font-size: 11.5px; gap: 8px; margin-top: 2px;">
+                                                        <span class="d-inline-flex align-items-center text-dark">
+                                                            <i class="fas fa-hand-holding-usd text-warning mr-1.5" style="font-size: 12px;"></i>
+                                                            <span>Sisa Kasbon: <strong class="text-danger" style="font-weight: 700;">Rp {{ number_format($remAmt, 0, ',', '.') }}</strong></span>
                                                         </span>
-                                                    @elseif ($paidAmt > 0)
-                                                        <span class="badge badge-info text-xs" style="font-weight: 500;">
-                                                            <i class="fas fa-info-circle mr-1"></i>Sudah Bayar Awal Rp {{ number_format($paidAmt, 0, ',', '.') }}
-                                                        </span>
-                                                    @endif
+                                                        @if ($totalAdvance > 0)
+                                                            <span style="color: #cbd5e1;">&bull;</span>
+                                                            <span>Total Pinjaman: <strong>Rp {{ number_format($totalAdvance, 0, ',', '.') }}</strong></span>
+                                                        @endif
+                                                        @if ($instNum && $instCount)
+                                                            <span style="color: #cbd5e1;">&bull;</span>
+                                                            <span class="badge badge-light border text-dark px-1.5 py-0" style="font-size: 11px; font-weight: 500; background-color: #f8fafc;">
+                                                                Cicilan {{ $instNum }} dari {{ $instCount }}
+                                                            </span>
+                                                        @endif
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td class="text-right align-middle !px-3 !py-2.5">
                                                 @if ($this->isEditable)
-                                                    <div class="d-inline-flex align-items-center" style="max-width: 175px;">
-                                                        <div class="input-group input-group-sm" x-data>
-                                                            <div class="input-group-prepend"><span class="input-group-text font-weight-bold text-danger py-0 px-2">-Rp</span></div>
+                                                    <div class="d-inline-flex flex-column align-items-end" style="width: 185px; max-width: 100%;">
+                                                        <div class="input-group payroll-input-group w-100"
+                                                             x-data="{
+                                                                 formatted: '{{ !empty($rowAmt) ? number_format((float) $rowAmt, 0, ',', '.') : '' }}',
+                                                                 format(val) {
+                                                                     if (val === '' || val === null || typeof val === 'undefined') return '';
+                                                                     let num = Math.round(Number(String(val).replace(/\D/g, '')));
+                                                                     return (!isNaN(num) && num > 0) ? new Intl.NumberFormat('id-ID').format(num) : '';
+                                                                 },
+                                                                 onInput(val) {
+                                                                     let raw = String(val).replace(/\D/g, '');
+                                                                     this.formatted = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                                                     $wire.$set('deductionRows.{{ $index }}.amount', raw ? parseFloat(raw) : '', false);
+                                                                 },
+                                                                 onChange(val) {
+                                                                     let raw = String(val).replace(/\D/g, '');
+                                                                     $wire.$set('deductionRows.{{ $index }}.amount', raw ? parseFloat(raw) : '', true);
+                                                                 },
+                                                                 applyReset(amt) {
+                                                                     this.formatted = this.format(amt);
+                                                                     if (this.$refs.kasbonInput) {
+                                                                         this.$refs.kasbonInput.value = this.formatted;
+                                                                     }
+                                                                 }
+                                                             }"
+                                                             @deduction-reset-{{ $index }}.window="applyReset($event.detail?.amount ?? $event.detail)"
+                                                             wire:key="deduction-kasbon-input-group-{{ $index }}-{{ (float) $rowAmt }}">
+                                                            <div class="input-group-prepend">
+                                                                <span class="input-group-text payroll-addon payroll-addon-deduction font-weight-bold">-Rp</span>
+                                                            </div>
                                                             <input type="text"
+                                                                   x-ref="kasbonInput"
                                                                    inputmode="numeric"
-                                                                   x-on:input="
-                                                                       let raw = $el.value.replace(/\D/g, '');
-                                                                       $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
-                                                                   "
-                                                                   x-on:input.debounce.350ms="$wire.set('deductionRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                                                   x-on:change="$wire.set('deductionRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                                                   x-on:blur="$wire.set('deductionRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                                                   value="{{ !empty($rowAmt) ? number_format((float) $rowAmt, 0, ',', '.') : '' }}"
-                                                                   class="form-control form-control-sm text-right font-weight-bold text-danger px-2"
+                                                                   x-model="formatted"
+                                                                   x-on:input="onInput($el.value)"
+                                                                   x-on:change="onChange($el.value)"
+                                                                   class="form-control text-right payroll-input payroll-input-deduction @error('deductionRows.'.$index.'.amount') is-invalid @enderror"
                                                                    placeholder="0"
                                                                    autocomplete="off">
                                                         </div>
+                                                        @error('deductionRows.'.$index.'.amount')
+                                                            <small class="text-danger d-block mt-1 text-right w-100" style="font-size: 11px;">{{ $message }}</small>
+                                                        @enderror
                                                     </div>
                                                 @else
-                                                    <span class="{{ $rowAmt > 0 ? 'text-danger' : 'text-muted' }}" style="font-weight: 600; font-size: 13px;">
+                                                    <span class="{{ $rowAmt > 0 ? 'text-danger' : 'text-muted' }}" style="font-weight: 600; font-size: 13.5px;">
                                                         -Rp {{ number_format($rowAmt, 0, ',', '.') }}
                                                     </span>
                                                 @endif
                                             </td>
                                             <td class="text-center align-middle text-muted !px-3 !py-2.5">
                                                 @if ($this->isEditable)
-                                                    <button type="button" wire:click="resetKasbonDeduction({{ $index }})" class="btn btn-sm btn-secondary" title="Reset ke tagihan normal">
-                                                        <i class="fas fa-undo"></i>
+                                                    <button type="button"
+                                                            wire:click="resetKasbonDeduction({{ $index }})"
+                                                            x-on:click="$dispatch('deduction-reset-{{ $index }}', { amount: {{ $normalInstallment }} })"
+                                                            class="btn btn-info btn-action"
+                                                            title="Reset ke tagihan cicilan normal">
+                                                        <i class="fas fa-undo-alt"></i>
                                                     </button>
                                                 @else
                                                     -
@@ -1161,7 +1245,7 @@
                                                         @if (($row['calc_mode'] ?? 'nominal') === 'percentage')
                                                             <div class="d-flex align-items-center flex-grow-1 mr-2">
                                                                 <div class="input-group payroll-input-group mr-1.5" style="width: 110px; flex-shrink: 0;" title="Persentase dari Gaji Pokok">
-                                                                    <input type="text" inputmode="decimal" wire:model.live.debounce.400ms="deductionRows.{{ $index }}.percentage" class="form-control text-right payroll-input payroll-pct-input" placeholder="0" autocomplete="off">
+                                                                    <input type="text" inputmode="decimal" wire:model.lazy="deductionRows.{{ $index }}.percentage" class="form-control text-right payroll-input payroll-pct-input" placeholder="0" autocomplete="off">
                                                                     <div class="input-group-append">
                                                                         <span class="input-group-text payroll-addon">%</span>
                                                                     </div>
@@ -1183,9 +1267,9 @@
                                                                        x-on:input="
                                                                            let raw = $el.value.replace(/\D/g, '');
                                                                            $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                                                           $wire.$set('deductionRows.{{ $index }}.amount', raw ? parseFloat(raw) : '', false);
                                                                        "
-                                                                       x-on:input.debounce.350ms="$wire.set('deductionRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                                                       x-on:blur="$wire.set('deductionRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                                                       x-on:change="$wire.$set('deductionRows.{{ $index }}.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '', true)"
                                                                        value="{{ !empty($row['amount']) ? number_format((float) $row['amount'], 0, ',', '.') : '' }}"
                                                                        class="form-control text-right payroll-input"
                                                                        placeholder="0"
@@ -1868,6 +1952,25 @@
                 border-color: #0b52aa !important;
                 box-shadow: 0 0 0 3px rgba(11, 82, 170, 0.12) !important;
                 z-index: 2 !important;
+            }
+            .payroll-input-group .payroll-addon.payroll-addon-deduction {
+                background-color: #fef2f2 !important;
+                color: #dc2626 !important;
+                border-color: #cbd5e1 !important;
+                font-weight: 700 !important;
+                font-size: 12px !important;
+            }
+            .payroll-input-group > .payroll-input.payroll-input-deduction {
+                color: #dc2626 !important;
+                font-weight: 700 !important;
+            }
+            .payroll-input-group > .payroll-input.payroll-input-deduction:focus {
+                border-color: #dc2626 !important;
+                box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
+            }
+            .payroll-input-group > .payroll-input.is-invalid {
+                border-color: #dc2626 !important;
+                background-color: #fff8f8 !important;
             }
 
             .payroll-pct-input {

@@ -93,10 +93,8 @@
                                    x-on:input="
                                        let raw = $el.value.replace(/\D/g, '');
                                        $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                       $wire.$set('paymentForm.amount', raw ? parseFloat(raw) : '', false);
                                    "
-                                   x-on:input.debounce.350ms="$wire.set('paymentForm.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                   x-on:change="$wire.set('paymentForm.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                   x-on:blur="$wire.set('paymentForm.amount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
                                    value="{{ !empty($paymentForm->amount) ? number_format((float) $paymentForm->amount, 0, ',', '.') : '' }}"
                                    class="form-control text-right @error('paymentForm.amount') is-invalid @enderror"
                                    placeholder="0"

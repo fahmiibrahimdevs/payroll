@@ -20,6 +20,9 @@ class CompanyProfile extends Model
         'website',
         'email_domain',
         'address',
+        'city',
+        'province',
+        'postal_code',
         'logo_path',
         'tax_identification_number',
         'enable_pph21',
@@ -142,6 +145,25 @@ class CompanyProfile extends Model
         $domain = ltrim(trim($domain), '@');
 
         return $username.'@'.$domain;
+    }
+
+    /**
+     * Get a compact brand label from the configured company code or its initials.
+     */
+    public function getDisplayCode(): string
+    {
+        $code = trim((string) $this->code);
+        if ($code !== '') {
+            return $code;
+        }
+
+        $words = array_values(array_filter(preg_split('/\s+/', trim((string) $this->name)) ?: []));
+        $initials = collect($words)
+            ->take(4)
+            ->map(fn (string $word): string => Str::upper(Str::substr($word, 0, 1)))
+            ->implode('');
+
+        return $initials !== '' ? $initials : 'HRM';
     }
 
     /**

@@ -23,7 +23,7 @@ class ActivityLogTest extends TestCase
 
     public function test_authenticated_user_can_view_logs_monitoring_page(): void
     {
-        $user = $this->createAdminUser();
+        $user = $this->createDeveloperUser();
 
         $response = $this->actingAs($user)->get(route('logs.index'));
 
@@ -31,9 +31,16 @@ class ActivityLogTest extends TestCase
         $response->assertSee('Monitoring Log Aktivitas');
     }
 
-    public function test_default_filter_is_today_and_shows_todays_logs(): void
+    public function test_non_developer_role_cannot_view_logs_monitoring_page(): void
     {
         $user = $this->createAdminUser();
+
+        $this->actingAs($user)->get(route('logs.index'))->assertForbidden();
+    }
+
+    public function test_default_filter_is_today_and_shows_todays_logs(): void
+    {
+        $user = $this->createDeveloperUser();
 
         // Create log today
         ActivityLog::forceCreate([
@@ -67,7 +74,7 @@ class ActivityLogTest extends TestCase
 
     public function test_date_preset_filter_shows_past_logs(): void
     {
-        $user = $this->createAdminUser();
+        $user = $this->createDeveloperUser();
 
         ActivityLog::forceCreate([
             'user_id' => $user->id,
@@ -87,7 +94,7 @@ class ActivityLogTest extends TestCase
 
     public function test_level_filter_and_search_filter(): void
     {
-        $user = $this->createAdminUser();
+        $user = $this->createDeveloperUser();
 
         ActivityLog::create([
             'user_id' => $user->id,
@@ -121,7 +128,7 @@ class ActivityLogTest extends TestCase
 
     public function test_show_detail_dispatches_modal_event(): void
     {
-        $user = $this->createAdminUser();
+        $user = $this->createDeveloperUser();
 
         $log = ActivityLog::create([
             'user_id' => $user->id,
@@ -177,7 +184,7 @@ class ActivityLogTest extends TestCase
         $this->assertEquals(450, $context['duration_ms']);
         $this->assertArrayHasKey('error', $context);
         $this->assertEquals('RuntimeException', $context['error']['type']);
-        $this->assertEquals('Database connection lost', $context['error']['message']);
+        $this->assertEquals('[redacted]', $context['error']['message']);
     }
 
     public function test_activity_log_level_badge_class_accessor(): void

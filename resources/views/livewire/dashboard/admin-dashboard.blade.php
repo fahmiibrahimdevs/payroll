@@ -84,14 +84,14 @@
             </div>
         </div>
 
-        <!-- 3. Total Setoran Pajak PPh 21 -->
+        <!-- 3. Total PPh 21 pada payroll -->
         <div class="card cash-advance-stat-card">
             <div class="card-body cash-advance-stat-body">
                 <div class="cash-advance-stat-icon cash-advance-stat-icon-red">
                     <i class="fas fa-landmark"></i>
                 </div>
                 <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Total Setoran Pajak PPh 21">Total setoran PPh 21</div>
+                    <div class="cash-advance-stat-title" title="Total PPh 21 yang tercatat pada slip payroll">PPh 21 tercatat</div>
                     <div class="cash-advance-stat-value-row">
                         <div class="cash-advance-stat-value text-danger" title="{{ $stats['formatted_pph21'] }}">
                             {{ $stats['formatted_pph21'] }}
@@ -102,9 +102,9 @@
                     </div>
                     <div class="cash-advance-stat-subtext">
                         @if ($stats['current_payroll_period'])
-                            Kewajiban setor &bull; {{ $stats['pph21_employee_count'] }} karyawan
+                            Tercatat pada {{ $stats['payroll_total_items_count'] }} slip payroll
                         @else
-                            PPh 21 bulan {{ $monthsList[$selectedMonth] }} &bull; Rp 0
+                            Belum ada payroll bulan {{ $monthsList[$selectedMonth] }}
                         @endif
                     </div>
                 </div>
@@ -146,7 +146,7 @@
                             Tren Beban Penggajian & PPh 21
                         </h4>
                         <div style="font-size: 11.5px; font-weight: 500; color: #64748b; margin-top: 2px;">
-                            Perbandingan Gaji Kotor, Gaji Bersih, dan PPh 21 tahun {{ $selectedYear }}
+                            Gaji kotor, gaji bersih, dan PPh 21 tercatat tahun {{ $selectedYear }} (termasuk draf)
                         </div>
                     </div>
                     <!-- Minimal Dot Legends -->
@@ -426,7 +426,7 @@
                     </div>
                     @if ($stats['current_payroll_period'])
                         @php $p = $stats['current_payroll_period']; @endphp
-                        <span class="badge font-weight-600 px-3 py-1" style="font-size: 11px; border-radius: 9999px; {{ $p->status->isEditable() ? 'background-color: #fefce8; color: #ca8a04; border: 1px solid #fef08a;' : ($p->status === \App\Enums\PayrollPeriodStatus::APPROVED ? 'background-color: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe;' : 'background-color: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0;') }}">
+                        <span class="badge font-weight-600 px-3 py-1" style="font-size: 11px; border-radius: 9999px; {{ $p->status === \App\Enums\PayrollPeriodStatus::DRAFT || $p->status === \App\Enums\PayrollPeriodStatus::SUBMITTED ? 'background-color: #fefce8; color: #ca8a04; border: 1px solid #fef08a;' : ($p->status === \App\Enums\PayrollPeriodStatus::REJECTED ? 'background-color: #fef2f2; color: #dc2626; border: 1px solid #fecaca;' : ($p->status === \App\Enums\PayrollPeriodStatus::APPROVED ? 'background-color: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe;' : 'background-color: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0;')) }}">
                             {{ $p->status->label() }}
                         </span>
                     @endif
@@ -449,7 +449,11 @@
                                         </div>
                                         <div>
                                             <div style="font-size: 12.5px; font-weight: 700; color: #0f172a; line-height: 1.2;">
-                                                Progress Verifikasi HRD
+                                                @if ($isDirector)
+                                                    Status Verifikasi HRD
+                                                @else
+                                                    Progress Verifikasi HRD
+                                                @endif
                                             </div>
                                             <div style="font-size: 11px; color: #64748b; line-height: 1.2; margin-top: 2px;">
                                                 {{ $stats['payroll_verified_count'] }} dari {{ $stats['payroll_total_items_count'] }} slip gaji telah diverifikasi
@@ -526,7 +530,17 @@
                                                     </div>
                                                 </div>
                                                 <div class="cash-advance-stat-subtext" style="font-size: 10px; color: #94a3b8; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                                    Siap ditransfer
+                                                    @if ($p->status === \App\Enums\PayrollPeriodStatus::DRAFT)
+                                                        Masih dalam draf
+                                                    @elseif ($p->status === \App\Enums\PayrollPeriodStatus::SUBMITTED)
+                                                        Menunggu persetujuan Direktur
+                                                    @elseif ($p->status === \App\Enums\PayrollPeriodStatus::APPROVED)
+                                                        Siap diproses pembayaran
+                                                    @elseif ($p->status === \App\Enums\PayrollPeriodStatus::REJECTED)
+                                                        Perlu direvisi
+                                                    @else
+                                                        Sudah dibayar
+                                                    @endif
                                                 </div>
                                             </div>
                                         </div>
@@ -542,7 +556,11 @@
                             <h6 class="font-weight-bold text-dark mb-1" style="font-size: 13.5px;">Periode Belum Dibuat</h6>
                             <p class="small text-muted mb-3" style="font-size: 11.5px;">Belum ada draf penggajian untuk bulan {{ $monthsList[$selectedMonth] }} {{ $selectedYear }}.</p>
                             <a href="{{ route('payrolls.index') }}" class="btn btn-outline-primary btn-sm font-weight-600 px-3 py-1" style="border-radius: 8px; font-size: 11.5px;">
-                                Kelola Daftar Periode
+                                @if ($isDirector)
+                                    Lihat Daftar Periode
+                                @else
+                                    Kelola Daftar Periode
+                                @endif
                             </a>
                         </div>
                     @endif
@@ -553,10 +571,34 @@
                     <div style="border-top: 1px solid #f1f5f9; padding: 13px 20px; background-color: #fafbfc; display: flex; align-items: center; justify-content: space-between;">
                         <div class="d-flex align-items-center text-muted" style="font-size: 11.5px;">
                             <i class="fas fa-file-invoice-dollar text-primary mr-1.5" style="font-size: 13px;"></i>
-                            <span>{{ $stats['payroll_total_items_count'] - $stats['payroll_verified_count'] > 0 ? ($stats['payroll_total_items_count'] - $stats['payroll_verified_count']) . ' slip belum diverifikasi' : 'Semua slip terverifikasi' }}</span>
+                            @if ($isDirector && $p->status === \App\Enums\PayrollPeriodStatus::SUBMITTED)
+                                <span>Penggajian menunggu persetujuan Direktur</span>
+                            @elseif ($isDirector && $p->status === \App\Enums\PayrollPeriodStatus::APPROVED)
+                                <span>Penggajian sudah disetujui</span>
+                            @elseif ($p->status === \App\Enums\PayrollPeriodStatus::APPROVED)
+                                <span>Disetujui Direktur &bull; siap diproses pembayarannya</span>
+                            @elseif ($p->status === \App\Enums\PayrollPeriodStatus::REJECTED)
+                                <span>Perlu revisi sebelum diajukan kembali</span>
+                            @else
+                                <span>{{ $stats['payroll_total_items_count'] - $stats['payroll_verified_count'] > 0 ? ($stats['payroll_total_items_count'] - $stats['payroll_verified_count']) . ' slip belum diverifikasi' : 'Semua slip terverifikasi' }}</span>
+                            @endif
                         </div>
                         <a href="{{ route('payrolls.show', $p->id) }}" class="btn btn-primary font-weight-600 px-3 py-1.5 shadow-xs d-inline-flex align-items-center" style="border-radius: 8px; font-size: 12px; background-color: #0b52aa; border-color: #0b52aa; gap: 6px;">
-                            <span>Buka Rincian Penggajian</span>
+                            <span>
+                                @if ($isDirector && $p->status === \App\Enums\PayrollPeriodStatus::SUBMITTED)
+                                    Tinjau Penggajian
+                                @elseif ($isDirector)
+                                    Lihat Rincian
+                                @elseif ($p->status === \App\Enums\PayrollPeriodStatus::DRAFT && $stats['payroll_total_items_count'] > $stats['payroll_verified_count'])
+                                    Lanjutkan Verifikasi
+                                @elseif ($p->status === \App\Enums\PayrollPeriodStatus::REJECTED)
+                                    Periksa Revisi
+                                @elseif ($p->status === \App\Enums\PayrollPeriodStatus::APPROVED)
+                                    Proses Pembayaran
+                                @else
+                                    Buka Rincian Penggajian
+                                @endif
+                            </span>
                             <i class="fas fa-arrow-right" style="font-size: 10px;"></i>
                         </a>
                     </div>

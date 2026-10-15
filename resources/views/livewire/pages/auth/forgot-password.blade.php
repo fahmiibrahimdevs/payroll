@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Password;
+use App\Services\ActivityLogService;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
 
@@ -26,6 +27,13 @@ new #[Layout('layouts.guest')] class extends Component
 
             return;
         }
+
+        app(ActivityLogService::class)->info(
+            action: 'PASSWORD_RESET_LINK_SENT',
+            module: 'auth',
+            message: 'Password reset link sent',
+            context: ['email' => $this->email]
+        );
 
         $this->reset('email');
 

@@ -26,7 +26,6 @@ return [
             'salary_components' => 'c,r,u,d',
             'cash_advances' => 'c,r,u,d',
             'posts' => 'c,r,u,d',
-            'logs' => 'r',
             'payrolls' => 'c,r,u,d',
             'receipts' => 'c,r,u,d',
         ],

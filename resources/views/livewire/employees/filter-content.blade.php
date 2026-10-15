@@ -41,12 +41,12 @@
     </div>
 </div>
 
-<!-- Filter Status Akun (Select2) -->
+<!-- Filter Status Karyawan (Select2) -->
 <div class="form-group mb-0">
-    <label for="filterStatus_{{ $ctx }}">Status Akun</label>
+    <label for="filterStatus_{{ $ctx }}">Status Karyawan</label>
     <div wire:ignore>
         <select id="filterStatus_{{ $ctx }}" class="form-control form-control-sm select2 select2-filter-status">
-            <option value="">Semua Status Akun</option>
+            <option value="">Semua Status Karyawan</option>
             @foreach ($statuses as $stat)
                 <option value="{{ $stat->value }}" @selected($filterStatus == $stat->value)>{{ $stat->label() }}</option>
             @endforeach

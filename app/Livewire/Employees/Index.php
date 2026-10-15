@@ -11,6 +11,7 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Position;
 use App\Services\EmployeeService;
+use App\Services\UserService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
@@ -74,6 +75,11 @@ class Index extends Component
 
         if (session()->has('employee_view_mode') && ! request()->has('view')) {
             $this->viewMode = session('employee_view_mode');
+        }
+
+        $editHandoff = session()->pull('employee_edit_handoff');
+        if (is_array($editHandoff) && isset($editHandoff['id']) && $user?->hasRole('admin')) {
+            $this->edit((int) $editHandoff['id'], $editHandoff['section'] ?? null);
         }
     }
 
@@ -192,12 +198,13 @@ class Index extends Component
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
         try {
-            $this->form->store($employeeService);
+            $employee = $this->form->store($employeeService);
+            $this->resetPage('expiringPage');
             $this->dispatch('close-modal', id: 'employeeModal');
             $this->dispatch('swal:alert', [
                 'type' => 'success',
                 'title' => 'Berhasil!',
-                'message' => 'Data karyawan baru berhasil ditambahkan!',
+                'message' => 'Data karyawan ditambahkan. Akun login: '.($employee->detail?->email ?? '-').' dengan password awal 1.',
             ]);
         } catch (ValidationException $e) {
             throw $e;
@@ -213,7 +220,7 @@ class Index extends Component
     /**
      * Open modal and populate form for editing an existing employee.
      */
-    public function edit(int $id): void
+    public function edit(int $id, ?string $section = null): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
         try {
@@ -229,6 +236,7 @@ class Index extends Component
                 'employment_status' => $this->form->employment_status,
                 'status' => $this->form->status,
                 'gender' => $this->form->gender,
+                'section' => in_array($section, ['kepegawaian', 'pribadi', 'pajak'], true) ? $section : 'kepegawaian',
             ]);
         } catch (Throwable) {
             $this->dispatch('swal:alert', [
@@ -247,6 +255,7 @@ class Index extends Component
         abort_unless(auth()->user()?->hasRole('admin'), 403);
         try {
             $this->form->update($employeeService);
+            $this->resetPage('expiringPage');
             $this->isEditMode = false;
             $this->editingEmployeeId = null;
             $this->dispatch('close-modal', id: 'employeeModal');
@@ -262,6 +271,68 @@ class Index extends Component
                 'type' => 'error',
                 'title' => 'Gagal Memperbarui!',
                 'message' => 'Terjadi kesalahan sistem saat memperbarui data karyawan.',
+            ]);
+        }
+    }
+
+    public function confirmToggleAccountStatus(int $id): void
+    {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
+        $employee = Employee::with('user.roles')->findOrFail($id);
+        if (! $employee->user || ! $employee->user->hasRole('karyawan')) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Akun Belum Tersedia',
+                'message' => 'Akun karyawan ini belum dibuat atau belum terhubung.',
+            ]);
+
+            return;
+        }
+
+        $isActive = $employee->user->is_active;
+        $this->dispatch('swal:confirm', [
+            'title' => $isActive ? 'Nonaktifkan akun?' : 'Aktifkan akun?',
+            'text' => $isActive
+                ? "{$employee->full_name} tidak dapat login setelah akun dinonaktifkan."
+                : "{$employee->full_name} dapat login setelah akun diaktifkan.",
+            'icon' => 'warning',
+            'confirmButtonText' => $isActive ? 'Ya, Nonaktifkan' : 'Ya, Aktifkan',
+            'confirmButtonColor' => $isActive ? '#ffa426' : '#47c363',
+            'action' => 'toggle-employee-account-status',
+            'params' => ['id' => $employee->id],
+        ]);
+    }
+
+    #[On('toggle-employee-account-status')]
+    public function toggleEmployeeAccountStatus(int $id, UserService $userService): void
+    {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
+        $employee = Employee::with('user.roles')->findOrFail($id);
+        if (! $employee->user || ! $employee->user->hasRole('karyawan')) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Akun Belum Tersedia',
+                'message' => 'Akun karyawan ini belum dibuat atau belum terhubung.',
+            ]);
+
+            return;
+        }
+
+        try {
+            $user = $userService->toggleUserStatus($employee->user->id, (int) auth()->id());
+            $status = $user->is_active ? 'diaktifkan.' : 'dinonaktifkan.';
+            $this->dispatch('swal:alert', [
+                'type' => 'success',
+                'title' => 'Status Akun Diperbarui',
+                'message' => "Akun {$employee->full_name} berhasil {$status}",
+            ]);
+        } catch (Throwable) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Mengubah Status',
+                'message' => 'Status akun karyawan tidak dapat diperbarui.',
             ]);
         }
     }
@@ -340,6 +411,7 @@ class Index extends Component
         try {
             $employee = Employee::with('detail')->findOrFail($id);
             $employeeService->deleteEmployee($employee);
+            $this->resetPage('expiringPage');
 
             $this->dispatch('swal:alert', [
                 'type' => 'success',

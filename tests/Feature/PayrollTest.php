@@ -192,6 +192,11 @@ class PayrollTest extends TestCase
         // Verify the employee item was created
         $item = $period->items()->where('employee_id', $employee->id)->first();
         $this->assertNotNull($item);
+        $this->assertDatabaseHas('activity_logs', [
+            'user_id' => $admin->id,
+            'module' => 'payrolls',
+            'action' => 'PERIOD_CREATED',
+        ]);
         $this->assertEquals(6000000, (float) $item->basic_salary);
 
         // Verify the cash advance deduction line was automatically created!
@@ -315,6 +320,12 @@ class PayrollTest extends TestCase
 
         $period->refresh();
         $this->assertEquals(PayrollPeriodStatus::SUBMITTED, $period->status);
+        $this->assertDatabaseHas('activity_logs', [
+            'user_id' => $admin->id,
+            'module' => 'payrolls',
+            'action' => 'PERIOD_SUBMITTED',
+            'context->payroll_period_id' => $period->id,
+        ]);
     }
 
     public function test_director_can_approve_and_admin_can_mark_as_paid_triggering_kasbon_deduction(): void
@@ -392,6 +403,12 @@ class PayrollTest extends TestCase
 
         $period->refresh();
         $this->assertEquals(PayrollPeriodStatus::PAID, $period->status);
+        $this->assertDatabaseHas('activity_logs', [
+            'user_id' => $admin->id,
+            'module' => 'payrolls',
+            'action' => 'PERIOD_PAID',
+            'context->payroll_period_id' => $period->id,
+        ]);
 
         // Verify Cash Advance was automatically deducted and settled!
         $advance->refresh();
@@ -1248,6 +1265,8 @@ class PayrollTest extends TestCase
 
         $period->items()->whereNotIn('employee_id', [$employee1->id, $employee2->id])->delete();
         $period->update(['employee_count' => 2]);
+        $service->verifyAllItems($period, $admin);
+        $service->submitPeriod($period, $admin);
 
         $this->actingAs($director);
 
@@ -1324,6 +1343,8 @@ class PayrollTest extends TestCase
         $item1 = $period->items()->where('employee_id', $emp1->id)->first();
         $item2 = $period->items()->where('employee_id', $emp2->id)->first();
         $item3 = $period->items()->where('employee_id', $emp3->id)->first();
+        $service->verifyAllItems($period, $admin);
+        $service->submitPeriod($period, $admin);
 
         $this->actingAs($director);
 
@@ -1394,6 +1415,8 @@ class PayrollTest extends TestCase
         ], $admin);
 
         $item = $period->items()->where('employee_id', $emp->id)->first();
+        $service->verifyAllItems($period, $admin);
+        $service->submitPeriod($period, $admin);
 
         $this->actingAs($director);
 
@@ -1436,6 +1459,8 @@ class PayrollTest extends TestCase
         ], $admin);
 
         $item = $period->items()->where('employee_id', $emp->id)->first();
+        $service->verifyAllItems($period, $admin);
+        $service->submitPeriod($period, $admin);
 
         $this->actingAs($director);
 
@@ -1478,7 +1503,11 @@ class PayrollTest extends TestCase
         ], $admin);
 
         $item = $period->items()->where('employee_id', $emp->id)->first();
+        $service->verifyAllItems($period, $admin);
+        $service->submitPeriod($period, $admin);
         $service->approveItem($item, $director);
+        $period->refresh();
+        $item->refresh();
 
         $this->actingAs($director);
 
@@ -1531,13 +1560,15 @@ class PayrollTest extends TestCase
         ], $admin);
 
         $item = $period->items()->where('employee_id', $emp->id)->first();
+        $service->verifyAllItems($period, $admin);
+        $service->submitPeriod($period, $admin);
         $service->approveItem($item, $director);
 
         $period->refresh();
         $item->refresh();
 
         // Period is still editable because second employee is still pending
-        $this->assertTrue($period->status->isEditable());
+        $this->assertSame(PayrollPeriodStatus::SUBMITTED, $period->status);
         $this->assertTrue($item->isApproved());
 
         $this->actingAs($admin);
@@ -1628,6 +1659,7 @@ class PayrollTest extends TestCase
         $employee = Employee::factory()->active()->create([
             'employment_status' => EmploymentStatus::TETAP,
             'join_date' => '2025-01-01',
+            'contract_end_date' => null,
         ]);
         $period = app(PayrollService::class)->createPeriod([
             'year' => 2027,
@@ -2616,6 +2648,7 @@ class PayrollTest extends TestCase
             'employment_status' => EmploymentStatus::TETAP,
             'status' => EmployeeStatus::ACTIVE,
             'basic_salary' => 10_000_000,
+            'contract_end_date' => null,
         ]);
 
         EmployeeDetail::create([
@@ -2772,7 +2805,8 @@ class PayrollTest extends TestCase
 
         // Test resetting cash advance deduction
         $lw->set("deductionRows.{$caIdx}.amount", 200000);
-        $lw->call('resetKasbonDeduction', $caIdx);
+        $lw->call('resetKasbonDeduction', $caIdx)
+            ->assertDispatched('deduction-reset-'.$caIdx);
         $this->assertEquals(500000.0, (float) $lw->get("deductionRows.{$caIdx}.amount"));
 
         // Customize deduction to 300,000
@@ -2861,7 +2895,7 @@ class PayrollTest extends TestCase
         // Direktur views during SUBMITTED (Tahap 3)
         Livewire::test(PayrollShow::class, ['period' => $period])
             ->assertSee('Setujui Semua')
-            ->assertSee('title="Setujui (ACC)"', false)
+            ->assertSee('title="Kelola persetujuan slip"', false)
             ->assertSee('wire:model.live="selectAll"', false);
     }
 
@@ -2884,6 +2918,7 @@ class PayrollTest extends TestCase
         Employee::factory()->active()->create([
             'employment_status' => EmploymentStatus::TETAP,
             'join_date' => '2025-01-01',
+            'contract_end_date' => null,
         ]);
 
         $service = app(PayrollService::class);
@@ -2929,6 +2964,7 @@ class PayrollTest extends TestCase
         Employee::factory()->active()->create([
             'employment_status' => EmploymentStatus::TETAP,
             'join_date' => '2025-01-01',
+            'contract_end_date' => null,
         ]);
 
         $service = app(PayrollService::class);
@@ -2975,6 +3011,7 @@ class PayrollTest extends TestCase
         Employee::factory()->active()->create([
             'employment_status' => EmploymentStatus::TETAP,
             'join_date' => '2025-01-01',
+            'contract_end_date' => null,
         ]);
 
         $service = app(PayrollService::class);
@@ -2999,5 +3036,201 @@ class PayrollTest extends TestCase
         $this->assertTrue($item->isVerified());
         $this->assertEquals($admin->id, $item->verified_by);
         $this->assertStringContainsString('Verif HRD: '.$admin->name, $item->payroll_status_label);
+    }
+
+    public function test_manage_item_displays_cash_advance_remaining_balance_and_formatted_inputs(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $emp = Employee::factory()->create([
+            'status' => EmployeeStatus::ACTIVE,
+            'employment_status' => EmploymentStatus::TETAP,
+            'basic_salary' => 8000000,
+        ]);
+
+        $ca = CashAdvance::create([
+            'reference_number' => 'KB-TEST-REMAINING',
+            'employee_id' => $emp->id,
+            'amount' => 1500000,
+            'remaining_amount' => 1500000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT,
+            'installment_count' => 3,
+            'monthly_installment' => 500000,
+            'disbursement_date' => '2026-10-01',
+            'reason' => 'Perbaikan rumah',
+            'status' => CashAdvanceStatus::APPROVED,
+            'submitted_by' => $admin->id,
+            'approved_by' => $admin->id,
+            'approved_at' => now(),
+        ]);
+
+        $inst1 = CashAdvanceInstallment::create([
+            'cash_advance_id' => $ca->id,
+            'installment_number' => 1,
+            'due_date' => '2026-10-25',
+            'amount' => 500000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING,
+        ]);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'year' => 2026,
+            'month' => 10,
+            'name' => 'Payroll Oktober 2026',
+        ], $admin);
+
+        $item = $period->items()->where('employee_id', $emp->id)->first();
+        $this->assertNotNull($item);
+
+        $testComp = Livewire::test(ManageItem::class, ['period' => $period, 'item' => $item])
+            ->assertSee('Sisa Kasbon:')
+            ->assertSee('Rp 1.500.000')
+            ->assertSee('Total Pinjaman:')
+            ->assertSee('Cicilan 1 dari 3')
+            ->assertSee('Total Sisa Kasbon')
+            ->assertSee('payroll-addon-deduction')
+            ->assertSee('payroll-input-deduction');
+
+        $deductions = $testComp->get('deductionRows');
+        $caIdx = null;
+        foreach ($deductions as $idx => $r) {
+            if (! empty($r['cash_advance_installment_id'])) {
+                $caIdx = $idx;
+                break;
+            }
+        }
+        $this->assertNotNull($caIdx);
+
+        $testComp->set("deductionRows.{$caIdx}.amount", 1000000);
+        $this->assertEquals(1000000, $testComp->get("deductionRows.{$caIdx}.amount"));
+
+        $testComp->call('resetKasbonDeduction', $caIdx);
+        $testComp->assertDispatched('deduction-reset-'.$caIdx, amount: 500000);
+        $this->assertEquals(500000, $testComp->get("deductionRows.{$caIdx}.amount"));
+
+        // Save custom amount higher than installment (e.g. 750,000 when installment is 500,000)
+        $testComp->set("deductionRows.{$caIdx}.amount", 750000);
+        $testComp->call('save');
+        $this->assertEquals(750000, $testComp->get("deductionRows.{$caIdx}.amount"));
+        $savedLine = $item->fresh()->lines()->where('cash_advance_installment_id', $inst1->id)->first();
+        $this->assertEquals(750000, (float) $savedLine->amount);
+    }
+
+    public function test_custom_higher_cash_advance_deduction_waterfalls_cleanly_through_payment_flow(): void
+    {
+        $admin = $this->createAdminUser();
+        $direktur = $this->createDirectorUser();
+        $this->actingAs($admin);
+
+        $emp = Employee::factory()->create([
+            'status' => EmployeeStatus::ACTIVE,
+            'employment_status' => EmploymentStatus::TETAP,
+            'basic_salary' => 8000000,
+        ]);
+
+        $ca = CashAdvance::create([
+            'reference_number' => 'KB-TEST-FLOW-WATERFALL',
+            'employee_id' => $emp->id,
+            'amount' => 1000000,
+            'remaining_amount' => 866667,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT,
+            'installment_count' => 3,
+            'monthly_installment' => 333333,
+            'disbursement_date' => '2026-10-01',
+            'reason' => 'Perbaikan motor',
+            'status' => CashAdvanceStatus::ACTIVE,
+            'submitted_by' => $admin->id,
+            'approved_by' => $admin->id,
+            'approved_at' => now(),
+        ]);
+
+        $inst1 = CashAdvanceInstallment::create([
+            'cash_advance_id' => $ca->id,
+            'installment_number' => 1,
+            'due_date' => '2026-10-25',
+            'amount' => 333333,
+            'paid_amount' => 133333,
+            'status' => InstallmentStatus::PARTIALLY_PAID,
+        ]);
+
+        $inst2 = CashAdvanceInstallment::create([
+            'cash_advance_id' => $ca->id,
+            'installment_number' => 2,
+            'due_date' => '2026-11-25',
+            'amount' => 333333,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING,
+        ]);
+
+        $inst3 = CashAdvanceInstallment::create([
+            'cash_advance_id' => $ca->id,
+            'installment_number' => 3,
+            'due_date' => '2026-12-25',
+            'amount' => 333334,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING,
+        ]);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'year' => 2026,
+            'month' => 10,
+            'name' => 'Payroll Oktober 2026',
+        ], $admin);
+
+        $item = $period->items()->where('employee_id', $emp->id)->first();
+        $this->assertNotNull($item);
+
+        // Edit deduction row to 366,667 (200,000 for inst1 + 166,667 for inst2)
+        $component = Livewire::test(ManageItem::class, ['period' => $period, 'item' => $item]);
+        $caIdx = collect($component->get('deductionRows'))->search(fn ($r) => ! empty($r['cash_advance_installment_id']));
+        $this->assertNotFalse($caIdx);
+
+        $component->set("deductionRows.{$caIdx}.amount", 366667);
+        $component->call('save');
+        $this->assertEquals(366667, $component->get("deductionRows.{$caIdx}.amount"));
+
+        // Verify HRD
+        $service->verifyItem($item->fresh(), $admin);
+
+        // Submit Period
+        $period->refresh();
+        $service->submitPeriod($period, $admin);
+
+        // Approve Period (Direktur)
+        $this->actingAs($direktur);
+        $service->approvePeriod($period, $direktur);
+
+        // Mark as paid
+        $this->actingAs($admin);
+        $period->refresh();
+        $service->markAsPaid($period, [
+            'payment_date' => '2026-10-31',
+            'payment_method' => 'bank_transfer',
+            'notes' => 'Pembayaran gaji Oktober',
+        ], $admin);
+
+        // Assertions:
+        // 1. Installment 1 should be completely paid
+        $inst1->refresh();
+        $this->assertEquals(InstallmentStatus::PAID, $inst1->status);
+        $this->assertEquals(333333, (float) $inst1->paid_amount);
+
+        // 2. Installment 2 should be partially paid with 166,667
+        $inst2->refresh();
+        $this->assertEquals(InstallmentStatus::PARTIALLY_PAID, $inst2->status);
+        $this->assertEquals(166667, (float) $inst2->paid_amount);
+
+        // 3. Cash advance remaining_amount should be exactly 500,000 (866,667 - 366,667)
+        $ca->refresh();
+        $this->assertEquals(500000, (float) $ca->remaining_amount);
+
+        // 4. Two salary deduction payment records created
+        $payments = CashAdvancePayment::where('cash_advance_id', $ca->id)->get();
+        $this->assertCount(2, $payments);
+        $this->assertTrue($payments->every(fn ($p) => $p->payment_method === PaymentMethod::SALARY_DEDUCTION));
+        $this->assertEquals(366667, (float) $payments->sum('amount'));
     }
 }

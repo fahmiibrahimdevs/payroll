@@ -52,7 +52,7 @@ class EmployeeSeeder extends Seeder
 
             $employees = [
                 [
-                    'code' => 'DEMO-001', 'name' => 'DEMO - Andi Pratama',
+                    'code' => 'DEMO-001', 'name' => 'DEMO - Andi Pratama', 'email' => 'karyawan@payroll.com',
                     'department' => 'Teknologi Informasi', 'position' => 'Software Engineer',
                     'employment_status' => EmploymentStatus::TETAP, 'join_date' => now()->subYears(3),
                     'contract_months' => null, 'salary' => 9_500_000, 'gender' => Gender::MALE,
@@ -61,7 +61,7 @@ class EmployeeSeeder extends Seeder
                     'has_npwp' => true,
                 ],
                 [
-                    'code' => 'DEMO-002', 'name' => 'DEMO - Dina Maharani',
+                    'code' => 'DEMO-002', 'name' => 'DEMO - Dina Maharani', 'email' => 'dina.maharani@payroll.com',
                     'department' => 'Sumber Daya Manusia', 'position' => 'HR Manager',
                     'employment_status' => EmploymentStatus::TETAP, 'join_date' => now()->subYears(4),
                     'contract_months' => null, 'salary' => 12_500_000, 'gender' => Gender::FEMALE,
@@ -70,7 +70,7 @@ class EmployeeSeeder extends Seeder
                     'has_npwp' => true,
                 ],
                 [
-                    'code' => 'DEMO-003', 'name' => 'DEMO - Reza Firmansyah',
+                    'code' => 'DEMO-003', 'name' => 'DEMO - Reza Firmansyah', 'email' => 'reza.firmansyah@payroll.com',
                     'department' => 'Keuangan', 'position' => 'Finance Analyst',
                     'employment_status' => EmploymentStatus::TETAP, 'join_date' => now()->subYears(2),
                     'contract_months' => null, 'salary' => 8_250_000, 'gender' => Gender::MALE,
@@ -79,7 +79,7 @@ class EmployeeSeeder extends Seeder
                     'has_npwp' => false,
                 ],
                 [
-                    'code' => 'DEMO-004', 'name' => 'DEMO - Rani Oktavia',
+                    'code' => 'DEMO-004', 'name' => 'DEMO - Rani Oktavia', 'email' => 'rani.oktavia@payroll.com',
                     'department' => 'Pemasaran', 'position' => 'Marketing Executive',
                     'employment_status' => EmploymentStatus::KONTRAK, 'join_date' => now()->subMonths(9),
                     'contract_months' => 5, 'salary' => 7_100_000, 'gender' => Gender::FEMALE,
@@ -88,7 +88,7 @@ class EmployeeSeeder extends Seeder
                     'has_npwp' => true,
                 ],
                 [
-                    'code' => 'DEMO-005', 'name' => 'DEMO - Galih Ramadhan',
+                    'code' => 'DEMO-005', 'name' => 'DEMO - Galih Ramadhan', 'email' => 'galih.ramadhan@payroll.com',
                     'department' => 'Operasional', 'position' => 'Operations Supervisor',
                     'employment_status' => EmploymentStatus::KONTRAK, 'join_date' => now()->subMonths(7),
                     'contract_months' => 9, 'salary' => 6_500_000, 'gender' => Gender::MALE,
@@ -97,7 +97,7 @@ class EmployeeSeeder extends Seeder
                     'has_npwp' => false,
                 ],
                 [
-                    'code' => 'DEMO-006', 'name' => 'DEMO - Tania Putri',
+                    'code' => 'DEMO-006', 'name' => 'DEMO - Tania Putri', 'email' => 'tania.putri@payroll.com',
                     'department' => 'Operasional', 'position' => 'Customer Support Specialist',
                     'employment_status' => EmploymentStatus::KONTRAK, 'join_date' => now()->subMonths(5),
                     'contract_months' => 7, 'salary' => 5_250_000, 'gender' => Gender::FEMALE,
@@ -106,7 +106,7 @@ class EmployeeSeeder extends Seeder
                     'has_npwp' => true,
                 ],
                 [
-                    'code' => 'DEMO-007', 'name' => 'DEMO - Fikri Alamsyah',
+                    'code' => 'DEMO-007', 'name' => 'DEMO - Fikri Alamsyah', 'email' => 'fikri.alamsyah@payroll.com',
                     'department' => 'Teknologi Informasi', 'position' => 'IT Intern',
                     'employment_status' => EmploymentStatus::MAGANG, 'join_date' => now()->subMonths(2),
                     'contract_months' => 4, 'salary' => 2_800_000, 'gender' => Gender::MALE,
@@ -115,12 +115,30 @@ class EmployeeSeeder extends Seeder
                     'has_npwp' => false,
                 ],
                 [
-                    'code' => 'DEMO-008', 'name' => 'DEMO - Nisa Rahma',
+                    'code' => 'DEMO-008', 'name' => 'DEMO - Nisa Rahma', 'email' => 'nisa.rahma@payroll.com',
                     'department' => 'Sumber Daya Manusia', 'position' => 'HR Intern',
                     'employment_status' => EmploymentStatus::MAGANG, 'join_date' => now()->subMonths(1),
                     'contract_months' => 5, 'salary' => 2_500_000, 'gender' => Gender::FEMALE,
                     'marital_status' => MaritalStatus::TK, 'dependents' => 0,
                     'tax_method' => TaxMethod::GROSS, 'tax_recipient_type' => TaxRecipientType::OutsideScope,
+                    'has_npwp' => false,
+                ],
+                [
+                    'code' => 'DEMO-009', 'name' => 'DEMO - Satria Wibowo', 'email' => 'satria.wibowo@payroll.com',
+                    'department' => 'Operasional', 'position' => 'Customer Support Specialist',
+                    'employment_status' => EmploymentStatus::TETAP, 'join_date' => now()->subYears(1),
+                    'contract_months' => null, 'salary' => 5_800_000, 'gender' => Gender::MALE,
+                    'marital_status' => MaritalStatus::TK, 'dependents' => 0,
+                    'tax_method' => TaxMethod::GROSS, 'tax_recipient_type' => TaxRecipientType::MonthlyEmployee,
+                    'has_npwp' => true, 'status' => EmployeeStatus::INACTIVE,
+                ],
+                [
+                    'code' => 'DEMO-010', 'name' => 'DEMO - Maya Lestari', 'email' => 'maya.lestari@payroll.com',
+                    'department' => 'Pemasaran', 'position' => 'Marketing Executive',
+                    'employment_status' => EmploymentStatus::KONTRAK, 'join_date' => now()->subMonths(11),
+                    'contract_months' => 1, 'salary' => 6_250_000, 'gender' => Gender::FEMALE,
+                    'marital_status' => MaritalStatus::K, 'dependents' => 1,
+                    'tax_method' => TaxMethod::GROSS_UP, 'tax_recipient_type' => TaxRecipientType::MonthlyEmployee,
                     'has_npwp' => false,
                 ],
             ];
@@ -139,16 +157,13 @@ class EmployeeSeeder extends Seeder
                 }
 
                 $employee->fill([
-                    'user_id' => $data['code'] === 'DEMO-001'
-                        ? User::query()->where('email', 'karyawan@payroll.com')->value('id')
-                        : null,
                     'department_id' => $departments[$data['department']]->id,
                     'position_id' => $positions[$data['position']]->id,
                     'full_name' => $data['name'],
                     'join_date' => Carbon::parse($data['join_date'])->toDateString(),
                     'contract_end_date' => $contractEndDate,
                     'employment_status' => $data['employment_status'],
-                    'status' => EmployeeStatus::ACTIVE,
+                    'status' => $data['status'] ?? EmployeeStatus::ACTIVE,
                     'basic_salary' => $data['salary'],
                     'photo_path' => null,
                 ])->save();
@@ -162,7 +177,7 @@ class EmployeeSeeder extends Seeder
                         'birth_date' => Carbon::parse('1998-05-15')->subYears((int) substr($data['code'], -1))->toDateString(),
                         'address' => 'Alamat fiktif untuk demonstrasi.',
                         'phone' => null,
-                        'email' => strtolower(str_replace(' ', '.', $data['code'])).'@example.test',
+                        'email' => $data['email'],
                         'bank_name' => 'Bank Demo',
                         'bank_account_number' => null,
                         'bank_account_name' => $data['name'],
@@ -176,6 +191,18 @@ class EmployeeSeeder extends Seeder
                         'bpjs_ketenagakerjaan_number' => null,
                     ]
                 );
+
+                $user = User::updateOrCreate(
+                    ['email' => $data['email']],
+                    [
+                        'name' => $data['name'],
+                        'password' => '1',
+                        'is_active' => $employee->status === EmployeeStatus::ACTIVE,
+                        'email_verified_at' => now(),
+                    ]
+                );
+                $user->syncRoles(['karyawan']);
+                $employee->update(['user_id' => $user->id]);
             }
         });
     }

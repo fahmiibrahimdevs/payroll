@@ -40,7 +40,6 @@
                             $unpaidList = $statements['unpaid_statements'] ?? [];
                             $waterfall = $this->earlyPaymentWaterfall;
                             $allocations = $waterfall['allocations'] ?? [];
-                            $totalAllUnpaid = (float) ($waterfall['total_unpaid_all'] ?? 0);
                             $selectedSum = 0.0;
                             foreach ($unpaidList as $st) {
                                 if (in_array($st['month_key'], $selectedMonthKeysForPayment, true)) {
@@ -130,7 +129,12 @@
                             <label for="early_pay_amount" class="early-pay-form-label">
                                 Nominal yang Ingin Dibayar <span class="text-danger">*</span>
                             </label>
-                            <div class="input-group" x-data>
+                            <div class="input-group" x-data
+                                 x-on:early-payment-amount-refreshed.window="
+                                     const amountInput = $el.querySelector('#early_pay_amount');
+                                     const raw = String($event.detail.amount ?? '').replace(/\D/g, '');
+                                     amountInput.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                 ">
                                 <div class="input-group-prepend early-pay-input-group-prepend">
                                     <span class="input-group-text early-pay-input-addon">Rp</span>
                                 </div>
@@ -141,9 +145,7 @@
                                            let raw = $el.value.replace(/\D/g, '');
                                            $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
                                        "
-                                       x-on:input.debounce.350ms="$wire.set('earlyPaymentAmount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                       x-on:change="$wire.set('earlyPaymentAmount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                       x-on:blur="$wire.set('earlyPaymentAmount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
+                                       x-on:change="$wire.$set('earlyPaymentAmount', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '', true)"
                                        value="{{ !empty($earlyPaymentAmount) ? number_format((float) $earlyPaymentAmount, 0, ',', '.') : '' }}"
                                        class="form-control text-right early-pay-form-control @error('earlyPaymentAmount') is-invalid @enderror"
                                        placeholder="0"
@@ -236,10 +238,10 @@
                     <button type="button" class="btn btn-secondary shadow-none early-pay-btn-cancel" data-dismiss="modal">Batal</button>
                     @php
                         $inputVal = (float) $earlyPaymentAmount;
-                        $isExceeded = $inputVal > $totalAllUnpaid;
-                        $isInvalid = $isExceeded || $inputVal < 1000 || empty($selectedMonthKeysForPayment) || $errors->has('earlyPaymentAmount');
+                        $isExceeded = $inputVal > $selectedSum;
+                        $isInvalid = $isExceeded || $inputVal < 1000 || $selectedSum <= 0 || empty($selectedMonthKeysForPayment) || $errors->has('earlyPaymentAmount');
                     @endphp
-                    <button type="submit" wire:loading.attr="disabled" wire:target="storeEarlyPayment,earlyProofDocument" class="btn btn-primary shadow-none early-pay-btn-submit" @if ($isInvalid) disabled @endif>
+                    <button type="submit" wire:loading.attr="disabled" wire:target="storeEarlyPayment,earlyProofDocument,earlyPaymentAmount,toggleMonthSelection,selectAllUnpaidMonths" class="btn btn-primary shadow-none early-pay-btn-submit" @if ($isInvalid) disabled @endif>
                         <i wire:loading wire:target="storeEarlyPayment" class="fas fa-spinner fa-spin mr-1"></i>
                         <span wire:loading.remove wire:target="storeEarlyPayment">
                             @if ($isExceeded)

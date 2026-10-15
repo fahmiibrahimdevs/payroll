@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\CashAdvancePaymentStatus;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
@@ -9,6 +10,7 @@ use App\Enums\InstallmentStatus;
 use App\Enums\PayrollPeriodStatus;
 use App\Models\CashAdvance;
 use App\Models\CashAdvanceInstallment;
+use App\Models\CashAdvancePayment;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\PayrollItem;
@@ -18,6 +20,36 @@ use App\Models\User;
 
 class DashboardService
 {
+    /**
+     * @return array{employee: ?Employee, remaining_cash_advance: float, active_cash_advance_count: int}
+     */
+    public function getEmployeeDashboardData(User $user): array
+    {
+        $employee = $user->getEmployeeRecord();
+
+        if (! $employee) {
+            return [
+                'employee' => null,
+                'remaining_cash_advance' => 0,
+                'active_cash_advance_count' => 0,
+            ];
+        }
+
+        $employee->loadMissing(['detail', 'department', 'position']);
+
+        $cashAdvanceMetrics = CashAdvance::query()
+            ->where('employee_id', $employee->id)
+            ->selectRaw('COALESCE(SUM(CASE WHEN status IN (?, ?) THEN remaining_amount ELSE 0 END), 0) as remaining_amount', [CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::PAID->value])
+            ->selectRaw('SUM(CASE WHEN status = ? AND remaining_amount > 0 THEN 1 ELSE 0 END) as active_count', [CashAdvanceStatus::APPROVED->value])
+            ->first();
+
+        return [
+            'employee' => $employee,
+            'remaining_cash_advance' => (float) $cashAdvanceMetrics->remaining_amount,
+            'active_cash_advance_count' => (int) $cashAdvanceMetrics->active_count,
+        ];
+    }
+
     /**
      * @return array{total_users: int, active_users: int, inactive_users: int, total_roles: int}
      */
@@ -51,51 +83,59 @@ class DashboardService
         ];
 
         // 1. Employee Headcount Metrics
-        $totalActiveEmployees = Employee::query()->where('status', EmployeeStatus::ACTIVE)->count();
-        $permanentCount = Employee::query()->where('status', EmployeeStatus::ACTIVE)->where('employment_status', EmploymentStatus::TETAP)->count();
-        $contractCount = Employee::query()->where('status', EmployeeStatus::ACTIVE)->where('employment_status', EmploymentStatus::KONTRAK)->count();
-        $internCount = Employee::query()->where('status', EmployeeStatus::ACTIVE)->where('employment_status', EmploymentStatus::MAGANG)->count();
-        $newEmployeesCount = Employee::query()
+        $employeeCounts = Employee::query()
             ->where('status', EmployeeStatus::ACTIVE)
-            ->whereMonth('join_date', $month)
-            ->whereYear('join_date', $year)
-            ->count();
+            ->selectRaw('COUNT(*) as active_count')
+            ->selectRaw('SUM(CASE WHEN employment_status = ? THEN 1 ELSE 0 END) as permanent_count', [EmploymentStatus::TETAP->value])
+            ->selectRaw('SUM(CASE WHEN employment_status = ? THEN 1 ELSE 0 END) as contract_count', [EmploymentStatus::KONTRAK->value])
+            ->selectRaw('SUM(CASE WHEN employment_status = ? THEN 1 ELSE 0 END) as intern_count', [EmploymentStatus::MAGANG->value])
+            ->selectRaw('SUM(CASE WHEN join_date >= ? AND join_date < ? THEN 1 ELSE 0 END) as new_employees_count', [now()->setDate($year, $month, 1)->startOfMonth()->toDateString(), now()->setDate($year, $month, 1)->startOfMonth()->addMonth()->toDateString()])
+            ->first();
+
+        $totalActiveEmployees = (int) $employeeCounts->active_count;
+        $permanentCount = (int) $employeeCounts->permanent_count;
+        $contractCount = (int) $employeeCounts->contract_count;
+        $internCount = (int) $employeeCounts->intern_count;
+        $newEmployeesCount = (int) $employeeCounts->new_employees_count;
 
         // 2. Selected Payroll Period Metrics
         $currentPayrollPeriod = PayrollPeriod::query()
-            ->with(['items' => fn ($q) => $q->select('id', 'payroll_period_id', 'verified_at', 'pph21_amount', 'net_salary')])
+            ->withCount([
+                'items',
+                'items as verified_items_count' => fn ($query) => $query->whereNotNull('verified_at'),
+            ])
+            ->withSum('items', 'pph21_amount')
             ->where('year', $year)
             ->where('month', $month)
             ->first();
 
         $totalNetSalary = $currentPayrollPeriod ? (float) $currentPayrollPeriod->total_net_salary : 0;
-        $payrollVerifiedCount = $currentPayrollPeriod ? $currentPayrollPeriod->items->whereNotNull('verified_at')->count() : 0;
-        $payrollTotalItemsCount = $currentPayrollPeriod ? $currentPayrollPeriod->items->count() : 0;
-        $totalPph21 = $currentPayrollPeriod ? (float) $currentPayrollPeriod->items->sum('pph21_amount') : 0;
-        $pph21EmployeeCount = $currentPayrollPeriod ? $currentPayrollPeriod->items->count() : 0;
+        $payrollVerifiedCount = (int) ($currentPayrollPeriod?->verified_items_count ?? 0);
+        $payrollTotalItemsCount = (int) ($currentPayrollPeriod?->items_count ?? 0);
+        $totalPph21 = (float) ($currentPayrollPeriod?->items_sum_pph21_amount ?? 0);
 
         // 3. Cash Advance Metrics (Real-time Active)
-        $totalRemainingCashAdvance = (float) CashAdvance::query()
-            ->whereIn('status', [CashAdvanceStatus::APPROVED, CashAdvanceStatus::ACTIVE])
-            ->sum('remaining_amount');
+        $cashAdvanceMetrics = CashAdvance::query()
+            ->selectRaw('COALESCE(SUM(CASE WHEN status IN (?, ?) THEN remaining_amount ELSE 0 END), 0) as remaining_amount', [CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::ACTIVE->value])
+            ->selectRaw('COUNT(DISTINCT CASE WHEN status IN (?, ?) AND remaining_amount > 0 THEN employee_id END) as borrowers_count', [CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::ACTIVE->value])
+            ->first();
 
-        $activeCashAdvanceBorrowersCount = CashAdvance::query()
-            ->whereIn('status', [CashAdvanceStatus::APPROVED, CashAdvanceStatus::ACTIVE])
-            ->where('remaining_amount', '>', 0)
-            ->distinct('employee_id')
-            ->count('employee_id');
+        $totalRemainingCashAdvance = (float) $cashAdvanceMetrics->remaining_amount;
+        $activeCashAdvanceBorrowersCount = (int) $cashAdvanceMetrics->borrowers_count;
 
-        $pendingCashAdvancesCount = CashAdvance::query()
-            ->where('status', CashAdvanceStatus::PENDING)
-            ->count();
+        // 4. Monthly Payroll Trend (12 Months in $year)
+        $taxByPeriod = PayrollItem::query()
+            ->join('payroll_periods as tax_periods', 'payroll_items.payroll_period_id', '=', 'tax_periods.id')
+            ->where('tax_periods.year', $year)
+            ->select('payroll_items.payroll_period_id')
+            ->selectRaw('SUM(payroll_items.pph21_amount) as tax_total')
+            ->groupBy('payroll_items.payroll_period_id');
 
-        // 4. Action Center Items (Urgent To-Dos)
-        $actionItems = $this->getActionItems($month, $year);
-
-        // 5. Monthly Payroll Trend (12 Months in $year)
         $periodsInYear = PayrollPeriod::query()
-            ->with(['items' => fn ($q) => $q->select('id', 'payroll_period_id', 'pph21_amount')])
-            ->where('year', $year)
+            ->leftJoinSub($taxByPeriod, 'tax_totals', fn ($join) => $join->on('payroll_periods.id', '=', 'tax_totals.payroll_period_id'))
+            ->where('payroll_periods.year', $year)
+            ->select(['payroll_periods.month', 'payroll_periods.total_basic_salary', 'payroll_periods.total_allowances', 'payroll_periods.total_net_salary', 'tax_totals.tax_total'])
+            ->selectRaw('(payroll_periods.total_basic_salary + payroll_periods.total_allowances) as total_gross_salary')
             ->get()
             ->keyBy('month');
 
@@ -108,10 +148,10 @@ class DashboardService
             $p = $periodsInYear->get($m);
             $grossTrend[] = $p ? (float) $p->total_gross_salary : 0;
             $netTrend[] = $p ? (float) $p->total_net_salary : 0;
-            $taxTrend[] = $p ? (float) $p->items->sum('pph21_amount') : 0;
+            $taxTrend[] = $p ? (float) ($p->tax_total ?? 0) : 0;
         }
 
-        // 6. Department Headcount Distribution
+        // 5. Department Headcount Distribution
         $departments = Department::query()
             ->withCount(['employees' => fn ($q) => $q->where('status', EmployeeStatus::ACTIVE)])
             ->get();
@@ -135,14 +175,14 @@ class DashboardService
             $deptCounts[] = $noDeptCount;
         }
 
-        // 7. Recent Cash Advances
+        // 6. Recent Cash Advances
         $recentCashAdvances = CashAdvance::query()
             ->with(['employee.department', 'employee.position'])
             ->latest()
             ->take(4)
             ->get();
 
-        // 8. Available Years List
+        // 7. Available Years List
         $payrollYears = PayrollPeriod::query()->distinct()->pluck('year')->all();
         $currentYear = (int) now()->format('Y');
         $availableYears = array_unique(array_merge([$currentYear - 1, $currentYear, $currentYear + 1], $payrollYears));
@@ -164,8 +204,6 @@ class DashboardService
             'active_cash_advance_borrowers_count' => $activeCashAdvanceBorrowersCount,
             'total_pph21' => $totalPph21,
             'formatted_pph21' => 'Rp '.number_format($totalPph21, 0, ',', '.'),
-            'pph21_employee_count' => $pph21EmployeeCount,
-            'action_items' => $actionItems,
             'payroll_trend' => [
                 'labels' => $trendMonths,
                 'gross' => $grossTrend,
@@ -193,31 +231,119 @@ class DashboardService
     {
         $month ??= (int) now()->format('n');
         $year ??= (int) now()->format('Y');
-
-        $monthsList = [
-            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
-            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
-            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
-        ];
+        $currentUser = auth()->user();
+        $isDirector = $currentUser?->hasRole('direktur') ?? false;
+        $isAdmin = $currentUser?->hasRole('admin') ?? false;
 
         $currentPayrollPeriod = PayrollPeriod::query()
             ->where('month', $month)
             ->where('year', $year)
             ->first();
 
-        $payrollTotalItemsCount = $currentPayrollPeriod ? PayrollItem::query()->where('payroll_period_id', $currentPayrollPeriod->id)->count() : 0;
-        $payrollVerifiedCount = $currentPayrollPeriod ? PayrollItem::query()->where('payroll_period_id', $currentPayrollPeriod->id)->whereNotNull('verified_at')->count() : 0;
+        $payrollCounts = $currentPayrollPeriod
+            ? PayrollItem::query()
+                ->where('payroll_period_id', $currentPayrollPeriod->id)
+                ->selectRaw('COUNT(*) as total_count')
+                ->selectRaw('SUM(CASE WHEN verified_at IS NOT NULL THEN 1 ELSE 0 END) as verified_count')
+                ->first()
+            : null;
 
-        $pendingCashAdvancesCount = CashAdvance::query()
-            ->where('status', CashAdvanceStatus::PENDING)
-            ->count();
+        $payrollTotalItemsCount = (int) ($payrollCounts?->total_count ?? 0);
+        $payrollVerifiedCount = (int) ($payrollCounts?->verified_count ?? 0);
+
+        $pendingCashAdvancesCount = $isDirector
+            ? CashAdvance::query()->where('status', CashAdvanceStatus::PENDING)->count()
+            : 0;
+
+        $pendingCashAdvancePaymentsCount = $isDirector || $isAdmin
+            ? CashAdvancePayment::query()->where('status', CashAdvancePaymentStatus::PENDING)->count()
+            : 0;
+
+        return $this->buildActionItems(
+            $month,
+            $year,
+            $currentPayrollPeriod,
+            $payrollTotalItemsCount,
+            $payrollVerifiedCount,
+            $pendingCashAdvancesCount,
+            $pendingCashAdvancePaymentsCount,
+            $isDirector,
+            $isAdmin,
+        );
+    }
+
+    /**
+     * @return array<int, array{type: string, icon: string, icon_color: string, title: string, text: string, action_label: string, url: string}>
+     */
+    private function buildActionItems(
+        int $month,
+        int $year,
+        ?PayrollPeriod $currentPayrollPeriod,
+        int $payrollTotalItemsCount,
+        int $payrollVerifiedCount,
+        int $pendingCashAdvancesCount,
+        int $pendingCashAdvancePaymentsCount,
+        bool $isDirector,
+        bool $isAdmin,
+    ): array {
+        $monthsList = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ];
 
         $actionItems = [];
 
         // 1. Penggajian: Status dan Tindakan
-        if ($currentPayrollPeriod && $currentPayrollPeriod->status->isEditable()) {
+        if ($currentPayrollPeriod && ($isAdmin || $isDirector) && $currentPayrollPeriod->employee_count > $payrollTotalItemsCount) {
+            $missingSlipsCount = $currentPayrollPeriod->employee_count - $payrollTotalItemsCount;
+            $actionItems[] = [
+                'type' => 'danger',
+                'icon' => 'fas fa-exclamation-triangle',
+                'icon_color' => 'text-danger',
+                'title' => "Slip Penggajian {$monthsList[$month]} {$year}",
+                'text' => "Jumlah slip tercatat {$missingSlipsCount} lebih sedikit dari jumlah karyawan pada periode ini.",
+                'action_label' => 'Periksa Periode Payroll',
+                'url' => route('payrolls.show', $currentPayrollPeriod->id),
+            ];
+        }
+
+        if ($currentPayrollPeriod && ($isAdmin || $isDirector)) {
+            $negativeNetItemsCount = PayrollItem::query()
+                ->where('payroll_period_id', $currentPayrollPeriod->id)
+                ->where('net_salary', '<', 0)
+                ->count();
+
+            if ($negativeNetItemsCount > 0) {
+                $negativeNetItem = PayrollItem::query()
+                    ->where('payroll_period_id', $currentPayrollPeriod->id)
+                    ->where('net_salary', '<', 0)
+                    ->orderBy('id')
+                    ->first(['id']);
+
+                $actionItems[] = [
+                    'type' => 'danger',
+                    'icon' => 'fas fa-exclamation-circle',
+                    'icon_color' => 'text-danger',
+                    'title' => "Nilai Slip Perlu Diperiksa — {$monthsList[$month]} {$year}",
+                    'text' => "Ada {$negativeNetItemsCount} slip dengan gaji bersih negatif.",
+                    'action_label' => 'Periksa Slip',
+                    'url' => $negativeNetItem
+                        ? route('payrolls.items.edit', [$currentPayrollPeriod->id, $negativeNetItem->id])
+                        : route('payrolls.show', $currentPayrollPeriod->id),
+                ];
+            }
+        }
+
+        if ($currentPayrollPeriod && $currentPayrollPeriod->status === PayrollPeriodStatus::DRAFT && $isAdmin) {
             $unverified = $payrollTotalItemsCount - $payrollVerifiedCount;
             if ($unverified > 0) {
+                $nextUnverifiedItem = PayrollItem::query()
+                    ->where('payroll_period_id', $currentPayrollPeriod->id)
+                    ->whereNull('verified_at')
+                    ->orderBy('id')
+                    ->first(['id']);
+
                 $actionItems[] = [
                     'type' => 'warning',
                     'icon' => 'fas fa-clipboard-check',
@@ -225,7 +351,9 @@ class DashboardService
                     'title' => "Penggajian {$monthsList[$month]} {$year}",
                     'text' => "{$unverified} dari {$payrollTotalItemsCount} karyawan belum diverifikasi HRD.",
                     'action_label' => 'Verifikasi Slip',
-                    'url' => route('payrolls.show', $currentPayrollPeriod->id),
+                    'url' => $nextUnverifiedItem
+                        ? route('payrolls.items.edit', [$currentPayrollPeriod->id, $nextUnverifiedItem->id])
+                        : route('payrolls.show', $currentPayrollPeriod->id),
                 ];
             } elseif ($payrollTotalItemsCount > 0) {
                 $actionItems[] = [
@@ -238,17 +366,26 @@ class DashboardService
                     'url' => route('payrolls.show', $currentPayrollPeriod->id),
                 ];
             }
-        } elseif ($currentPayrollPeriod && $currentPayrollPeriod->status === PayrollPeriodStatus::APPROVED) {
-            $actionItems[] = [
-                'type' => 'info',
-                'icon' => 'fas fa-money-check-alt',
-                'icon_color' => 'text-primary',
-                'title' => "Penggajian {$monthsList[$month]} {$year}",
-                'text' => 'Telah disetujui Direktur. Siap diproses pembayaran/transfer.',
-                'action_label' => 'Proses Bayar',
-                'url' => route('payrolls.show', $currentPayrollPeriod->id),
-            ];
-        } elseif ($currentPayrollPeriod && $currentPayrollPeriod->status === PayrollPeriodStatus::REJECTED) {
+        } elseif ($currentPayrollPeriod && $currentPayrollPeriod->status === PayrollPeriodStatus::APPROVED && $isAdmin) {
+            $unpaidItemsCount = PayrollItem::query()
+                ->where('payroll_period_id', $currentPayrollPeriod->id)
+                ->where(function ($query): void {
+                    $query->whereNull('payment_status')->orWhere('payment_status', '!=', 'paid');
+                })
+                ->count();
+
+            if ($unpaidItemsCount > 0) {
+                $actionItems[] = [
+                    'type' => 'info',
+                    'icon' => 'fas fa-money-check-alt',
+                    'icon_color' => 'text-primary',
+                    'title' => "Penggajian {$monthsList[$month]} {$year}",
+                    'text' => "Disetujui Direktur; {$unpaidItemsCount} slip masih belum dibayar.",
+                    'action_label' => 'Proses Pembayaran',
+                    'url' => route('payrolls.show', $currentPayrollPeriod->id),
+                ];
+            }
+        } elseif ($currentPayrollPeriod && $currentPayrollPeriod->status === PayrollPeriodStatus::REJECTED && $isAdmin) {
             $actionItems[] = [
                 'type' => 'danger',
                 'icon' => 'fas fa-exclamation-circle',
@@ -258,7 +395,7 @@ class DashboardService
                 'action_label' => 'Periksa Catatan',
                 'url' => route('payrolls.show', $currentPayrollPeriod->id),
             ];
-        } elseif (! $currentPayrollPeriod) {
+        } elseif (! $currentPayrollPeriod && $isAdmin) {
             $actionItems[] = [
                 'type' => 'info',
                 'icon' => 'fas fa-calendar-plus',
@@ -270,16 +407,92 @@ class DashboardService
             ];
         }
 
+        if ($isDirector) {
+            $pendingPayrollPeriods = PayrollPeriod::query()
+                ->where('status', PayrollPeriodStatus::SUBMITTED)
+                ->orderBy('submitted_at')
+                ->get(['id', 'month', 'year', 'submitted_at']);
+
+            foreach ($pendingPayrollPeriods as $pendingPayrollPeriod) {
+                $periodMonth = $monthsList[(int) $pendingPayrollPeriod->month] ?? (string) $pendingPayrollPeriod->month;
+                $waitingDays = $pendingPayrollPeriod->submitted_at
+                    ? (int) $pendingPayrollPeriod->submitted_at->diffInDays(now())
+                    : null;
+                $isDelayed = $waitingDays !== null && $waitingDays >= 3;
+
+                $actionItems[] = [
+                    'type' => 'warning',
+                    'icon' => $isDelayed ? 'fas fa-hourglass-half' : 'fas fa-file-signature',
+                    'icon_color' => 'text-warning',
+                    'title' => $isDelayed ? 'Persetujuan Penggajian Tertunda' : "Penggajian {$periodMonth} {$pendingPayrollPeriod->year}",
+                    'text' => $isDelayed
+                        ? "Penggajian {$periodMonth} {$pendingPayrollPeriod->year} sudah menunggu {$waitingDays} hari."
+                        : "Penggajian {$periodMonth} {$pendingPayrollPeriod->year} menunggu persetujuan Direktur.",
+                    'action_label' => 'Tinjau Penggajian',
+                    'url' => route('payrolls.show', $pendingPayrollPeriod->id),
+                ];
+            }
+        }
+
         // 2. Kasbon: Pengajuan Baru Menunggu Persetujuan
-        if ($pendingCashAdvancesCount > 0) {
+        if ($pendingCashAdvancesCount > 0 && $isDirector) {
+            $oldestPendingAdvance = CashAdvance::query()
+                ->where('status', CashAdvanceStatus::PENDING)
+                ->oldest('created_at')
+                ->first(['id', 'created_at']);
+            $agingRequestsCount = CashAdvance::query()
+                ->where('status', CashAdvanceStatus::PENDING)
+                ->where('created_at', '<=', now()->subDays(3))
+                ->count();
             $actionItems[] = [
                 'type' => 'warning',
                 'icon' => 'fas fa-hand-holding-usd',
                 'icon_color' => 'text-warning',
                 'title' => 'Persetujuan Kasbon',
-                'text' => "Terdapat {$pendingCashAdvancesCount} pengajuan kasbon baru menunggu persetujuan admin.",
-                'action_label' => 'Tinjau Kasbon',
-                'url' => route('cash-advances.index'),
+                'text' => "Terdapat {$pendingCashAdvancesCount} pengajuan kasbon menunggu persetujuan Direktur.".($agingRequestsCount > 0 ? " {$agingRequestsCount} pengajuan sudah lebih dari 3 hari." : ''),
+                'action_label' => 'Tinjau Pengajuan',
+                'url' => $oldestPendingAdvance
+                    ? route('cash-advances.review', ['advance' => $oldestPendingAdvance->id, 'action' => 'approval'])
+                    : route('cash-advances.index'),
+            ];
+        }
+
+        if ($pendingCashAdvancePaymentsCount > 0 && $isDirector) {
+            $oldestPendingPayment = CashAdvancePayment::query()
+                ->with('cashAdvance:id')
+                ->where('status', CashAdvancePaymentStatus::PENDING)
+                ->oldest('created_at')
+                ->first(['id', 'cash_advance_id', 'created_at']);
+            $agingPaymentsCount = CashAdvancePayment::query()
+                ->where('status', CashAdvancePaymentStatus::PENDING)
+                ->where('created_at', '<=', now()->subDays(3))
+                ->count();
+            $actionItems[] = [
+                'type' => 'warning',
+                'icon' => 'fas fa-money-check-alt',
+                'icon_color' => 'text-warning',
+                'title' => 'Persetujuan Pembayaran Kasbon',
+                'text' => "Terdapat {$pendingCashAdvancePaymentsCount} pembayaran kasbon menunggu persetujuan Direktur.".($agingPaymentsCount > 0 ? " {$agingPaymentsCount} pembayaran sudah lebih dari 3 hari." : ''),
+                'action_label' => 'Tinjau Pembayaran',
+                'url' => $oldestPendingPayment
+                    ? route('cash-advances.review', ['advance' => $oldestPendingPayment->cash_advance_id, 'action' => 'payment', 'payment' => $oldestPendingPayment->id])
+                    : route('cash-advances.index'),
+            ];
+        } elseif ($pendingCashAdvancePaymentsCount > 0 && $isAdmin) {
+            $oldestPendingPayment = CashAdvancePayment::query()
+                ->where('status', CashAdvancePaymentStatus::PENDING)
+                ->oldest('created_at')
+                ->first(['id', 'cash_advance_id']);
+            $actionItems[] = [
+                'type' => 'info',
+                'icon' => 'fas fa-hourglass-half',
+                'icon_color' => 'text-info',
+                'title' => 'Pembayaran Kasbon',
+                'text' => "{$pendingCashAdvancePaymentsCount} pembayaran kasbon menunggu persetujuan Direktur.",
+                'action_label' => 'Lihat Status',
+                'url' => $oldestPendingPayment
+                    ? route('cash-advances.review', ['advance' => $oldestPendingPayment->cash_advance_id, 'action' => 'payment', 'payment' => $oldestPendingPayment->id])
+                    : route('cash-advances.index'),
             ];
         }
 
@@ -294,6 +507,15 @@ class DashboardService
             ->count('cash_advances.employee_id');
 
         if ($overdueCashAdvancesCount > 0) {
+            $overdueAdvance = CashAdvance::query()
+                ->whereIn('status', [CashAdvanceStatus::ACTIVE, CashAdvanceStatus::APPROVED])
+                ->whereHas('installments', function ($query) use ($startOfMonth): void {
+                    $query->whereDate('due_date', '<', $startOfMonth)
+                        ->whereIn('status', [InstallmentStatus::PENDING, InstallmentStatus::PARTIALLY_PAID]);
+                })
+                ->orderBy('id')
+                ->first(['id']);
+
             $actionItems[] = [
                 'type' => 'warning',
                 'icon' => 'fas fa-clock',
@@ -301,6 +523,43 @@ class DashboardService
                 'title' => 'Cicilan Jatuh Tempo',
                 'text' => "Terdapat {$overdueCashAdvancesCount} karyawan memiliki cicilan kasbon terlewat jatuh tempo.",
                 'action_label' => 'Tinjau Kasbon',
+                'url' => $overdueAdvance
+                    ? route('cash-advances.review', ['advance' => $overdueAdvance->id, 'action' => 'detail'])
+                    : route('cash-advances.index'),
+            ];
+        }
+
+        $inactiveEmployeesWithDebtQuery = CashAdvance::query()
+            ->whereIn('status', [CashAdvanceStatus::ACTIVE, CashAdvanceStatus::APPROVED])
+            ->where('remaining_amount', '>', 0)
+            ->whereHas('employee', fn ($query) => $query->where('status', '!=', EmployeeStatus::ACTIVE));
+        $inactiveEmployeesWithDebtCount = (clone $inactiveEmployeesWithDebtQuery)->count();
+        $inactiveEmployeesWithDebt = $inactiveEmployeesWithDebtQuery
+            ->with('employee:id,full_name')
+            ->orderBy('id')
+            ->take(5)
+            ->get(['id', 'employee_id']);
+
+        foreach ($inactiveEmployeesWithDebt as $advance) {
+            $actionItems[] = [
+                'type' => 'warning',
+                'icon' => 'fas fa-user-slash',
+                'icon_color' => 'text-danger',
+                'title' => 'Kasbon Karyawan Nonaktif',
+                'text' => ($advance->employee?->full_name ?? 'Seorang karyawan').' memiliki sisa kasbon yang perlu ditinjau.',
+                'action_label' => 'Buka Rincian Kasbon',
+                'url' => route('cash-advances.review', ['advance' => $advance->id, 'action' => 'detail']),
+            ];
+        }
+
+        if ($inactiveEmployeesWithDebtCount > $inactiveEmployeesWithDebt->count()) {
+            $actionItems[] = [
+                'type' => 'warning',
+                'icon' => 'fas fa-users',
+                'icon_color' => 'text-warning',
+                'title' => 'Kasbon Karyawan Nonaktif Lainnya',
+                'text' => ($inactiveEmployeesWithDebtCount - $inactiveEmployeesWithDebt->count()).' kasbon lainnya masih memiliki saldo untuk ditinjau.',
+                'action_label' => 'Buka Daftar Kasbon',
                 'url' => route('cash-advances.index'),
             ];
         }
@@ -314,6 +573,14 @@ class DashboardService
             ->count();
 
         if ($expiringContracts > 0) {
+            $nextExpiringContract = Employee::query()
+                ->where('status', EmployeeStatus::ACTIVE)
+                ->where('employment_status', EmploymentStatus::KONTRAK)
+                ->whereNotNull('contract_end_date')
+                ->whereBetween('contract_end_date', [now()->startOfDay(), now()->addDays(30)->endOfDay()])
+                ->orderBy('contract_end_date')
+                ->first(['id']);
+
             $actionItems[] = [
                 'type' => 'info',
                 'icon' => 'fas fa-user-clock',
@@ -321,8 +588,129 @@ class DashboardService
                 'title' => 'Masa Kontrak Karyawan',
                 'text' => "Terdapat {$expiringContracts} karyawan yang masa kontraknya berakhir dalam 30 hari ke depan.",
                 'action_label' => 'Tinjau Karyawan',
+                'url' => $nextExpiringContract
+                    ? ($isAdmin
+                        ? route('employees.edit', ['employee' => $nextExpiringContract->id, 'section' => 'kepegawaian'])
+                        : route('employees.show', ['employee' => $nextExpiringContract->id, 'tab' => 'kepegawaian']))
+                    : route('employees.index'),
+            ];
+        }
+
+        $expiredContractsQuery = Employee::query()
+            ->where('status', EmployeeStatus::ACTIVE)
+            ->where('employment_status', EmploymentStatus::KONTRAK)
+            ->whereNotNull('contract_end_date')
+            ->whereDate('contract_end_date', '<', now()->toDateString())
+            ->orderBy('contract_end_date');
+        $expiredContractsCount = (clone $expiredContractsQuery)->count();
+        $expiredContracts = $expiredContractsQuery
+            ->take(5)
+            ->get(['id', 'full_name', 'contract_end_date']);
+
+        foreach ($expiredContracts as $employee) {
+            $actionItems[] = [
+                'type' => 'danger',
+                'icon' => 'fas fa-user-clock',
+                'icon_color' => 'text-danger',
+                'title' => "Kontrak Berakhir: {$employee->full_name}",
+                'text' => 'Tanggal akhir kontrak sudah lewat pada '.$employee->contract_end_date?->format('d M Y').'.',
+                'action_label' => 'Tinjau Data Kepegawaian',
+                'url' => $isAdmin
+                    ? route('employees.edit', ['employee' => $employee->id, 'section' => 'kepegawaian'])
+                    : route('employees.show', ['employee' => $employee->id, 'tab' => 'kepegawaian']),
+            ];
+        }
+
+        if ($expiredContractsCount > $expiredContracts->count()) {
+            $actionItems[] = [
+                'type' => 'danger',
+                'icon' => 'fas fa-users',
+                'icon_color' => 'text-danger',
+                'title' => 'Kontrak Berakhir Lainnya',
+                'text' => ($expiredContractsCount - $expiredContracts->count()).' karyawan kontrak aktif lainnya memiliki tanggal akhir kontrak yang sudah lewat.',
+                'action_label' => 'Buka Daftar Karyawan',
                 'url' => route('employees.index'),
             ];
+        }
+
+        // 5. Data penting karyawan yang belum lengkap untuk payroll.
+        if ($isAdmin || $isDirector) {
+            $employeesNeedingPayrollDataQuery = Employee::query()
+                ->where('status', EmployeeStatus::ACTIVE)
+                ->with('detail:id,employee_id,bank_name,bank_account_number,bank_account_name,tax_recipient_type,nik,bpjs_kesehatan_number,bpjs_ketenagakerjaan_number')
+                ->where(function ($query): void {
+                    $query->whereDoesntHave('detail')
+                        ->orWhereHas('detail', function ($detailQuery): void {
+                            $detailQuery->whereNull('bank_name')->orWhere('bank_name', '')
+                                ->orWhereNull('bank_account_number')->orWhere('bank_account_number', '')
+                                ->orWhereNull('bank_account_name')->orWhere('bank_account_name', '')
+                                ->orWhereNull('tax_recipient_type')->orWhere('tax_recipient_type', '')
+                                ->orWhereNull('nik')->orWhere('nik', '')
+                                ->orWhereNull('bpjs_kesehatan_number')->orWhere('bpjs_kesehatan_number', '')
+                                ->orWhereNull('bpjs_ketenagakerjaan_number')->orWhere('bpjs_ketenagakerjaan_number', '');
+                        });
+                })
+                ->orderBy('full_name');
+            $incompleteEmployeeCount = (clone $employeesNeedingPayrollDataQuery)->count();
+            $employeesNeedingPayrollData = $employeesNeedingPayrollDataQuery
+                ->take(5)
+                ->get(['id', 'full_name']);
+
+            foreach ($employeesNeedingPayrollData->take(5) as $employee) {
+                $detail = $employee->detail;
+                $missingFields = [];
+
+                if (! $detail || blank($detail->bank_name) || blank($detail->bank_account_number) || blank($detail->bank_account_name)) {
+                    $missingFields[] = 'rekening bank';
+                }
+
+                if (! $detail?->tax_recipient_type) {
+                    $missingFields[] = 'klasifikasi pajak';
+                }
+
+                if (! $detail || blank($detail->nik)) {
+                    $missingFields[] = 'NIK';
+                }
+
+                if (! $detail || blank($detail->bpjs_kesehatan_number) || blank($detail->bpjs_ketenagakerjaan_number)) {
+                    $missingFields[] = 'data nomor BPJS';
+                }
+
+                $opensEmploymentTab = in_array('rekening bank', $missingFields, true);
+
+                $actionItems[] = [
+                    'type' => 'warning',
+                    'icon' => 'fas fa-user-edit',
+                    'icon_color' => 'text-warning',
+                    'title' => "Data Payroll: {$employee->full_name}",
+                    'text' => 'Lengkapi '.implode(' dan ', $missingFields).' sebelum proses payroll.',
+                    'action_label' => $opensEmploymentTab
+                        ? 'Buka Data Kepegawaian'
+                        : 'Buka Data Pajak & BPJS',
+                    'url' => $isAdmin
+                        ? route('employees.edit', [
+                            'employee' => $employee->id,
+                            'section' => $opensEmploymentTab ? 'kepegawaian' : 'pajak',
+                        ])
+                        : route('employees.show', [
+                            'employee' => $employee->id,
+                            'tab' => $opensEmploymentTab ? 'kepegawaian' : 'pajak-bpjs',
+                        ]),
+                ];
+            }
+
+            $remainingIncompleteEmployees = $incompleteEmployeeCount - $employeesNeedingPayrollData->count();
+            if ($remainingIncompleteEmployees > 0) {
+                $actionItems[] = [
+                    'type' => 'warning',
+                    'icon' => 'fas fa-users',
+                    'icon_color' => 'text-warning',
+                    'title' => 'Data Payroll Karyawan Lainnya',
+                    'text' => "{$remainingIncompleteEmployees} karyawan aktif lainnya memiliki data rekening atau klasifikasi pajak yang belum lengkap.",
+                    'action_label' => 'Buka Daftar Karyawan',
+                    'url' => route('employees.index'),
+                ];
+            }
         }
 
         return $actionItems;

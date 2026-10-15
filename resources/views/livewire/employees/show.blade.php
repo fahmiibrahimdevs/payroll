@@ -107,6 +107,11 @@
                                     {{ $employee->status_label }}
                                 </span>
                             </div>
+                            @if (auth()->user()->hasRole('admin'))
+                                <button type="button" wire:click="editEmployeeData" wire:loading.attr="disabled" class="btn btn-primary btn-block mt-3">
+                                    <i class="fas fa-edit mr-1"></i> Edit Data
+                                </button>
+                            @endif
                         </div>
 
                         <!-- Ringkasan Cepat Info Pokok -->
@@ -285,7 +290,7 @@
                                             {{ $employee->detail?->address ?: '-' }}
                                         </div>
                                     </div>
-                                    @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('karyawan'))
+                                    @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur') || auth()->user()->hasRole('karyawan'))
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
                                                 <div class="emp-tile-icon"><i class="fas fa-file-pdf text-danger"></i></div>
@@ -590,20 +595,15 @@
                                                 </span>
                                             </td>
                                             <td class="text-nowrap text-center">
-                                                <div class="d-inline-flex align-items-center" style="gap: 5px;">
-                                                    <button type="button" wire:click="openPreviewSlip({{ $item->id }})" wire:loading.attr="disabled" class="btn btn-sm btn-solid-slip" title="Lihat Rincian Slip Gaji">
-                                                        <i class="fas fa-eye mr-1"></i> Slip
+                                                @if ($this->isApprovedItem($item))
+                                                    <a href="{{ route('payrolls.items.print', ['period' => $item->payroll_period_id, 'item' => $item->id]) }}" target="_blank" class="btn btn-sm btn-primary px-3 py-1 font-weight-600 shadow-sm" style="border-radius: 6px; font-size: 12px; background-color: #0b52aa; border-color: #0b52aa;" title="Buka / Cetak Slip Gaji Resmi">
+                                                        <i class="fas fa-print mr-1"></i> Cetak Slip
+                                                    </a>
+                                                @else
+                                                    <button type="button" class="btn btn-sm btn-secondary px-3 py-1 text-nowrap" disabled style="border-radius: 6px; font-size: 12px; opacity: 0.6; cursor: not-allowed;" title="Slip gaji menunggu persetujuan Direktur">
+                                                        <i class="fas fa-clock mr-1"></i> Menunggu ACC
                                                     </button>
-                                                    @if ($this->isApprovedItem($item))
-                                                        <a href="{{ route('payrolls.items.print', ['period' => $item->payroll_period_id, 'item' => $item->id]) }}" target="_blank" class="btn btn-sm btn-solid-print" title="Cetak Slip Resmi">
-                                                            <i class="fas fa-print"></i>
-                                                        </a>
-                                                    @else
-                                                        <button type="button" class="btn btn-sm btn-solid-print text-muted" disabled style="opacity: 0.55; cursor: not-allowed;" title="Slip belum diapprove Direktur">
-                                                            <i class="fas fa-print"></i>
-                                                        </button>
-                                                    @endif
-                                                </div>
+                                                @endif
                                             </td>
                                         </tr>
                                     @empty
@@ -664,10 +664,8 @@
                                            x-on:input="
                                                let raw = $el.value.replace(/\D/g, '');
                                                $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                               $wire.$set('adj_new_salary', raw ? parseFloat(raw) : '', false);
                                            "
-                                           x-on:input.debounce.350ms="$wire.set('adj_new_salary', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                           x-on:change="$wire.set('adj_new_salary', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                           x-on:blur="$wire.set('adj_new_salary', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
                                            value="{{ !empty($adj_new_salary) ? number_format((float) preg_replace('/[^0-9]/', '', (string) $adj_new_salary), 0, ',', '.') : '' }}"
                                            class="form-control text-right @error('adj_new_salary') is-invalid @enderror"
                                            placeholder="0"
@@ -720,118 +718,7 @@
             </div>
         </div>
     @endif
-    <!-- Modal Preview Slip Gaji Karyawan -->
-    <div wire:ignore.self class="modal fade" id="previewSlipModal" role="dialog" aria-labelledby="previewSlipModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
-            <div class="modal-content">
-                <div class="modal-header bg-white border-bottom py-3">
-                    <h5 class="modal-title font-weight-600 text-dark" id="previewSlipModalLabel">
-                        <i class="fas fa-file-invoice-dollar text-primary mr-2"></i> Rincian Slip Gaji Karyawan
-                    </h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                </div>
-                <div class="modal-body p-3 p-md-4">
-                    @if ($previewItem)
-                        <!-- Header Slip Perusahaan -->
-                        <div class="d-flex align-items-center justify-content-between pb-3 mb-3 border-bottom flex-wrap">
-                            <div>
-                                <h6 class="font-weight-700 text-primary mb-1" style="font-size: 16px;">{{ $company->name ?? 'PT LARASHIZ INDONESIA' }}</h6>
-                                <span class="text-small text-secondary">{{ $company->address ?? 'HR & Payroll Management' }}</span>
-                            </div>
-                            <div class="text-right mt-2 mt-sm-0">
-                                <span class="badge badge-light border text-dark font-weight-600">{{ $previewItem->payslip_number }}</span>
-                                <div class="text-small text-secondary mt-1">Periode: <strong class="text-dark">{{ $previewItem->payrollPeriod?->period_label }}</strong></div>
-                            </div>
-                        </div>
 
-                        <!-- Info Karyawan -->
-                        <div class="row mb-3">
-                            <div class="col-sm-6 col-12 mb-2">
-                                <div class="text-small text-secondary">Nama Karyawan</div>
-                                <div class="font-weight-600 text-dark">{{ $previewItem->employee?->full_name }}</div>
-                                <div class="text-small text-secondary">{{ $previewItem->employee?->detail?->employee_code ?: '-' }} &bull; {{ $previewItem->employee?->position?->name ?: '-' }}</div>
-                            </div>
-                            <div class="col-sm-6 col-12 mb-2">
-                                <div class="text-small text-secondary">Departemen & Rekening</div>
-                                <div class="font-weight-600 text-dark">{{ $previewItem->employee?->department?->name ?: '-' }}</div>
-                                <div class="text-small text-secondary">{{ $previewItem->bank_name ?: '-' }} - {{ $previewItem->bank_account_number ?: '-' }}</div>
-                            </div>
-                        </div>
-
-                        <!-- Rincian Pendapatan & Potongan -->
-                        <div class="row">
-                            <div class="col-md-6 col-12 mb-3">
-                                <div class="border rounded p-3 h-100 bg-white">
-                                    <div class="font-weight-600 text-success mb-2 border-bottom pb-1">
-                                        <i class="fas fa-plus-circle mr-1"></i> Pendapatan (Earnings)
-                                    </div>
-                                    <div class="d-flex justify-content-between text-small mb-1.5">
-                                        <span class="text-secondary">Gaji Pokok</span>
-                                        <span class="font-weight-500 text-dark">{{ $previewItem->formatted_basic_salary }}</span>
-                                    </div>
-                                    @foreach ($previewItem->allowanceLines as $line)
-                                        <div class="d-flex justify-content-between text-small mb-1.5">
-                                            <span class="text-secondary">{{ $line->name }}</span>
-                                            <span class="font-weight-500 text-dark">+{{ $line->formatted_amount }}</span>
-                                        </div>
-                                    @endforeach
-                                    <div class="d-flex justify-content-between text-small border-top pt-2 mt-2 font-weight-600">
-                                        <span class="text-dark">Total Gaji Kotor</span>
-                                        <span class="text-success">{{ $previewItem->formatted_gross_salary }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6 col-12 mb-3">
-                                <div class="border rounded p-3 h-100 bg-white">
-                                    <div class="font-weight-600 text-danger mb-2 border-bottom pb-1">
-                                        <i class="fas fa-minus-circle mr-1"></i> Potongan (Deductions)
-                                    </div>
-                                    @forelse ($previewItem->deductionLines->filter(fn ($l) => (float) $l->amount > 0) as $line)
-                                        <div class="d-flex justify-content-between text-small mb-1.5">
-                                            <span class="text-secondary">{{ $line->name }}</span>
-                                            <span class="font-weight-500 text-danger">-{{ $line->formatted_amount }}</span>
-                                        </div>
-                                    @empty
-                                        <div class="text-small text-secondary font-italic mb-1.5">Tidak ada potongan</div>
-                                    @endforelse
-                                    <div class="d-flex justify-content-between text-small border-top pt-2 mt-2 font-weight-600">
-                                        <span class="text-dark">Total Potongan</span>
-                                        <span class="text-danger">-{{ $previewItem->formatted_total_deductions }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Take Home Pay Box -->
-                        <div class="p-3 rounded border text-center mt-2" style="background: #ffffff; border-color: #0b52aa !important;">
-                            <div class="text-secondary text-small font-weight-500 text-uppercase mb-1">Gaji Bersih Diterima (Take Home Pay)</div>
-                            <div class="font-weight-700 text-primary" style="font-size: 22px;">{{ $previewItem->formatted_net_salary }}</div>
-                            <div class="text-small text-secondary mt-1">Status: <span class="{{ $previewItem->payrollPeriod?->status_badge_class }}">{{ $previewItem->payrollPeriod?->status_label }}</span></div>
-                        </div>
-                    @else
-                        <div class="text-center py-4">
-                            <i class="fas fa-spinner fa-spin text-primary" style="font-size: 24px;"></i>
-                            <div class="mt-2 text-secondary text-small">Memuat data slip...</div>
-                        </div>
-                    @endif
-                </div>
-                <div class="modal-footer bg-white border-top">
-                    @if ($previewItem)
-                        @if ($this->isApprovedItem($previewItem))
-                            <a href="{{ route('payrolls.items.print', ['period' => $previewItem->payroll_period_id, 'item' => $previewItem->id]) }}" target="_blank" class="btn btn-primary">
-                                <i class="fas fa-print mr-1"></i> Cetak Dokumen Resmi
-                            </a>
-                        @else
-                            <div class="mr-auto text-muted small">
-                                <i class="fas fa-info-circle text-warning mr-1"></i> Belum dapat dicetak: Menunggu approval Direktur.
-                            </div>
-                        @endif
-                    @endif
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 @push('scripts')

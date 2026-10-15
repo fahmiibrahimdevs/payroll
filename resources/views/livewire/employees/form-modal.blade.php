@@ -95,10 +95,10 @@
                                     </div>
                                 </div>
 
-                                <!-- Status Akun (Native Clean Select) -->
+                                <!-- Status Karyawan (Native Clean Select) -->
                                 <div class="col-md-6">
                                     <div class="form-group mb-2">
-                                        <label for="status">Status Akun <span class="text-danger">*</span></label>
+                                        <label for="status">Status Karyawan <span class="text-danger">*</span></label>
                                         <select id="status" wire:model="form.status" class="form-control @error('form.status') is-invalid @enderror">
                                             @foreach ($statuses as $st)
                                                 <option value="{{ $st->value }}">{{ $st->label() }}</option>
@@ -147,10 +147,8 @@
                                                    x-on:input="
                                                        let raw = $el.value.replace(/\D/g, '');
                                                        $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                                       $wire.$set('form.basic_salary', raw ? parseFloat(raw) : '', false);
                                                    "
-                                                   x-on:input.debounce.350ms="$wire.set('form.basic_salary', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                                   x-on:change="$wire.set('form.basic_salary', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
-                                                   x-on:blur="$wire.set('form.basic_salary', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : '')"
                                                    value="{{ !empty($form->basic_salary) ? number_format((float) $form->basic_salary, 0, ',', '.') : '' }}"
                                                    class="form-control text-right @error('form.basic_salary') is-invalid @enderror"
                                                    placeholder="0"

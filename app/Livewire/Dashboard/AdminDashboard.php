@@ -36,6 +36,7 @@ class AdminDashboard extends Component
             'stats' => $stats,
             'monthsList' => $stats['months_list'],
             'availableYears' => $stats['available_years'],
+            'isDirector' => auth()->user()?->hasRole('direktur') ?? false,
         ]);
     }
 }

@@ -120,6 +120,19 @@ class Index extends Component
             $this->selectedEmployeeId = $emp?->id;
             $this->selectedDepartmentId = $emp?->department_id;
         }
+
+        $reviewHandoff = session()->pull('cash_advance_review_handoff');
+        if (is_array($reviewHandoff) && isset($reviewHandoff['advance_id'])) {
+            $advanceId = (int) $reviewHandoff['advance_id'];
+            if (($reviewHandoff['action'] ?? null) === 'approval') {
+                $this->openApproval($advanceId);
+            } else {
+                $paymentId = ($reviewHandoff['action'] ?? null) === 'payment'
+                    ? (int) ($reviewHandoff['payment_id'] ?? 0)
+                    : null;
+                $this->showDetail($advanceId, $paymentId ?: null);
+            }
+        }
     }
 
     public function updatingSelectedDepartmentId(): void
@@ -193,6 +206,12 @@ class Index extends Component
      */
     public function updatedFormEmployeeId($value, CashAdvanceService $service): void
     {
+        if (auth()->user()?->hasRole('karyawan')) {
+            $employeeId = auth()->user()->getEmployeeRecord()?->id;
+            $this->form->employee_id = $employeeId;
+            $value = $employeeId;
+        }
+
         if (! empty($value)) {
             $summary = $service->getActiveCashAdvanceSummaryByEmployee((int) $value, $this->editingCashAdvanceId);
             $this->activeCashAdvanceAlert = $summary['has_active'] ? $summary : null;
@@ -457,7 +476,7 @@ class Index extends Component
     public function showDetail(int $id, ?int $paymentId = null): void
     {
         try {
-            $this->selectedCashAdvance = CashAdvance::with([
+            $cashAdvance = CashAdvance::with([
                 'employee.department',
                 'employee.position',
                 'submitter',
@@ -465,7 +484,9 @@ class Index extends Component
                 'installments.payments.recorder',
                 'payments.recorder',
             ])->findOrFail($id);
+            Gate::authorize('view', $cashAdvance);
 
+            $this->selectedCashAdvance = $cashAdvance;
             $this->selectedCashAdvanceId = $id;
             $this->highlightPaymentId = $paymentId;
             $this->detailModalTab = $paymentId ? 'payments' : 'installments';
@@ -490,7 +511,10 @@ class Index extends Component
     public function openApproval(int $id): void
     {
         try {
-            $this->selectedCashAdvance = CashAdvance::with(['employee.department', 'employee.position', 'submitter'])->findOrFail($id);
+            $cashAdvance = CashAdvance::with(['employee.department', 'employee.position', 'submitter'])->findOrFail($id);
+            Gate::authorize('approve', $cashAdvance);
+
+            $this->selectedCashAdvance = $cashAdvance;
             $this->selectedCashAdvanceId = $id;
             $this->approvalNotes = '';
             $this->rejectionReason = '';
@@ -676,6 +700,7 @@ class Index extends Component
                 'installments.payments.recorder',
                 'payments.recorder',
             ])->findOrFail($id);
+            Gate::authorize('view', $cashAdvance);
 
             if (! in_array($cashAdvance->status, [CashAdvanceStatus::ACTIVE, CashAdvanceStatus::APPROVED], true)) {
                 $this->dispatch('swal:alert', [
@@ -714,6 +739,9 @@ class Index extends Component
                 'installments.payments.recorder',
                 'payments.recorder',
             ])->findOrFail($advanceId);
+            Gate::authorize('view', $cashAdvance);
+
+            abort_unless($cashAdvance->installments()->whereKey($installmentId)->exists(), 404);
 
             if (! in_array($cashAdvance->status, [CashAdvanceStatus::ACTIVE, CashAdvanceStatus::APPROVED], true)) {
                 $this->dispatch('swal:alert', [
@@ -986,6 +1014,8 @@ class Index extends Component
             return;
         }
 
+        $this->authorizeEmployeeScope($this->selectedEmployeeId);
+
         $found = $service->getEmployeeMonthlyStatementDetail($this->selectedEmployeeId, $monthKey);
 
         if ($found) {
@@ -1023,9 +1053,10 @@ class Index extends Component
             ];
         }
 
+        $this->authorizeEmployeeScope($this->selectedEmployeeId);
+
         $service = app(CashAdvanceService::class);
-        $statements = $service->getEmployeeMonthlyStatements($this->selectedEmployeeId);
-        $unpaidList = $statements['unpaid_statements'] ?? [];
+        $unpaidList = $service->getEmployeeUnpaidMonthlyStatementSummaries($this->selectedEmployeeId);
 
         $totalUnpaidAll = (float) array_sum(array_column($unpaidList, 'remaining_amount'));
         $amount = (float) ($this->earlyPaymentAmount ?? 0);
@@ -1104,7 +1135,7 @@ class Index extends Component
     public function updatedEarlyPaymentAmount($value): void
     {
         $selectedSum = $this->getSelectedMonthsRemainingSum();
-        $maxAllowed = (float) ceil($selectedSum);
+        $maxAllowed = $selectedSum;
 
         if (empty($this->selectedMonthKeysForPayment) || $selectedSum <= 0) {
             $this->addError('earlyPaymentAmount', 'Silakan pilih minimal satu bulan tagihan terlebih dahulu.');
@@ -1131,11 +1162,13 @@ class Index extends Component
             return 0.0;
         }
 
+        $this->authorizeEmployeeScope($this->selectedEmployeeId);
+
         $service = app(CashAdvanceService::class);
-        $statements = $service->getEmployeeMonthlyStatements($this->selectedEmployeeId);
+        $unpaidStatements = $service->getEmployeeUnpaidMonthlyStatementSummaries($this->selectedEmployeeId);
         $sum = 0.0;
 
-        foreach ($statements['unpaid_statements'] as $st) {
+        foreach ($unpaidStatements as $st) {
             if (in_array($st['month_key'], $this->selectedMonthKeysForPayment, true)) {
                 $sum += (float) ($st['remaining_amount'] ?? 0);
             }
@@ -1162,9 +1195,9 @@ class Index extends Component
         }
 
         $service ??= app(CashAdvanceService::class);
-        $statements = $service->getEmployeeMonthlyStatements($this->selectedEmployeeId);
+        $unpaidStatements = $service->getEmployeeUnpaidMonthlyStatementSummaries($this->selectedEmployeeId);
 
-        if (empty($statements['unpaid_statements'])) {
+        if (empty($unpaidStatements)) {
             $this->dispatch('swal:alert', [
                 'type' => 'info',
                 'title' => 'Tidak Ada Tagihan',
@@ -1174,13 +1207,22 @@ class Index extends Component
             return;
         }
 
-        if ($targetMonthKey) {
+        $availableMonthKeys = array_column($unpaidStatements, 'month_key');
+
+        if ($targetMonthKey && in_array($targetMonthKey, $availableMonthKeys, true)) {
             $this->selectedMonthKeysForPayment = [$targetMonthKey];
         } else {
-            $this->selectedMonthKeysForPayment = [$statements['unpaid_statements'][0]['month_key']];
+            $this->selectedMonthKeysForPayment = [$unpaidStatements[0]['month_key']];
         }
 
-        $this->earlyPaymentAmount = (float) ceil($this->getSelectedMonthsRemainingSum());
+        $selectedMonthKeys = $this->selectedMonthKeysForPayment;
+        $selectedBalance = array_sum(array_map(
+            fn ($statement) => in_array($statement['month_key'], $selectedMonthKeys, true)
+                ? (float) $statement['remaining_amount']
+                : 0.0,
+            $unpaidStatements
+        ));
+        $this->earlyPaymentAmount = $selectedBalance;
         $this->earlyPaymentDate = Carbon::today()->format('Y-m-d');
         $this->earlyPaymentMethod = 'cash';
         $this->earlyProofDocument = null;
@@ -1198,9 +1240,10 @@ class Index extends Component
             return;
         }
 
+        $this->authorizeEmployeeScope($this->selectedEmployeeId);
+
         $service = app(CashAdvanceService::class);
-        $statements = $service->getEmployeeMonthlyStatements($this->selectedEmployeeId);
-        $unpaidList = $statements['unpaid_statements'] ?? [];
+        $unpaidList = $service->getEmployeeUnpaidMonthlyStatementSummaries($this->selectedEmployeeId);
 
         $allKeys = array_column($unpaidList, 'month_key');
         if (! in_array($monthKey, $allKeys, true)) {
@@ -1228,8 +1271,9 @@ class Index extends Component
             }
         }
 
-        $this->earlyPaymentAmount = $newSum > 0 ? (float) ceil($newSum) : null;
+        $this->earlyPaymentAmount = $newSum > 0 ? $newSum : null;
         $this->resetErrorBag(['earlyPaymentAmount', 'selectedMonthKeysForPayment']);
+        $this->dispatch('early-payment-amount-refreshed', amount: $this->earlyPaymentAmount);
     }
 
     /**
@@ -1241,12 +1285,14 @@ class Index extends Component
             return;
         }
 
-        $statements = $service->getEmployeeMonthlyStatements($this->selectedEmployeeId);
-        $unpaidList = $statements['unpaid_statements'] ?? [];
+        $this->authorizeEmployeeScope($this->selectedEmployeeId);
+
+        $unpaidList = $service->getEmployeeUnpaidMonthlyStatementSummaries($this->selectedEmployeeId);
 
         $this->selectedMonthKeysForPayment = array_column($unpaidList, 'month_key');
-        $this->earlyPaymentAmount = (float) ceil(array_sum(array_column($unpaidList, 'remaining_amount')));
+        $this->earlyPaymentAmount = (float) array_sum(array_column($unpaidList, 'remaining_amount'));
         $this->resetErrorBag(['earlyPaymentAmount', 'selectedMonthKeysForPayment']);
+        $this->dispatch('early-payment-amount-refreshed', amount: $this->earlyPaymentAmount);
     }
 
     /**
@@ -1261,7 +1307,7 @@ class Index extends Component
         }
 
         $selectedSum = $this->getSelectedMonthsRemainingSum();
-        $maxAllowed = (float) ceil($selectedSum);
+        $maxAllowed = $selectedSum;
         if (empty($this->selectedMonthKeysForPayment) || $selectedSum <= 0) {
             $this->addError('selectedMonthKeysForPayment', 'Silakan pilih minimal 1 bulan tagihan untuk pelunasan.');
 
@@ -1451,12 +1497,24 @@ HTML;
             : $fallback;
     }
 
+    private function authorizeEmployeeScope(int $employeeId): void
+    {
+        Gate::authorize('viewAny', CashAdvance::class);
+
+        $user = auth()->user();
+        if ($user?->hasRole('karyawan')) {
+            $employee = $user->getEmployeeRecord();
+            abort_unless($employee && (int) $employee->id === $employeeId, 403);
+        }
+    }
+
     /**
      * Render the Livewire component view.
      */
     public function render(CashAdvanceService $service): View
     {
         if ($this->selectedCashAdvance instanceof CashAdvance) {
+            Gate::authorize('view', $this->selectedCashAdvance);
             $this->selectedCashAdvance->load([
                 'employee.department',
                 'employee.position',

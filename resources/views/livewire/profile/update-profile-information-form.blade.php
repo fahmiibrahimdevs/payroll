@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
@@ -33,12 +34,26 @@ new class extends Component
         ]);
 
         $user->fill($validated);
+        $changedFields = array_keys($user->getDirty());
 
         if ($user->isDirty('email')) {
             $user->email_verified_at = null;
         }
 
         $user->save();
+
+        if ($changedFields !== []) {
+            app(ActivityLogService::class)->info(
+                action: 'PROFILE_UPDATED',
+                module: 'users',
+                message: 'User profile updated',
+                context: [
+                    'user_id' => $user->id,
+                    'changed_fields' => $changedFields,
+                ],
+                userId: $user->id
+            );
+        }
 
         $this->dispatch('profile-updated', name: $user->name);
         session()->flash('profile_status', 'Informasi profil berhasil disimpan!');
@@ -58,6 +73,14 @@ new class extends Component
         }
 
         $user->sendEmailVerificationNotification();
+
+        app(ActivityLogService::class)->info(
+            action: 'VERIFICATION_LINK_SENT',
+            module: 'auth',
+            message: 'Email verification link sent',
+            context: ['user_id' => $user->id],
+            userId: $user->id
+        );
 
         Session::flash('status', 'verification-link-sent');
     }

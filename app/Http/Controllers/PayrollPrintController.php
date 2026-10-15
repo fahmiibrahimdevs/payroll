@@ -5,11 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\CompanyProfile;
 use App\Models\PayrollItem;
 use App\Models\PayrollPeriod;
+use App\Services\ActivityLogService;
 use App\Services\PayrollService;
 use Illuminate\Contracts\View\View;
 
 class PayrollPrintController extends Controller
 {
+    public function __construct(
+        protected ActivityLogService $logger
+    ) {}
+
     /**
      * Display printable payslip view.
      */
@@ -21,6 +26,8 @@ class PayrollPrintController extends Controller
         if ($user && $user->hasRole('karyawan')) {
             $emp = $user->getEmployeeRecord();
             abort_unless($emp && (int) $item->employee_id === (int) $emp->id, 403, 'Anda tidak memiliki hak akses untuk mencetak slip gaji karyawan lain.');
+            $item->loadMissing('payrollPeriod');
+            abort_unless($item->isOfficiallyApproved(), 403, 'Slip gaji belum disetujui Direktur.');
         }
 
         $item->load([
@@ -33,6 +40,18 @@ class PayrollPrintController extends Controller
         ]);
 
         $company = CompanyProfile::getProfile();
+
+        $this->logger->info(
+            action: 'PAYSLIP_PRINTED',
+            module: 'payrolls',
+            message: 'Payslip print view opened',
+            context: [
+                'payroll_period_id' => $period->id,
+                'payroll_item_id' => $item->id,
+                'employee_id' => $item->employee_id,
+                'payslip_number' => $item->payslip_number,
+            ]
+        );
 
         return view('payrolls.print', [
             'period' => $period,
@@ -48,6 +67,13 @@ class PayrollPrintController extends Controller
     {
         $statistics = $service->getStatistics($year);
         $company = CompanyProfile::getProfile();
+
+        $this->logger->info(
+            action: 'YEARLY_SUMMARY_PRINTED',
+            module: 'payrolls',
+            message: 'Annual payroll summary print view opened',
+            context: ['year' => $year]
+        );
 
         return view('payrolls.print-yearly-summary', [
             'year' => $year,

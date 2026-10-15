@@ -40,6 +40,8 @@ class Index extends Component
      */
     public function mount(): void
     {
+        abort_unless(auth()->user()?->hasRole('developer'), 403);
+
         $today = Carbon::today()->format('Y-m-d');
         $this->startDate = $today;
         $this->endDate = $today;

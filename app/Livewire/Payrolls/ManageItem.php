@@ -14,6 +14,7 @@ use App\Enums\SalaryComponentCategory;
 use App\Enums\SalaryComponentType;
 use App\Enums\TaxMethod;
 use App\Enums\TaxRecipientType;
+use App\Models\CashAdvance;
 use App\Models\CashAdvanceInstallment;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
@@ -21,6 +22,7 @@ use App\Models\PayrollItem;
 use App\Models\PayrollPeriod;
 use App\Models\SalaryComponent;
 use App\Models\User;
+use App\Services\ActivityLogService;
 use App\Services\PayrollService;
 use App\Services\TaxCalculationService;
 use Illuminate\Contracts\View\View;
@@ -142,7 +144,7 @@ class ManageItem extends Component
             'employee.position',
             'employee.detail',
             'lines.salaryComponent',
-            'lines.cashAdvanceInstallment',
+            'lines.cashAdvanceInstallment.cashAdvance',
             'updater',
             'approver',
             'verifier',
@@ -217,6 +219,7 @@ class ManageItem extends Component
             );
 
             if ($needsSalarySync || $needsTaxSync) {
+                $changedFields = [];
                 if ($needsSalarySync) {
                     $this->item->update([
                         'basic_salary' => $expectedBasic,
@@ -224,12 +227,28 @@ class ManageItem extends Component
                         'bank_account_number' => $empDetail?->bank_account_number,
                         'bank_account_name' => $empDetail?->bank_account_name,
                     ]);
+                    $changedFields = ['basic_salary', 'bank_details'];
+                }
+                if ($needsTaxSync) {
+                    $changedFields = array_merge($changedFields, ['ptkp_status', 'tax_method']);
                 }
                 if ($this->taxConfigurationWarning === '') {
                     $service->recalculateItemTax($this->item);
                 }
                 $service->recalculateItem($this->item);
                 $service->recalculatePeriod($this->period);
+                app(ActivityLogService::class)->info(
+                    action: 'PAYSLIP_MASTER_DATA_SYNCED',
+                    module: 'payrolls',
+                    message: 'Payslip synchronized with employee data on open',
+                    context: [
+                        'payroll_period_id' => $this->period->id,
+                        'payroll_item_id' => $this->item->id,
+                        'employee_id' => $this->item->employee_id,
+                        'changed_fields' => array_values(array_unique($changedFields)),
+                    ],
+                    userId: auth()->id()
+                );
                 $this->item->refresh();
                 $this->period->refresh();
             }
@@ -257,16 +276,23 @@ class ManageItem extends Component
             $amount = (float) $line->amount;
 
             $inst = null;
-            // Synchronize cash advance installment with actual unpaid remaining balance
+            // Keep the payroll deduction amount user-editable. The reset button
+            // explicitly restores the unpaid scheduled installment amount.
             if (! empty($line->cash_advance_installment_id)) {
                 $inst = $line->relationLoaded('cashAdvanceInstallment')
                     ? $line->cashAdvanceInstallment
-                    : CashAdvanceInstallment::find($line->cash_advance_installment_id);
+                    : CashAdvanceInstallment::with('cashAdvance')->find($line->cash_advance_installment_id);
+
+                if ($inst && ! $inst->relationLoaded('cashAdvance')) {
+                    $inst->load('cashAdvance');
+                }
 
                 if ($inst) {
                     $unpaidInstallment = max(0.0, round((float) $inst->amount - (float) $inst->paid_amount, 2));
-                    if ($this->isEditable && $amount > $unpaidInstallment + 0.001) {
-                        $amount = $unpaidInstallment;
+                    $totalRemainingAdvance = max(0.0, round((float) ($inst->cashAdvance?->remaining_amount ?? $unpaidInstallment), 2));
+
+                    if ($this->isEditable && $amount > $totalRemainingAdvance + 0.001) {
+                        $amount = $totalRemainingAdvance;
                         $line->update(['amount' => $amount]);
                         app(PayrollService::class)->recalculateItem($this->item);
                         $this->item->refresh();
@@ -293,6 +319,8 @@ class ManageItem extends Component
                 }
             }
 
+            $advance = $inst?->cashAdvance;
+
             $rowData = [
                 'id' => $line->id,
                 'name' => $line->name,
@@ -303,6 +331,11 @@ class ManageItem extends Component
                 'cash_advance_installment_id' => $line->cash_advance_installment_id,
                 'installment_paid_amount' => (float) ($inst?->paid_amount ?? 0),
                 'installment_total_amount' => (float) ($inst?->amount ?? 0),
+                'installment_number' => $inst?->installment_number ?? null,
+                'advance_reference_number' => $advance?->reference_number ?? null,
+                'advance_total_amount' => (float) ($advance?->amount ?? 0),
+                'advance_remaining_amount' => (float) ($advance?->remaining_amount ?? 0),
+                'advance_installment_count' => $advance?->installment_count ?? null,
                 'category' => $line->category?->value ?? ($line->type === PayrollLineType::ALLOWANCE ? 'allowance' : 'deduction'),
                 'is_system' => $isSystem,
                 'is_enabled' => $isEnabled,
@@ -426,6 +459,11 @@ class ManageItem extends Component
                                 'cash_advance_installment_id' => $installment->id,
                                 'installment_paid_amount' => (float) $installment->paid_amount,
                                 'installment_total_amount' => (float) $installment->amount,
+                                'installment_number' => $installment->installment_number,
+                                'advance_reference_number' => $advance->reference_number,
+                                'advance_total_amount' => (float) $advance->amount,
+                                'advance_remaining_amount' => (float) $advance->remaining_amount,
+                                'advance_installment_count' => $advance->installment_count,
                                 'category' => 'cash_advance',
                                 'is_system' => true,
                                 'is_enabled' => true,
@@ -824,8 +862,23 @@ class ManageItem extends Component
                 $this->deductionRows[$index]['amount'] = round(($cleanPct / 100) * $basic);
             }
         } elseif ($field === 'amount') {
+            if (! empty($this->deductionRows[$index]['cash_advance_installment_id'])
+                && is_numeric($value)
+                && (float) $value < 0) {
+                $this->deductionRows[$index]['amount'] = $value;
+                $this->validateCashAdvanceDeductionRows($index);
+
+                return;
+            }
+
             $clean = preg_replace('/[^0-9]/', '', (string) $value);
             $this->deductionRows[$index]['amount'] = $clean !== '' ? (float) $clean : '';
+
+            if (! empty($this->deductionRows[$index]['cash_advance_installment_id'])
+                && ! $this->validateCashAdvanceDeductionRows($index)) {
+                return;
+            }
+
             if (($this->deductionRows[$index]['calc_mode'] ?? 'nominal') === 'percentage' && $basic > 0 && ! empty($this->deductionRows[$index]['amount'])) {
                 $this->deductionRows[$index]['percentage'] = round(((float) $this->deductionRows[$index]['amount'] / $basic) * 100, 2);
             }
@@ -900,6 +953,77 @@ class ManageItem extends Component
         }
     }
 
+    /**
+     * Validate editable payroll deductions linked to cash advances.
+     * A payroll deduction can cover multiple installments, but cannot exceed the advance's remaining balance.
+     */
+    protected function validateCashAdvanceDeductionRows(?int $onlyIndex = null): bool
+    {
+        $indices = $onlyIndex === null ? array_keys($this->deductionRows) : [$onlyIndex];
+        $rows = collect($indices)
+            ->filter(fn (int $index) => ! empty($this->deductionRows[$index]['cash_advance_installment_id']))
+            ->mapWithKeys(fn (int $index) => [$index => $this->deductionRows[$index]]);
+
+        if ($rows->isEmpty()) {
+            return true;
+        }
+
+        $installmentIds = $rows
+            ->pluck('cash_advance_installment_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $installments = CashAdvanceInstallment::query()
+            ->with('cashAdvance:id,employee_id,remaining_amount')
+            ->whereKey($installmentIds)
+            ->get()
+            ->keyBy('id');
+        $isValid = true;
+
+        foreach ($rows as $index => $row) {
+            $errorKey = "deductionRows.{$index}.amount";
+
+            if (($row['is_enabled'] ?? true) === false) {
+                $this->resetValidation($errorKey);
+
+                continue;
+            }
+
+            $amountValue = $row['amount'] ?? 0;
+            $amountValue = $amountValue === '' || $amountValue === null ? 0 : $amountValue;
+
+            if (! is_numeric($amountValue) || ! is_finite((float) $amountValue) || (float) $amountValue < 0) {
+                $this->addError($errorKey, 'Nominal potongan kasbon harus berupa angka nol atau lebih.');
+                $isValid = false;
+
+                continue;
+            }
+
+            $installment = $installments->get((int) $row['cash_advance_installment_id']);
+            if (! $installment || (int) $installment->cashAdvance?->employee_id !== (int) $this->item->employee_id) {
+                $this->addError($errorKey, 'Jadwal cicilan kasbon tidak valid untuk karyawan ini. Muat ulang halaman.');
+                $isValid = false;
+
+                continue;
+            }
+
+            $maxAmount = max(0, round((float) $installment->cashAdvance->remaining_amount, 2));
+            if ((float) $amountValue > $maxAmount + 0.009) {
+                $this->addError(
+                    $errorKey,
+                    'Nominal potongan tidak boleh melebihi sisa kasbon Rp '.number_format($maxAmount, 0, ',', '.').'.'
+                );
+                $isValid = false;
+
+                continue;
+            }
+
+            $this->resetValidation($errorKey);
+        }
+
+        return $isValid;
+    }
+
     public function resetKasbonDeduction(int $index): void
     {
         if (! $this->isEditable || ! isset($this->deductionRows[$index])) {
@@ -908,9 +1032,25 @@ class ManageItem extends Component
 
         $total = (float) ($this->deductionRows[$index]['installment_total_amount'] ?? 0);
         $paid = (float) ($this->deductionRows[$index]['installment_paid_amount'] ?? 0);
-        $this->deductionRows[$index]['amount'] = max(0.0, round($total - $paid, 2));
+
+        if ($total <= 0 && ! empty($this->deductionRows[$index]['cash_advance_installment_id'])) {
+            $inst = CashAdvanceInstallment::find($this->deductionRows[$index]['cash_advance_installment_id']);
+            if ($inst) {
+                $total = (float) $inst->amount;
+                $paid = (float) $inst->paid_amount;
+                $this->deductionRows[$index]['installment_total_amount'] = $total;
+                $this->deductionRows[$index]['installment_paid_amount'] = $paid;
+            }
+        }
+
+        $normalAmount = max(0.0, round($total - $paid, 2));
+        $this->deductionRows[$index]['amount'] = $normalAmount;
         $this->deductionRows[$index]['is_enabled'] = true;
+        $this->resetValidation("deductionRows.{$index}.amount");
+        $this->syncAutoBpjsAndTax();
         $this->clearComputedProperties();
+
+        $this->dispatch('deduction-reset-'.$index, amount: $normalAmount);
     }
 
     public function clearComputedProperties(): void
@@ -927,7 +1067,20 @@ class ManageItem extends Component
             $this->totalCompanyContributions,
             $this->costToCompany,
             $this->estimatedNetSalary,
+            $this->employeeTotalRemainingCashAdvance,
         );
+    }
+
+    public function getEmployeeTotalRemainingCashAdvanceProperty(): float
+    {
+        if (! $this->item->employee_id) {
+            return 0.0;
+        }
+
+        return (float) CashAdvance::query()
+            ->where('employee_id', $this->item->employee_id)
+            ->whereIn('status', [CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::ACTIVE->value])
+            ->sum('remaining_amount');
     }
 
     public function getGrossSalaryProperty(): float
@@ -1508,7 +1661,10 @@ class ManageItem extends Component
         }
 
         try {
-            $this->persistItemLines($service);
+            if (! $this->persistItemLines($service)) {
+                return;
+            }
+
             $this->loadComponentRows();
 
             $this->dispatch('swal:alert', [
@@ -2463,10 +2619,10 @@ class ManageItem extends Component
     /**
      * Persist payroll item allowances and deductions, skipping incomplete rows.
      */
-    public function persistItemLines(?PayrollService $service = null): void
+    public function persistItemLines(?PayrollService $service = null): bool
     {
-        if (! $this->isEditable) {
-            return;
+        if (! $this->isEditable || ! $this->validateCashAdvanceDeductionRows()) {
+            return false;
         }
 
         try {
@@ -2516,7 +2672,7 @@ class ManageItem extends Component
             $service = $service ?? app(PayrollService::class);
             $user = auth()->user() ?? $this->period->creator ?? User::first();
             if (! $user) {
-                return;
+                return false;
             }
 
             $this->item = $service->syncItemLines(
@@ -2531,6 +2687,8 @@ class ManageItem extends Component
             $this->loadComponentRows();
             $this->clearComputedProperties();
             $this->lastSavedAt = now()->format('H:i:s');
+
+            return true;
         } catch (Throwable $e) {
             Log::warning('Payroll persistItemLines error: '.$e->getMessage());
             throw $e;
@@ -2557,7 +2715,16 @@ class ManageItem extends Component
         }
 
         try {
-            $this->persistItemLines($service);
+            if (! $this->persistItemLines($service)) {
+                $errors = $this->getErrorBag();
+                $this->dispatch('swal:alert', [
+                    'type' => 'error',
+                    'title' => $errors->isNotEmpty() ? 'Periksa Data Komponen Gaji' : 'Gagal Menyimpan',
+                    'message' => $errors->first() ?: 'Komponen gaji belum tersimpan. Silakan periksa kembali data dan coba lagi.',
+                ]);
+
+                return;
+            }
 
             $this->dispatch('swal:alert', [
                 'type' => 'success',
@@ -2700,7 +2867,7 @@ class ManageItem extends Component
             'employee.position',
             'employee.detail',
             'lines.salaryComponent',
-            'lines.cashAdvanceInstallment',
+            'lines.cashAdvanceInstallment.cashAdvance',
             'updater',
             'approver',
         ]);
@@ -2712,8 +2879,18 @@ class ManageItem extends Component
         $disabledCompanyKeys = array_keys(array_filter($this->companyBpjsStatus, fn ($v) => ! $v));
         $enabledCompanyKeys = array_keys(array_filter($this->companyBpjsStatus, fn ($v) => (bool) $v));
         $notesData = [];
-        if (! empty($this->item->notes) && str_starts_with($this->item->notes, '{')) {
-            $notesData = json_decode($this->item->notes, true) ?: [];
+        $textNote = null;
+        if (! empty($this->item->notes)) {
+            $trimmed = trim((string) $this->item->notes);
+            if (str_starts_with($trimmed, '{')) {
+                $notesData = json_decode($trimmed, true) ?: [];
+                $textNote = $notesData['text_note'] ?? null;
+            } else {
+                $textNote = $trimmed;
+            }
+        }
+        if ($textNote) {
+            $notesData['text_note'] = $textNote;
         }
         $notesData['disabled_company_bpjs'] = $disabledCompanyKeys;
         $notesData['enabled_company_bpjs'] = $enabledCompanyKeys;

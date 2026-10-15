@@ -17,7 +17,7 @@
 
             <!-- 2. Modal Body: Daftar Karyawan Kontrak Segera Berakhir -->
             <div class="modal-body p-3" style="max-height: 70vh; overflow-y: auto;">
-                @if (isset($expiringEmployees) && $expiringEmployees->isNotEmpty())
+                @if (isset($expiringEmployees) && $expiringEmployees->total() > 0)
                     <div class="d-flex flex-column" style="gap: 10px;">
                         @foreach ($expiringEmployees as $emp)
                             @php
@@ -79,6 +79,11 @@
                             </div>
                         @endforeach
                     </div>
+                    @if ($expiringEmployees->hasPages())
+                        <div class="d-flex justify-content-center mt-3">
+                            {{ $expiringEmployees->links('livewire.custom-pagination') }}
+                        </div>
+                    @endif
                 @else
                     <div class="text-center py-5">
                         <i class="fas fa-check-circle text-success mb-2" style="font-size: 36px;"></i>
@@ -91,8 +96,8 @@
             <!-- 3. Modal Footer -->
             <div class="modal-footer d-flex justify-content-between align-items-center" style="background-color: #ffffff; border-top: 1px solid #f1f5f9; padding: 12px 20px;">
                 <div style="font-size: 12.5px; color: #1e293b;">
-                    <span>Total:</span> <span class="font-weight-600 text-dark">{{ isset($expiringEmployees) ? $expiringEmployees->count() : 0 }} Karyawan</span>
-                    @if (isset($expiringEmployees) && $expiringEmployees->isNotEmpty())
+                    <span>Total:</span> <span class="font-weight-600 text-dark">{{ isset($expiringEmployees) ? $expiringEmployees->total() : 0 }} Karyawan</span>
+                    @if (isset($expiringEmployees) && $expiringEmployees->total() > 0)
                         <span class="text-danger font-weight-500 ml-1">perlu ditindaklanjuti</span>
                     @endif
                 </div>

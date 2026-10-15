@@ -8,7 +8,7 @@
                 </li>
             @else
                 <li class="page-item">
-                    <button type="button" wire:click="previousPage" wire:loading.attr="disabled" class="page-link" aria-label="Previous">
+                    <button type="button" wire:click="previousPage('{{ $paginator->getPageName() }}')" wire:loading.attr="disabled" class="page-link" aria-label="Previous">
                         <i class="fas fa-chevron-left"></i>
                     </button>
                 </li>
@@ -32,7 +32,7 @@
                             </li>
                         @else
                             <li class="page-item">
-                                <button type="button" wire:click="gotoPage({{ $page }})" wire:loading.attr="disabled" class="page-link">
+                                <button type="button" wire:click="gotoPage({{ $page }}, '{{ $paginator->getPageName() }}')" wire:loading.attr="disabled" class="page-link">
                                     {{ $page }}
                                 </button>
                             </li>
@@ -44,7 +44,7 @@
             {{-- Next Page Link --}}
             @if ($paginator->hasMorePages())
                 <li class="page-item">
-                    <button type="button" wire:click="nextPage" wire:loading.attr="disabled" class="page-link" aria-label="Next">
+                    <button type="button" wire:click="nextPage('{{ $paginator->getPageName() }}')" wire:loading.attr="disabled" class="page-link" aria-label="Next">
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </li>

@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\PayrollPeriodStatus;
 use App\Models\PayrollPeriod;
 use App\Models\User;
 
@@ -43,12 +44,20 @@ class PayrollPeriodPolicy
 
     public function approve(User $user, PayrollPeriod $period): bool
     {
-        return $user->hasRole('direktur');
+        return $user->hasRole('direktur')
+            && in_array($period->status, [
+                PayrollPeriodStatus::SUBMITTED,
+                PayrollPeriodStatus::APPROVED,
+            ], true);
     }
 
     public function reject(User $user, PayrollPeriod $period): bool
     {
-        return $user->hasRole('direktur');
+        return $user->hasRole('direktur')
+            && in_array($period->status, [
+                PayrollPeriodStatus::SUBMITTED,
+                PayrollPeriodStatus::APPROVED,
+            ], true);
     }
 
     public function recordPayment(User $user, PayrollPeriod $period): bool

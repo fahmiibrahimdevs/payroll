@@ -24,8 +24,25 @@
                         </div>
                         <div class="dropdown-list-content dropdown-list-icons" style="max-height: 360px; overflow-y: auto;">
                             @forelse ($navbarNotifications ?? [] as $item)
+                                @php
+                                    $itemTitle = $item['title'] ?? '';
+                                    $itemIconStyle = match (true) {
+                                        str_contains($itemTitle, 'Karyawan Nonaktif'),
+                                        str_contains($itemTitle, 'Data Payroll'),
+                                        str_contains($itemTitle, 'Kontrak'),
+                                        str_contains($itemTitle, 'Cicilan'),
+                                        str_contains($itemTitle, 'Perlu Diperiksa') => 'background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); box-shadow: 0 5px 12px rgba(109, 40, 217, 0.28);',
+                                        str_contains($itemTitle, 'Kasbon'),
+                                        str_contains($itemTitle, 'Pembayaran Kasbon') => 'background: linear-gradient(135deg, #f59e0b 0%, #ea8c00 100%); box-shadow: 0 5px 12px rgba(234, 140, 0, 0.28);',
+                                        $item['type'] === 'success' => 'background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 5px 12px rgba(22, 163, 74, 0.28);',
+                                        str_contains($itemTitle, 'Penggajian'),
+                                        str_contains($itemTitle, 'Periode'),
+                                        str_contains($itemTitle, 'Slip') => 'background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 5px 12px rgba(37, 99, 235, 0.28);',
+                                        default => 'background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 5px 12px rgba(37, 99, 235, 0.28);',
+                                    };
+                                @endphp
                                 <a href="{{ $item['url'] }}" class="dropdown-item dropdown-item-unread" style="padding: 12px 16px; border-bottom: 1px solid #f8fafc; text-decoration: none; display: flex; align-items: flex-start;">
-                                    <div class="dropdown-item-icon {{ $item['type'] === 'danger' ? 'bg-danger' : ($item['type'] === 'warning' ? 'bg-warning' : ($item['type'] === 'success' ? 'bg-success' : 'bg-primary')) }} text-white mr-3" style="width: 36px; height: 36px; line-height: 36px; border-radius: 10px; font-size: 13px; text-align: center; flex-shrink: 0;">
+                                    <div class="dropdown-item-icon text-white mr-3" style="width: 36px; height: 36px; line-height: 36px; border-radius: 10px; font-size: 13px; text-align: center; flex-shrink: 0; {{ $itemIconStyle }}">
                                         <i class="{{ $item['icon'] }}"></i>
                                     </div>
                                     <div class="dropdown-item-desc" style="margin-left: 0; flex-grow: 1;">

@@ -33,4 +33,17 @@ abstract class TestCase extends BaseTestCase
 
         return $user;
     }
+
+    protected function createDeveloperUser(): User
+    {
+        $role = Role::firstOrCreate(
+            ['name' => 'developer'],
+            ['display_name' => 'Developer', 'description' => 'Developer sistem'],
+        );
+
+        $user = User::factory()->create(['is_active' => true]);
+        $user->syncRoles([$role]);
+
+        return $user;
+    }
 }

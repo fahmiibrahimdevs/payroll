@@ -151,10 +151,40 @@
 
                         <div class="form-group">
                             <label class="font-weight-600">Alamat Kantor Lengkap</label>
-                            <textarea wire:model="address" class="form-control @error('address') is-invalid @enderror" rows="3" placeholder="Alamat jalan, gedung, nomor, kecamatan, kota, kode pos"></textarea>
+                            <textarea wire:model="address" class="form-control @error('address') is-invalid @enderror" rows="2" placeholder="Nama jalan, gedung, nomor, RT/RW, kelurahan/kecamatan"></textarea>
                             @error('address')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-5">
+                                <div class="form-group">
+                                    <label class="font-weight-600">Kota / Kabupaten</label>
+                                    <input type="text" wire:model="city" class="form-control @error('city') is-invalid @enderror" placeholder="Contoh: Jakarta Selatan">
+                                    @error('city')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="font-weight-600">Provinsi</label>
+                                    <input type="text" wire:model="province" class="form-control @error('province') is-invalid @enderror" placeholder="Contoh: DKI Jakarta">
+                                    @error('province')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label class="font-weight-600">Kode Pos</label>
+                                    <input type="text" wire:model="postal_code" class="form-control @error('postal_code') is-invalid @enderror" placeholder="Contoh: 12190">
+                                    @error('postal_code')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            </div>
                         </div>
 
                         <hr>
@@ -210,10 +240,8 @@
                                                x-on:input="
                                                    let raw = $el.value.replace(/\D/g, '');
                                                    $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                                   $wire.$set('bpjs_jp_cap', raw ? parseFloat(raw) : 0, false);
                                                "
-                                               x-on:input.debounce.350ms="$wire.set('bpjs_jp_cap', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : 0)"
-                                               x-on:change="$wire.set('bpjs_jp_cap', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : 0)"
-                                               x-on:blur="$wire.set('bpjs_jp_cap', $el.value.replace(/\D/g, '') ? parseFloat($el.value.replace(/\D/g, '')) : 0)"
                                                value="{{ !empty($bpjs_jp_cap) ? number_format((float) $bpjs_jp_cap, 0, ',', '.') : '' }}"
                                                class="form-control text-right @error('bpjs_jp_cap') is-invalid @enderror"
                                                placeholder="0"

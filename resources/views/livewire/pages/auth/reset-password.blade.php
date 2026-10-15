@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Auth\Events\PasswordReset;
+use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Session;
@@ -48,6 +49,13 @@ new #[Layout('layouts.guest')] class extends Component
                 ])->save();
 
                 event(new PasswordReset($user));
+                app(ActivityLogService::class)->info(
+                    action: 'PASSWORD_RESET',
+                    module: 'auth',
+                    message: 'User password reset',
+                    context: ['user_id' => $user->id],
+                    userId: $user->id
+                );
             }
         );
 

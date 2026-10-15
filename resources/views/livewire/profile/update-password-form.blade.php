@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
+use App\Services\ActivityLogService;
 use Livewire\Volt\Component;
 
 new class extends Component
@@ -28,9 +29,18 @@ new class extends Component
             throw $e;
         }
 
-        Auth::user()->update([
+        $user = Auth::user();
+        $user->update([
             'password' => Hash::make($validated['password']),
         ]);
+
+        app(ActivityLogService::class)->info(
+            action: 'PASSWORD_CHANGED',
+            module: 'auth',
+            message: 'User password changed',
+            context: ['user_id' => $user->id],
+            userId: $user->id
+        );
 
         $this->reset('current_password', 'password', 'password_confirmation');
 

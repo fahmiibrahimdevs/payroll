@@ -55,6 +55,22 @@ class Employee extends Model
     }
 
     /**
+     * Limit employees to those whose employment overlaps a payroll period.
+     */
+    public function scopeEmployedDuring(Builder $query, string $startDate, string $endDate): Builder
+    {
+        return $query
+            ->where(function (Builder $query) use ($endDate): void {
+                $query->whereNull('join_date')
+                    ->orWhereDate('join_date', '<=', $endDate);
+            })
+            ->where(function (Builder $query) use ($startDate): void {
+                $query->whereNull('contract_end_date')
+                    ->orWhereDate('contract_end_date', '>=', $startDate);
+            });
+    }
+
+    /**
      * Get the user account linked to the employee.
      */
     public function user(): BelongsTo

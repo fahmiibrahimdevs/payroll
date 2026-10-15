@@ -31,6 +31,12 @@ class Index extends Component
 
     public ?string $address = null;
 
+    public ?string $city = null;
+
+    public ?string $province = null;
+
+    public ?string $postal_code = null;
+
     public ?string $tax_identification_number = null;
 
     public bool $enable_pph21 = true;
@@ -80,6 +86,9 @@ class Index extends Component
         $this->website = $profile->website;
         $this->email_domain = $profile->email_domain ?? $profile->getEmailDomain();
         $this->address = $profile->address;
+        $this->city = $profile->city;
+        $this->province = $profile->province;
+        $this->postal_code = $profile->postal_code;
         $this->tax_identification_number = $profile->tax_identification_number;
         $this->enable_pph21 = (bool) $profile->enable_pph21;
         $this->include_bpjs_in_tax = (bool) $profile->include_bpjs_in_tax;
@@ -109,6 +118,9 @@ class Index extends Component
             'website' => 'nullable|string|max:150',
             'email_domain' => 'nullable|string|max:100',
             'address' => 'nullable|string|max:500',
+            'city' => 'nullable|string|max:100',
+            'province' => 'nullable|string|max:100',
+            'postal_code' => 'nullable|string|max:20',
             'tax_identification_number' => 'nullable|string|max:50',
             'enable_pph21' => 'boolean',
             'include_bpjs_in_tax' => 'boolean',
@@ -154,6 +166,9 @@ class Index extends Component
                 'website' => $this->website,
                 'email_domain' => $this->email_domain,
                 'address' => $this->address,
+                'city' => $this->city,
+                'province' => $this->province,
+                'postal_code' => $this->postal_code,
                 'tax_identification_number' => $this->tax_identification_number,
                 'enable_pph21' => $this->enable_pph21,
                 'include_bpjs_in_tax' => $this->include_bpjs_in_tax,
@@ -174,6 +189,7 @@ class Index extends Component
 
             $this->currentLogoUrl = $profile->logo_url;
             $this->logo = null;
+            $this->dispatch('company-profile-updated', logoUrl: $profile->logo_url, code: $profile->getDisplayCode());
 
             $this->dispatch('swal:alert', [
                 'type' => 'success',

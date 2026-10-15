@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Employees;
 
-use App\Enums\PayrollPeriodStatus;
 use App\Enums\SalaryAdjustmentType;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
@@ -64,6 +63,18 @@ class Show extends Component
         if (in_array($tab, ['kepegawaian', 'pribadi', 'riwayat-gaji', 'pajak-bpjs'], true)) {
             $this->activeTab = $tab;
         }
+    }
+
+    public function editEmployeeData(): mixed
+    {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
+        session()->put('employee_edit_handoff', [
+            'id' => $this->employee->id,
+            'section' => 'kepegawaian',
+        ]);
+
+        return redirect()->route('employees.index');
     }
 
     public function openAdjustmentModal(): void
@@ -141,7 +152,7 @@ class Show extends Component
         }
     }
 
-    public function deleteSalaryHistory(int $historyId): void
+    public function deleteSalaryHistory(int $historyId, EmployeeService $employeeService): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
 
@@ -167,15 +178,7 @@ class Show extends Component
             return;
         }
 
-        $history->delete();
-
-        // Sinkronisasi gaji pokok karyawan ke riwayat paling akhir yang masih ada
-        $latest = $this->employee->salaryHistories()->orderByDesc('effective_date')->orderByDesc('id')->first();
-        if ($latest) {
-            $this->employee->update(['basic_salary' => $latest->new_salary]);
-        }
-
-        $this->employee->refresh();
+        $this->employee = $employeeService->deleteSalaryHistory($history, auth()->user());
         $this->employee->load(['salaryHistories.changer']);
 
         $this->dispatch('swal:alert', [
@@ -199,11 +202,16 @@ class Show extends Component
             'employee.department',
             'employee.position',
             'employee.detail',
-            'lines',
+            'allowanceLines',
+            'deductionLines',
             'payrollPeriod',
             'payer',
             'approver',
         ])->where('employee_id', $this->employee->id)->findOrFail($itemId);
+
+        if (auth()->user()?->hasRole('karyawan')) {
+            abort_unless($this->previewItem->isOfficiallyApproved(), 403, 'Slip gaji belum disetujui Direktur.');
+        }
 
         $this->dispatch('open-modal', ['id' => 'previewSlipModal']);
     }
@@ -236,20 +244,38 @@ class Show extends Component
      */
     public function isApprovedItem(?PayrollItem $item): bool
     {
-        if (! $item) {
-            return false;
+        return $item?->isOfficiallyApproved() ?? false;
+    }
+
+    /**
+     * Generate WhatsApp click-to-chat link for an employee's payslip.
+     */
+    public function getWhatsappLink(?PayrollItem $item): string
+    {
+        if (! $item || ! $item->employee) {
+            return '#';
         }
 
-        if ($item->isApproved() || ! empty($item->approved_at)) {
-            return true;
+        $phone = $item->employee->detail?->phone ?? '';
+        $cleanedPhone = preg_replace('/[^0-9]/', '', $phone);
+
+        if (str_starts_with($cleanedPhone, '0')) {
+            $cleanedPhone = '62'.substr($cleanedPhone, 1);
         }
 
-        $periodStatus = $item->payrollPeriod?->status;
-        $statusValue = $periodStatus instanceof PayrollPeriodStatus
-            ? $periodStatus->value
-            : (is_string($periodStatus) ? $periodStatus : null);
+        $company = CompanyProfile::getProfile();
+        $periodLabel = $item->payrollPeriod?->period_label ?? 'Bulan Ini';
+        $message = "Halo {$item->employee->full_name},\n\n";
+        $message .= "Berikut adalah ringkasan slip gaji Anda untuk {$periodLabel} dari {$company->name}:\n";
+        $message .= "• No Slip: {$item->payslip_number}\n";
+        $message .= "• Gaji Pokok: {$item->formatted_basic_salary}\n";
+        $message .= "• Total Tunjangan (+): {$item->formatted_total_allowances}\n";
+        $message .= "• Total Potongan (-): {$item->formatted_total_deductions}\n";
+        $message .= "• Gaji Bersih (Take Home Pay): {$item->formatted_net_salary}\n\n";
+        $message .= 'Status Pembayaran: '.($item->payment_status === 'paid' ? 'LUNAS / DIBAYAR' : 'PROSES')."\n";
+        $message .= 'Terima kasih atas kerja keras Anda!';
 
-        return in_array($statusValue, [PayrollPeriodStatus::APPROVED->value, PayrollPeriodStatus::PAID->value], true);
+        return 'https://wa.me/'.$cleanedPhone.'?text='.rawurlencode($message);
     }
 
     public function getMonthlySalaryDataProperty(): array

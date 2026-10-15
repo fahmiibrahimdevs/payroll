@@ -10,6 +10,7 @@ use App\Enums\TaxMethod;
 use App\Enums\TaxRecipientType;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
+use App\Models\User;
 use App\Services\EmployeeService;
 use Illuminate\Validation\Rule;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
@@ -107,7 +108,13 @@ class EmployeeForm extends Form
             'birth_date' => ['nullable', 'date'],
             'address' => ['nullable', 'string', 'max:1000'],
             'phone' => ['nullable', 'string', 'max:50'],
-            'email' => ['nullable', 'email', 'max:255', Rule::unique('employee_details', 'email')->ignore($detailId)],
+            'email' => [
+                'nullable',
+                'email',
+                'max:255',
+                Rule::unique('employee_details', 'email')->ignore($detailId),
+                Rule::unique(User::class, 'email')->ignore($this->employee?->user_id),
+            ],
             'bank_name' => ['nullable', 'string', 'max:100'],
             'bank_account_number' => ['nullable', 'string', 'max:100'],
             'bank_account_name' => ['nullable', 'string', 'max:255'],

@@ -29,6 +29,11 @@ class PasswordUpdateTest extends TestCase
             ->assertNoRedirect();
 
         $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
+        $this->assertDatabaseHas('activity_logs', [
+            'user_id' => $user->id,
+            'module' => 'auth',
+            'action' => 'PASSWORD_CHANGED',
+        ]);
     }
 
     public function test_correct_password_must_be_provided_to_update_password(): void

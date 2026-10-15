@@ -174,15 +174,15 @@
                                         {{ $selectedEmployee->detail?->address ?: '-' }}
                                     </div>
                                 </div>
-                                @if (auth()->user()->hasRole('admin'))
+                                @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur'))
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
                                             <div class="emp-tile-icon"><i class="fas fa-file-pdf"></i></div>
                                             <span>Berkas CV</span>
                                         </div>
                                         <div class="emp-tile-right">
-                                            @if ($selectedEmployee->detail?->cv_url)
-                                                <a href="{{ $selectedEmployee->detail->cv_url }}" target="_blank" class="btn btn-sm btn-outline-primary text-nowrap">
+                                            @if ($selectedEmployee->detail?->curriculum_vitae)
+                                                <a href="{{ route('employees.documents.cv', $selectedEmployee) }}" target="_blank" class="btn btn-sm btn-outline-primary text-nowrap">
                                                     <i class="fas fa-download mr-1"></i> Unduh CV
                                                 </a>
                                             @else

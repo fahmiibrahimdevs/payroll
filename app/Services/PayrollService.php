@@ -34,6 +34,55 @@ use InvalidArgumentException;
 
 class PayrollService
 {
+    public function __construct(
+        protected ActivityLogService $logger
+    ) {}
+
+    /**
+     * Write an audit event for a payroll period mutation.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    private function logPeriodActivity(string $action, string $message, PayrollPeriod $period, User $user, array $context = []): void
+    {
+        $this->logger->info(
+            action: $action,
+            module: 'payrolls',
+            message: $message,
+            context: array_merge([
+                'payroll_period_id' => $period->id,
+                'reference_number' => $period->reference_number,
+                'month' => $period->month,
+                'year' => $period->year,
+            ], $context),
+            userId: $user->id,
+        );
+    }
+
+    /**
+     * Write an audit event for a payslip mutation.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    private function logItemActivity(string $action, string $message, PayrollItem $item, User $user, array $context = []): void
+    {
+        $item->loadMissing('payrollPeriod');
+
+        $this->logger->info(
+            action: $action,
+            module: 'payrolls',
+            message: $message,
+            context: array_merge([
+                'payroll_period_id' => $item->payroll_period_id,
+                'reference_number' => $item->payrollPeriod?->reference_number,
+                'payroll_item_id' => $item->id,
+                'employee_id' => $item->employee_id,
+                'payslip_number' => $item->payslip_number,
+            ], $context),
+            userId: $user->id,
+        );
+    }
+
     /**
      * Get paginated payroll periods for index list.
      */
@@ -761,7 +810,7 @@ class PayrollService
             // Pull active employees with details
             $activeEmployees = Employee::query()
                 ->where('status', EmployeeStatus::ACTIVE)
-                ->where('join_date', '<=', $endDate->toDateString())
+                ->employedDuring($startDate->toDateString(), $endDate->toDateString())
                 ->with('detail')
                 ->orderBy('full_name')
                 ->get();
@@ -785,6 +834,12 @@ class PayrollService
 
             $company = CompanyProfile::getProfile();
             $taxService = app(TaxCalculationService::class);
+            $systemComponents = SalaryComponent::query()
+                ->whereIn('code', ['PPH21', 'TUNJ_PPH21', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP'])
+                ->get()
+                ->keyBy('code');
+            $pendingPayrollLines = [];
+            $itemsToRecalculate = [];
             if ($month === 12 && $company->enable_pph21) {
                 $taxService->preloadFinalPeriodHistory($activeEmployees->modelKeys(), $year, $month);
             }
@@ -815,6 +870,7 @@ class PayrollService
                 // Check pending cash advance installments due in or before this month
                 $itemAllowances = 0;
                 $itemDeductions = 0;
+                $itemLines = collect();
 
                 // Active cash advances for this employee
                 $activeAdvances = $activeAdvancesByEmployee->get($employee->id, collect());
@@ -824,7 +880,7 @@ class PayrollService
                     if ($installment) {
                         $deductionAmount = (float) ($installment->amount - $installment->paid_amount);
                         if ($deductionAmount > 0) {
-                            PayrollItemLine::create([
+                            $this->createOrQueuePayrollItemLine([
                                 'payroll_item_id' => $item->id,
                                 'cash_advance_installment_id' => $installment->id,
                                 'name' => "Potongan Kasbon ({$advance->reference_number} Cicilan #{$installment->installment_number})",
@@ -832,18 +888,26 @@ class PayrollService
                                 'category' => PayrollLineCategory::CASH_ADVANCE,
                                 'amount' => $deductionAmount,
                                 'notes' => 'Potongan otomatis dari kasbon aktif',
-                            ]);
+                            ], $pendingPayrollLines);
                             $itemDeductions += $deductionAmount;
                         }
                     }
                 }
 
+                // Reuse the employee, period, and lines already in memory during tax sync.
+                $item->setRelation('employee', $employee)
+                    ->setRelation('payrollPeriod', $period)
+                    ->setRelation('lines', $itemLines);
+
                 if ($employee->detail && $company->enable_pph21) {
-                    $this->recalculateItemTax($item, $company, taxService: $taxService);
-                    $this->recalculateItem($item, updatePeriodTotals: false);
-                    $itemAllowances = (float) $item->total_allowances;
-                    $itemDeductions = (float) $item->total_deductions;
-                    $netSalary = (float) $item->net_salary;
+                    $this->recalculateItemTax(
+                        $item,
+                        $company,
+                        taxService: $taxService,
+                        systemComponents: $systemComponents,
+                        pendingLines: $pendingPayrollLines,
+                    );
+                    $itemsToRecalculate[] = $item->id;
                 } else {
                     $netSalary = max(0, $basicSalary + $itemAllowances - $itemDeductions);
                     $item->update([
@@ -855,7 +919,14 @@ class PayrollService
 
             }
 
+            $this->insertPayrollItemLines($pendingPayrollLines);
+            $this->recalculateItems($itemsToRecalculate);
             $this->recalculatePeriod($period);
+
+            $this->logPeriodActivity('PERIOD_CREATED', 'Payroll period created', $period, $user, [
+                'employee_count' => $activeEmployees->count(),
+                'status' => $period->status->value,
+            ]);
 
             return $period;
         });
@@ -883,8 +954,11 @@ class PayrollService
         }
 
         $joinDate = $employee->join_date ? Carbon::parse($employee->join_date)->startOfDay() : null;
+        $contractEndDate = $employee->contract_end_date ? Carbon::parse($employee->contract_end_date)->endOfDay() : null;
+        $workedStart = $joinDate && $joinDate->gt($startDate) ? $joinDate : $startDate->copy();
+        $workedEnd = $contractEndDate && $contractEndDate->lt($endDate) ? $contractEndDate : $endDate->copy();
 
-        if ($joinDate && $joinDate->gt($endDate)) {
+        if ($workedStart->gt($workedEnd)) {
             return [
                 'basic_salary' => 0.0,
                 'full_salary' => $fullSalary,
@@ -894,8 +968,7 @@ class PayrollService
             ];
         }
 
-        // Prorata only applies if employee joined during this period (startDate < joinDate <= endDate)
-        if (! $joinDate || $joinDate->lte($startDate)) {
+        if ($workedStart->equalTo($startDate) && $workedEnd->equalTo($endDate)) {
             return [
                 'basic_salary' => $fullSalary,
                 'full_salary' => $fullSalary,
@@ -905,10 +978,10 @@ class PayrollService
             ];
         }
 
-        // Joined during the period: count Monday - Saturday from join_date to endDate
+        // Prorate the active employment days in the period on a Monday-to-Saturday basis.
         $workedDays = 0;
-        $curr = $joinDate->copy();
-        while ($curr->lte($endDate)) {
+        $curr = $workedStart->copy();
+        while ($curr->lte($workedEnd)) {
             if (! $curr->isSunday()) {
                 $workedDays++;
             }
@@ -942,6 +1015,10 @@ class PayrollService
             throw new InvalidArgumentException('Karyawan belum bergabung pada periode penggajian ini.');
         }
 
+        if ($employee->contract_end_date && $employee->contract_end_date->lt($period->start_date)) {
+            throw new InvalidArgumentException('Kontrak karyawan telah berakhir sebelum periode penggajian ini.');
+        }
+
         $existing = $period->items()->where('employee_id', $employee->id)->first();
         if ($existing) {
             return $existing;
@@ -949,7 +1026,7 @@ class PayrollService
 
         $employee->loadMissing(['detail', 'position', 'department']);
 
-        return DB::transaction(function () use ($period, $employee) {
+        return DB::transaction(function () use ($period, $employee, $user) {
             $date = Carbon::createFromDate($period->year, $period->month, 1)->startOfMonth();
             $payslipNumber = $this->generatePayslipNumber($date);
 
@@ -1016,6 +1093,8 @@ class PayrollService
 
             $this->recalculatePeriod($period);
 
+            $this->logItemActivity('EMPLOYEE_ADDED', 'Employee added to payroll period', $item, $user);
+
             return $item;
         });
     }
@@ -1039,10 +1118,7 @@ class PayrollService
             ->with(['detail', 'position', 'department'])
             ->where('status', EmployeeStatus::ACTIVE)
             ->whereNotIn('id', $existingIds)
-            ->where(function ($q) use ($period) {
-                $q->whereNull('join_date')
-                    ->orWhere('join_date', '<=', $period->end_date);
-            })
+            ->employedDuring($period->start_date->toDateString(), $period->end_date->toDateString())
             ->orderBy('full_name')
             ->get();
 
@@ -1069,7 +1145,7 @@ class PayrollService
         $items = $period->items()->with(['employee.detail', 'lines'])->get();
         $updatedCount = 0;
 
-        return DB::transaction(function () use ($period, $items, $company, &$updatedCount) {
+        return DB::transaction(function () use ($period, $items, $company, $user, &$updatedCount) {
             foreach ($items as $item) {
                 $employee = $item->employee;
                 if (! $employee) {
@@ -1096,6 +1172,10 @@ class PayrollService
 
             $this->recalculatePeriod($period);
 
+            $this->logPeriodActivity('EMPLOYEES_SYNCED', 'Payroll items synchronized with employee master data', $period, $user, [
+                'updated_count' => $updatedCount,
+            ]);
+
             return $updatedCount;
         });
     }
@@ -1117,7 +1197,7 @@ class PayrollService
             return $item;
         }
 
-        return DB::transaction(function () use ($item, $period, $employee) {
+        return DB::transaction(function () use ($item, $period, $employee, $user) {
             $company = CompanyProfile::getProfile();
             $salaryInfo = $this->calculateProratedSalary($employee, $period);
             $newBasic = (float) $salaryInfo['basic_salary'];
@@ -1135,6 +1215,8 @@ class PayrollService
             $this->recalculateItemTax($item, $company);
             $this->recalculateItem($item);
             $this->recalculatePeriod($period);
+
+            $this->logItemActivity('EMPLOYEE_SYNCED', 'Payslip synchronized with employee master data', $item, $user);
 
             return $item->fresh();
         });
@@ -1326,6 +1408,11 @@ class PayrollService
             ]);
             $item->payrollPeriod->update(['updated_by' => $user->id]);
 
+            $this->logItemActivity('PAYSLIP_UPDATED', 'Payslip components updated', $item, $user, [
+                'allowance_row_count' => count($allowanceRows),
+                'deduction_row_count' => count($deductionRows),
+            ]);
+
             return $item->fresh([
                 'lines.salaryComponent',
                 'lines.cashAdvanceInstallment',
@@ -1354,7 +1441,7 @@ class PayrollService
         $type = PayrollLineType::tryFrom($data['type'] ?? '') ?? PayrollLineType::ALLOWANCE;
         $category = PayrollLineCategory::tryFrom($data['category'] ?? '') ?? ($type === PayrollLineType::ALLOWANCE ? PayrollLineCategory::ALLOWANCE : PayrollLineCategory::DEDUCTION);
 
-        return DB::transaction(function () use ($item, $data, $amount, $type, $category) {
+        return DB::transaction(function () use ($item, $data, $amount, $type, $category, $user) {
             $line = PayrollItemLine::create([
                 'payroll_item_id' => $item->id,
                 'salary_component_id' => $data['salary_component_id'] ?? null,
@@ -1366,6 +1453,12 @@ class PayrollService
             ]);
 
             $this->recalculateItem($item);
+
+            $this->logItemActivity('PAYSLIP_LINE_ADDED', 'Payslip component added', $item, $user, [
+                'line_id' => $line->id,
+                'line_type' => $type->value,
+                'line_category' => $category->value,
+            ]);
 
             return $line;
         });
@@ -1388,7 +1481,7 @@ class PayrollService
             throw new InvalidArgumentException('Nominal komponen harus lebih besar dari 0.');
         }
 
-        return DB::transaction(function () use ($line, $item, $data, $amount) {
+        return DB::transaction(function () use ($line, $item, $data, $amount, $user) {
             $line->update([
                 'name' => trim((string) ($data['name'] ?? $line->name)),
                 'amount' => $amount,
@@ -1396,6 +1489,10 @@ class PayrollService
             ]);
 
             $this->recalculateItem($item);
+
+            $this->logItemActivity('PAYSLIP_LINE_UPDATED', 'Payslip component updated', $item, $user, [
+                'line_id' => $line->id,
+            ]);
 
             return $line;
         });
@@ -1413,9 +1510,13 @@ class PayrollService
             throw new InvalidArgumentException('Hanya draf gaji atau revisi yang dapat diubah.');
         }
 
-        DB::transaction(function () use ($line, $item) {
+        DB::transaction(function () use ($line, $item, $user) {
             $line->delete();
             $this->recalculateItem($item);
+
+            $this->logItemActivity('PAYSLIP_LINE_DELETED', 'Payslip component deleted', $item, $user, [
+                'line_id' => $line->id,
+            ]);
         });
     }
 
@@ -1428,7 +1529,9 @@ class PayrollService
         ?array $disabledSystemCodes = null,
         ?array $disabledCompanyBpjsKeys = null,
         ?array $enabledSystemCodes = null,
-        ?TaxCalculationService $taxService = null
+        ?TaxCalculationService $taxService = null,
+        ?Collection $systemComponents = null,
+        ?array &$pendingLines = null
     ): PayrollItem {
         $company = $company ?? CompanyProfile::getProfile();
         $item->loadMissing(['employee.detail', 'lines', 'payrollPeriod']);
@@ -1439,22 +1542,23 @@ class PayrollService
         }
 
         $taxService ??= app(TaxCalculationService::class);
+        $systemComponents ??= SalaryComponent::query()
+            ->whereIn('code', ['PPH21', 'TUNJ_PPH21', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP'])
+            ->get()
+            ->keyBy('code');
         $basicSalary = (float) $item->basic_salary;
         $month = (int) $item->payrollPeriod->month;
         $year = (int) $item->payrollPeriod->year;
 
         // Non-tax allowance lines
-        $currentAllowanceLines = $item->lines()
-            ->where('type', PayrollLineType::ALLOWANCE)
-            ->where('category', '!=', PayrollLineCategory::TAX)
-            ->get();
+        $lines = $item->lines;
+        $currentAllowanceLines = $lines->filter(fn (PayrollItemLine $line) => $line->type === PayrollLineType::ALLOWANCE && $line->category !== PayrollLineCategory::TAX
+        );
 
         // Check if PPh 21 is disabled
         // Priority: Explicit per-employee toggle -> Existing line note -> Global CompanyProfile
-        $pphDeductionLine = $item->lines()
-            ->where('type', PayrollLineType::DEDUCTION)
-            ->where('category', PayrollLineCategory::TAX)
-            ->first();
+        $pphDeductionLine = $lines->first(fn (PayrollItemLine $line) => $line->type === PayrollLineType::DEDUCTION && $line->category === PayrollLineCategory::TAX
+        );
 
         $isPphExplicitlyEnabled = $enabledSystemCodes !== null && in_array('PPH21', $enabledSystemCodes, true);
         $isPphExplicitlyDisabled = $disabledSystemCodes !== null && in_array('PPH21', $disabledSystemCodes, true);
@@ -1472,7 +1576,7 @@ class PayrollService
 
         $supportsMonthlyTax = $taxService->supportsMonthlyEmployeeTax($employee);
         $currentPensionDeduction = $supportsMonthlyTax && ($month === 12 || $item->is_final_tax_period)
-            ? $this->currentPensionDeduction($item, $company, $taxService, $basicSalary, $currentAllowanceLines, $disabledSystemCodes, $enabledSystemCodes)
+            ? $this->currentPensionDeduction($lines, $company, $taxService, $basicSalary, $currentAllowanceLines, $disabledSystemCodes, $enabledSystemCodes)
             : null;
 
         $taxResult = $supportsMonthlyTax
@@ -1491,10 +1595,8 @@ class PayrollService
 
         if ($taxResult !== null) {
             // 1. Sync Gross-Up Tax Allowance Line
-            $taxAllowanceLine = $item->lines()
-                ->where('type', PayrollLineType::ALLOWANCE)
-                ->where('category', PayrollLineCategory::TAX)
-                ->first();
+            $taxAllowanceLine = $lines->first(fn (PayrollItemLine $line) => $line->type === PayrollLineType::ALLOWANCE && $line->category === PayrollLineCategory::TAX
+            );
 
             if (! $isPphDisabled && $taxResult['tax_method'] === TaxMethod::GROSS_UP && $taxResult['tax_allowance'] > 0) {
                 if ($taxAllowanceLine) {
@@ -1504,8 +1606,8 @@ class PayrollService
                         'notes' => 'Tunjangan pajak otomatis skema Gross-Up',
                     ]);
                 } else {
-                    $pph21AllowanceComp = SalaryComponent::where('code', 'TUNJ_PPH21')->first();
-                    PayrollItemLine::create([
+                    $pph21AllowanceComp = $systemComponents->get('TUNJ_PPH21');
+                    $this->createOrQueuePayrollItemLine([
                         'payroll_item_id' => $item->id,
                         'salary_component_id' => $pph21AllowanceComp?->id,
                         'name' => 'Tunjangan PPh 21 (Gross-Up)',
@@ -1513,7 +1615,7 @@ class PayrollService
                         'category' => PayrollLineCategory::TAX,
                         'amount' => $taxResult['tax_allowance'],
                         'notes' => 'Tunjangan pajak otomatis skema Gross-Up',
-                    ]);
+                    ], $pendingLines);
                 }
             } else {
                 $taxAllowanceLine?->delete();
@@ -1522,7 +1624,7 @@ class PayrollService
             // 2. Sync PPh 21 Deduction Line
             if ($isPphDisabled) {
                 if ($isPphExplicitlyDisabled || ($pphDeductionLine && $pphDeductionLine->notes === 'Nonaktif')) {
-                    $pph21Comp = SalaryComponent::where('code', 'PPH21')->first();
+                    $pph21Comp = $systemComponents->get('PPH21');
                     if ($pphDeductionLine) {
                         $pphDeductionLine->update([
                             'name' => 'PPh 21',
@@ -1530,7 +1632,7 @@ class PayrollService
                             'notes' => 'Nonaktif',
                         ]);
                     } else {
-                        PayrollItemLine::create([
+                        $this->createOrQueuePayrollItemLine([
                             'payroll_item_id' => $item->id,
                             'salary_component_id' => $pph21Comp?->id,
                             'name' => 'PPh 21',
@@ -1538,13 +1640,13 @@ class PayrollService
                             'category' => PayrollLineCategory::TAX,
                             'amount' => 0,
                             'notes' => 'Nonaktif',
-                        ]);
+                        ], $pendingLines);
                     }
                 } else {
                     $pphDeductionLine?->delete();
                 }
             } elseif ($taxResult['pph21_amount'] > 0) {
-                $pph21Comp = SalaryComponent::where('code', 'PPH21')->first();
+                $pph21Comp = $systemComponents->get('PPH21');
                 if ($pphDeductionLine) {
                     $pphDeductionLine->update([
                         'name' => 'PPh 21',
@@ -1552,7 +1654,7 @@ class PayrollService
                         'notes' => $taxResult['notes'] ?? 'Potongan PPh 21 otomatis',
                     ]);
                 } else {
-                    PayrollItemLine::create([
+                    $this->createOrQueuePayrollItemLine([
                         'payroll_item_id' => $item->id,
                         'salary_component_id' => $pph21Comp?->id,
                         'name' => 'PPh 21',
@@ -1560,10 +1662,10 @@ class PayrollService
                         'category' => PayrollLineCategory::TAX,
                         'amount' => $taxResult['pph21_amount'],
                         'notes' => $taxResult['notes'] ?? 'Potongan PPh 21 otomatis',
-                    ]);
+                    ], $pendingLines);
                 }
             } elseif ($taxResult['pph21_amount'] < 0) {
-                $pph21Comp = SalaryComponent::where('code', 'PPH21')->first();
+                $pph21Comp = $systemComponents->get('PPH21');
                 $refundName = 'PPh 21 (Lebih Bayar)';
                 $refundNotes = 'Kelebihan potong PPh 21 masa sebelumnya dikembalikan ke karyawan';
                 if ($pphDeductionLine) {
@@ -1573,7 +1675,7 @@ class PayrollService
                         'notes' => $refundNotes,
                     ]);
                 } else {
-                    PayrollItemLine::create([
+                    $this->createOrQueuePayrollItemLine([
                         'payroll_item_id' => $item->id,
                         'salary_component_id' => $pph21Comp?->id,
                         'name' => $refundName,
@@ -1581,7 +1683,7 @@ class PayrollService
                         'category' => PayrollLineCategory::TAX,
                         'amount' => $taxResult['pph21_amount'],
                         'notes' => $refundNotes,
-                    ]);
+                    ], $pendingLines);
                 }
             } else {
                 $pphDeductionLine?->delete();
@@ -1600,11 +1702,9 @@ class PayrollService
                 ['code' => 'BPJS_JP', 'name' => 'BPJS Pensiun (1%)', 'amount' => $bpjsBreakdown['employee']['bpjs_jp'], 'notes' => 'Iuran BPJS Ketenagakerjaan JP 1% dibayar karyawan'],
             ];
 
-            $bpjsComps = SalaryComponent::whereIn('code', ['BPJS_KES', 'BPJS_JHT', 'BPJS_JP'])->get()->keyBy('code');
-            $existingBpjsLines = $item->lines()
-                ->where('type', PayrollLineType::DEDUCTION)
-                ->where('category', PayrollLineCategory::BPJS)
-                ->get();
+            $bpjsComps = $systemComponents;
+            $existingBpjsLines = $lines->filter(fn (PayrollItemLine $line) => $line->type === PayrollLineType::DEDUCTION && $line->category === PayrollLineCategory::BPJS
+            );
 
             foreach ($bpjsConfigs as $cfg) {
                 $compId = $bpjsComps->get($cfg['code'])?->id;
@@ -1633,7 +1733,7 @@ class PayrollService
                                 'notes' => 'Nonaktif',
                             ]);
                         } else {
-                            PayrollItemLine::create([
+                            $this->createOrQueuePayrollItemLine([
                                 'payroll_item_id' => $item->id,
                                 'salary_component_id' => $compId,
                                 'name' => $cfg['name'],
@@ -1641,7 +1741,7 @@ class PayrollService
                                 'category' => PayrollLineCategory::BPJS,
                                 'amount' => 0,
                                 'notes' => 'Nonaktif',
-                            ]);
+                            ], $pendingLines);
                         }
                     } else {
                         $line?->delete();
@@ -1654,7 +1754,7 @@ class PayrollService
                             'notes' => $cfg['notes'],
                         ]);
                     } else {
-                        PayrollItemLine::create([
+                        $this->createOrQueuePayrollItemLine([
                             'payroll_item_id' => $item->id,
                             'salary_component_id' => $compId,
                             'name' => $cfg['name'],
@@ -1662,7 +1762,7 @@ class PayrollService
                             'category' => PayrollLineCategory::BPJS,
                             'amount' => $cfg['amount'],
                             'notes' => $cfg['notes'],
-                        ]);
+                        ], $pendingLines);
                     }
                 }
             }
@@ -1696,9 +1796,8 @@ class PayrollService
                 $hasExplicitCompanyBpjsMeta = true;
             }
 
-            $existingCompLines = $item->lines()
-                ->where('type', PayrollLineType::COMPANY_CONTRIBUTION)
-                ->get();
+            $existingCompLines = $lines->filter(fn (PayrollItemLine $line) => $line->type === PayrollLineType::COMPANY_CONTRIBUTION
+            );
 
             foreach ($compBpjsConfigs as $cfg) {
                 $prefix = explode(' (', $cfg['name'])[0];
@@ -1724,14 +1823,14 @@ class PayrollService
                                 'notes' => 'Nonaktif',
                             ]);
                         } else {
-                            PayrollItemLine::create([
+                            $this->createOrQueuePayrollItemLine([
                                 'payroll_item_id' => $item->id,
                                 'name' => $cfg['name'],
                                 'type' => PayrollLineType::COMPANY_CONTRIBUTION,
                                 'category' => PayrollLineCategory::BPJS,
                                 'amount' => 0,
                                 'notes' => 'Nonaktif',
-                            ]);
+                            ], $pendingLines);
                         }
                     } else {
                         $line?->delete();
@@ -1744,14 +1843,14 @@ class PayrollService
                             'notes' => $cfg['notes'],
                         ]);
                     } else {
-                        PayrollItemLine::create([
+                        $this->createOrQueuePayrollItemLine([
                             'payroll_item_id' => $item->id,
                             'name' => $cfg['name'],
                             'type' => PayrollLineType::COMPANY_CONTRIBUTION,
                             'category' => PayrollLineCategory::BPJS,
                             'amount' => $cfg['amount'],
                             'notes' => $cfg['notes'],
-                        ]);
+                        ], $pendingLines);
                     }
                 }
             }
@@ -1785,12 +1884,13 @@ class PayrollService
     /**
      * Determine the employee JHT and JP amounts that will actually be deducted.
      *
+     * @param  Collection<int, PayrollItemLine>  $lines
      * @param  Collection<int, PayrollItemLine>  $allowanceLines
      * @param  array<string>|null  $disabledSystemCodes
      * @param  array<string>|null  $enabledSystemCodes
      */
     protected function currentPensionDeduction(
-        PayrollItem $item,
+        Collection $lines,
         CompanyProfile $company,
         TaxCalculationService $taxService,
         float $basicSalary,
@@ -1799,10 +1899,8 @@ class PayrollService
         ?array $enabledSystemCodes
     ): float {
         $bpjs = $taxService->calculateBpjsBreakdown($basicSalary + (float) $allowanceLines->sum('amount'), $company);
-        $existingLines = $item->lines()
-            ->where('type', PayrollLineType::DEDUCTION)
-            ->where('category', PayrollLineCategory::BPJS)
-            ->get();
+        $existingLines = $lines->filter(fn (PayrollItemLine $line) => $line->type === PayrollLineType::DEDUCTION && $line->category === PayrollLineCategory::BPJS
+        );
         $total = 0.0;
 
         foreach (['BPJS_JHT' => 'bpjs_jht', 'BPJS_JP' => 'bpjs_jp'] as $code => $key) {
@@ -1827,6 +1925,114 @@ class PayrollService
     }
 
     /**
+     * Preserve Eloquent writes for ordinary recalculations, but queue fresh lines
+     * during period creation so they can be inserted in batches.
+     */
+    private function createOrQueuePayrollItemLine(array $attributes, ?array &$pendingLines): ?PayrollItemLine
+    {
+        if ($pendingLines === null) {
+            return PayrollItemLine::create($attributes);
+        }
+
+        $now = now();
+        $attributes = array_replace([
+            'payroll_item_id' => null,
+            'salary_component_id' => null,
+            'cash_advance_installment_id' => null,
+            'name' => null,
+            'type' => null,
+            'category' => null,
+            'amount' => 0,
+            'notes' => null,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ], $attributes);
+        $attributes['type'] = $attributes['type'] instanceof \BackedEnum
+            ? $attributes['type']->value
+            : $attributes['type'];
+        $attributes['category'] = $attributes['category'] instanceof \BackedEnum
+            ? $attributes['category']->value
+            : $attributes['category'];
+        $pendingLines[] = $attributes;
+
+        return null;
+    }
+
+    /** Insert queued payroll lines in SQLite-safe batches. */
+    private function insertPayrollItemLines(array $lines): void
+    {
+        foreach (array_chunk($lines, 50) as $chunk) {
+            DB::table('payroll_item_lines')->insert($chunk);
+        }
+    }
+
+    /** Recalculate all selected item totals with one grouped line query. */
+    private function recalculateItems(array $itemIds): void
+    {
+        if ($itemIds === []) {
+            return;
+        }
+
+        $totalsByItem = PayrollItemLine::query()
+            ->whereIn('payroll_item_id', $itemIds)
+            ->select('payroll_item_id')
+            ->selectRaw('COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) as total_allowances', [PayrollLineType::ALLOWANCE->value])
+            ->selectRaw('COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) as total_deductions', [PayrollLineType::DEDUCTION->value])
+            ->selectRaw('COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) as total_company_contributions', [PayrollLineType::COMPANY_CONTRIBUTION->value])
+            ->groupBy('payroll_item_id')
+            ->get()
+            ->keyBy('payroll_item_id');
+
+        $items = PayrollItem::query()->whereKey($itemIds)->get();
+
+        foreach ($items as $item) {
+            $totals = $totalsByItem->get($item->id);
+            $totalAllowances = (float) ($totals?->total_allowances ?? 0);
+            $totalDeductions = (float) ($totals?->total_deductions ?? 0);
+            $totalCompanyContributions = (float) ($totals?->total_company_contributions ?? 0);
+            $netSalary = max(0, round((float) $item->basic_salary + $totalAllowances - $totalDeductions, 2));
+
+            $item->update([
+                'total_allowances' => $totalAllowances,
+                'total_deductions' => $totalDeductions,
+                'total_company_contributions' => $totalCompanyContributions,
+                'net_salary' => $netSalary,
+            ]);
+        }
+    }
+
+    /**
+     * Mark an earlier month as the employee's final PPh 21 period.
+     */
+    public function recalculateTaxesForPeriod(PayrollPeriod $period, User $user): int
+    {
+        Gate::forUser($user)->authorize('update', $period);
+
+        if (! $period->status->isEditable()) {
+            throw new InvalidArgumentException('Hanya periode draf atau revisi yang dapat dihitung ulang.');
+        }
+
+        $company = CompanyProfile::getProfile();
+        $items = $period->items()->with(['employee.detail', 'lines'])->get();
+        $taxService = app(TaxCalculationService::class);
+
+        if ($period->month === 12 && $company->enable_pph21) {
+            $taxService->preloadFinalPeriodHistory($items->pluck('employee_id')->all(), $period->year, $period->month);
+        }
+
+        foreach ($items as $item) {
+            $this->recalculateItemTax($item, $company, taxService: $taxService);
+            $this->recalculateItem($item);
+        }
+
+        $this->logPeriodActivity('TAXES_RECALCULATED', 'Payroll taxes recalculated for period', $period, $user, [
+            'recalculated_count' => $items->count(),
+        ]);
+
+        return $items->count();
+    }
+
+    /**
      * Mark an earlier month as the employee's final PPh 21 period.
      */
     public function setFinalTaxPeriod(PayrollItem $item, bool $isFinal, User $user): PayrollItem
@@ -1836,6 +2042,15 @@ class PayrollService
 
         if ((! $period->status->isEditable() && ! $item->isRejected()) || $period->month === 12) {
             throw new InvalidArgumentException('Masa pajak terakhir hanya dapat diubah pada slip draf/revisi sebelum Desember.');
+        }
+
+        $employee = $item->employee;
+        if ($isFinal && $employee?->employment_status === EmploymentStatus::KONTRAK && $employee->contract_end_date) {
+            $contractEndDate = Carbon::parse($employee->contract_end_date);
+            $periodStart = Carbon::create((int) $period->year, (int) $period->month, 1);
+            if ($periodStart->greaterThan($contractEndDate->copy()->startOfMonth())) {
+                throw new InvalidArgumentException('Masa pajak terakhir pegawai kontrak tidak boleh melewati bulan akhir kontraknya.');
+            }
         }
 
         if ($isFinal && PayrollItem::query()
@@ -1848,10 +2063,14 @@ class PayrollService
             throw new InvalidArgumentException('Sudah ada payroll berikutnya yang dibayar untuk karyawan ini pada tahun yang sama.');
         }
 
-        return DB::transaction(function () use ($item, $isFinal) {
+        return DB::transaction(function () use ($item, $isFinal, $user) {
             $item->update(['is_final_tax_period' => $isFinal]);
             $this->recalculateItemTax($item);
             $this->recalculateItem($item);
+
+            $this->logItemActivity('FINAL_TAX_PERIOD_CHANGED', 'Final tax period setting changed', $item, $user, [
+                'is_final_tax_period' => $isFinal,
+            ]);
 
             return $item->fresh();
         });
@@ -1937,6 +2156,8 @@ class PayrollService
             'updated_by' => $user->id,
         ]);
 
+        $this->logItemActivity('PAYSLIP_VERIFIED', 'Payslip verified by HR', $item, $user);
+
         return $item;
     }
 
@@ -1957,6 +2178,8 @@ class PayrollService
             'updated_by' => $user->id,
         ]);
 
+        $this->logItemActivity('PAYSLIP_UNVERIFIED', 'Payslip verification reverted', $item, $user);
+
         return $item;
     }
 
@@ -1973,11 +2196,19 @@ class PayrollService
 
         $now = Carbon::now();
 
-        return $period->items()->whereNull('verified_at')->update([
+        $verifiedCount = $period->items()->whereNull('verified_at')->update([
             'verified_by' => $user->id,
             'verified_at' => $now,
             'updated_by' => $user->id,
         ]);
+
+        if ($verifiedCount > 0) {
+            $this->logPeriodActivity('PAYSLIPS_VERIFIED', 'Payroll slips verified in bulk', $period, $user, [
+                'verified_count' => $verifiedCount,
+            ]);
+        }
+
+        return $verifiedCount;
     }
 
     /**
@@ -2007,6 +2238,10 @@ class PayrollService
             'rejection_reason' => null,
         ]);
 
+        $this->logPeriodActivity('PERIOD_SUBMITTED', 'Payroll period submitted for approval', $period, $user, [
+            'employee_count' => $period->items()->count(),
+        ]);
+
         return $period;
     }
 
@@ -2017,26 +2252,37 @@ class PayrollService
     {
         Gate::forUser($user)->authorize('approve', $period);
 
-        if ($period->status !== PayrollPeriodStatus::SUBMITTED && $period->status !== PayrollPeriodStatus::DRAFT) {
-            throw new InvalidArgumentException('Hanya periode yang sedang diajukan atau draf yang dapat disetujui.');
-        }
+        return DB::transaction(function () use ($period, $user): PayrollPeriod {
+            $lockedPeriod = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+            if ($lockedPeriod->status !== PayrollPeriodStatus::SUBMITTED) {
+                throw new InvalidArgumentException('Hanya periode yang sudah diajukan dan menunggu persetujuan yang dapat disetujui.');
+            }
 
-        $now = Carbon::now();
-        $period->update([
-            'status' => PayrollPeriodStatus::APPROVED,
-            'approved_by' => $user->id,
-            'approved_at' => $now,
-            'rejection_reason' => null,
-        ]);
+            if ($lockedPeriod->items()->whereNull('verified_at')->exists()) {
+                throw new InvalidArgumentException('Semua slip harus diverifikasi HRD sebelum periode disetujui.');
+            }
 
-        $period->items()->update([
-            'approval_status' => 'approved',
-            'approved_by' => $user->id,
-            'approved_at' => $now,
-            'rejection_reason' => null,
-        ]);
+            $now = Carbon::now();
+            $lockedPeriod->update([
+                'status' => PayrollPeriodStatus::APPROVED,
+                'approved_by' => $user->id,
+                'approved_at' => $now,
+                'rejection_reason' => null,
+            ]);
 
-        return $period;
+            $lockedPeriod->items()->update([
+                'approval_status' => 'approved',
+                'approved_by' => $user->id,
+                'approved_at' => $now,
+                'rejection_reason' => null,
+            ]);
+
+            $this->logPeriodActivity('PERIOD_APPROVED', 'Payroll period approved', $lockedPeriod, $user, [
+                'employee_count' => $lockedPeriod->items()->count(),
+            ]);
+
+            return $lockedPeriod;
+        });
     }
 
     /**
@@ -2050,17 +2296,32 @@ class PayrollService
             throw new InvalidArgumentException('Alasan penolakan wajib diisi.');
         }
 
-        $period->update([
-            'status' => PayrollPeriodStatus::REJECTED,
-            'rejection_reason' => trim($reason),
-        ]);
+        return DB::transaction(function () use ($period, $reason, $user): PayrollPeriod {
+            $lockedPeriod = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+            if ($lockedPeriod->status !== PayrollPeriodStatus::SUBMITTED) {
+                throw new InvalidArgumentException('Hanya periode yang diajukan dan menunggu persetujuan yang dapat ditolak.');
+            }
 
-        $period->items()->update([
-            'approval_status' => 'rejected',
-            'rejection_reason' => trim($reason),
-        ]);
+            Gate::forUser($user)->authorize('reject', $lockedPeriod);
+            $trimmedReason = trim($reason);
+            $lockedPeriod->update([
+                'status' => PayrollPeriodStatus::REJECTED,
+                'rejection_reason' => $trimmedReason,
+            ]);
 
-        return $period;
+            $lockedPeriod->items()->update([
+                'approval_status' => 'rejected',
+                'approved_by' => null,
+                'approved_at' => null,
+                'rejection_reason' => $trimmedReason,
+            ]);
+
+            $this->logPeriodActivity('PERIOD_REJECTED', 'Payroll period rejected', $lockedPeriod, $user, [
+                'employee_count' => $lockedPeriod->items()->count(),
+            ]);
+
+            return $lockedPeriod;
+        });
     }
 
     /**
@@ -2070,17 +2331,26 @@ class PayrollService
     {
         Gate::forUser($user)->authorize('approve', $item->payrollPeriod);
 
-        $now = Carbon::now();
-        $item->update([
-            'approval_status' => 'approved',
-            'approved_by' => $user->id,
-            'approved_at' => $now,
-            'rejection_reason' => null,
-        ]);
+        return DB::transaction(function () use ($item, $user): PayrollItem {
+            $period = PayrollPeriod::query()->lockForUpdate()->findOrFail($item->payroll_period_id);
+            Gate::forUser($user)->authorize('approve', $period);
+            $this->ensurePeriodCanReviewSlips($period);
 
-        $this->syncPeriodApprovalStatus($item->payrollPeriod, $user);
+            $lockedItem = PayrollItem::query()->lockForUpdate()->findOrFail($item->id);
+            $now = Carbon::now();
+            $lockedItem->update([
+                'approval_status' => 'approved',
+                'approved_by' => $user->id,
+                'approved_at' => $now,
+                'rejection_reason' => null,
+            ]);
 
-        return $item;
+            $this->syncPeriodApprovalStatus($period, $user);
+
+            $this->logItemActivity('PAYSLIP_APPROVED', 'Payslip approved', $lockedItem, $user);
+
+            return $lockedItem->fresh();
+        });
     }
 
     /**
@@ -2094,22 +2364,33 @@ class PayrollService
             throw new InvalidArgumentException('Alasan penolakan wajib diisi.');
         }
 
-        $item->update([
-            'approval_status' => 'rejected',
-            'approved_by' => null,
-            'approved_at' => null,
-            'rejection_reason' => trim($reason),
-        ]);
+        return DB::transaction(function () use ($item, $reason, $user): PayrollItem {
+            $period = PayrollPeriod::query()->lockForUpdate()->findOrFail($item->payroll_period_id);
+            Gate::forUser($user)->authorize('reject', $period);
+            $this->ensurePeriodCanReviewSlips($period);
 
-        $period = $item->payrollPeriod;
-        if ($period->status === PayrollPeriodStatus::APPROVED) {
-            $period->update([
-                'status' => PayrollPeriodStatus::SUBMITTED,
-                'rejection_reason' => "Slip {$item->employee->full_name} ditolak: ".trim($reason),
+            $lockedItem = PayrollItem::query()->with('employee')->lockForUpdate()->findOrFail($item->id);
+            $trimmedReason = trim($reason);
+            $lockedItem->update([
+                'approval_status' => 'rejected',
+                'approved_by' => null,
+                'approved_at' => null,
+                'rejection_reason' => $trimmedReason,
             ]);
-        }
 
-        return $item;
+            if ($period->status === PayrollPeriodStatus::APPROVED) {
+                $period->update([
+                    'status' => PayrollPeriodStatus::SUBMITTED,
+                    'approved_by' => null,
+                    'approved_at' => null,
+                    'rejection_reason' => "Slip {$lockedItem->employee?->full_name} ditolak: {$trimmedReason}",
+                ]);
+            }
+
+            $this->logItemActivity('PAYSLIP_REJECTED', 'Payslip rejected', $lockedItem, $user);
+
+            return $lockedItem->fresh();
+        });
     }
 
     /**
@@ -2119,27 +2400,31 @@ class PayrollService
     {
         Gate::forUser($user)->authorize('approve', $item->payrollPeriod);
 
-        if ($item->payrollPeriod->status === PayrollPeriodStatus::PAID) {
-            throw new InvalidArgumentException('Tidak dapat membatalkan persetujuan periode yang sudah dibayar.');
-        }
+        return DB::transaction(function () use ($item, $user): PayrollItem {
+            $period = PayrollPeriod::query()->lockForUpdate()->findOrFail($item->payroll_period_id);
+            Gate::forUser($user)->authorize('approve', $period);
+            $this->ensurePeriodCanReviewSlips($period);
 
-        $item->update([
-            'approval_status' => 'pending',
-            'approved_by' => null,
-            'approved_at' => null,
-            'rejection_reason' => null,
-        ]);
-
-        $period = $item->payrollPeriod;
-        if ($period->status === PayrollPeriodStatus::APPROVED) {
-            $period->update([
-                'status' => PayrollPeriodStatus::SUBMITTED,
+            $lockedItem = PayrollItem::query()->lockForUpdate()->findOrFail($item->id);
+            $lockedItem->update([
+                'approval_status' => 'pending',
                 'approved_by' => null,
                 'approved_at' => null,
+                'rejection_reason' => null,
             ]);
-        }
 
-        return $item;
+            if ($period->status === PayrollPeriodStatus::APPROVED) {
+                $period->update([
+                    'status' => PayrollPeriodStatus::SUBMITTED,
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ]);
+            }
+
+            $this->logItemActivity('PAYSLIP_APPROVAL_REVOKED', 'Payslip approval revoked', $lockedItem, $user);
+
+            return $lockedItem->fresh();
+        });
     }
 
     /**
@@ -2153,17 +2438,28 @@ class PayrollService
             return 0;
         }
 
-        $now = Carbon::now();
-        $count = $period->items()->whereIn('id', $itemIds)->update([
-            'approval_status' => 'approved',
-            'approved_by' => $user->id,
-            'approved_at' => $now,
-            'rejection_reason' => null,
-        ]);
+        return DB::transaction(function () use ($period, $itemIds, $user): int {
+            $lockedPeriod = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+            Gate::forUser($user)->authorize('approve', $lockedPeriod);
+            $this->ensurePeriodCanReviewSlips($lockedPeriod);
 
-        $this->syncPeriodApprovalStatus($period, $user);
+            $count = $lockedPeriod->items()->whereIn('id', $itemIds)->update([
+                'approval_status' => 'approved',
+                'approved_by' => $user->id,
+                'approved_at' => Carbon::now(),
+                'rejection_reason' => null,
+            ]);
 
-        return $count;
+            $this->syncPeriodApprovalStatus($lockedPeriod, $user);
+
+            if ($count > 0) {
+                $this->logPeriodActivity('PAYSLIPS_APPROVED', 'Payroll slips approved in bulk', $lockedPeriod, $user, [
+                    'approved_count' => $count,
+                ]);
+            }
+
+            return $count;
+        });
     }
 
     /**
@@ -2181,21 +2477,36 @@ class PayrollService
             throw new InvalidArgumentException('Alasan penolakan wajib diisi.');
         }
 
-        $count = $period->items()->whereIn('id', $itemIds)->update([
-            'approval_status' => 'rejected',
-            'approved_by' => null,
-            'approved_at' => null,
-            'rejection_reason' => trim($reason),
-        ]);
+        return DB::transaction(function () use ($period, $itemIds, $reason, $user): int {
+            $lockedPeriod = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+            Gate::forUser($user)->authorize('reject', $lockedPeriod);
+            $this->ensurePeriodCanReviewSlips($lockedPeriod);
+            $trimmedReason = trim($reason);
 
-        if ($period->status === PayrollPeriodStatus::APPROVED) {
-            $period->update([
-                'status' => PayrollPeriodStatus::SUBMITTED,
-                'rejection_reason' => trim($reason),
+            $count = $lockedPeriod->items()->whereIn('id', $itemIds)->update([
+                'approval_status' => 'rejected',
+                'approved_by' => null,
+                'approved_at' => null,
+                'rejection_reason' => $trimmedReason,
             ]);
-        }
 
-        return $count;
+            if ($lockedPeriod->status === PayrollPeriodStatus::APPROVED) {
+                $lockedPeriod->update([
+                    'status' => PayrollPeriodStatus::SUBMITTED,
+                    'approved_by' => null,
+                    'approved_at' => null,
+                    'rejection_reason' => $trimmedReason,
+                ]);
+            }
+
+            if ($count > 0) {
+                $this->logPeriodActivity('PAYSLIPS_REJECTED', 'Payroll slips rejected in bulk', $lockedPeriod, $user, [
+                    'rejected_count' => $count,
+                ]);
+            }
+
+            return $count;
+        });
     }
 
     /**
@@ -2205,22 +2516,32 @@ class PayrollService
     {
         Gate::forUser($user)->authorize('approve', $period);
 
-        $now = Carbon::now();
-        $count = $period->items()->update([
-            'approval_status' => 'approved',
-            'approved_by' => $user->id,
-            'approved_at' => $now,
-            'rejection_reason' => null,
-        ]);
+        return DB::transaction(function () use ($period, $user): int {
+            $lockedPeriod = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+            Gate::forUser($user)->authorize('approve', $lockedPeriod);
+            $this->ensurePeriodCanReviewSlips($lockedPeriod);
 
-        $period->update([
-            'status' => PayrollPeriodStatus::APPROVED,
-            'approved_by' => $user->id,
-            'approved_at' => $now,
-            'rejection_reason' => null,
-        ]);
+            $now = Carbon::now();
+            $count = $lockedPeriod->items()->update([
+                'approval_status' => 'approved',
+                'approved_by' => $user->id,
+                'approved_at' => $now,
+                'rejection_reason' => null,
+            ]);
 
-        return $count;
+            $lockedPeriod->update([
+                'status' => PayrollPeriodStatus::APPROVED,
+                'approved_by' => $user->id,
+                'approved_at' => $now,
+                'rejection_reason' => null,
+            ]);
+
+            $this->logPeriodActivity('PERIOD_APPROVED', 'Payroll period approved in bulk', $lockedPeriod, $user, [
+                'approved_count' => $count,
+            ]);
+
+            return $count;
+        });
     }
 
     /**
@@ -2238,6 +2559,13 @@ class PayrollService
                 'approved_at' => Carbon::now(),
                 'rejection_reason' => null,
             ]);
+        }
+    }
+
+    private function ensurePeriodCanReviewSlips(PayrollPeriod $period): void
+    {
+        if (! in_array($period->status, [PayrollPeriodStatus::SUBMITTED, PayrollPeriodStatus::APPROVED], true)) {
+            throw new InvalidArgumentException('Slip hanya dapat ditinjau saat periode diajukan atau sedang disetujui.');
         }
     }
 
@@ -2291,6 +2619,7 @@ class PayrollService
                 ->whereNotNull('cash_advance_installment_id')
                 ->with(['cashAdvanceInstallment.cashAdvance'])
                 ->get();
+            $cashAdvancePaymentCount = 0;
 
             foreach ($advanceLines as $line) {
                 if (! $line->cashAdvanceInstallment) {
@@ -2354,6 +2683,7 @@ class PayrollService
                         'notes' => "Potongan Gaji {$lockedPeriod->reference_number} ({$lockedPeriod->name})",
                         'recorded_by' => $user->id,
                     ]);
+                    $cashAdvancePaymentCount++;
 
                     $newPaid = round((float) $inst->paid_amount + $alloc, 2);
                     $isDone = ($newPaid >= (float) $inst->amount - 0.01);
@@ -2373,6 +2703,13 @@ class PayrollService
                     'status' => $newAdvanceStatus,
                 ]);
             }
+
+            $this->logPeriodActivity('PERIOD_PAID', 'Payroll period marked as paid', $lockedPeriod, $user, [
+                'payment_date' => $paymentDate->toDateString(),
+                'payment_method' => $paymentMethod,
+                'paid_item_count' => $unpaidItemIds->count(),
+                'cash_advance_payment_count' => $cashAdvancePaymentCount,
+            ]);
 
             return $lockedPeriod;
         });
@@ -2528,6 +2865,11 @@ class PayrollService
                 ]);
             }
 
+            $this->logItemActivity('PAYSLIP_PAID', 'Payslip marked as paid', $lockedItem, $user, [
+                'payment_date' => $paymentDate->toDateString(),
+                'payment_method' => $paymentMethod,
+            ]);
+
             return $lockedItem->fresh(['employee', 'payer']);
         });
     }
@@ -2560,6 +2902,11 @@ class PayrollService
 
         $item->update($updateData);
 
+        $this->logItemActivity('PAYMENT_DETAILS_UPDATED', 'Payslip payment details updated', $item, $user, [
+            'payment_date' => $paymentDate->toDateString(),
+            'payment_method' => $paymentMethod,
+        ]);
+
         return $item->fresh(['employee', 'payer', 'updater']);
     }
 
@@ -2575,11 +2922,17 @@ class PayrollService
             throw new InvalidArgumentException('Karyawan hanya dapat dihapus dari periode berstatus Draf atau Revisi.');
         }
 
-        DB::transaction(function () use ($item, $period) {
+        DB::transaction(function () use ($item, $period, $user) {
             $item->lines()->delete();
             $item->delete();
 
             $this->recalculatePeriod($period);
+
+            $this->logPeriodActivity('PAYSLIP_REMOVED', 'Payslip removed from payroll period', $period, $user, [
+                'payroll_item_id' => $item->id,
+                'employee_id' => $item->employee_id,
+                'payslip_number' => $item->payslip_number,
+            ]);
         });
     }
 
@@ -2594,8 +2947,12 @@ class PayrollService
             throw new InvalidArgumentException('Hanya periode berstatus draf atau ditolak yang dapat dihapus.');
         }
 
-        DB::transaction(function () use ($period) {
+        DB::transaction(function () use ($period, $user) {
             $period->delete();
+
+            $this->logPeriodActivity('PERIOD_DELETED', 'Payroll period deleted', $period, $user, [
+                'status' => $period->status->value,
+            ]);
         });
     }
 }

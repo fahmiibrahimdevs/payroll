@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\Storage;
 
 class CompanyProfileService
 {
+    public function __construct(
+        protected ActivityLogService $logger
+    ) {}
+
     /**
      * Get the active company profile record.
      */
@@ -30,7 +34,7 @@ class CompanyProfileService
             $data['logo_path'] = $logo->store('company', 'public');
         }
 
-        $profile->update([
+        $attributes = [
             'name' => trim((string) ($data['name'] ?? $profile->name)),
             'code' => ! empty($data['code']) ? trim((string) $data['code']) : null,
             'email' => ! empty($data['email']) ? trim((string) $data['email']) : null,
@@ -38,6 +42,9 @@ class CompanyProfileService
             'website' => ! empty($data['website']) ? trim((string) $data['website']) : null,
             'email_domain' => ! empty($data['email_domain']) ? ltrim(trim((string) $data['email_domain']), '@') : null,
             'address' => ! empty($data['address']) ? trim((string) $data['address']) : null,
+            'city' => ! empty($data['city']) ? trim((string) $data['city']) : null,
+            'province' => ! empty($data['province']) ? trim((string) $data['province']) : null,
+            'postal_code' => ! empty($data['postal_code']) ? trim((string) $data['postal_code']) : null,
             'tax_identification_number' => ! empty($data['tax_identification_number']) ? trim((string) $data['tax_identification_number']) : null,
             'enable_pph21' => isset($data['enable_pph21']) ? (bool) $data['enable_pph21'] : $profile->enable_pph21,
             'include_bpjs_in_tax' => isset($data['include_bpjs_in_tax']) ? (bool) $data['include_bpjs_in_tax'] : $profile->include_bpjs_in_tax,
@@ -55,7 +62,25 @@ class CompanyProfileService
             'bank_account_number' => ! empty($data['bank_account_number']) ? trim((string) $data['bank_account_number']) : null,
             'bank_account_name' => ! empty($data['bank_account_name']) ? trim((string) $data['bank_account_name']) : null,
             'logo_path' => $data['logo_path'] ?? $profile->logo_path,
-        ]);
+        ];
+
+        $profile->fill($attributes);
+        $changedFields = array_keys($profile->getDirty());
+        $profile->save();
+
+        if ($changedFields !== []) {
+            $this->logger->info(
+                action: 'PROFILE_UPDATED',
+                module: 'company_profile',
+                message: 'Company profile updated',
+                context: [
+                    'company_profile_id' => $profile->id,
+                    'changed_fields' => $changedFields,
+                    'pph21_enabled' => (bool) $profile->enable_pph21,
+                    'bpjs_included_in_tax' => (bool) $profile->include_bpjs_in_tax,
+                ]
+            );
+        }
 
         return $profile;
     }
