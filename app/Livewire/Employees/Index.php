@@ -446,8 +446,8 @@ class Index extends Component
 
         return view('livewire.employees.index', [
             'employees' => $employees,
-            'departments' => Department::query()->select(['id', 'name'])->orderBy('name')->get(),
-            'positions' => Position::query()->select(['id', 'name'])->orderBy('name')->get(),
+            'departments' => Department::getLookup(),
+            'positions' => Position::getLookup(),
             'statuses' => EmployeeStatus::cases(),
             'employmentStatuses' => EmploymentStatus::cases(),
             'genders' => Gender::cases(),

@@ -4,13 +4,35 @@ namespace App\Models;
 
 use Database\Factories\PositionFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class Position extends Model
 {
     /** @use HasFactory<PositionFactory> */
     use HasFactory;
+
+    public const LOOKUP_CACHE_KEY = 'positions_lookup';
+
+    public static function getLookup(): Collection
+    {
+        return Cache::remember(self::LOOKUP_CACHE_KEY, 86400, function () {
+            return static::query()->select(['id', 'name'])->orderBy('name')->get();
+        });
+    }
+
+    public static function clearLookupCache(): void
+    {
+        Cache::forget(self::LOOKUP_CACHE_KEY);
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(fn () => static::clearLookupCache());
+        static::deleted(fn () => static::clearLookupCache());
+    }
 
     /**
      * The attributes that are mass assignable.

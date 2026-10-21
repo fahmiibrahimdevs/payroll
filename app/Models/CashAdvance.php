@@ -269,4 +269,10 @@ class CashAdvance extends Model
     {
         return $query->where('employee_id', $employeeId);
     }
+
+    protected static function booted(): void
+    {
+        static::saved(fn () => \App\Services\CashAdvanceService::clearRecapChartCache());
+        static::deleted(fn () => \App\Services\CashAdvanceService::clearRecapChartCache());
+    }
 }

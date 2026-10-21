@@ -19,6 +19,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
@@ -382,8 +383,15 @@ class CashAdvanceService
             ->values();
     }
 
+    public const RECAP_CHART_CACHE_KEY = 'cash_advance_recap_chart';
+
+    public static function clearRecapChartCache(): void
+    {
+        Cache::forget(self::RECAP_CHART_CACHE_KEY);
+    }
+
     /**
-     * Get analytics and statistics chart data for the cash advance recap dashboard.
+     * Get aggregated metrics for cash advance recap charts (monthly trend, top debtors, department share).
      *
      * @return array{
      *     monthly: array{labels: array<int, string>, disbursed: array<int, float>, paid: array<int, float>, has_data: bool},
@@ -393,112 +401,114 @@ class CashAdvanceService
      */
     public function getRecapChartData(): array
     {
-        $now = Carbon::now();
-        $startDate = (clone $now)->subMonths(5)->startOfMonth()->toDateString();
-        $endDate = (clone $now)->endOfMonth()->toDateString();
+        return Cache::remember(self::RECAP_CHART_CACHE_KEY, 1800, function () {
+            $now = Carbon::now();
+            $startDate = (clone $now)->subMonths(5)->startOfMonth()->toDateString();
+            $endDate = (clone $now)->endOfMonth()->toDateString();
 
-        $disbursedByMonth = CashAdvance::query()
-            ->whereIn('status', [
-                CashAdvanceStatus::ACTIVE->value,
-                CashAdvanceStatus::APPROVED->value,
-                CashAdvanceStatus::PAID->value,
-            ])
-            ->whereDate('disbursement_date', '>=', $startDate)
-            ->whereDate('disbursement_date', '<=', $endDate)
-            ->selectRaw("{$this->dateToMonthExpression('disbursement_date')} as m_key, SUM(amount) as total")
-            ->groupBy('m_key')
-            ->pluck('total', 'm_key');
+            $disbursedByMonth = CashAdvance::query()
+                ->whereIn('status', [
+                    CashAdvanceStatus::ACTIVE->value,
+                    CashAdvanceStatus::APPROVED->value,
+                    CashAdvanceStatus::PAID->value,
+                ])
+                ->whereDate('disbursement_date', '>=', $startDate)
+                ->whereDate('disbursement_date', '<=', $endDate)
+                ->selectRaw("{$this->dateToMonthExpression('disbursement_date')} as m_key, SUM(amount) as total")
+                ->groupBy('m_key')
+                ->pluck('total', 'm_key');
 
-        $paidByMonth = CashAdvancePayment::query()
-            ->where('status', CashAdvancePaymentStatus::APPROVED->value)
-            ->whereDate('payment_date', '>=', $startDate)
-            ->whereDate('payment_date', '<=', $endDate)
-            ->selectRaw("{$this->dateToMonthExpression('payment_date')} as m_key, SUM(amount) as total")
-            ->groupBy('m_key')
-            ->pluck('total', 'm_key');
+            $paidByMonth = CashAdvancePayment::query()
+                ->where('status', CashAdvancePaymentStatus::APPROVED->value)
+                ->whereDate('payment_date', '>=', $startDate)
+                ->whereDate('payment_date', '<=', $endDate)
+                ->selectRaw("{$this->dateToMonthExpression('payment_date')} as m_key, SUM(amount) as total")
+                ->groupBy('m_key')
+                ->pluck('total', 'm_key');
 
-        // 1. Tren Bulanan (6 bulan terakhir: mundur 5 bulan ke bulan berjalan)
-        $monthlyLabels = [];
-        $monthlyDisbursed = [];
-        $monthlyPaid = [];
+            // 1. Tren Bulanan (6 bulan terakhir: mundur 5 bulan ke bulan berjalan)
+            $monthlyLabels = [];
+            $monthlyDisbursed = [];
+            $monthlyPaid = [];
 
-        for ($i = 5; $i >= 0; $i--) {
-            $mDate = (clone $now)->subMonths($i);
-            $key = $mDate->format('Y-m');
+            for ($i = 5; $i >= 0; $i--) {
+                $mDate = (clone $now)->subMonths($i);
+                $key = $mDate->format('Y-m');
 
-            $monthlyLabels[] = $mDate->translatedFormat('M Y');
-            $monthlyDisbursed[] = (float) ($disbursedByMonth->get($key) ?? 0);
-            $monthlyPaid[] = (float) ($paidByMonth->get($key) ?? 0);
-        }
+                $monthlyLabels[] = $mDate->translatedFormat('M Y');
+                $monthlyDisbursed[] = (float) ($disbursedByMonth->get($key) ?? 0);
+                $monthlyPaid[] = (float) ($paidByMonth->get($key) ?? 0);
+            }
 
-        // 2. Top 5 Kasbon Terbesar (berdasarkan sisa saldo kasbon aktif)
-        $topDebtorsQuery = CashAdvance::query()
-            ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
-            ->where('remaining_amount', '>', 0)
-            ->with('employee:id,full_name')
-            ->selectRaw('employee_id, SUM(remaining_amount) as total_debt')
-            ->groupBy('employee_id')
-            ->orderByDesc('total_debt')
-            ->get();
+            // 2. Top 5 Kasbon Terbesar (berdasarkan sisa saldo kasbon aktif)
+            $topDebtorsQuery = CashAdvance::query()
+                ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
+                ->where('remaining_amount', '>', 0)
+                ->with('employee:id,full_name')
+                ->selectRaw('employee_id, SUM(remaining_amount) as total_debt')
+                ->groupBy('employee_id')
+                ->orderByDesc('total_debt')
+                ->get();
 
-        $top5Debtors = $topDebtorsQuery->take(5);
-        $otherDebtorsSum = (float) $topDebtorsQuery->slice(5)->sum('total_debt');
+            $top5Debtors = $topDebtorsQuery->take(5);
+            $otherDebtorsSum = (float) $topDebtorsQuery->slice(5)->sum('total_debt');
 
-        $debtorLabels = [];
-        $debtorData = [];
-        $debtorColors = ['#0b52aa', '#2563eb', '#38bdf8', '#059669', '#10b981', '#94a3b8'];
+            $debtorLabels = [];
+            $debtorData = [];
+            $debtorColors = ['#0b52aa', '#2563eb', '#38bdf8', '#059669', '#10b981', '#94a3b8'];
 
-        foreach ($top5Debtors as $item) {
-            $empName = $item->employee?->full_name ?? ('Karyawan #'.$item->employee_id);
-            $debtorLabels[] = Str::limit($empName, 18);
-            $debtorData[] = round((float) $item->total_debt, 2);
-        }
+            foreach ($top5Debtors as $item) {
+                $empName = $item->employee?->full_name ?? ('Karyawan #'.$item->employee_id);
+                $debtorLabels[] = Str::limit($empName, 18);
+                $debtorData[] = round((float) $item->total_debt, 2);
+            }
 
-        if ($otherDebtorsSum > 0) {
-            $debtorLabels[] = 'Lainnya';
-            $debtorData[] = round($otherDebtorsSum, 2);
-        }
+            if ($otherDebtorsSum > 0) {
+                $debtorLabels[] = 'Lainnya';
+                $debtorData[] = round($otherDebtorsSum, 2);
+            }
 
-        // 3. Distribusi Kasbon per Departemen
-        $deptDistributionQuery = CashAdvance::query()
-            ->whereIn('cash_advances.status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
-            ->where('cash_advances.remaining_amount', '>', 0)
-            ->join('employees', 'employees.id', '=', 'cash_advances.employee_id')
-            ->leftJoin('departments', 'departments.id', '=', 'employees.department_id')
-            ->selectRaw('COALESCE(departments.name, "Tanpa Departemen") as dept_name, SUM(cash_advances.remaining_amount) as total_dept_debt')
-            ->groupBy('dept_name')
-            ->orderByDesc('total_dept_debt')
-            ->get();
+            // 3. Distribusi Kasbon per Departemen
+            $deptDistributionQuery = CashAdvance::query()
+                ->whereIn('cash_advances.status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
+                ->where('cash_advances.remaining_amount', '>', 0)
+                ->join('employees', 'employees.id', '=', 'cash_advances.employee_id')
+                ->leftJoin('departments', 'departments.id', '=', 'employees.department_id')
+                ->selectRaw('COALESCE(departments.name, "Tanpa Departemen") as dept_name, SUM(cash_advances.remaining_amount) as total_dept_debt')
+                ->groupBy('dept_name')
+                ->orderByDesc('total_dept_debt')
+                ->get();
 
-        $deptLabels = [];
-        $deptData = [];
-        $deptColors = ['#0b52aa', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#64748b', '#06b6d4'];
+            $deptLabels = [];
+            $deptData = [];
+            $deptColors = ['#0b52aa', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#64748b', '#06b6d4'];
 
-        foreach ($deptDistributionQuery as $row) {
-            $deptLabels[] = $row->dept_name;
-            $deptData[] = round((float) $row->total_dept_debt, 2);
-        }
+            foreach ($deptDistributionQuery as $row) {
+                $deptLabels[] = $row->dept_name;
+                $deptData[] = round((float) $row->total_dept_debt, 2);
+            }
 
-        return [
-            'monthly' => [
-                'labels' => $monthlyLabels,
-                'disbursed' => $monthlyDisbursed,
-                'paid' => $monthlyPaid,
-                'has_data' => (array_sum($monthlyDisbursed) > 0 || array_sum($monthlyPaid) > 0),
-            ],
-            'top_debtors' => [
-                'labels' => $debtorLabels,
-                'data' => $debtorData,
-                'colors' => array_slice($debtorColors, 0, max(1, count($debtorData))),
-                'has_data' => count($debtorData) > 0,
-            ],
-            'departments' => [
-                'labels' => $deptLabels,
-                'data' => $deptData,
-                'colors' => array_slice($deptColors, 0, max(1, count($deptData))),
-                'has_data' => count($deptData) > 0,
-            ],
-        ];
+            return [
+                'monthly' => [
+                    'labels' => $monthlyLabels,
+                    'disbursed' => $monthlyDisbursed,
+                    'paid' => $monthlyPaid,
+                    'has_data' => (array_sum($monthlyDisbursed) > 0 || array_sum($monthlyPaid) > 0),
+                ],
+                'top_debtors' => [
+                    'labels' => $debtorLabels,
+                    'data' => $debtorData,
+                    'colors' => array_slice($debtorColors, 0, max(1, count($debtorData))),
+                    'has_data' => count($debtorData) > 0,
+                ],
+                'departments' => [
+                    'labels' => $deptLabels,
+                    'data' => $deptData,
+                    'colors' => array_slice($deptColors, 0, max(1, count($deptData))),
+                    'has_data' => count($deptData) > 0,
+                ],
+            ];
+        });
     }
 
     /**

@@ -1537,7 +1537,7 @@ HTML;
             $this->selectedDepartmentId = $karyawanRecord->department_id;
         }
 
-        $departments = Department::query()->orderBy('name', 'asc')->get();
+        $departments = Department::getLookup();
 
         $employeesQuery = Employee::query()
             ->select(['id', 'full_name', 'department_id', 'position_id'])

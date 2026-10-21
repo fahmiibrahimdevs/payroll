@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -72,36 +73,51 @@ class CompanyProfile extends Model
         ];
     }
 
+    public const CACHE_KEY = 'company_profile_singleton';
+
     /**
      * Get the singleton or first company profile record.
      */
     public static function getProfile(): self
     {
-        return static::firstOrCreate([], [
-            'name' => 'PT LARASHIZ INDONESIA',
-            'code' => 'LARASHIZ',
-            'email' => 'info@larashiz.com',
-            'phone' => '021-12345678',
-            'website' => 'https://larashiz.com',
-            'email_domain' => 'larashiz.com',
-            'address' => 'Jl. Jenderal Sudirman No. 123, Jakarta Selatan',
-            'tax_identification_number' => '01.234.567.8-901.000',
-            'work_days_per_week' => 6,
-            'payroll_cutoff_day' => 20,
-            'payroll_pay_day' => 25,
-            'enable_pph21' => true,
-            'include_bpjs_in_tax' => true,
-            'bpjs_jkk_risk_rate' => 0.0024,
-            'bpjs_jkm_rate' => 0.0030,
-            'bpjs_kes_emp_rate' => 0.0100,
-            'bpjs_kes_comp_rate' => 0.0400,
-            'bpjs_jht_emp_rate' => 0.0200,
-            'bpjs_jht_comp_rate' => 0.0370,
-            'bpjs_jp_emp_rate' => 0.0100,
-            'bpjs_jp_comp_rate' => 0.0200,
-            'bpjs_kes_cap' => 12000000.00,
-            'bpjs_jp_cap' => 10042300.00,
-        ]);
+        return Cache::remember(self::CACHE_KEY, 86400, function () {
+            return static::firstOrCreate([], [
+                'name' => 'PT LARASHIZ INDONESIA',
+                'code' => 'LARASHIZ',
+                'email' => 'info@larashiz.com',
+                'phone' => '021-12345678',
+                'website' => 'https://larashiz.com',
+                'email_domain' => 'larashiz.com',
+                'address' => 'Jl. Jenderal Sudirman No. 123, Jakarta Selatan',
+                'tax_identification_number' => '01.234.567.8-901.000',
+                'work_days_per_week' => 6,
+                'payroll_cutoff_day' => 20,
+                'payroll_pay_day' => 25,
+                'enable_pph21' => true,
+                'include_bpjs_in_tax' => true,
+                'bpjs_jkk_risk_rate' => 0.0024,
+                'bpjs_jkm_rate' => 0.0030,
+                'bpjs_kes_emp_rate' => 0.0100,
+                'bpjs_kes_comp_rate' => 0.0400,
+                'bpjs_jht_emp_rate' => 0.0200,
+                'bpjs_jht_comp_rate' => 0.0370,
+                'bpjs_jp_emp_rate' => 0.0100,
+                'bpjs_jp_comp_rate' => 0.0200,
+                'bpjs_kes_cap' => 12000000.00,
+                'bpjs_jp_cap' => 10042300.00,
+            ]);
+        });
+    }
+
+    public static function clearProfileCache(): void
+    {
+        Cache::forget(self::CACHE_KEY);
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(fn () => static::clearProfileCache());
+        static::deleted(fn () => static::clearProfileCache());
     }
 
     /**
