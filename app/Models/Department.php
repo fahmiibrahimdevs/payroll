@@ -19,9 +19,11 @@ class Department extends Model
 
     public static function getLookup(): Collection
     {
-        return Cache::remember(self::LOOKUP_CACHE_KEY, 86400, function () {
-            return static::query()->select(['id', 'name'])->orderBy('name')->get();
+        $items = Cache::remember(self::LOOKUP_CACHE_KEY, 86400, function () {
+            return static::query()->select(['id', 'name'])->orderBy('name')->get()->toArray();
         });
+
+        return (new static)->hydrate($items);
     }
 
     public static function clearLookupCache(): void

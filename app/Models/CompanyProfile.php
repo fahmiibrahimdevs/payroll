@@ -80,8 +80,8 @@ class CompanyProfile extends Model
      */
     public static function getProfile(): self
     {
-        return Cache::remember(self::CACHE_KEY, 86400, function () {
-            return static::firstOrCreate([], [
+        $attributes = Cache::remember(self::CACHE_KEY, 86400, function () {
+            $record = static::firstOrCreate([], [
                 'name' => 'PT LARASHIZ INDONESIA',
                 'code' => 'LARASHIZ',
                 'email' => 'info@larashiz.com',
@@ -106,7 +106,11 @@ class CompanyProfile extends Model
                 'bpjs_kes_cap' => 12000000.00,
                 'bpjs_jp_cap' => 10042300.00,
             ]);
+
+            return $record->getAttributes();
         });
+
+        return (new static)->newFromBuilder($attributes);
     }
 
     public static function clearProfileCache(): void
