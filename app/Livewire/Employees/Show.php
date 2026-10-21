@@ -51,6 +51,7 @@ class Show extends Component
             'position',
             'detail',
             'salaryHistories.changer',
+            'cashAdvances',
         ]);
 
         $this->chartYear = (int) now()->format('Y');
