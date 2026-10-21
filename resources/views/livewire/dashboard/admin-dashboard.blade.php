@@ -163,6 +163,7 @@
                     </div>
                 </div>
                 <div class="card-body p-4 flex-grow-1"
+                     wire:key="admin-payroll-trend-{{ $selectedYear }}-{{ $selectedMonth }}-{{ md5(json_encode($stats['payroll_trend'])) }}"
                      x-data="{
                         chartInstance: null,
                         initChart() {
@@ -172,7 +173,7 @@
                             const taxData = {{ Js::from($stats['payroll_trend']['tax']) }};
 
                             const render = () => {
-                                const canvas = document.getElementById('adminPayrollTrendCanvas-{{ $selectedYear }}');
+                                const canvas = this.$refs.canvas;
                                 if (!canvas) return;
 
                                 if (typeof Chart === 'undefined') {
@@ -275,7 +276,7 @@
                      }"
                      x-init="initChart()">
                     <div style="height: 260px; position: relative;">
-                        <canvas id="adminPayrollTrendCanvas-{{ $selectedYear }}"></canvas>
+                        <canvas x-ref="canvas"></canvas>
                     </div>
                 </div>
             </div>
@@ -295,6 +296,7 @@
                     </div>
                 </div>
                 <div class="card-body p-3 d-flex flex-column justify-content-between flex-grow-1"
+                     wire:key="admin-dept-doughnut-{{ $selectedYear }}-{{ $selectedMonth }}-{{ md5(json_encode($stats['department_distribution'])) }}"
                      x-data="{
                         chartInstance: null,
                         initChart() {
@@ -304,7 +306,7 @@
                             const total = {{ (int) $stats['department_distribution']['total'] }};
 
                             const render = () => {
-                                const canvas = document.getElementById('adminDeptDoughnutCanvas');
+                                const canvas = this.$refs.canvas;
                                 if (!canvas) return;
 
                                 if (typeof Chart === 'undefined') {
@@ -370,7 +372,7 @@
 
                     <!-- Doughnut Canvas with Center Overlay -->
                     <div class="position-relative d-flex justify-content-center align-items-center my-2" style="height: 150px; width: 100%;">
-                        <canvas id="adminDeptDoughnutCanvas" style="max-height: 150px; max-width: 150px;"></canvas>
+                        <canvas x-ref="canvas" style="max-height: 150px; max-width: 150px;"></canvas>
 
                         <div class="position-absolute text-center d-flex flex-column justify-content-center align-items-center" style="pointer-events: none;">
                             <span style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase;">

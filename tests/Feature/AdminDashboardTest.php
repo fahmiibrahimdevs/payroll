@@ -84,8 +84,11 @@ class AdminDashboardTest extends TestCase
             ->assertSet('selectedYear', $currentYear)
             ->assertSet('selectedMonth', $currentMonth)
             ->assertSee('Rp 75.000.000')
+            ->assertSee('wire:key="admin-payroll-trend-'.$currentYear.'-'.$currentMonth, false)
+            ->assertSee('x-ref="canvas"', false)
             ->set('selectedMonth', $currentMonth === 1 ? 2 : 1)
-            ->assertDispatched('dashboard-updated');
+            ->assertDispatched('dashboard-updated')
+            ->assertSee('wire:key="admin-payroll-trend-'.$currentYear.'-'.($currentMonth === 1 ? 2 : 1), false);
     }
 
     public function test_direktur_can_also_access_admin_dashboard(): void

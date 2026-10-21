@@ -25,7 +25,7 @@
             </div>
 
             <!-- Bar Chart Container -->
-            <div wire:key="ca-monthly-bar-chart"
+            <div wire:key="ca-monthly-bar-chart-{{ md5(json_encode($chartData['monthly'] ?? [])) }}"
                  x-data="{
                      chartInstance: null,
                      initChart() {
@@ -165,7 +165,7 @@
             </div>
 
             <!-- Donut Chart Container -->
-            <div wire:key="ca-top-debtors-donut"
+            <div wire:key="ca-top-debtors-donut-{{ md5(json_encode($chartData['top_debtors'] ?? [])) }}"
                  x-data="{
                      chartInstance: null,
                      initChart() {
@@ -306,7 +306,7 @@
             </div>
 
             <!-- Donut Chart Container -->
-            <div wire:key="ca-dept-donut"
+            <div wire:key="ca-dept-donut-{{ md5(json_encode($chartData['departments'] ?? [])) }}"
                  x-data="{
                      chartInstance: null,
                      initChart() {

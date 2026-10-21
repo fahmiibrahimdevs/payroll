@@ -178,7 +178,7 @@
                         </div>
 
                         <!-- Donut Chart Container -->
-                        <div wire:key="payroll-doughnut-{{ $selectedYear }}-{{ $statistics['yearly_total_company_cost'] }}"
+                        <div wire:key="payroll-doughnut-{{ $selectedYear }}-{{ md5(json_encode([$statistics['yearly_total_company_cost'] ?? 0, $chartValues ?? []])) }}"
                              x-data="{
                                  chartInstance: null,
                                  initChart() {
@@ -189,7 +189,7 @@
                                      const bgColors = {{ \Illuminate\Support\Js::from($chartColors) }};
 
                                      const render = () => {
-                                         const canvas = document.getElementById('payrollDoughnutCanvas-' + year);
+                                         const canvas = this.$refs.canvas;
                                          if (!canvas) return;
 
                                          if (typeof Chart === 'undefined') {
@@ -268,7 +268,7 @@
                              class="position-relative d-flex justify-content-center align-items-center my-3"
                              style="height: 180px; width: 100%;">
 
-                            <canvas id="payrollDoughnutCanvas-{{ $selectedYear }}" style="max-height: 180px; max-width: 180px;"></canvas>
+                            <canvas x-ref="canvas" style="max-height: 180px; max-width: 180px;"></canvas>
 
                             <!-- Center Text Overlay -->
                             <div class="chart-center-overlay position-absolute text-center d-flex flex-column justify-content-center align-items-center" style="pointer-events: none; max-width: 125px; transition: opacity 0.2s ease;">
