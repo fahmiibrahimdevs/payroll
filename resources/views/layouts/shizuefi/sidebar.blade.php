@@ -31,17 +31,7 @@
             @if (auth()->user()?->hasRole('developer'))
                 {{-- Developer hanya menggunakan Monitoring Log sebagai halaman utama. --}}
             @elseif (auth()->user()?->hasRole('karyawan'))
-                @php
-                    $empRecord = auth()->user()?->getEmployeeRecord();
-                @endphp
                 <li class="menu-header">Menu Karyawan</li>
-                @if ($empRecord)
-                    <li class="{{ request()->routeIs('employees.*') ? 'active' : '' }}">
-                        <a class="nav-link" href="{{ route('employees.show', $empRecord->id) }}">
-                            <i class="fas fa-user-circle"></i> <span>Profil Saya</span>
-                        </a>
-                    </li>
-                @endif
                 <li class="{{ request()->routeIs('cash-advances.*') ? 'active' : '' }}">
                     <a class="nav-link" href="{{ route('cash-advances.index') }}">
                         <i class="fas fa-hand-holding-usd"></i> <span>Kasbon Saya</span>

@@ -22,7 +22,7 @@ use Carbon\Carbon;
 class DashboardService
 {
     /**
-     * @return array{employee: ?Employee, remaining_cash_advance: float, active_cash_advance_count: int}
+     * @return array{employee: ?Employee, remaining_cash_advance: float, active_cash_advance_count: int, latest_payroll_item: ?PayrollItem, active_cash_advance: ?CashAdvance}
      */
     public function getEmployeeDashboardData(User $user): array
     {
@@ -33,6 +33,8 @@ class DashboardService
                 'employee' => null,
                 'remaining_cash_advance' => 0,
                 'active_cash_advance_count' => 0,
+                'latest_payroll_item' => null,
+                'active_cash_advance' => null,
             ];
         }
 
@@ -49,10 +51,29 @@ class DashboardService
             ->selectRaw('COUNT(CASE WHEN status IN (?, ?) AND remaining_amount > 0 THEN 1 END) as active_count', $activeStatuses)
             ->first();
 
+        $latestPayrollItem = PayrollItem::query()
+            ->where('employee_id', $employee->id)
+            ->whereHas('payrollPeriod', fn ($q) => $q->whereIn('status', [
+                PayrollPeriodStatus::APPROVED,
+                PayrollPeriodStatus::PAID,
+            ]))
+            ->with(['payrollPeriod', 'lines.salaryComponent'])
+            ->latest('id')
+            ->first();
+
+        $activeCashAdvance = CashAdvance::query()
+            ->where('employee_id', $employee->id)
+            ->whereIn('status', $activeStatuses)
+            ->where('remaining_amount', '>', 0)
+            ->latest('id')
+            ->first();
+
         return [
             'employee' => $employee,
             'remaining_cash_advance' => (float) $cashAdvanceMetrics->remaining_amount,
             'active_cash_advance_count' => (int) $cashAdvanceMetrics->active_count,
+            'latest_payroll_item' => $latestPayrollItem,
+            'active_cash_advance' => $activeCashAdvance,
         ];
     }
 

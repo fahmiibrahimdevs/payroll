@@ -330,4 +330,18 @@ class KaryawanRoleAccessTest extends TestCase
         $response = $this->actingAs($unlinkedUser)->get(route('cash-advances.index'));
         $response->assertStatus(403);
     }
+
+    public function test_karyawan_sidebar_navigation_and_dashboard_hub(): void
+    {
+        $response = $this->actingAs($this->karyawanUser)->get(route('dashboard'));
+
+        $response->assertStatus(200);
+
+        // Sidebar check: Profil Saya & Riwayat Slip Gaji removed from sidebar menu
+        // but Kasbon Saya remains in sidebar
+        $response->assertSee('Kasbon Saya');
+        $response->assertSee('Buka Profil Lengkap');
+        $response->assertSee('Slip Gaji Terkini');
+        $response->assertSee('flutter-stat-card');
+    }
 }
