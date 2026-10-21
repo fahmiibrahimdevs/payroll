@@ -394,6 +394,28 @@ class CashAdvanceService
     public function getRecapChartData(): array
     {
         $now = Carbon::now();
+        $startDate = (clone $now)->subMonths(5)->startOfMonth()->toDateString();
+        $endDate = (clone $now)->endOfMonth()->toDateString();
+
+        $disbursedByMonth = CashAdvance::query()
+            ->whereIn('status', [
+                CashAdvanceStatus::ACTIVE->value,
+                CashAdvanceStatus::APPROVED->value,
+                CashAdvanceStatus::PAID->value,
+            ])
+            ->whereDate('disbursement_date', '>=', $startDate)
+            ->whereDate('disbursement_date', '<=', $endDate)
+            ->selectRaw("{$this->dateToMonthExpression('disbursement_date')} as m_key, SUM(amount) as total")
+            ->groupBy('m_key')
+            ->pluck('total', 'm_key');
+
+        $paidByMonth = CashAdvancePayment::query()
+            ->where('status', CashAdvancePaymentStatus::APPROVED->value)
+            ->whereDate('payment_date', '>=', $startDate)
+            ->whereDate('payment_date', '<=', $endDate)
+            ->selectRaw("{$this->dateToMonthExpression('payment_date')} as m_key, SUM(amount) as total")
+            ->groupBy('m_key')
+            ->pluck('total', 'm_key');
 
         // 1. Tren Bulanan (6 bulan terakhir: mundur 5 bulan ke bulan berjalan)
         $monthlyLabels = [];
@@ -402,29 +424,11 @@ class CashAdvanceService
 
         for ($i = 5; $i >= 0; $i--) {
             $mDate = (clone $now)->subMonths($i);
-            $mStart = (clone $mDate)->startOfMonth()->toDateString();
-            $mEnd = (clone $mDate)->endOfMonth()->toDateString();
-            $mLabel = $mDate->translatedFormat('M Y');
+            $key = $mDate->format('Y-m');
 
-            $monthlyLabels[] = $mLabel;
-
-            $disbursed = (float) CashAdvance::query()
-                ->whereIn('status', [
-                    CashAdvanceStatus::ACTIVE->value,
-                    CashAdvanceStatus::APPROVED->value,
-                    CashAdvanceStatus::PAID->value,
-                ])
-                ->whereDate('disbursement_date', '>=', $mStart)
-                ->whereDate('disbursement_date', '<=', $mEnd)
-                ->sum('amount');
-            $monthlyDisbursed[] = $disbursed;
-
-            $paid = (float) CashAdvancePayment::query()
-                ->where('status', CashAdvancePaymentStatus::APPROVED->value)
-                ->whereDate('payment_date', '>=', $mStart)
-                ->whereDate('payment_date', '<=', $mEnd)
-                ->sum('amount');
-            $monthlyPaid[] = $paid;
+            $monthlyLabels[] = $mDate->translatedFormat('M Y');
+            $monthlyDisbursed[] = (float) ($disbursedByMonth->get($key) ?? 0);
+            $monthlyPaid[] = (float) ($paidByMonth->get($key) ?? 0);
         }
 
         // 2. Top 5 Kasbon Terbesar (berdasarkan sisa saldo kasbon aktif)
@@ -2497,13 +2501,18 @@ class CashAdvanceService
         }
     }
 
-    private function cashAdvanceStatementMonthExpression(): string
+    private function dateToMonthExpression(string $column): string
     {
         return match (DB::connection()->getDriverName()) {
-            'sqlite' => "strftime('%Y-%m', cash_advance_installments.due_date)",
-            'pgsql' => "to_char(cash_advance_installments.due_date, 'YYYY-MM')",
-            default => "DATE_FORMAT(cash_advance_installments.due_date, '%Y-%m')",
+            'sqlite' => "strftime('%Y-%m', {$column})",
+            'pgsql' => "to_char({$column}, 'YYYY-MM')",
+            default => "DATE_FORMAT({$column}, '%Y-%m')",
         };
+    }
+
+    private function cashAdvanceStatementMonthExpression(): string
+    {
+        return $this->dateToMonthExpression('cash_advance_installments.due_date');
     }
 
     /**

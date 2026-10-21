@@ -1303,7 +1303,8 @@ class ManageItem extends Component
     public function getOtherItemsProperty(): Collection
     {
         return $this->period->items()
-            ->with(['employee.position', 'employee.department', 'employee.detail'])
+            ->select(['id', 'payroll_period_id', 'employee_id'])
+            ->with(['employee:id,full_name', 'employee.detail:id,employee_id,employee_code'])
             ->orderBy('id')
             ->get();
     }
@@ -2967,6 +2968,18 @@ class ManageItem extends Component
 
     public function render(): View
     {
+        $this->item->loadMissing([
+            'employee.department',
+            'employee.position',
+            'employee.detail',
+            'lines.salaryComponent',
+            'lines.cashAdvanceInstallment.cashAdvance',
+            'updater',
+            'approver',
+            'verifier',
+        ]);
+        $this->period->loadMissing(['creator', 'updater', 'submitter', 'approver']);
+
         $company = CompanyProfile::getProfile();
 
         return view('livewire.payrolls.manage-item', [
