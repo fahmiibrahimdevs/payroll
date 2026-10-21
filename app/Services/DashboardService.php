@@ -253,6 +253,18 @@ class DashboardService
     }
 
     /**
+     * In-memory cache for action items within the current request.
+     *
+     * @var array<string, array<int, array<string, mixed>>>
+     */
+    protected static array $memoizedActionItems = [];
+
+    public static function clearActionItemsCache(): void
+    {
+        static::$memoizedActionItems = [];
+    }
+
+    /**
      * Get urgent action items / notifications for admin and management.
      *
      * @return array<int, array{type: string, icon: string, icon_color: string, title: string, text: string, action_label: string, url: string}>
@@ -262,6 +274,13 @@ class DashboardService
         $month ??= (int) now()->format('n');
         $year ??= (int) now()->format('Y');
         $currentUser = auth()->user();
+        $userId = $currentUser?->id ?? 0;
+        $cacheKey = "{$userId}_{$month}_{$year}";
+
+        if (isset(static::$memoizedActionItems[$cacheKey])) {
+            return static::$memoizedActionItems[$cacheKey];
+        }
+
         $isDirector = $currentUser?->hasRole('direktur') ?? false;
         $isAdmin = $currentUser?->hasRole('admin') ?? false;
 
@@ -289,7 +308,7 @@ class DashboardService
             ? CashAdvancePayment::query()->where('status', CashAdvancePaymentStatus::PENDING)->count()
             : 0;
 
-        return $this->buildActionItems(
+        return static::$memoizedActionItems[$cacheKey] = $this->buildActionItems(
             $month,
             $year,
             $currentPayrollPeriod,
@@ -559,16 +578,23 @@ class DashboardService
             ];
         }
 
-        $inactiveEmployeesWithDebtQuery = CashAdvance::query()
+        $inactiveEmployeesList = CashAdvance::query()
             ->whereIn('status', [CashAdvanceStatus::ACTIVE, CashAdvanceStatus::APPROVED])
             ->where('remaining_amount', '>', 0)
-            ->whereHas('employee', fn ($query) => $query->where('status', '!=', EmployeeStatus::ACTIVE));
-        $inactiveEmployeesWithDebtCount = (clone $inactiveEmployeesWithDebtQuery)->count();
-        $inactiveEmployeesWithDebt = $inactiveEmployeesWithDebtQuery
+            ->whereHas('employee', fn ($query) => $query->where('status', '!=', EmployeeStatus::ACTIVE))
             ->with('employee:id,full_name')
             ->orderBy('id')
-            ->take(5)
+            ->take(6)
             ->get(['id', 'employee_id']);
+
+        $inactiveEmployeesWithDebt = $inactiveEmployeesList->take(5);
+        $inactiveEmployeesWithDebtCount = $inactiveEmployeesList->count() > 5
+            ? CashAdvance::query()
+                ->whereIn('status', [CashAdvanceStatus::ACTIVE, CashAdvanceStatus::APPROVED])
+                ->where('remaining_amount', '>', 0)
+                ->whereHas('employee', fn ($query) => $query->where('status', '!=', EmployeeStatus::ACTIVE))
+                ->count()
+            : $inactiveEmployeesList->count();
 
         foreach ($inactiveEmployeesWithDebt as $advance) {
             $actionItems[] = [
@@ -625,23 +651,19 @@ class DashboardService
             ->where('employment_status', EmploymentStatus::KONTRAK)
             ->whereNotNull('contract_end_date')
             ->whereBetween('contract_end_date', [now()->startOfDay(), now()->addDays(30)->endOfDay()])
-            ->count();
+            ->orderBy('contract_end_date')
+            ->get(['id']);
+        $expiringContractsCount = $expiringContracts->count();
 
-        if ($expiringContracts > 0) {
-            $nextExpiringContract = Employee::query()
-                ->where('status', EmployeeStatus::ACTIVE)
-                ->where('employment_status', EmploymentStatus::KONTRAK)
-                ->whereNotNull('contract_end_date')
-                ->whereBetween('contract_end_date', [now()->startOfDay(), now()->addDays(30)->endOfDay()])
-                ->orderBy('contract_end_date')
-                ->first(['id']);
+        if ($expiringContractsCount > 0) {
+            $nextExpiringContract = $expiringContracts->first();
 
             $actionItems[] = [
                 'type' => 'info',
                 'icon' => 'fas fa-user-clock',
                 'icon_color' => 'text-info',
                 'title' => 'Masa Kontrak Karyawan',
-                'text' => "Terdapat {$expiringContracts} karyawan yang masa kontraknya berakhir dalam 30 hari ke depan.",
+                'text' => "Terdapat {$expiringContractsCount} karyawan yang masa kontraknya berakhir dalam 30 hari ke depan.",
                 'action_label' => 'Tinjau Karyawan',
                 'url' => $nextExpiringContract
                     ? ($isAdmin
@@ -651,16 +673,24 @@ class DashboardService
             ];
         }
 
-        $expiredContractsQuery = Employee::query()
+        $expiredContractsList = Employee::query()
             ->where('status', EmployeeStatus::ACTIVE)
             ->where('employment_status', EmploymentStatus::KONTRAK)
             ->whereNotNull('contract_end_date')
             ->whereDate('contract_end_date', '<', now()->toDateString())
-            ->orderBy('contract_end_date');
-        $expiredContractsCount = (clone $expiredContractsQuery)->count();
-        $expiredContracts = $expiredContractsQuery
-            ->take(5)
+            ->orderBy('contract_end_date')
+            ->take(6)
             ->get(['id', 'full_name', 'contract_end_date']);
+
+        $expiredContracts = $expiredContractsList->take(5);
+        $expiredContractsCount = $expiredContractsList->count() > 5
+            ? Employee::query()
+                ->where('status', EmployeeStatus::ACTIVE)
+                ->where('employment_status', EmploymentStatus::KONTRAK)
+                ->whereNotNull('contract_end_date')
+                ->whereDate('contract_end_date', '<', now()->toDateString())
+                ->count()
+            : $expiredContractsList->count();
 
         foreach ($expiredContracts as $employee) {
             $actionItems[] = [
@@ -690,7 +720,7 @@ class DashboardService
 
         // 5. Data penting karyawan yang belum lengkap untuk payroll.
         if ($isAdmin || $isDirector) {
-            $employeesNeedingPayrollDataQuery = Employee::query()
+            $incompleteEmployeesList = Employee::query()
                 ->where('status', EmployeeStatus::ACTIVE)
                 ->with('detail:id,employee_id,bank_name,bank_account_number,bank_account_name,tax_recipient_type,nik,bpjs_kesehatan_number,bpjs_ketenagakerjaan_number')
                 ->where(function ($query): void {
@@ -705,11 +735,28 @@ class DashboardService
                                 ->orWhereNull('bpjs_ketenagakerjaan_number')->orWhere('bpjs_ketenagakerjaan_number', '');
                         });
                 })
-                ->orderBy('full_name');
-            $incompleteEmployeeCount = (clone $employeesNeedingPayrollDataQuery)->count();
-            $employeesNeedingPayrollData = $employeesNeedingPayrollDataQuery
-                ->take(5)
+                ->orderBy('full_name')
+                ->take(6)
                 ->get(['id', 'full_name']);
+
+            $employeesNeedingPayrollData = $incompleteEmployeesList->take(5);
+            $incompleteEmployeeCount = $incompleteEmployeesList->count() > 5
+                ? Employee::query()
+                    ->where('status', EmployeeStatus::ACTIVE)
+                    ->where(function ($query): void {
+                        $query->whereDoesntHave('detail')
+                            ->orWhereHas('detail', function ($detailQuery): void {
+                                $detailQuery->whereNull('bank_name')->orWhere('bank_name', '')
+                                    ->orWhereNull('bank_account_number')->orWhere('bank_account_number', '')
+                                    ->orWhereNull('bank_account_name')->orWhere('bank_account_name', '')
+                                    ->orWhereNull('tax_recipient_type')->orWhere('tax_recipient_type', '')
+                                    ->orWhereNull('nik')->orWhere('nik', '')
+                                    ->orWhereNull('bpjs_kesehatan_number')->orWhere('bpjs_kesehatan_number', '')
+                                    ->orWhereNull('bpjs_ketenagakerjaan_number')->orWhere('bpjs_ketenagakerjaan_number', '');
+                            });
+                    })
+                    ->count()
+                : $incompleteEmployeesList->count();
 
             foreach ($employeesNeedingPayrollData->take(5) as $employee) {
                 $detail = $employee->detail;
