@@ -340,8 +340,8 @@ class KaryawanRoleAccessTest extends TestCase
         // Sidebar check: Profil Saya & Riwayat Slip Gaji removed from sidebar menu
         // but Kasbon Saya remains in sidebar
         $response->assertSee('Kasbon Saya');
-        $response->assertSee('Buka Profil Lengkap');
-        $response->assertSee('Slip Gaji Terkini');
+        $response->assertSee('Analisis Gaji Bersih');
+        $response->assertSee('Total Diterima');
         $response->assertSee('flutter-stat-card');
     }
 }
