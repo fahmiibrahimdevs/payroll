@@ -39,6 +39,12 @@ class Index extends Component
 
     public ?string $tax_identification_number = null;
 
+    public int $work_days_per_week = 6;
+
+    public int $payroll_cutoff_day = 20;
+
+    public int $payroll_pay_day = 25;
+
     public bool $enable_pph21 = true;
 
     public bool $include_bpjs_in_tax = true;
@@ -90,6 +96,9 @@ class Index extends Component
         $this->province = $profile->province;
         $this->postal_code = $profile->postal_code;
         $this->tax_identification_number = $profile->tax_identification_number;
+        $this->work_days_per_week = (int) ($profile->work_days_per_week ?? 6);
+        $this->payroll_cutoff_day = (int) ($profile->payroll_cutoff_day ?? 20);
+        $this->payroll_pay_day = (int) ($profile->payroll_pay_day ?? 25);
         $this->enable_pph21 = (bool) $profile->enable_pph21;
         $this->include_bpjs_in_tax = (bool) $profile->include_bpjs_in_tax;
         $this->bpjs_jkk_risk_rate = (float) ($profile->bpjs_jkk_risk_rate ?? 0.0024);
@@ -122,6 +131,9 @@ class Index extends Component
             'province' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:20',
             'tax_identification_number' => 'nullable|string|max:50',
+            'work_days_per_week' => 'required|integer|in:5,6',
+            'payroll_cutoff_day' => 'required|integer|min:1|max:31',
+            'payroll_pay_day' => 'required|integer|min:1|max:31',
             'enable_pph21' => 'boolean',
             'include_bpjs_in_tax' => 'boolean',
             'bpjs_jkk_risk_rate' => 'numeric|min:0|max:1',
@@ -145,6 +157,11 @@ class Index extends Component
     {
         return [
             'name.required' => 'Nama perusahaan wajib diisi.',
+            'work_days_per_week.in' => 'Skema hari kerja harus 5 hari atau 6 hari kerja per minggu.',
+            'payroll_cutoff_day.min' => 'Tanggal cut-off minimal tanggal 1.',
+            'payroll_cutoff_day.max' => 'Tanggal cut-off maksimal tanggal 31.',
+            'payroll_pay_day.min' => 'Tanggal gajian minimal tanggal 1.',
+            'payroll_pay_day.max' => 'Tanggal gajian maksimal tanggal 31.',
             'email.email' => 'Format email tidak valid.',
             'logo.image' => 'File logo harus berupa gambar (jpg, png, jpeg).',
             'logo.max' => 'Ukuran file logo maksimal 2MB.',
@@ -170,6 +187,9 @@ class Index extends Component
                 'province' => $this->province,
                 'postal_code' => $this->postal_code,
                 'tax_identification_number' => $this->tax_identification_number,
+                'work_days_per_week' => (int) $this->work_days_per_week,
+                'payroll_cutoff_day' => (int) $this->payroll_cutoff_day,
+                'payroll_pay_day' => (int) $this->payroll_pay_day,
                 'enable_pph21' => $this->enable_pph21,
                 'include_bpjs_in_tax' => $this->include_bpjs_in_tax,
                 'bpjs_jkk_risk_rate' => $this->bpjs_jkk_risk_rate,

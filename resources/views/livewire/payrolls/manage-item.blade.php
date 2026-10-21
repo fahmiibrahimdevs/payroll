@@ -874,6 +874,15 @@
                                                         <span class="d-inline-flex align-items-center text-dark">
                                                             <i class="fas fa-hand-holding-usd text-warning mr-1.5" style="font-size: 12px;"></i>
                                                             <span>Sisa Kasbon: <strong class="text-danger" style="font-weight: 700;">Rp {{ number_format($remAmt, 0, ',', '.') }}</strong></span>
+                                                            @if ($this->isEditable && $remAmt > $rowAmt)
+                                                                <button type="button"
+                                                                        wire:click="settleRemainingKasbon({{ $index }})"
+                                                                        class="badge badge-warning text-dark border-0 ml-1.5 font-weight-600"
+                                                                        style="cursor: pointer; font-size: 10.5px; padding: 2px 7px; border-radius: 6px;"
+                                                                        title="Klik untuk memasukkan pelunasan penuh sisa kasbon Rp {{ number_format($remAmt, 0, ',', '.') }}">
+                                                                    <i class="fas fa-coins mr-1"></i>Lunaskan Sisa
+                                                                </button>
+                                                            @endif
                                                         </span>
                                                         @if ($totalAdvance > 0)
                                                             <span style="color: #cbd5e1;">&bull;</span>
@@ -886,6 +895,17 @@
                                                             </span>
                                                         @endif
                                                     </div>
+
+                                                    @php
+                                                        $isFinalPeriod = $this->item->employee?->contract_end_date && \Carbon\Carbon::parse($this->item->employee->contract_end_date)->lte($this->period->end_date);
+                                                    @endphp
+                                                    @if ($isFinalPeriod && $remAmt > 0)
+                                                        <div class="mt-1">
+                                                            <span class="badge badge-warning text-dark text-xs font-weight-600" style="padding: 2px 8px;">
+                                                                <i class="fas fa-exclamation-triangle mr-1"></i>Periode Akhir Kerja (Selesai {{ $this->item->employee->contract_end_date->translatedFormat('d M Y') }}) - Sisa Pinjaman Perlu Penyelesaian
+                                                            </span>
+                                                        </div>
+                                                    @endif
                                                 </div>
                                             </td>
                                             <td class="text-right align-middle !px-3 !py-2.5">

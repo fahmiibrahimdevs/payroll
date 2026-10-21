@@ -253,4 +253,81 @@ class KaryawanRoleAccessTest extends TestCase
         $response->assertDontSee('Kembali ke Daftar Karyawan');
         $response->assertDontSee('Detail Profil Karyawan');
     }
+
+    public function test_karyawan_dashboard_displays_active_cash_advance_balance(): void
+    {
+        CashAdvance::create([
+            'reference_number' => 'KB-DASHBOARD-TEST',
+            'employee_id' => $this->ownEmployee->id,
+            'amount' => 2000000,
+            'remaining_amount' => 2000000,
+            'repayment_scheme' => 'salary_installment',
+            'installment_count' => 2,
+            'monthly_installment' => 1000000,
+            'disbursement_date' => now()->toDateString(),
+            'reason' => 'Keperluan berobat',
+            'status' => 'active',
+            'submitted_by' => $this->karyawanUser->id,
+        ]);
+
+        $response = $this->actingAs($this->karyawanUser)->get(route('dashboard'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Sisa Saldo Kasbon');
+        $response->assertSee('Rp 2.000.000');
+        $response->assertSee('1 Pinjaman Aktif');
+    }
+
+    public function test_karyawan_profile_displays_calculated_total_kasbon_and_remaining_balance(): void
+    {
+        CashAdvance::create([
+            'reference_number' => 'KB-PROFILE-TEST-1',
+            'employee_id' => $this->ownEmployee->id,
+            'amount' => 3000000,
+            'remaining_amount' => 0,
+            'repayment_scheme' => 'salary_installment',
+            'installment_count' => 3,
+            'monthly_installment' => 1000000,
+            'disbursement_date' => now()->subMonths(3)->toDateString(),
+            'reason' => 'Pinjaman 1',
+            'status' => 'paid',
+            'submitted_by' => $this->karyawanUser->id,
+        ]);
+
+        CashAdvance::create([
+            'reference_number' => 'KB-PROFILE-TEST-2',
+            'employee_id' => $this->ownEmployee->id,
+            'amount' => 2000000,
+            'remaining_amount' => 2000000,
+            'repayment_scheme' => 'salary_installment',
+            'installment_count' => 2,
+            'monthly_installment' => 1000000,
+            'disbursement_date' => now()->toDateString(),
+            'reason' => 'Pinjaman 2',
+            'status' => 'active',
+            'submitted_by' => $this->karyawanUser->id,
+        ]);
+
+        $response = $this->actingAs($this->karyawanUser)->get(route('employees.show', $this->ownEmployee->id));
+
+        $response->assertStatus(200);
+        $response->assertSee('Total Kasbon');
+        $response->assertSee('Rp 5.000.000');
+        $response->assertSee('(Sisa: Rp 2.000.000)');
+    }
+
+    public function test_unlinked_karyawan_cannot_access_cash_advances_module(): void
+    {
+        $unlinkedUser = User::create([
+            'name' => 'Unlinked Karyawan',
+            'email' => 'unlinked.karyawan@larashiz.com',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
+        $unlinkedUser->syncRoles(['karyawan']);
+
+        $response = $this->actingAs($unlinkedUser)->get(route('cash-advances.index'));
+        $response->assertStatus(403);
+    }
 }

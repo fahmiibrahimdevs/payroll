@@ -84,6 +84,9 @@
                                         </div>
                                         <div class="emp-tile-right">
                                             {{ $selectedEmployee->formatted_total_cash_receipt }}
+                                            @if ($selectedEmployee->remaining_cash_advance > 0)
+                                                <span class="text-danger small d-block font-weight-normal">(Sisa: {{ $selectedEmployee->formatted_remaining_cash_advance }})</span>
+                                            @endif
                                         </div>
                                     </div>
                                 @endif

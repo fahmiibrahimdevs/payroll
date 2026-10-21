@@ -188,6 +188,61 @@
                         </div>
 
                         <hr>
+                        <h6 class="font-weight-bold text-dark mb-3"><i class="fas fa-calendar-alt mr-2"></i>Pengaturan Siklus Penggajian & Hari Kerja</h6>
+
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <div class="form-group mb-0">
+                                    <label class="font-weight-600">Skema Hari Kerja Mingguan</label>
+                                    <select wire:model="work_days_per_week" class="form-control @error('work_days_per_week') is-invalid @enderror">
+                                        <option value="5">5 Hari Kerja (Senin - Jumat)</option>
+                                        <option value="6">6 Hari Kerja (Senin - Sabtu)</option>
+                                    </select>
+                                    <small class="text-muted d-block mt-1">
+                                        Standar hari kerja per minggu untuk pembagi gaji prorata.
+                                    </small>
+                                    @error('work_days_per_week')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="form-group mb-0">
+                                    <label class="font-weight-600">Tanggal Cut-Off Bulanan</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text"><i class="fas fa-calendar-check"></i></span>
+                                        </div>
+                                        <input type="number" min="1" max="31" wire:model="payroll_cutoff_day" class="form-control @error('payroll_cutoff_day') is-invalid @enderror" placeholder="20">
+                                    </div>
+                                    <small class="text-muted d-block mt-1">
+                                        Tanggal tutup buku rekap gaji (misal tgl 20 &rarr; siklus kerja: 21 bulan lalu s/d 20 bulan ini).
+                                    </small>
+                                    @error('payroll_cutoff_day')
+                                        <div class="invalid-feedback d-block">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="form-group mb-0">
+                                    <label class="font-weight-600">Tanggal Gajian Default</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text"><i class="fas fa-money-bill-wave"></i></span>
+                                        </div>
+                                        <input type="number" min="1" max="31" wire:model="payroll_pay_day" class="form-control @error('payroll_pay_day') is-invalid @enderror" placeholder="25">
+                                    </div>
+                                    <small class="text-muted d-block mt-1">
+                                        Tanggal default transfer gaji ke rekening karyawan (misal tgl 25).
+                                    </small>
+                                    @error('payroll_pay_day')
+                                        <div class="invalid-feedback d-block">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
                         <h6 class="font-weight-bold text-dark mb-3"><i class="fas fa-file-invoice-dollar mr-2"></i>Pengaturan Pajak PPh 21 & BPJS</h6>
 
                         <div class="row">
@@ -247,7 +302,7 @@
                                                placeholder="0"
                                                autocomplete="off">
                                     </div>
-                                    <small class="text-muted">Batas maksimal dasar upah JP tahun berjalan.</small>
+                                    <small class="text-muted">Batas maksimal dasar upah JP tahun berjalan (sesuaikan jika ada penyesuaian regulasi Kemnaker per tahun berjalan).</small>
                                     @error('bpjs_jp_cap')
                                         <div class="invalid-feedback d-block">{{ $message }}</div>
                                     @enderror

@@ -786,13 +786,25 @@ class PayrollService
             throw new InvalidArgumentException("Periode penggajian untuk bulan {$monthName} {$year} sudah ada.");
         }
 
+        $company = CompanyProfile::getProfile();
         $date = Carbon::createFromDate($year, $month, 1)->startOfMonth();
-        $startDate = $date->copy()->startOfMonth();
-        $endDate = $date->copy()->endOfMonth();
+
+        if (! empty($data['start_date']) && ! empty($data['end_date'])) {
+            $startDate = Carbon::parse($data['start_date'])->startOfDay();
+            $endDate = Carbon::parse($data['end_date'])->endOfDay();
+            $paymentDate = ! empty($data['payment_date'])
+                ? Carbon::parse($data['payment_date'])->startOfDay()
+                : $endDate->copy()->startOfDay();
+        } else {
+            $cycle = $company->resolvePayrollCycleDates($year, $month);
+            $startDate = ! empty($data['start_date']) ? Carbon::parse($data['start_date'])->startOfDay() : $cycle['start_date'];
+            $endDate = ! empty($data['end_date']) ? Carbon::parse($data['end_date'])->endOfDay() : $cycle['end_date'];
+            $paymentDate = ! empty($data['payment_date']) ? Carbon::parse($data['payment_date'])->startOfDay() : $cycle['payment_date'];
+        }
 
         $name = $data['name'] ?? "Penggajian Periode {$monthName} {$year}";
 
-        return DB::transaction(function () use ($month, $year, $startDate, $endDate, $name, $data, $date, $user) {
+        return DB::transaction(function () use ($month, $year, $startDate, $endDate, $paymentDate, $name, $data, $date, $company, $user) {
             $refNumber = $this->generatePeriodReferenceNumber($date);
 
             $period = PayrollPeriod::create([
@@ -802,6 +814,7 @@ class PayrollService
                 'year' => $year,
                 'start_date' => $startDate->toDateString(),
                 'end_date' => $endDate->toDateString(),
+                'payment_date' => $paymentDate->toDateString(),
                 'status' => PayrollPeriodStatus::DRAFT,
                 'created_by' => $user->id,
                 'notes' => ! empty($data['notes']) ? trim((string) $data['notes']) : null,
@@ -821,12 +834,13 @@ class PayrollService
                 $activeEmployees->count()
             );
 
+            $maxDeductionDate = max($endDate->toDateString(), $paymentDate->toDateString());
             $activeAdvancesByEmployee = CashAdvance::query()
                 ->whereIn('employee_id', $activeEmployees->modelKeys())
                 ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
-                ->with(['installments' => function ($query) use ($endDate) {
+                ->with(['installments' => function ($query) use ($maxDeductionDate) {
                     $query->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
-                        ->where('due_date', '<=', $endDate->toDateString())
+                        ->where('due_date', '<=', $maxDeductionDate)
                         ->orderBy('installment_number');
                 }])
                 ->get()
@@ -846,11 +860,9 @@ class PayrollService
 
             foreach ($activeEmployees as $index => $employee) {
                 $payslipNumber = $payslipNumbers[$index];
-                $salaryInfo = $this->calculateProratedSalary($employee, $period);
+                $salaryInfo = $this->calculateProratedSalary($employee, $period, $company);
                 $basicSalary = (float) $salaryInfo['basic_salary'];
-                $prorateNote = $salaryInfo['is_prorated']
-                    ? 'Gaji prorata Rp '.number_format($salaryInfo['basic_salary'], 0, ',', '.').' dari Rp '.number_format($salaryInfo['full_salary'], 0, ',', '.')." ({$salaryInfo['worked_days']} dari {$salaryInfo['total_working_days']} hari kerja • masuk ".$employee->join_date?->translatedFormat('d M Y').')'
-                    : null;
+                $prorateNote = $this->formatProrateNote($salaryInfo, $employee);
 
                 $item = PayrollItem::create([
                     'payroll_period_id' => $period->id,
@@ -937,17 +949,21 @@ class PayrollService
      *
      * @return array{basic_salary: float, full_salary: float, is_prorated: bool, worked_days: int, total_working_days: int}
      */
-    public function calculateProratedSalary(Employee $employee, PayrollPeriod $period): array
+    public function calculateProratedSalary(Employee $employee, PayrollPeriod $period, ?CompanyProfile $company = null): array
     {
+        $company = $company ?? CompanyProfile::getProfile();
+        $workDaysPerWeek = (int) ($company->work_days_per_week ?? 6);
+
         $fullSalary = (float) ($employee->basic_salary ?? 0);
         $startDate = Carbon::parse($period->start_date)->startOfDay();
         $endDate = Carbon::parse($period->end_date)->endOfDay();
 
-        // Total working days in period (Monday - Saturday, exclude Sunday)
+        // Total working days in period (5 days: exclude Sat & Sun; 6 days: exclude Sun)
         $totalWorkingDays = 0;
         $curr = $startDate->copy();
         while ($curr->lte($endDate)) {
-            if (! $curr->isSunday()) {
+            $isWorkDay = $workDaysPerWeek === 5 ? ! $curr->isWeekend() : ! $curr->isSunday();
+            if ($isWorkDay) {
                 $totalWorkingDays++;
             }
             $curr->addDay();
@@ -965,6 +981,9 @@ class PayrollService
                 'is_prorated' => true,
                 'worked_days' => 0,
                 'total_working_days' => $totalWorkingDays,
+                'ratio' => 0.0,
+                'reason' => 'none',
+                'reason_text' => 'tidak ada hari kerja aktif dalam periode',
             ];
         }
 
@@ -975,14 +994,18 @@ class PayrollService
                 'is_prorated' => false,
                 'worked_days' => $totalWorkingDays,
                 'total_working_days' => $totalWorkingDays,
+                'ratio' => 1.0,
+                'reason' => 'full',
+                'reason_text' => '',
             ];
         }
 
-        // Prorate the active employment days in the period on a Monday-to-Saturday basis.
+        // Prorate the active employment days in the period based on company work schedule
         $workedDays = 0;
         $curr = $workedStart->copy();
         while ($curr->lte($workedEnd)) {
-            if (! $curr->isSunday()) {
+            $isWorkDay = $workDaysPerWeek === 5 ? ! $curr->isWeekend() : ! $curr->isSunday();
+            if ($isWorkDay) {
                 $workedDays++;
             }
             $curr->addDay();
@@ -991,13 +1014,50 @@ class PayrollService
         $ratio = $totalWorkingDays > 0 ? ($workedDays / $totalWorkingDays) : 1;
         $proratedSalary = round($fullSalary * $ratio);
 
+        $isJoinedMidPeriod = $joinDate && $joinDate->gt($startDate);
+        $isResignedMidPeriod = $contractEndDate && $contractEndDate->lt($endDate);
+
+        $reason = 'prorated';
+        $reasonText = '';
+        if ($isJoinedMidPeriod && $isResignedMidPeriod) {
+            $reason = 'both';
+            $reasonText = 'masuk '.$joinDate->translatedFormat('d M Y').' • selesai '.$contractEndDate->translatedFormat('d M Y');
+        } elseif ($isJoinedMidPeriod) {
+            $reason = 'join';
+            $reasonText = 'masuk '.$joinDate->translatedFormat('d M Y');
+        } elseif ($isResignedMidPeriod) {
+            $reason = 'resignation';
+            $reasonText = 'selesai/akhir kerja '.$contractEndDate->translatedFormat('d M Y');
+        }
+
         return [
             'basic_salary' => (float) $proratedSalary,
             'full_salary' => $fullSalary,
             'is_prorated' => true,
             'worked_days' => $workedDays,
             'total_working_days' => $totalWorkingDays,
+            'ratio' => (float) $ratio,
+            'reason' => $reason,
+            'reason_text' => $reasonText,
         ];
+    }
+
+    /**
+     * Format a descriptive prorate note for payroll items.
+     */
+    public function formatProrateNote(array $salaryInfo, Employee $employee): ?string
+    {
+        if (empty($salaryInfo['is_prorated'])) {
+            return null;
+        }
+
+        $basic = number_format((float) ($salaryInfo['basic_salary'] ?? 0), 0, ',', '.');
+        $full = number_format((float) ($salaryInfo['full_salary'] ?? 0), 0, ',', '.');
+        $worked = $salaryInfo['worked_days'] ?? 0;
+        $total = $salaryInfo['total_working_days'] ?? 0;
+        $reason = ! empty($salaryInfo['reason_text']) ? ' • '.$salaryInfo['reason_text'] : '';
+
+        return "Gaji prorata Rp {$basic} dari Rp {$full} ({$worked} dari {$total} hari kerja{$reason})";
     }
 
     /**
@@ -1032,10 +1092,7 @@ class PayrollService
 
             $salaryInfo = $this->calculateProratedSalary($employee, $period);
             $basicSalary = $salaryInfo['basic_salary'];
-
-            $prorateNote = $salaryInfo['is_prorated']
-                ? 'Gaji prorata Rp '.number_format($salaryInfo['basic_salary'], 0, ',', '.').' dari Rp '.number_format($salaryInfo['full_salary'], 0, ',', '.')." ({$salaryInfo['worked_days']} dari {$salaryInfo['total_working_days']} hari kerja • masuk ".$employee->join_date?->translatedFormat('d M Y').')'
-                : null;
+            $prorateNote = $this->formatProrateNote($salaryInfo, $employee);
 
             $item = PayrollItem::create([
                 'payroll_period_id' => $period->id,
@@ -1053,12 +1110,15 @@ class PayrollService
             ]);
 
             // Check pending cash advance installments due in or before this month
-            $endDate = Carbon::parse($period->end_date)->endOfDay();
+            $maxDeductionDate = max(
+                $period->end_date ? Carbon::parse($period->end_date)->toDateString() : now()->toDateString(),
+                $period->payment_date ? Carbon::parse($period->payment_date)->toDateString() : now()->toDateString()
+            );
             $activeAdvances = $employee->cashAdvances()
                 ->whereIn('status', ['active', 'approved'])
-                ->with(['installments' => function ($q) use ($endDate) {
+                ->with(['installments' => function ($q) use ($maxDeductionDate) {
                     $q->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
-                        ->where('due_date', '<=', $endDate->toDateString())
+                        ->where('due_date', '<=', $maxDeductionDate)
                         ->orderBy('installment_number');
                 }])
                 ->get();
@@ -1152,14 +1212,12 @@ class PayrollService
                     continue;
                 }
 
-                $salaryInfo = $this->calculateProratedSalary($employee, $period);
+                $salaryInfo = $this->calculateProratedSalary($employee, $period, $company);
                 $newBasic = (float) $salaryInfo['basic_salary'];
 
                 $item->update([
                     'basic_salary' => $newBasic,
-                    'notes' => $salaryInfo['is_prorated']
-                        ? 'Gaji prorata Rp '.number_format($salaryInfo['basic_salary'], 0, ',', '.').' dari Rp '.number_format($salaryInfo['full_salary'], 0, ',', '.')." ({$salaryInfo['worked_days']} dari {$salaryInfo['total_working_days']} hari kerja • masuk ".$employee->join_date?->translatedFormat('d M Y').')'
-                        : null,
+                    'notes' => $this->formatProrateNote($salaryInfo, $employee),
                     'bank_name' => $employee->detail?->bank_name,
                     'bank_account_number' => $employee->detail?->bank_account_number,
                     'bank_account_name' => $employee->detail?->bank_account_name,
@@ -1199,14 +1257,12 @@ class PayrollService
 
         return DB::transaction(function () use ($item, $period, $employee, $user) {
             $company = CompanyProfile::getProfile();
-            $salaryInfo = $this->calculateProratedSalary($employee, $period);
+            $salaryInfo = $this->calculateProratedSalary($employee, $period, $company);
             $newBasic = (float) $salaryInfo['basic_salary'];
 
             $item->update([
                 'basic_salary' => $newBasic,
-                'notes' => $salaryInfo['is_prorated']
-                    ? 'Gaji prorata Rp '.number_format($salaryInfo['basic_salary'], 0, ',', '.').' dari Rp '.number_format($salaryInfo['full_salary'], 0, ',', '.')." ({$salaryInfo['worked_days']} dari {$salaryInfo['total_working_days']} hari kerja • masuk ".$employee->join_date?->translatedFormat('d M Y').')'
-                    : null,
+                'notes' => $this->formatProrateNote($salaryInfo, $employee),
                 'bank_name' => $employee->detail?->bank_name,
                 'bank_account_number' => $employee->detail?->bank_account_number,
                 'bank_account_name' => $employee->detail?->bank_account_name,

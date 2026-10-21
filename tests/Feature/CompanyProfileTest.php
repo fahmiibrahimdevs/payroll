@@ -102,4 +102,38 @@ class CompanyProfileTest extends TestCase
         $generated = CompanyProfile::generateEmployeeEmail('Arif Fahmi Abdillah');
         $this->assertSame('arif.fahmi.abdillah@perusahaananda.co.id', $generated);
     }
+
+    public function test_admin_can_update_weekly_work_days_setting(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        Livewire::test(Index::class)
+            ->set('work_days_per_week', 5)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseHas('company_profiles', [
+            'work_days_per_week' => 5,
+        ]);
+    }
+
+    public function test_admin_can_update_payroll_cutoff_and_pay_day_settings(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        Livewire::test(Index::class)
+            ->set('payroll_cutoff_day', 22)
+            ->set('payroll_pay_day', 27)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseHas('company_profiles', [
+            'payroll_cutoff_day' => 22,
+            'payroll_pay_day' => 27,
+        ]);
+    }
 }

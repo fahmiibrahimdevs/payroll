@@ -501,6 +501,15 @@
             <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 12px;">
                 <h4 class="mb-0">Rincian Gaji - <span class="text-primary font-weight-bold">{{ $period->period_label }}</span></h4>
                 <div class="d-flex align-items-center" style="gap: 8px;">
+                    @if ($period->items()->count() > 0)
+                        <a href="{{ route('payrolls.print-all', $period) }}" 
+                           target="_blank" 
+                           class="btn btn-sm btn-outline-primary font-weight-bold shadow-sm" 
+                           style="border-radius: 8px;"
+                           title="Buka seluruh slip gaji periode ini dalam satu halaman siap cetak">
+                            <i class="fas fa-print mr-1.5"></i> Cetak Semua Slip
+                        </a>
+                    @endif
 
                     @if (auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted')
                         <button type="button" 

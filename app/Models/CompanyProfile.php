@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -25,6 +26,9 @@ class CompanyProfile extends Model
         'postal_code',
         'logo_path',
         'tax_identification_number',
+        'work_days_per_week',
+        'payroll_cutoff_day',
+        'payroll_pay_day',
         'enable_pph21',
         'include_bpjs_in_tax',
         'bpjs_jkk_risk_rate',
@@ -50,6 +54,9 @@ class CompanyProfile extends Model
     protected function casts(): array
     {
         return [
+            'work_days_per_week' => 'integer',
+            'payroll_cutoff_day' => 'integer',
+            'payroll_pay_day' => 'integer',
             'enable_pph21' => 'boolean',
             'include_bpjs_in_tax' => 'boolean',
             'bpjs_jkk_risk_rate' => 'decimal:4',
@@ -79,6 +86,9 @@ class CompanyProfile extends Model
             'email_domain' => 'larashiz.com',
             'address' => 'Jl. Jenderal Sudirman No. 123, Jakarta Selatan',
             'tax_identification_number' => '01.234.567.8-901.000',
+            'work_days_per_week' => 6,
+            'payroll_cutoff_day' => 20,
+            'payroll_pay_day' => 25,
             'enable_pph21' => true,
             'include_bpjs_in_tax' => true,
             'bpjs_jkk_risk_rate' => 0.0024,
@@ -92,6 +102,57 @@ class CompanyProfile extends Model
             'bpjs_kes_cap' => 12000000.00,
             'bpjs_jp_cap' => 10042300.00,
         ]);
+    }
+
+    /**
+     * Resolve the payroll period date range and payment date based on company cutoff & pay day settings.
+     *
+     * @return array{start_date: \Carbon\Carbon, end_date: \Carbon\Carbon, payment_date: \Carbon\Carbon}
+     */
+    public function resolvePayrollCycleDates(int $year, int $month): array
+    {
+        $currMonth = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+        $cutoffDay = (int) ($this->payroll_cutoff_day ?? 20);
+        $payDaySetting = (int) ($this->payroll_pay_day ?? 25);
+
+        // If cutoffDay is 0 or >= 31, use full calendar month (1st to last day of month)
+        if ($cutoffDay === 0 || $cutoffDay >= 31) {
+            $startDate = $currMonth->copy()->startOfDay();
+            $endDate = $currMonth->copy()->endOfMonth();
+            $payDay = $payDaySetting > 0 ? min($payDaySetting, $currMonth->daysInMonth) : $currMonth->daysInMonth;
+            $paymentDate = $currMonth->copy()->day($payDay)->startOfDay();
+
+            return [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'payment_date' => $paymentDate,
+            ];
+        }
+
+        // Standard Cutoff Cycle: (Previous month cutoff + 1) to (Current month cutoff)
+        $endDay = min($cutoffDay, $currMonth->daysInMonth);
+        $endDate = $currMonth->copy()->day($endDay)->endOfDay();
+
+        $prevMonth = $currMonth->copy()->subMonth();
+        $prevCutoffDay = min($cutoffDay, $prevMonth->daysInMonth);
+        $startDate = $prevMonth->copy()->day($prevCutoffDay)->addDay()->startOfDay();
+
+        // If payment day is on or after cutoff day, payment is in the current month.
+        // If payment day is before cutoff day, payment is in the next month.
+        if ($payDaySetting >= $endDay) {
+            $paymentDay = min($payDaySetting, $currMonth->daysInMonth);
+            $paymentDate = $currMonth->copy()->day($paymentDay)->startOfDay();
+        } else {
+            $nextMonth = $currMonth->copy()->addMonth();
+            $paymentDay = min($payDaySetting, $nextMonth->daysInMonth);
+            $paymentDate = $nextMonth->copy()->day($paymentDay)->startOfDay();
+        }
+
+        return [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'payment_date' => $paymentDate,
+        ];
     }
 
     /**

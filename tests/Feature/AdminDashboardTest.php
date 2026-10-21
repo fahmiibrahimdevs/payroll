@@ -58,7 +58,7 @@ class AdminDashboardTest extends TestCase
         $response->assertSee('Karyawan Aktif');
         $response->assertSee('Gaji Bersih');
         $response->assertSee('Sisa Kasbon');
-        $response->assertSee('Pajak PPh 21');
+        $response->assertSee('PPh 21');
         $response->assertSee('Tren Beban Penggajian');
         $response->assertSee('Sebaran Departemen');
     }
@@ -117,15 +117,69 @@ class AdminDashboardTest extends TestCase
             'reason' => 'Keperluan mendesak',
         ]);
 
+        $this->actingAs($this->adminUser);
         $actionItems = app(DashboardService::class)->getActionItems();
         $this->assertNotEmpty($actionItems);
         $allTexts = collect($actionItems)->pluck('text')->implode(' ');
-        $this->assertStringContainsString('pengajuan kasbon baru menunggu persetujuan admin', $allTexts);
+        $this->assertStringContainsString('pengajuan kasbon menunggu persetujuan Direktur', $allTexts);
 
         $response = $this->actingAs($this->adminUser)->get(route('dashboard'));
         $response->assertStatus(200);
         $response->assertSee('Tindakan Perlu Perhatian');
-        $response->assertSee('pengajuan kasbon baru menunggu persetujuan admin');
-        $response->assertSee('Tinjau Kasbon');
+        $response->assertSee('pengajuan kasbon menunggu persetujuan Direktur');
+        $response->assertSee('Lihat Kasbon');
+    }
+
+    public function test_action_items_include_expiring_employee_with_debt_alert(): void
+    {
+        $employee = Employee::factory()->create([
+            'status' => EmployeeStatus::ACTIVE,
+            'employment_status' => EmploymentStatus::KONTRAK,
+            'contract_end_date' => now()->addDays(10)->toDateString(),
+            'full_name' => 'Budi Resign Test',
+        ]);
+
+        CashAdvance::create([
+            'reference_number' => 'CA-EXPIRING-DEBT',
+            'employee_id' => $employee->id,
+            'amount' => 2000000,
+            'remaining_amount' => 1200000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT,
+            'installment_count' => 4,
+            'monthly_installment' => 500000,
+            'disbursement_date' => now()->subMonths(2)->toDateString(),
+            'submitted_by' => $this->adminUser->id,
+            'approved_by' => $this->adminUser->id,
+            'approved_at' => now()->subMonths(2),
+            'status' => CashAdvanceStatus::ACTIVE,
+            'reason' => 'Renovasi rumah',
+        ]);
+
+        $this->actingAs($this->adminUser);
+        $actionItems = app(DashboardService::class)->getActionItems();
+        $this->assertNotEmpty($actionItems);
+
+        $titles = collect($actionItems)->pluck('title')->all();
+        $this->assertContains('Sisa Kasbon Kontrak Berakhir', $titles);
+
+        $allTexts = collect($actionItems)->pluck('text')->implode(' ');
+        $this->assertStringContainsString('Budi Resign Test', $allTexts);
+        $this->assertStringContainsString('Rp 1.200.000', $allTexts);
+    }
+
+    public function test_dashboard_statistics_calculate_correctly_across_different_years(): void
+    {
+        $service = app(DashboardService::class);
+
+        // Employee joined in Jan 2027
+        Employee::factory()->create([
+            'status' => EmployeeStatus::ACTIVE,
+            'employment_status' => EmploymentStatus::TETAP,
+            'join_date' => '2027-01-10',
+        ]);
+
+        $stats2027 = $service->getAdminStatistics(2027, 1);
+        $this->assertGreaterThanOrEqual(1, $stats2027['new_employees_count']);
+        $this->assertContains(2027, $stats2027['available_years']);
     }
 }

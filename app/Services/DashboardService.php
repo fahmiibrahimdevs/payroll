@@ -17,6 +17,7 @@ use App\Models\PayrollItem;
 use App\Models\PayrollPeriod;
 use App\Models\Role;
 use App\Models\User;
+use Carbon\Carbon;
 
 class DashboardService
 {
@@ -37,10 +38,15 @@ class DashboardService
 
         $employee->loadMissing(['detail', 'department', 'position']);
 
+        $activeStatuses = [
+            CashAdvanceStatus::ACTIVE->value,
+            CashAdvanceStatus::APPROVED->value,
+        ];
+
         $cashAdvanceMetrics = CashAdvance::query()
             ->where('employee_id', $employee->id)
-            ->selectRaw('COALESCE(SUM(CASE WHEN status IN (?, ?) THEN remaining_amount ELSE 0 END), 0) as remaining_amount', [CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::PAID->value])
-            ->selectRaw('SUM(CASE WHEN status = ? AND remaining_amount > 0 THEN 1 ELSE 0 END) as active_count', [CashAdvanceStatus::APPROVED->value])
+            ->selectRaw('COALESCE(SUM(CASE WHEN status IN (?, ?) AND remaining_amount > 0 THEN remaining_amount ELSE 0 END), 0) as remaining_amount', $activeStatuses)
+            ->selectRaw('COUNT(CASE WHEN status IN (?, ?) AND remaining_amount > 0 THEN 1 END) as active_count', $activeStatuses)
             ->first();
 
         return [
@@ -82,6 +88,9 @@ class DashboardService
             9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
         ];
 
+        $monthStart = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+        $monthEnd = $monthStart->copy()->addMonth();
+
         // 1. Employee Headcount Metrics
         $employeeCounts = Employee::query()
             ->where('status', EmployeeStatus::ACTIVE)
@@ -89,7 +98,7 @@ class DashboardService
             ->selectRaw('SUM(CASE WHEN employment_status = ? THEN 1 ELSE 0 END) as permanent_count', [EmploymentStatus::TETAP->value])
             ->selectRaw('SUM(CASE WHEN employment_status = ? THEN 1 ELSE 0 END) as contract_count', [EmploymentStatus::KONTRAK->value])
             ->selectRaw('SUM(CASE WHEN employment_status = ? THEN 1 ELSE 0 END) as intern_count', [EmploymentStatus::MAGANG->value])
-            ->selectRaw('SUM(CASE WHEN join_date >= ? AND join_date < ? THEN 1 ELSE 0 END) as new_employees_count', [now()->setDate($year, $month, 1)->startOfMonth()->toDateString(), now()->setDate($year, $month, 1)->startOfMonth()->addMonth()->toDateString()])
+            ->selectRaw('SUM(CASE WHEN join_date >= ? AND join_date < ? THEN 1 ELSE 0 END) as new_employees_count', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->first();
 
         $totalActiveEmployees = (int) $employeeCounts->active_count;
@@ -251,7 +260,7 @@ class DashboardService
         $payrollTotalItemsCount = (int) ($payrollCounts?->total_count ?? 0);
         $payrollVerifiedCount = (int) ($payrollCounts?->verified_count ?? 0);
 
-        $pendingCashAdvancesCount = $isDirector
+        $pendingCashAdvancesCount = $isDirector || $isAdmin
             ? CashAdvance::query()->where('status', CashAdvanceStatus::PENDING)->count()
             : 0;
 
@@ -435,7 +444,7 @@ class DashboardService
         }
 
         // 2. Kasbon: Pengajuan Baru Menunggu Persetujuan
-        if ($pendingCashAdvancesCount > 0 && $isDirector) {
+        if ($pendingCashAdvancesCount > 0 && ($isDirector || $isAdmin)) {
             $oldestPendingAdvance = CashAdvance::query()
                 ->where('status', CashAdvanceStatus::PENDING)
                 ->oldest('created_at')
@@ -450,8 +459,8 @@ class DashboardService
                 'icon_color' => 'text-warning',
                 'title' => 'Persetujuan Kasbon',
                 'text' => "Terdapat {$pendingCashAdvancesCount} pengajuan kasbon menunggu persetujuan Direktur.".($agingRequestsCount > 0 ? " {$agingRequestsCount} pengajuan sudah lebih dari 3 hari." : ''),
-                'action_label' => 'Tinjau Pengajuan',
-                'url' => $oldestPendingAdvance
+                'action_label' => $isDirector ? 'Tinjau Pengajuan' : 'Lihat Kasbon',
+                'url' => ($isDirector && $oldestPendingAdvance)
                     ? route('cash-advances.review', ['advance' => $oldestPendingAdvance->id, 'action' => 'approval'])
                     : route('cash-advances.index'),
             ];
@@ -561,6 +570,31 @@ class DashboardService
                 'text' => ($inactiveEmployeesWithDebtCount - $inactiveEmployeesWithDebt->count()).' kasbon lainnya masih memiliki saldo untuk ditinjau.',
                 'action_label' => 'Buka Daftar Kasbon',
                 'url' => route('cash-advances.index'),
+            ];
+        }
+
+        // Kasbon pada Karyawan yang Kontraknya Berakhir dalam 30 Hari
+        $expiringEmployeesWithDebt = CashAdvance::query()
+            ->whereIn('status', [CashAdvanceStatus::ACTIVE, CashAdvanceStatus::APPROVED])
+            ->where('remaining_amount', '>', 0)
+            ->whereHas('employee', function ($query): void {
+                $query->where('status', EmployeeStatus::ACTIVE)
+                    ->whereNotNull('contract_end_date')
+                    ->whereBetween('contract_end_date', [now()->startOfDay(), now()->addDays(30)->endOfDay()]);
+            })
+            ->with('employee:id,full_name,contract_end_date')
+            ->take(5)
+            ->get(['id', 'employee_id', 'remaining_amount']);
+
+        foreach ($expiringEmployeesWithDebt as $advance) {
+            $actionItems[] = [
+                'type' => 'warning',
+                'icon' => 'fas fa-hand-holding-usd',
+                'icon_color' => 'text-danger',
+                'title' => 'Sisa Kasbon Kontrak Berakhir',
+                'text' => ($advance->employee?->full_name ?? 'Karyawan').' berakhir kontrak pada '.($advance->employee?->contract_end_date?->format('d M Y') ?? '-').' dengan sisa kasbon Rp '.number_format((float) $advance->remaining_amount, 0, ',', '.').'. Pastikan pelunasan pada slip gaji terakhir.',
+                'action_label' => 'Tinjau Kasbon',
+                'url' => route('cash-advances.review', ['advance' => $advance->id, 'action' => 'detail']),
             ];
         }
 

@@ -117,8 +117,10 @@ class Index extends Component
 
         if (auth()->user()?->hasRole('karyawan')) {
             $emp = auth()->user()->getEmployeeRecord();
-            $this->selectedEmployeeId = $emp?->id;
-            $this->selectedDepartmentId = $emp?->department_id;
+            abort_unless($emp !== null, 403, 'Akun Anda belum terhubung dengan data profil karyawan.');
+
+            $this->selectedEmployeeId = $emp->id;
+            $this->selectedDepartmentId = $emp->department_id;
         }
 
         $reviewHandoff = session()->pull('cash_advance_review_handoff');
@@ -1529,8 +1531,10 @@ HTML;
         $karyawanRecord = null;
         if ($isKaryawan) {
             $karyawanRecord = auth()->user()->getEmployeeRecord();
-            $this->selectedEmployeeId = $karyawanRecord?->id;
-            $this->selectedDepartmentId = $karyawanRecord?->department_id;
+            abort_unless($karyawanRecord !== null, 403, 'Akun Anda belum terhubung dengan data profil karyawan.');
+
+            $this->selectedEmployeeId = $karyawanRecord->id;
+            $this->selectedDepartmentId = $karyawanRecord->department_id;
         }
 
         $departments = Department::query()->orderBy('name', 'asc')->get();

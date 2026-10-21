@@ -3,6 +3,7 @@
 namespace App\Livewire\Payrolls;
 
 use App\Enums\PayrollPeriodStatus;
+use App\Models\CompanyProfile;
 use App\Models\PayrollPeriod;
 use App\Services\PayrollService;
 use Carbon\Carbon;
@@ -83,6 +84,13 @@ class Index extends Component
     public function updatedSearch(): void
     {
         $this->resetPage();
+    }
+
+    public function getEstimatedCycleProperty(): array
+    {
+        $company = CompanyProfile::getProfile();
+
+        return $company->resolvePayrollCycleDates((int) ($this->newYear ?: now()->year), (int) ($this->newMonth ?: now()->month));
     }
 
     public function openCreateModal(): void

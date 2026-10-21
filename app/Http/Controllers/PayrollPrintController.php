@@ -61,6 +61,47 @@ class PayrollPrintController extends Controller
     }
 
     /**
+     * Display printable batch payslips view for all employees in a period.
+     */
+    public function printAllSlips(PayrollPeriod $period): View
+    {
+        $user = auth()->user();
+        abort_unless($user && $user->hasRole(['admin', 'direktur']), 403, 'Hanya Admin dan Direktur yang dapat mencetak seluruh slip gaji.');
+
+        $period->loadMissing(['creator', 'submitter', 'approver']);
+
+        $items = $period->items()
+            ->with([
+                'employee.department',
+                'employee.position',
+                'employee.detail',
+                'allowanceLines.salaryComponent',
+                'deductionLines.salaryComponent',
+                'payrollPeriod',
+            ])
+            ->orderBy('id')
+            ->get();
+
+        $company = CompanyProfile::getProfile();
+
+        $this->logger->info(
+            action: 'PAYSLIPS_BATCH_PRINTED',
+            module: 'payrolls',
+            message: 'All payslips batch print view opened',
+            context: [
+                'payroll_period_id' => $period->id,
+                'items_count' => $items->count(),
+            ]
+        );
+
+        return view('payrolls.print-batch', [
+            'period' => $period,
+            'items' => $items,
+            'company' => $company,
+        ]);
+    }
+
+    /**
      * Display printable annual payroll summary.
      */
     public function printYearlySummary(int $year, PayrollService $service): View

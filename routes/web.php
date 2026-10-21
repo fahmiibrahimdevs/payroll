@@ -129,6 +129,10 @@ Route::get('payrolls/{period}/items/{item}/print', [PayrollPrintController::clas
     ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
     ->name('payrolls.items.print');
 
+Route::get('payrolls/{period}/print-all', [PayrollPrintController::class, 'printAllSlips'])
+    ->middleware(['auth', 'active', 'role:admin|direktur'])
+    ->name('payrolls.print-all');
+
 Route::get('payrolls/yearly-summary/{year}/print', [PayrollPrintController::class, 'printYearlySummary'])
     ->middleware(['auth', 'active', 'role:admin|direktur'])
     ->name('payrolls.yearly-summary.print');

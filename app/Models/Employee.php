@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CashAdvanceStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
 use Database\Factories\EmployeeFactory;
@@ -279,12 +280,93 @@ class Employee extends Model
     }
 
     /**
+     * Get the total accumulated cash advance amount (approved/active/paid).
+     */
+    protected function totalCashAdvanceAmount(): Attribute
+    {
+        return Attribute::make(
+            get: function (): float {
+                if ($this->relationLoaded('cashAdvances')) {
+                    $total = (float) $this->cashAdvances
+                        ->filter(fn ($ca) => in_array($ca->status, [
+                            CashAdvanceStatus::APPROVED,
+                            CashAdvanceStatus::ACTIVE,
+                            CashAdvanceStatus::PAID,
+                        ], true) || in_array($ca->status?->value ?? (string) $ca->status, [
+                            CashAdvanceStatus::APPROVED->value,
+                            CashAdvanceStatus::ACTIVE->value,
+                            CashAdvanceStatus::PAID->value,
+                        ], true))
+                        ->sum('amount');
+
+                    if ($total > 0 || $this->cashAdvances->isNotEmpty()) {
+                        return $total;
+                    }
+                } elseif ($this->exists && $this->cashAdvances()->exists()) {
+                    return (float) $this->cashAdvances()
+                        ->whereIn('status', [
+                            CashAdvanceStatus::APPROVED->value,
+                            CashAdvanceStatus::ACTIVE->value,
+                            CashAdvanceStatus::PAID->value,
+                        ])
+                        ->sum('amount');
+                }
+
+                return (float) ($this->total_cash_receipt ?? 0);
+            }
+        );
+    }
+
+    /**
      * Get formatted Indonesian rupiah currency for total cash receipt.
      */
     protected function formattedTotalCashReceipt(): Attribute
     {
         return Attribute::make(
-            get: fn (): string => 'Rp '.number_format((float) ($this->total_cash_receipt ?? 0), 0, ',', '.'),
+            get: fn (): string => 'Rp '.number_format((float) ($this->total_cash_advance_amount ?? 0), 0, ',', '.'),
+        );
+    }
+
+    /**
+     * Get remaining cash advance balance for this employee.
+     */
+    protected function remainingCashAdvance(): Attribute
+    {
+        return Attribute::make(
+            get: function (): float {
+                if ($this->relationLoaded('cashAdvances')) {
+                    return (float) $this->cashAdvances
+                        ->filter(fn ($ca) => in_array($ca->status, [
+                            CashAdvanceStatus::APPROVED,
+                            CashAdvanceStatus::ACTIVE,
+                        ], true) || in_array($ca->status?->value ?? (string) $ca->status, [
+                            CashAdvanceStatus::APPROVED->value,
+                            CashAdvanceStatus::ACTIVE->value,
+                        ], true))
+                        ->sum('remaining_amount');
+                }
+
+                if ($this->exists) {
+                    return (float) $this->cashAdvances()
+                        ->whereIn('status', [
+                            CashAdvanceStatus::APPROVED->value,
+                            CashAdvanceStatus::ACTIVE->value,
+                        ])
+                        ->sum('remaining_amount');
+                }
+
+                return 0.0;
+            }
+        );
+    }
+
+    /**
+     * Get formatted Indonesian rupiah currency for remaining cash advance.
+     */
+    protected function formattedRemainingCashAdvance(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): string => 'Rp '.number_format((float) ($this->remaining_cash_advance ?? 0), 0, ',', '.'),
         );
     }
 

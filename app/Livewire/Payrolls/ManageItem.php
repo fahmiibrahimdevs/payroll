@@ -296,6 +296,11 @@ class ManageItem extends Component
                         $line->update(['amount' => $amount]);
                         app(PayrollService::class)->recalculateItem($this->item);
                         $this->item->refresh();
+                    } elseif ($this->isEditable && abs($amount - (float) $inst->amount) < 0.001 && $inst->paid_amount > 0) {
+                        $amount = min($unpaidInstallment, $totalRemainingAdvance);
+                        $line->update(['amount' => $amount]);
+                        app(PayrollService::class)->recalculateItem($this->item);
+                        $this->item->refresh();
                     }
                 }
             }
@@ -772,7 +777,15 @@ class ManageItem extends Component
                         $this->allowanceRows[$index]['calc_mode'] = 'nominal';
                         $this->allowanceRows[$index]['percentage'] = '';
                         if ($comp->default_value !== null && (float) $comp->default_value > 0) {
-                            $this->allowanceRows[$index]['amount'] = (float) $comp->default_value;
+                            $defaultVal = (float) $comp->default_value;
+                            $ratio = $this->getEmployeeProrateRatio();
+                            $isFixedAllowance = $comp->category === SalaryComponentCategory::FIXED_ALLOWANCE
+                                || (is_string($comp->category) && $comp->category === 'pendapatan_tetap');
+                            if ($isFixedAllowance && $ratio < 1.0) {
+                                $this->allowanceRows[$index]['amount'] = round($defaultVal * $ratio);
+                            } else {
+                                $this->allowanceRows[$index]['amount'] = $defaultVal;
+                            }
                         }
                     }
                 } else {
@@ -1024,6 +1037,17 @@ class ManageItem extends Component
         return $isValid;
     }
 
+    protected function getEmployeeProrateRatio(): float
+    {
+        if (! $this->item->employee) {
+            return 1.0;
+        }
+
+        $info = app(PayrollService::class)->calculateProratedSalary($this->item->employee, $this->period);
+
+        return $info['is_prorated'] ? (float) ($info['ratio'] ?? 1.0) : 1.0;
+    }
+
     public function resetKasbonDeduction(int $index): void
     {
         if (! $this->isEditable || ! isset($this->deductionRows[$index])) {
@@ -1051,6 +1075,36 @@ class ManageItem extends Component
         $this->clearComputedProperties();
 
         $this->dispatch('deduction-reset-'.$index, amount: $normalAmount);
+    }
+
+    public function settleRemainingKasbon(int $index): void
+    {
+        if (! $this->isEditable || ! isset($this->deductionRows[$index])) {
+            return;
+        }
+
+        $rem = (float) ($this->deductionRows[$index]['advance_remaining_amount'] ?? 0);
+        if ($rem <= 0 && ! empty($this->deductionRows[$index]['cash_advance_installment_id'])) {
+            $inst = CashAdvanceInstallment::with('cashAdvance')->find($this->deductionRows[$index]['cash_advance_installment_id']);
+            if ($inst?->cashAdvance) {
+                $rem = (float) $inst->cashAdvance->remaining_amount;
+                $this->deductionRows[$index]['advance_remaining_amount'] = $rem;
+            }
+        }
+
+        if ($rem > 0) {
+            $this->deductionRows[$index]['amount'] = $rem;
+            $this->deductionRows[$index]['is_enabled'] = true;
+            $this->validateCashAdvanceDeductionRows($index);
+            $this->syncAutoBpjsAndTax();
+            $this->clearComputedProperties();
+
+            $this->dispatch('deduction-reset-'.$index, amount: $rem);
+            $this->dispatch('swal:toast', [
+                'type' => 'info',
+                'message' => 'Nominal potongan diset ke pelunasan sisa kasbon Rp '.number_format($rem, 0, ',', '.'),
+            ]);
+        }
     }
 
     public function clearComputedProperties(): void
@@ -1381,7 +1435,15 @@ class ManageItem extends Component
                 $this->modalCalcMode = 'nominal';
                 $this->modalPercentage = '';
                 if ($comp->default_value !== null && (float) $comp->default_value > 0) {
-                    $this->modalAmount = (float) $comp->default_value;
+                    $defaultVal = (float) $comp->default_value;
+                    $ratio = $this->getEmployeeProrateRatio();
+                    $isFixedAllowance = $comp->category === SalaryComponentCategory::FIXED_ALLOWANCE
+                        || (is_string($comp->category) && $comp->category === 'pendapatan_tetap');
+                    if ($isFixedAllowance && $ratio < 1.0) {
+                        $this->modalAmount = round($defaultVal * $ratio);
+                    } else {
+                        $this->modalAmount = $defaultVal;
+                    }
                 }
             }
         }
@@ -1721,7 +1783,12 @@ class ManageItem extends Component
         string $mode = 'ter_scheme'
     ): array {
         $recon = $taxResult['annual_reconciliation'] ?? null;
-        $periodName = $this->period->start_date?->locale('id')->translatedFormat('F') ?? 'Terakhir';
+        $monthsList = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ];
+        $periodName = $monthsList[(int) $this->period->month] ?? ($this->period->end_date?->locale('id')->translatedFormat('F') ?? 'Terakhir');
         if (! $recon) {
             return [
                 'title' => $mode === 'pph21' ? 'Rincian Perhitungan PPh 21 (Masa Terakhir)' : 'Dasar Skema Tarif PPh 21 (Masa Terakhir)',

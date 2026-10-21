@@ -603,9 +603,15 @@
                             @enderror
                         </div>
 
-                        <div class="alert alert-light border small text-muted mb-0">
-                            <i class="fas fa-info-circle text-primary mr-1"></i>
-                            Sistem akan secara otomatis menarik seluruh karyawan berstatus <strong>Aktif</strong>, gaji pokok masing-masing, serta potongan cicilan kasbon yang jatuh tempo pada bulan tersebut.
+                        <div class="alert alert-light border small text-muted mb-0" style="background-color: #f8fafc; border-radius: 8px;">
+                            <div class="d-flex align-items-center mb-1 text-dark font-weight-600" style="font-size: 12px;">
+                                <i class="fas fa-calendar-alt text-primary mr-1.5"></i>
+                                <span>Siklus Cut-Off: {{ $this->estimatedCycle['start_date']->translatedFormat('d M Y') }} &ndash; {{ $this->estimatedCycle['end_date']->translatedFormat('d M Y') }}</span>
+                                <span class="badge badge-light border text-primary ml-2 font-weight-600" style="font-size: 10.5px;">Gajian: {{ $this->estimatedCycle['payment_date']->translatedFormat('d M Y') }}</span>
+                            </div>
+                            <div style="font-size: 11px; line-height: 1.45; color: #64748b;">
+                                Sistem otomatis menarik seluruh karyawan aktif dalam rentang siklus di atas serta potongan cicilan kasbon yang jatuh tempo.
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer bg-whitesmoke br">

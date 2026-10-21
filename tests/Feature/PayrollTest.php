@@ -176,6 +176,7 @@ class PayrollTest extends TestCase
 
         // Create payroll period via Livewire
         Livewire::test(PayrollIndex::class)
+            ->assertSee('Siklus Cut-Off:')
             ->set('newMonth', $currentMonth)
             ->set('newYear', $currentYear)
             ->set('newName', "Penggajian Bulan {$currentMonth} {$currentYear}")
@@ -1273,7 +1274,7 @@ class PayrollTest extends TestCase
         // Approve item 1 individually
         Livewire::test(PayrollShow::class, ['period' => $period])
             ->call('approveItem', $item1->id)
-            ->assertDispatched('swal:toast');
+            ->assertDispatched('swal:alert');
 
         $item1->refresh();
         $item2->refresh();
@@ -1288,7 +1289,7 @@ class PayrollTest extends TestCase
         // Approve item 2 individually -> should automatically sync period status to approved
         Livewire::test(PayrollShow::class, ['period' => $period])
             ->call('approveItem', $item2->id)
-            ->assertDispatched('swal:toast');
+            ->assertDispatched('swal:alert');
 
         $item2->refresh();
         $period->refresh();
@@ -1352,7 +1353,7 @@ class PayrollTest extends TestCase
         Livewire::test(PayrollShow::class, ['period' => $period])
             ->set('selectedItems', [$item1->id, $item2->id])
             ->call('approveSelected')
-            ->assertDispatched('swal:toast');
+            ->assertDispatched('swal:alert');
 
         $item1->refresh();
         $item2->refresh();
@@ -1368,7 +1369,7 @@ class PayrollTest extends TestCase
             ->set('itemRejectionReason', 'Tolong sesuaikan lembur')
             ->set('isBulkReject', true)
             ->call('confirmRejectItem')
-            ->assertDispatched('swal:toast');
+            ->assertDispatched('swal:alert');
 
         $item3->refresh();
         $this->assertTrue($item3->isRejected());
@@ -2168,6 +2169,9 @@ class PayrollTest extends TestCase
         $service = app(PayrollService::class);
         $admin = $this->createAdminUser();
 
+        $company = CompanyProfile::getProfile();
+        $company->update(['work_days_per_week' => 6]);
+
         // October 2026 has 31 days, 4 Sundays (4, 11, 18, 25 Oct), so 27 working days (Mon-Sat)
         $period = PayrollPeriod::create([
             'reference_number' => 'PR-TEST-PRORATE-1',
@@ -2186,6 +2190,7 @@ class PayrollTest extends TestCase
         $empMid = Employee::factory()->active()->create([
             'basic_salary' => 6000000,
             'join_date' => '2026-10-15',
+            'contract_end_date' => null,
         ]);
 
         $resMid = $service->calculateProratedSalary($empMid, $period);
@@ -2198,6 +2203,7 @@ class PayrollTest extends TestCase
         $empFull = Employee::factory()->active()->create([
             'basic_salary' => 6000000,
             'join_date' => '2026-10-01',
+            'contract_end_date' => null,
         ]);
         $resFull = $service->calculateProratedSalary($empFull, $period);
         $this->assertFalse($resFull['is_prorated']);
@@ -2207,10 +2213,64 @@ class PayrollTest extends TestCase
         $empOld = Employee::factory()->active()->create([
             'basic_salary' => 6000000,
             'join_date' => '2026-09-01',
+            'contract_end_date' => null,
         ]);
         $resOld = $service->calculateProratedSalary($empOld, $period);
         $this->assertFalse($resOld['is_prorated']);
         $this->assertEquals(6000000, (int) $resOld['basic_salary']);
+    }
+
+    public function test_prorated_salary_calculation_five_day_workweek(): void
+    {
+        $service = app(PayrollService::class);
+        $admin = $this->createAdminUser();
+
+        $company = CompanyProfile::getProfile();
+        $company->update(['work_days_per_week' => 5]);
+
+        $period = PayrollPeriod::create([
+            'reference_number' => 'PR-TEST-PRORATE-5DAYS',
+            'name' => 'Payroll Test Prorate 5 Days',
+            'month' => 10,
+            'year' => 2026,
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-10-31',
+            'payment_date' => '2026-10-31',
+            'status' => PayrollPeriodStatus::DRAFT,
+            'created_by' => $admin->id,
+        ]);
+
+        // Employee joined mid-month: 15 Oct 2026 (5-day workweek)
+        // Total working days (Mon-Fri in Oct 2026): 22 days
+        // Worked days (15 Oct to 31 Oct, excluding Sat & Sun): 12 days
+        $empMid = Employee::factory()->active()->create([
+            'basic_salary' => 6000000,
+            'join_date' => '2026-10-15',
+            'contract_end_date' => null,
+        ]);
+
+        $resMid = $service->calculateProratedSalary($empMid, $period, $company);
+        $this->assertTrue($resMid['is_prorated']);
+        $this->assertEquals(22, $resMid['total_working_days']);
+        $this->assertEquals(12, $resMid['worked_days']);
+        $this->assertEquals(3272727, (int) $resMid['basic_salary']);
+        $this->assertEquals('join', $resMid['reason']);
+
+        // Employee resigns mid-month: contract ends 20 Oct 2026
+        // Worked days (1 Oct to 20 Oct, Mon-Fri): 14 days
+        $empResign = Employee::factory()->active()->create([
+            'basic_salary' => 6000000,
+            'join_date' => '2025-01-01',
+            'contract_end_date' => '2026-10-20',
+        ]);
+
+        $resResign = $service->calculateProratedSalary($empResign, $period, $company);
+        $this->assertTrue($resResign['is_prorated']);
+        $this->assertEquals(22, $resResign['total_working_days']);
+        $this->assertEquals(14, $resResign['worked_days']);
+        $this->assertEquals(3818182, (int) $resResign['basic_salary']);
+        $this->assertEquals('resignation', $resResign['reason']);
+        $this->assertStringContainsString('selesai/akhir kerja 20', $resResign['reason_text']);
     }
 
     public function test_sync_missing_employees_and_banner_detection(): void
@@ -3232,5 +3292,260 @@ class PayrollTest extends TestCase
         $this->assertCount(2, $payments);
         $this->assertTrue($payments->every(fn ($p) => $p->payment_method === PaymentMethod::SALARY_DEDUCTION));
         $this->assertEquals(366667, (float) $payments->sum('amount'));
+    }
+
+    public function test_manage_item_settle_remaining_kasbon_sets_full_remaining_amount_and_marks_paid_on_payroll_settlement(): void
+    {
+        $admin = $this->createAdminUser();
+        $direktur = $this->createDirectorUser();
+        $this->actingAs($admin);
+
+        $emp = Employee::factory()->create([
+            'status' => EmployeeStatus::ACTIVE,
+            'employment_status' => EmploymentStatus::KONTRAK,
+            'contract_end_date' => '2026-10-28',
+            'basic_salary' => 8000000,
+        ]);
+
+        $ca = CashAdvance::create([
+            'reference_number' => 'KB-TEST-SETTLE-RESIGN',
+            'employee_id' => $emp->id,
+            'amount' => 1500000,
+            'remaining_amount' => 1500000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT,
+            'installment_count' => 3,
+            'monthly_installment' => 500000,
+            'disbursement_date' => '2026-10-01',
+            'reason' => 'Pinjaman resign test',
+            'status' => CashAdvanceStatus::ACTIVE,
+            'submitted_by' => $admin->id,
+            'approved_by' => $admin->id,
+            'approved_at' => now(),
+        ]);
+
+        $inst1 = CashAdvanceInstallment::create([
+            'cash_advance_id' => $ca->id,
+            'installment_number' => 1,
+            'due_date' => '2026-10-25',
+            'amount' => 500000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING,
+        ]);
+
+        $inst2 = CashAdvanceInstallment::create([
+            'cash_advance_id' => $ca->id,
+            'installment_number' => 2,
+            'due_date' => '2026-11-25',
+            'amount' => 500000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING,
+        ]);
+
+        $inst3 = CashAdvanceInstallment::create([
+            'cash_advance_id' => $ca->id,
+            'installment_number' => 3,
+            'due_date' => '2026-12-25',
+            'amount' => 500000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING,
+        ]);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'year' => 2026,
+            'month' => 10,
+            'name' => 'Payroll Resign Settlement Test',
+        ], $admin);
+
+        $item = $period->items()->where('employee_id', $emp->id)->first();
+        $this->assertNotNull($item);
+
+        // ManageItem should allow 1-click full settlement of 1,500,000
+        $component = Livewire::test(ManageItem::class, ['period' => $period, 'item' => $item]);
+        $caIdx = collect($component->get('deductionRows'))->search(fn ($r) => ! empty($r['cash_advance_installment_id']));
+        $this->assertNotFalse($caIdx);
+
+        // Initial deduction was 500,000 (normal 1st installment)
+        $this->assertEquals(500000, (float) $component->get("deductionRows.{$caIdx}.amount"));
+
+        // Click settle remaining kasbon (lunaskan sekaligus)
+        $component->call('settleRemainingKasbon', $caIdx);
+        $this->assertEquals(1500000, (float) $component->get("deductionRows.{$caIdx}.amount"));
+
+        $component->call('save');
+        $this->assertEquals(1500000, (float) $component->get("deductionRows.{$caIdx}.amount"));
+
+        // Verify, Submit, Approve, and Mark as Paid
+        $service->verifyItem($item->fresh(), $admin);
+        $period->refresh();
+        $service->submitPeriod($period, $admin);
+
+        $this->actingAs($direktur);
+        $service->approvePeriod($period, $direktur);
+
+        $this->actingAs($admin);
+        $period->refresh();
+        $service->markAsPaid($period, [
+            'payment_date' => '2026-10-31',
+            'payment_method' => 'bank_transfer',
+            'notes' => 'Pembayaran gaji terakhir resign',
+        ], $admin);
+
+        // Verify all 3 installments and the loan itself are marked PAID/SETTLED
+        $inst1->refresh();
+        $inst2->refresh();
+        $inst3->refresh();
+        $ca->refresh();
+
+        $this->assertEquals(InstallmentStatus::PAID, $inst1->status);
+        $this->assertEquals(InstallmentStatus::PAID, $inst2->status);
+        $this->assertEquals(InstallmentStatus::PAID, $inst3->status);
+        $this->assertEquals(CashAdvanceStatus::PAID, $ca->status);
+        $this->assertEquals(0, (float) $ca->remaining_amount);
+    }
+
+    public function test_fixed_allowance_is_prorated_by_default_and_editable_by_admin(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $company = CompanyProfile::getProfile();
+        $company->update(['work_days_per_week' => 5]);
+
+        $comp = SalaryComponent::create([
+            'name' => 'Tunjangan Jabatan Prorata Test',
+            'code' => 'TUNJ_JAB_PRORATA',
+            'category' => SalaryComponentCategory::FIXED_ALLOWANCE,
+            'calculation_type' => SalaryCalculationType::NOMINAL,
+            'default_value' => 2200000,
+            'is_taxable' => true,
+            'is_system' => false,
+            'is_active' => true,
+        ]);
+
+        $emp = Employee::factory()->active()->create([
+            'basic_salary' => 6000000,
+            'join_date' => '2026-10-15',
+            'contract_end_date' => null,
+        ]);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'year' => 2026,
+            'month' => 10,
+            'name' => 'Payroll Oct 2026 Fixed Allowance Prorate',
+        ], $admin);
+
+        $item = $period->items()->where('employee_id', $emp->id)->first();
+        $this->assertNotNull($item);
+
+        // With cutoff day 20, period cycle is 21 Sep - 20 Oct.
+        // Joined 15 Oct -> worked 4 days out of 22 total working days (Mon-Fri) = 400,000 prorated
+        $lw = Livewire::test(ManageItem::class, ['period' => $period, 'item' => $item]);
+
+        // Test modal selection defaults to 400,000
+        $lw->call('applyModalMaster', $comp->id);
+        $this->assertEquals(400000, (float) $lw->get('modalAmount'));
+
+        // Test quick table row input defaults to 400,000
+        $lw->set('allowanceRows.0.name', $comp->name);
+        $this->assertEquals(400000, (float) $lw->get('allowanceRows.0.amount'));
+
+        // Admin can still manually override and save
+        $lw->set('allowanceRows.0.amount', 2000000);
+        $lw->call('save');
+
+        $savedLine = $item->fresh()->lines()->where('salary_component_id', $comp->id)->first();
+        $this->assertNotNull($savedLine);
+        $this->assertEquals(2000000, (float) $savedLine->amount);
+    }
+
+    public function test_payroll_period_cycle_respects_cutoff_day_and_cross_year(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $company = CompanyProfile::getProfile();
+        $company->update([
+            'payroll_cutoff_day' => 20,
+            'payroll_pay_day' => 25,
+        ]);
+
+        $service = app(PayrollService::class);
+
+        // 1. Regular month: October 2026 -> 21 Sep to 20 Oct, pay date 25 Oct
+        $periodOct = $service->createPeriod([
+            'year' => 2026,
+            'month' => 10,
+            'name' => 'Payroll Cutoff Oct 2026',
+        ], $admin);
+
+        $this->assertEquals('2026-09-21', $periodOct->start_date->toDateString());
+        $this->assertEquals('2026-10-20', $periodOct->end_date->toDateString());
+        $this->assertEquals('2026-10-25', $periodOct->payment_date->toDateString());
+
+        // 2. Cross-year boundary: January 2027 -> 21 Dec 2026 to 20 Jan 2027, pay date 25 Jan 2027
+        $periodJan = $service->createPeriod([
+            'year' => 2027,
+            'month' => 1,
+            'name' => 'Payroll Cutoff Jan 2027',
+        ], $admin);
+
+        $this->assertEquals('2026-12-21', $periodJan->start_date->toDateString());
+        $this->assertEquals('2027-01-20', $periodJan->end_date->toDateString());
+        $this->assertEquals('2027-01-25', $periodJan->payment_date->toDateString());
+
+        // 3. Payday in next month (e.g. cutoff = 25, payday = 1 next month)
+        $company->update([
+            'payroll_cutoff_day' => 25,
+            'payroll_pay_day' => 1,
+        ]);
+
+        $periodNov = $service->createPeriod([
+            'year' => 2026,
+            'month' => 11,
+            'name' => 'Payroll Cutoff Nov 2026 Next Month Payday',
+        ], $admin);
+
+        $this->assertEquals('2026-10-26', $periodNov->start_date->toDateString());
+        $this->assertEquals('2026-11-25', $periodNov->end_date->toDateString());
+        $this->assertEquals('2026-12-01', $periodNov->payment_date->toDateString());
+    }
+
+    public function test_admin_and_director_can_batch_print_all_slips_while_karyawan_is_forbidden(): void
+    {
+        $admin = $this->createAdminUser();
+        $director = $this->createDirectorUser();
+
+        $emp1 = Employee::factory()->active()->create(['basic_salary' => 5000000, 'full_name' => 'Budi Cetak']);
+        $emp2 = Employee::factory()->active()->create(['basic_salary' => 6000000, 'full_name' => 'Siti Cetak']);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'year' => 2026,
+            'month' => 10,
+            'name' => 'Payroll Batch Print Test',
+        ], $admin);
+
+        // 1. Admin can access batch print
+        $this->actingAs($admin);
+        $responseAdmin = $this->get(route('payrolls.print-all', $period));
+        $responseAdmin->assertOk();
+        $responseAdmin->assertSee('Cetak Seluruh Slip Gaji:');
+        $responseAdmin->assertSee('Budi Cetak');
+        $responseAdmin->assertSee('Siti Cetak');
+
+        // 2. Director can also access batch print
+        $this->actingAs($director);
+        $responseDir = $this->get(route('payrolls.print-all', $period));
+        $responseDir->assertOk();
+        $responseDir->assertSee('Budi Cetak');
+
+        // 3. User with karyawan role cannot access batch print
+        $karyawanUser = User::factory()->create(['is_active' => true]);
+        $karyawanUser->addRole('karyawan');
+        $this->actingAs($karyawanUser);
+        $responseKaryawan = $this->get(route('payrolls.print-all', $period));
+        $responseKaryawan->assertForbidden();
     }
 }
