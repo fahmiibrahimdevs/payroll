@@ -83,4 +83,44 @@ class CacheInvalidationTest extends TestCase
         CashAdvanceService::clearRecapChartCache();
         $this->assertFalse(Cache::has(CashAdvanceService::RECAP_CHART_CACHE_KEY));
     }
+
+    public function test_salary_component_lookup_cache_is_invalidated_when_updated(): void
+    {
+        Cache::flush();
+
+        $initial = \App\Models\SalaryComponent::getActiveLookup();
+        $this->assertTrue(Cache::has(\App\Models\SalaryComponent::LOOKUP_CACHE_KEY));
+
+        $newComp = \App\Models\SalaryComponent::create([
+            'name' => 'Tunjangan Khusus Project',
+            'code' => 'TUNJ_PROJECT',
+            'category' => \App\Enums\SalaryComponentCategory::FIXED_ALLOWANCE,
+            'type' => \App\Enums\SalaryComponentType::ALLOWANCE,
+            'calculation_type' => \App\Enums\SalaryCalculationType::NOMINAL,
+            'default_value' => 500000,
+            'is_taxable' => true,
+            'is_system' => false,
+            'is_active' => true,
+            'sort_order' => 99,
+        ]);
+
+        // Cache must be flushed automatically
+        $this->assertFalse(Cache::has(\App\Models\SalaryComponent::LOOKUP_CACHE_KEY));
+
+        $refreshed = \App\Models\SalaryComponent::getActiveLookup();
+        $this->assertTrue($refreshed->contains('code', 'TUNJ_PROJECT'));
+        $this->assertNotNull(\App\Models\SalaryComponent::getByCode('TUNJ_PROJECT'));
+    }
+
+    public function test_dashboard_payroll_trend_cache_is_invalidated_when_payroll_period_saved(): void
+    {
+        Cache::flush();
+
+        $year = (int) date('Y');
+        Cache::put("dashboard_payroll_trend_{$year}", ['test' => true], 1800);
+        $this->assertTrue(Cache::has("dashboard_payroll_trend_{$year}"));
+
+        \App\Services\DashboardService::clearPayrollTrendCache($year);
+        $this->assertFalse(Cache::has("dashboard_payroll_trend_{$year}"));
+    }
 }

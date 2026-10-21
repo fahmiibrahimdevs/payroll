@@ -258,11 +258,7 @@ class Show extends Component
      */
     public function getMasterComponentsProperty(): Collection
     {
-        return SalaryComponent::query()
-            ->where('is_active', true)
-            ->orderBy('type')
-            ->orderBy('name')
-            ->get();
+        return SalaryComponent::getActiveLookup()->sortBy(['type', 'name'])->values();
     }
 
     /**
@@ -270,13 +266,13 @@ class Show extends Component
      */
     public function getMasterAllowancesProperty(): Collection
     {
-        return SalaryComponent::query()
-            ->where('is_active', true)
-            ->where('type', SalaryComponentType::ALLOWANCE)
-            ->where('category', '!=', SalaryComponentCategory::DEDUCTION)
-            ->whereNotIn('code', ['GAJI_POKOK', 'TUNJ_PPH21', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP', 'PPH21', 'KASBON', 'POT-KASBON'])
-            ->orderBy('name')
-            ->get();
+        return SalaryComponent::getActiveLookup()
+            ->filter(fn ($comp) => $comp->type === SalaryComponentType::ALLOWANCE
+                && $comp->category !== SalaryComponentCategory::DEDUCTION
+                && ! in_array($comp->code, ['GAJI_POKOK', 'TUNJ_PPH21', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP', 'PPH21', 'KASBON', 'POT-KASBON'], true)
+            )
+            ->sortBy('name')
+            ->values();
     }
 
     /**
@@ -284,14 +280,14 @@ class Show extends Component
      */
     public function getMasterDeductionsProperty(): Collection
     {
-        return SalaryComponent::query()
-            ->where('is_active', true)
-            ->where('type', SalaryComponentType::DEDUCTION)
-            ->where('category', SalaryComponentCategory::DEDUCTION)
-            ->whereNotIn('code', ['PPH21', 'KASBON', 'POT-KASBON', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP'])
-            ->where('is_system', false)
-            ->orderBy('name')
-            ->get();
+        return SalaryComponent::getActiveLookup()
+            ->filter(fn ($comp) => $comp->type === SalaryComponentType::DEDUCTION
+                && $comp->category === SalaryComponentCategory::DEDUCTION
+                && ! $comp->is_system
+                && ! in_array($comp->code, ['PPH21', 'KASBON', 'POT-KASBON', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP'], true)
+            )
+            ->sortBy('name')
+            ->values();
     }
 
     /**

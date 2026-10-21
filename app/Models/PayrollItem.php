@@ -448,4 +448,16 @@ class PayrollItem extends Model
             }
         );
     }
+
+    protected static function booted(): void
+    {
+        static::saved(function (PayrollItem $item) {
+            $year = $item->payrollPeriod?->year;
+            \App\Services\DashboardService::clearPayrollTrendCache($year);
+        });
+        static::deleted(function (PayrollItem $item) {
+            $year = $item->payrollPeriod?->year;
+            \App\Services\DashboardService::clearPayrollTrendCache($year);
+        });
+    }
 }

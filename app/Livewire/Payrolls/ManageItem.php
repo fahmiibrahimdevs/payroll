@@ -361,9 +361,9 @@ class ManageItem extends Component
                 $hasBpjs = collect($this->deductionRows)->contains(fn ($r) => ($r['category'] ?? '') === 'bpjs' || str_starts_with(strtolower($r['name'] ?? ''), 'bpjs'));
                 if (! $hasBpjs) {
                     $bpjs = $this->bpjsBreakdown;
-                    $compBpjsKes = SalaryComponent::where('code', 'BPJS_KES')->first();
-                    $compBpjsJht = SalaryComponent::where('code', 'BPJS_JHT')->first();
-                    $compBpjsJp = SalaryComponent::where('code', 'BPJS_JP')->first();
+                    $compBpjsKes = SalaryComponent::getByCode('BPJS_KES');
+                    $compBpjsJht = SalaryComponent::getByCode('BPJS_JHT');
+                    $compBpjsJp = SalaryComponent::getByCode('BPJS_JP');
                     $bpjsDefault = (bool) $company->include_bpjs_in_tax;
 
                     $this->deductionRows[] = [
@@ -412,7 +412,7 @@ class ManageItem extends Component
             if ($this->item->employee?->detail && $basic > 0) {
                 $hasPph = collect($this->deductionRows)->contains(fn ($r) => ($r['category'] ?? '') === 'tax' || str_starts_with(strtolower(trim($r['name'] ?? '')), 'pph 21'));
                 if (! $hasPph) {
-                    $compPph = SalaryComponent::where('code', 'PPH21')->first();
+                    $compPph = SalaryComponent::getByCode('PPH21');
                     $pphDefault = (bool) $company->enable_pph21;
                     $pphAmount = (float) ($this->item->pph21_amount ?? 0);
                     $this->deductionRows[] = [
@@ -502,16 +502,14 @@ class ManageItem extends Component
             ->map(fn ($n) => strtolower(trim($n)))
             ->all();
 
-        return SalaryComponent::query()
-            ->where('is_active', true)
-            ->where('type', SalaryComponentType::ALLOWANCE)
-            ->where('category', '!=', SalaryComponentCategory::DEDUCTION)
-            ->whereNotIn('code', ['GAJI_POKOK', 'TUNJ_PPH21', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP', 'PPH21', 'KASBON', 'POT-KASBON'])
-            ->when(! empty($usedIds), fn ($q) => $q->whereNotIn('id', $usedIds))
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get()
-            ->filter(fn ($comp) => ! in_array(strtolower(trim($comp->name)), $usedNames))
+        return SalaryComponent::getActiveLookup()
+            ->filter(fn ($comp) => $comp->type === SalaryComponentType::ALLOWANCE
+                && $comp->category !== SalaryComponentCategory::DEDUCTION
+                && ! in_array($comp->code, ['GAJI_POKOK', 'TUNJ_PPH21', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP', 'PPH21', 'KASBON', 'POT-KASBON'], true)
+                && (empty($usedIds) || ! in_array($comp->id, $usedIds, true))
+                && ! in_array(strtolower(trim($comp->name)), $usedNames, true)
+            )
+            ->sortBy(['sort_order', 'name'])
             ->values();
     }
 
@@ -532,17 +530,15 @@ class ManageItem extends Component
             ->map(fn ($n) => strtolower(trim($n)))
             ->all();
 
-        return SalaryComponent::query()
-            ->where('is_active', true)
-            ->where('type', SalaryComponentType::DEDUCTION)
-            ->where('category', SalaryComponentCategory::DEDUCTION)
-            ->whereNotIn('code', ['PPH21', 'KASBON', 'POT-KASBON', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP'])
-            ->where('is_system', false)
-            ->when(! empty($usedIds), fn ($q) => $q->whereNotIn('id', $usedIds))
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get()
-            ->filter(fn ($comp) => ! in_array(strtolower(trim($comp->name)), $usedNames))
+        return SalaryComponent::getActiveLookup()
+            ->filter(fn ($comp) => $comp->type === SalaryComponentType::DEDUCTION
+                && $comp->category === SalaryComponentCategory::DEDUCTION
+                && ! $comp->is_system
+                && ! in_array($comp->code, ['PPH21', 'KASBON', 'POT-KASBON', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP'], true)
+                && (empty($usedIds) || ! in_array($comp->id, $usedIds, true))
+                && ! in_array(strtolower(trim($comp->name)), $usedNames, true)
+            )
+            ->sortBy(['sort_order', 'name'])
             ->values();
     }
 

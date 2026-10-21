@@ -8,14 +8,46 @@ use App\Enums\SalaryComponentType;
 use Database\Factories\SalaryComponentFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 
 class SalaryComponent extends Model
 {
     /** @use HasFactory<SalaryComponentFactory> */
     use HasFactory, SoftDeletes;
+
+    public const LOOKUP_CACHE_KEY = 'salary_components_lookup';
+
+    public static function getLookup(): Collection
+    {
+        $items = Cache::remember(self::LOOKUP_CACHE_KEY, 86400, function () {
+            return static::query()
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get()
+                ->toArray();
+        });
+
+        return (new static)->hydrate($items);
+    }
+
+    public static function getActiveLookup(): Collection
+    {
+        return static::getLookup()->where('is_active', true)->values();
+    }
+
+    public static function getByCode(string $code): ?self
+    {
+        return static::getLookup()->firstWhere('code', $code);
+    }
+
+    public static function clearLookupCache(): void
+    {
+        Cache::forget(self::LOOKUP_CACHE_KEY);
+    }
 
     /**
      * The attributes that are mass assignable.
@@ -70,6 +102,10 @@ class SalaryComponent extends Model
                 }
             }
         });
+
+        static::saved(fn () => static::clearLookupCache());
+        static::deleted(fn () => static::clearLookupCache());
+        static::restored(fn () => static::clearLookupCache());
     }
 
     /**

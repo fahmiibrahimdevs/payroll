@@ -18,9 +18,22 @@ use App\Models\PayrollPeriod;
 use App\Models\Role;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class DashboardService
 {
+    public static function clearPayrollTrendCache(?int $year = null): void
+    {
+        if ($year !== null) {
+            Cache::forget("dashboard_payroll_trend_{$year}");
+        } else {
+            $curr = (int) date('Y');
+            for ($y = $curr - 2; $y <= $curr + 2; $y++) {
+                Cache::forget("dashboard_payroll_trend_{$y}");
+            }
+        }
+    }
+
     /**
      * @return array{employee: ?Employee, remaining_cash_advance: float, active_cash_advance_count: int, latest_payroll_item: ?PayrollItem, active_cash_advance: ?CashAdvance}
      */
@@ -154,32 +167,46 @@ class DashboardService
         $activeCashAdvanceBorrowersCount = (int) $cashAdvanceMetrics->borrowers_count;
 
         // 4. Monthly Payroll Trend (12 Months in $year)
-        $taxByPeriod = PayrollItem::query()
-            ->join('payroll_periods as tax_periods', 'payroll_items.payroll_period_id', '=', 'tax_periods.id')
-            ->where('tax_periods.year', $year)
-            ->select('payroll_items.payroll_period_id')
-            ->selectRaw('SUM(payroll_items.pph21_amount) as tax_total')
-            ->groupBy('payroll_items.payroll_period_id');
+        $trendData = Cache::remember("dashboard_payroll_trend_{$year}", 1800, function () use ($year) {
+            $taxByPeriod = PayrollItem::query()
+                ->join('payroll_periods as tax_periods', 'payroll_items.payroll_period_id', '=', 'tax_periods.id')
+                ->where('tax_periods.year', $year)
+                ->select('payroll_items.payroll_period_id')
+                ->selectRaw('SUM(payroll_items.pph21_amount) as tax_total')
+                ->groupBy('payroll_items.payroll_period_id');
 
-        $periodsInYear = PayrollPeriod::query()
-            ->leftJoinSub($taxByPeriod, 'tax_totals', fn ($join) => $join->on('payroll_periods.id', '=', 'tax_totals.payroll_period_id'))
-            ->where('payroll_periods.year', $year)
-            ->select(['payroll_periods.month', 'payroll_periods.total_basic_salary', 'payroll_periods.total_allowances', 'payroll_periods.total_net_salary', 'tax_totals.tax_total'])
-            ->selectRaw('(payroll_periods.total_basic_salary + payroll_periods.total_allowances) as total_gross_salary')
-            ->get()
-            ->keyBy('month');
+            $periodsInYear = PayrollPeriod::query()
+                ->leftJoinSub($taxByPeriod, 'tax_totals', fn ($join) => $join->on('payroll_periods.id', '=', 'tax_totals.payroll_period_id'))
+                ->where('payroll_periods.year', $year)
+                ->select(['payroll_periods.month', 'payroll_periods.total_basic_salary', 'payroll_periods.total_allowances', 'payroll_periods.total_net_salary', 'tax_totals.tax_total'])
+                ->selectRaw('(payroll_periods.total_basic_salary + payroll_periods.total_allowances) as total_gross_salary')
+                ->get()
+                ->keyBy('month');
 
-        $trendMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-        $grossTrend = [];
-        $netTrend = [];
-        $taxTrend = [];
+            $trendMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+            $grossTrend = [];
+            $netTrend = [];
+            $taxTrend = [];
 
-        for ($m = 1; $m <= 12; $m++) {
-            $p = $periodsInYear->get($m);
-            $grossTrend[] = $p ? (float) $p->total_gross_salary : 0;
-            $netTrend[] = $p ? (float) $p->total_net_salary : 0;
-            $taxTrend[] = $p ? (float) ($p->tax_total ?? 0) : 0;
-        }
+            for ($m = 1; $m <= 12; $m++) {
+                $p = $periodsInYear->get($m);
+                $grossTrend[] = $p ? (float) $p->total_gross_salary : 0;
+                $netTrend[] = $p ? (float) $p->total_net_salary : 0;
+                $taxTrend[] = $p ? (float) ($p->tax_total ?? 0) : 0;
+            }
+
+            return [
+                'trend_months' => $trendMonths,
+                'gross_trend' => $grossTrend,
+                'net_trend' => $netTrend,
+                'tax_trend' => $taxTrend,
+            ];
+        });
+
+        $trendMonths = $trendData['trend_months'];
+        $grossTrend = $trendData['gross_trend'];
+        $netTrend = $trendData['net_trend'];
+        $taxTrend = $trendData['tax_trend'];
 
         // 5. Department Headcount Distribution
         $departments = Department::query()

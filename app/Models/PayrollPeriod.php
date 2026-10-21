@@ -186,4 +186,14 @@ class PayrollPeriod extends Model
             get: fn () => 'Rp '.number_format((float) $this->total_cost_to_company, 0, ',', '.')
         );
     }
+
+    protected static function booted(): void
+    {
+        static::saved(function (PayrollPeriod $period) {
+            \App\Services\DashboardService::clearPayrollTrendCache($period->year);
+        });
+        static::deleted(function (PayrollPeriod $period) {
+            \App\Services\DashboardService::clearPayrollTrendCache($period->year);
+        });
+    }
 }
