@@ -684,7 +684,7 @@ class CashAdvanceService
                 $disbursementDate = Carbon::parse($data['disbursement_date'])->toDateString();
 
                 $lockedCashAdvance->update([
-                    'employee_id' => $data['employee_id'],
+                    'employee_id' => $lockedCashAdvance->employee_id, // Immutable: cannot be altered on update
                     'amount' => $amount,
                     'remaining_amount' => $amount,
                     'repayment_scheme' => $scheme,
@@ -1518,6 +1518,7 @@ class CashAdvanceService
 
             return [
                 'id' => $emp->id,
+                'hashid' => $emp->hashid,
                 'name' => $emp->full_name,
                 'photo_url' => $emp->photo_url,
                 'department' => $emp->department?->name ?: 'Tanpa Departemen',
@@ -1774,6 +1775,7 @@ class CashAdvanceService
 
                 return [
                     'id' => $advance->id,
+                    'hashid' => $advance->hashid,
                     'type' => 'advance',
                     'created_at' => $advance->created_at ?? $advance->disbursement_date,
                     'sort_date' => $transactionDate->timestamp,
@@ -1840,6 +1842,7 @@ class CashAdvanceService
                 'status_badge' => $payment->status_badge_class,
                 'model' => $payment,
                 'cash_advance_id' => $payment->cash_advance_id,
+                'cash_advance_hashid' => $payment->cashAdvance?->hashid,
                 'saldo_akhir' => $balanceByKey['payment:'.$row->id] ?? 0,
                 'formatted_saldo_akhir' => 'Rp '.number_format($balanceByKey['payment:'.$row->id] ?? 0, 0, ',', '.'),
             ];

@@ -28,10 +28,19 @@ new class extends Component
     {
         $user = Auth::user();
 
+        // Karyawan corporate email is managed by HRD and immutable from profile self-service
+        if ($user->hasRole('karyawan')) {
+            $this->email = $user->email;
+        }
+
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)->ignore($user->id)],
         ]);
+
+        if ($user->hasRole('karyawan')) {
+            $validated['email'] = $user->email;
+        }
 
         $user->fill($validated);
         $changedFields = array_keys($user->getDirty());
@@ -111,7 +120,10 @@ new class extends Component
 
         <div class="form-group">
             <label for="profile_email">Alamat Email</label>
-            <input wire:model="email" id="profile_email" type="email" class="form-control @error('email') is-invalid @enderror" required autocomplete="username">
+            <input wire:model="email" id="profile_email" type="email" class="form-control @error('email') is-invalid @enderror" required autocomplete="username" @if (auth()->user()->hasRole('karyawan')) readonly @endif>
+            @if (auth()->user()->hasRole('karyawan'))
+                <small class="d-block mt-1 font-weight-500" style="color: #475569; font-size: 12px;">Email resmi perusahaan dikelola oleh Administrator HRD.</small>
+            @endif
             @error('email')
                 <div class="invalid-feedback">
                     {{ $message }}

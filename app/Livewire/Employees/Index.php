@@ -12,6 +12,7 @@ use App\Models\Employee;
 use App\Models\Position;
 use App\Services\EmployeeService;
 use App\Services\UserService;
+use App\Support\IdObfuscator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -244,13 +245,14 @@ class Index extends Component
     /**
      * Open modal and populate form for editing an existing employee.
      */
-    public function edit(int $id, ?string $section = null): void
+    public function edit(int|string $id, ?string $section = null): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
+        $realId = IdObfuscator::decodeOrFail($id, Employee::class);
         try {
-            $employee = Employee::with(['department', 'position', 'detail', 'user.roles'])->findOrFail($id);
+            $employee = Employee::with(['department', 'position', 'detail', 'user.roles'])->findOrFail($realId);
             $this->isEditMode = true;
-            $this->editingEmployeeId = $id;
+            $this->editingEmployeeId = $realId;
             $this->isEmailManuallyModified = true;
             $this->companyEmailDomain = CompanyProfile::getProfile()->getEmailDomain();
             $this->form->setEmployee($employee);
@@ -311,11 +313,12 @@ class Index extends Component
         }
     }
 
-    public function confirmToggleAccountStatus(int $id): void
+    public function confirmToggleAccountStatus(int|string $id): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
+        $realId = IdObfuscator::decodeOrFail($id, Employee::class);
 
-        $employee = Employee::with('user.roles')->findOrFail($id);
+        $employee = Employee::with('user.roles')->findOrFail($realId);
         if (! $employee->user) {
             $this->dispatch('swal:alert', [
                 'type' => 'warning',
@@ -346,16 +349,18 @@ class Index extends Component
             'confirmButtonText' => $isActive ? 'Ya, Nonaktifkan' : 'Ya, Aktifkan',
             'confirmButtonColor' => $isActive ? '#ffa426' : '#47c363',
             'action' => 'toggle-employee-account-status',
-            'params' => ['id' => $employee->id],
+            'params' => ['id' => $employee->hashid],
         ]);
     }
 
     #[On('toggle-employee-account-status')]
-    public function toggleEmployeeAccountStatus(int $id, UserService $userService): void
+    public function toggleEmployeeAccountStatus(int|string|array $id, UserService $userService): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
+        $rawId = is_array($id) ? ($id['id'] ?? reset($id)) : $id;
+        $realId = IdObfuscator::decodeOrFail($rawId, Employee::class);
 
-        $employee = Employee::with('user.roles')->findOrFail($id);
+        $employee = Employee::with('user.roles')->findOrFail($realId);
         if (! $employee->user) {
             $this->dispatch('swal:alert', [
                 'type' => 'warning',
@@ -379,6 +384,12 @@ class Index extends Component
         try {
             $user = $userService->toggleUserStatus($employee->user->id, (int) auth()->id());
             $status = $user->is_active ? 'diaktifkan.' : 'dinonaktifkan.';
+
+            $this->dispatch('employee-account-status-updated', [
+                'id' => $employee->hashid,
+                'status' => (bool) $user->is_active,
+            ]);
+
             $this->dispatch('swal:alert', [
                 'type' => 'success',
                 'title' => 'Status Akun Diperbarui',
@@ -396,8 +407,9 @@ class Index extends Component
     /**
      * Show detail profile modal for an employee.
      */
-    public function showDetail(int $id): void
+    public function showDetail(int|string $id): void
     {
+        $realId = IdObfuscator::decodeOrFail($id, Employee::class);
         try {
             $isAdmin = auth()->user()?->hasRole('admin');
             $isPrivileged = auth()->user()?->hasRole(['admin', 'direktur']);
@@ -415,7 +427,7 @@ class Index extends Component
                 'department:id,name',
                 'position:id,name',
                 'detail:'.implode(',', $detailColumns),
-            ])->findOrFail($id);
+            ])->findOrFail($realId);
 
             if (! $isAdmin) {
                 $employee->makeHidden(['basic_salary', 'total_cash_receipt']);
@@ -435,10 +447,11 @@ class Index extends Component
     /**
      * Trigger SweetAlert2 delete confirmation dialog.
      */
-    public function confirmDelete(int $id): void
+    public function confirmDelete(int|string $id): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
-        $employee = Employee::find($id);
+        $realId = IdObfuscator::decodeOrFail($id, Employee::class);
+        $employee = Employee::find($realId);
 
         if (! $employee) {
             $this->dispatch('swal:alert', [
@@ -451,7 +464,7 @@ class Index extends Component
         }
 
         $this->dispatch('swal:confirm-delete', [
-            'id' => $id,
+            'id' => $employee->hashid,
             'title' => $employee->full_name,
             'action' => 'delete-employee',
         ]);
@@ -461,11 +474,12 @@ class Index extends Component
      * Delete an employee after confirmation.
      */
     #[On('delete-employee')]
-    public function delete(int $id, EmployeeService $employeeService): void
+    public function delete(int|string $id, EmployeeService $employeeService): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
+        $realId = IdObfuscator::decodeOrFail($id, Employee::class);
         try {
-            $employee = Employee::with('detail')->findOrFail($id);
+            $employee = Employee::with('detail')->findOrFail($realId);
             $employeeService->deleteEmployee($employee);
             $this->resetPage('expiringPage');
 

@@ -469,7 +469,6 @@
                                         <select id="form_role" wire:model="form.role" class="form-control @error('form.role') is-invalid @enderror">
                                             <option value="karyawan">Karyawan</option>
                                             <option value="admin">Administrator</option>
-                                            <option value="direktur">Direktur</option>
                                         </select>
                                         @error('form.role')
                                             <div class="invalid-feedback">{{ $message }}</div>

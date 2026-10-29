@@ -14,6 +14,7 @@ use App\Models\CashAdvancePayment;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Services\CashAdvanceService;
+use App\Support\IdObfuscator;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\View\View;
@@ -154,7 +155,7 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function selectEmployee(int $id): void
+    public function selectEmployee(int|string $id): void
     {
         if (auth()->user()?->hasRole('karyawan')) {
             $this->selectedEmployeeId = auth()->user()->getEmployeeRecord()?->id;
@@ -162,11 +163,13 @@ class Index extends Component
             return;
         }
 
-        $this->selectedEmployeeId = $id;
+        $realId = IdObfuscator::decodeOrFail($id, Employee::class);
+
+        $this->selectedEmployeeId = $realId;
         $this->resetPage();
         $this->statementSubTab = 'unpaid';
         $this->selectedStatementDetail = null;
-        $this->dispatch('employee-selected', id: $id);
+        $this->dispatch('employee-selected', id: $realId);
     }
 
     public function clearSelectedEmployee(): void
@@ -400,10 +403,11 @@ class Index extends Component
     /**
      * Open modal and populate form for editing an existing cash advance.
      */
-    public function edit(int $id, CashAdvanceService $service): void
+    public function edit(int|string $id, CashAdvanceService $service): void
     {
+        $realId = IdObfuscator::decodeOrFail($id, CashAdvance::class);
         try {
-            $cashAdvance = CashAdvance::findOrFail($id);
+            $cashAdvance = CashAdvance::findOrFail($realId);
             Gate::authorize('update', $cashAdvance);
 
             if ($cashAdvance->status !== CashAdvanceStatus::PENDING) {
@@ -417,10 +421,10 @@ class Index extends Component
             }
 
             $this->isEditMode = true;
-            $this->editingCashAdvanceId = $id;
+            $this->editingCashAdvanceId = $realId;
             $this->form->setCashAdvance($cashAdvance);
 
-            $summary = $service->getActiveCashAdvanceSummaryByEmployee($cashAdvance->employee_id, $id);
+            $summary = $service->getActiveCashAdvanceSummaryByEmployee($cashAdvance->employee_id, $realId);
             $this->activeCashAdvanceAlert = $summary['has_active'] ? $summary : null;
 
             $this->dispatch('open-modal', [
@@ -450,6 +454,9 @@ class Index extends Component
             $cashAdvance = CashAdvance::findOrFail($this->editingCashAdvanceId);
             Gate::authorize('update', $cashAdvance);
 
+            // Prevent employee_id tampering via Inspect Element
+            $this->form->employee_id = $cashAdvance->employee_id;
+
             $user = auth()->user();
             $cashAdvance = $this->form->update($service, $user);
 
@@ -475,8 +482,9 @@ class Index extends Component
     /**
      * Open detail modal for full history, installment schedules, and payment logs.
      */
-    public function showDetail(int $id, ?int $paymentId = null): void
+    public function showDetail(int|string $id, int|string|null $paymentId = null): void
     {
+        $realId = IdObfuscator::decodeOrFail($id, CashAdvance::class);
         try {
             $cashAdvance = CashAdvance::with([
                 'employee.department',
@@ -485,11 +493,11 @@ class Index extends Component
                 'approver',
                 'installments.payments.recorder',
                 'payments.recorder',
-            ])->findOrFail($id);
+            ])->findOrFail($realId);
             Gate::authorize('view', $cashAdvance);
 
             $this->selectedCashAdvance = $cashAdvance;
-            $this->selectedCashAdvanceId = $id;
+            $this->selectedCashAdvanceId = $realId;
             $this->highlightPaymentId = $paymentId;
             $this->detailModalTab = $paymentId ? 'payments' : 'installments';
 
@@ -510,14 +518,15 @@ class Index extends Component
     /**
      * Open approval/rejection modal for Directors/Admins.
      */
-    public function openApproval(int $id): void
+    public function openApproval(int|string $id): void
     {
+        $realId = IdObfuscator::decodeOrFail($id, CashAdvance::class);
         try {
-            $cashAdvance = CashAdvance::with(['employee.department', 'employee.position', 'submitter'])->findOrFail($id);
+            $cashAdvance = CashAdvance::with(['employee.department', 'employee.position', 'submitter'])->findOrFail($realId);
             Gate::authorize('approve', $cashAdvance);
 
             $this->selectedCashAdvance = $cashAdvance;
-            $this->selectedCashAdvanceId = $id;
+            $this->selectedCashAdvanceId = $realId;
             $this->approvalNotes = '';
             $this->rejectionReason = '';
             $this->dispatch('open-modal', id: 'cashAdvanceApprovalModal');
@@ -691,9 +700,10 @@ class Index extends Component
     /**
      * Open payment modal for recording manual cash advance repayments.
      */
-    public function openPayment(int $id): void
+    public function openPayment(int|string $id): void
     {
         try {
+            $realId = IdObfuscator::decodeOrFail($id, CashAdvance::class);
             $cashAdvance = CashAdvance::with([
                 'employee.department',
                 'employee.position',
@@ -701,8 +711,8 @@ class Index extends Component
                 'approver',
                 'installments.payments.recorder',
                 'payments.recorder',
-            ])->findOrFail($id);
-            Gate::authorize('view', $cashAdvance);
+            ])->findOrFail($realId);
+            Gate::authorize('recordPayment', $cashAdvance);
 
             if (! in_array($cashAdvance->status, [CashAdvanceStatus::ACTIVE, CashAdvanceStatus::APPROVED], true)) {
                 $this->dispatch('swal:alert', [
@@ -714,7 +724,7 @@ class Index extends Component
                 return;
             }
 
-            $this->selectedCashAdvanceIdForPayment = $id;
+            $this->selectedCashAdvanceIdForPayment = $realId;
             $this->selectedCashAdvance = $cashAdvance;
             $this->paymentForm->setCashAdvance($cashAdvance);
             $this->dispatch('open-modal', id: 'cashAdvancePaymentModal');
@@ -730,9 +740,10 @@ class Index extends Component
     /**
      * Open payment modal directly targeting a specific installment.
      */
-    public function openPaymentForInstallment(int $advanceId, int $installmentId): void
+    public function openPaymentForInstallment(int|string $advanceId, int $installmentId): void
     {
         try {
+            $realAdvanceId = IdObfuscator::decodeOrFail($advanceId, CashAdvance::class);
             $cashAdvance = CashAdvance::with([
                 'employee.department',
                 'employee.position',
@@ -740,8 +751,8 @@ class Index extends Component
                 'approver',
                 'installments.payments.recorder',
                 'payments.recorder',
-            ])->findOrFail($advanceId);
-            Gate::authorize('view', $cashAdvance);
+            ])->findOrFail($realAdvanceId);
+            Gate::authorize('recordPayment', $cashAdvance);
 
             abort_unless($cashAdvance->installments()->whereKey($installmentId)->exists(), 404);
 
@@ -755,7 +766,7 @@ class Index extends Component
                 return;
             }
 
-            $this->selectedCashAdvanceIdForPayment = $advanceId;
+            $this->selectedCashAdvanceIdForPayment = $realAdvanceId;
             $this->selectedCashAdvance = $cashAdvance;
             $this->paymentForm->setCashAdvance($cashAdvance);
             $this->paymentForm->applyPaymentTarget('installment', $installmentId);
@@ -883,9 +894,10 @@ class Index extends Component
     /**
      * Trigger SweetAlert2 delete confirmation dialog.
      */
-    public function confirmDelete(int $id): void
+    public function confirmDelete(int|string $id): void
     {
-        $cashAdvance = CashAdvance::find($id);
+        $realId = IdObfuscator::decodeOrFail($id, CashAdvance::class);
+        $cashAdvance = CashAdvance::find($realId);
 
         if (! $cashAdvance) {
             $this->dispatch('swal:alert', [
@@ -910,7 +922,7 @@ class Index extends Component
         }
 
         $this->dispatch('swal:confirm-delete', [
-            'id' => $id,
+            'id' => $cashAdvance->hashid,
             'title' => "Pengajuan Kasbon {$cashAdvance->reference_number} ({$cashAdvance->employee?->full_name})",
         ]);
     }
@@ -919,10 +931,11 @@ class Index extends Component
      * Delete a cash advance after user confirmation.
      */
     #[On('delete-cash-advance')]
-    public function delete(int $id, CashAdvanceService $service): void
+    public function delete(int|string $id, CashAdvanceService $service): void
     {
         try {
-            $cashAdvance = CashAdvance::findOrFail($id);
+            $realId = IdObfuscator::decodeOrFail($id, CashAdvance::class);
+            $cashAdvance = CashAdvance::findOrFail($realId);
             Gate::authorize('delete', $cashAdvance);
 
             $user = auth()->user();
@@ -959,23 +972,23 @@ class Index extends Component
     /**
      * Direct navigate from review modal to employee's ledger transaction row.
      */
-    public function directToTransaction(?int $employeeId, string $type, int $id): void
+    public function directToTransaction(int|string|null $employeeId, string $type, int|string $id): void
     {
         if (auth()->user()?->hasRole('karyawan')) {
             $this->selectedEmployeeId = auth()->user()->getEmployeeRecord()?->id;
         } elseif ($employeeId) {
-            $this->selectedEmployeeId = $employeeId;
+            $this->selectedEmployeeId = IdObfuscator::decodeOrFail($employeeId, Employee::class);
         }
 
         $this->activeMainTab = 'ledger';
         $this->search = '';
 
         if ($type === 'advance') {
-            $this->selectedCashAdvanceId = $id;
+            $this->selectedCashAdvanceId = IdObfuscator::decodeOrFail($id, CashAdvance::class);
             $this->highlightPaymentId = null;
         } else {
-            $this->highlightPaymentId = $id;
-            $payment = CashAdvancePayment::find($id);
+            $this->highlightPaymentId = (int) $id;
+            $payment = CashAdvancePayment::find((int) $id);
             $this->selectedCashAdvanceId = $payment?->cash_advance_id;
             if (! $this->selectedEmployeeId && $payment?->cashAdvance?->employee_id) {
                 $this->selectedEmployeeId = $payment->cashAdvance->employee_id;

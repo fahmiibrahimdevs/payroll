@@ -55,4 +55,17 @@ abstract class TestCase extends BaseTestCase
 
         return $user;
     }
+
+    protected function createKaryawanUser(): User
+    {
+        $role = Role::firstOrCreate(
+            ['name' => 'karyawan'],
+            ['display_name' => 'Karyawan', 'description' => 'Karyawan Perusahaan'],
+        );
+
+        $user = User::factory()->create(['is_active' => true]);
+        $user->syncRoles([$role]);
+
+        return $user;
+    }
 }

@@ -16,6 +16,7 @@ use App\Services\PayrollService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
@@ -734,6 +735,8 @@ class Show extends Component
      */
     public function openPayItemModal(int $itemId): void
     {
+        Gate::authorize('recordPayment', $this->period);
+
         $item = PayrollItem::with(['employee.detail', 'payrollPeriod'])->findOrFail($itemId);
 
         if (! $item->isApproved() && $item->payrollPeriod->status->value !== 'approved') {
@@ -777,6 +780,8 @@ class Show extends Component
      */
     public function openEditItemPaymentModal(int $itemId): void
     {
+        Gate::authorize('recordPayment', $this->period);
+
         $item = PayrollItem::with(['employee.detail', 'payrollPeriod'])->findOrFail($itemId);
 
         $this->payingItem = $item;

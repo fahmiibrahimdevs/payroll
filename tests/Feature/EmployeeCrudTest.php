@@ -592,9 +592,9 @@ class EmployeeCrudTest extends TestCase
 
         Livewire::test(Index::class)
             ->call('create')
-            ->set('form.full_name', 'Bambang Direktur Testing')
-            ->set('form.email_username', 'bambang.direktur')
-            ->set('form.role', 'direktur')
+            ->set('form.full_name', 'Bambang Admin Testing')
+            ->set('form.email_username', 'bambang.admin')
+            ->set('form.role', 'admin')
             ->set('form.password', 'rahasia123')
             ->set('form.employment_status', EmploymentStatus::TETAP->value)
             ->set('form.tax_recipient_type', TaxRecipientType::MonthlyEmployee->value)
@@ -605,15 +605,15 @@ class EmployeeCrudTest extends TestCase
             ->assertHasNoErrors()
             ->assertDispatched('close-modal', id: 'employeeModal');
 
-        $expectedEmail = 'bambang.direktur@'.$domain;
-        $employee = Employee::where('full_name', 'Bambang Direktur Testing')->first();
+        $expectedEmail = 'bambang.admin@'.$domain;
+        $employee = Employee::where('full_name', 'Bambang Admin Testing')->first();
         $this->assertNotNull($employee);
         $this->assertSame($expectedEmail, $employee->detail?->email);
 
         $user = $employee->user;
         $this->assertNotNull($user);
         $this->assertSame($expectedEmail, $user->email);
-        $this->assertTrue($user->hasRole('direktur'));
+        $this->assertTrue($user->hasRole('admin'));
         $this->assertTrue(Hash::check('rahasia123', $user->password));
     }
 
@@ -646,6 +646,100 @@ class EmployeeCrudTest extends TestCase
         $user->refresh();
         $this->assertTrue($user->hasRole('admin'));
         $this->assertTrue(Hash::check('adminbaru999', $user->password));
+    }
+
+    public function test_role_tampering_via_devtool_is_rejected_by_validation(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $emp = Employee::factory()->withDetail()->create([
+            'full_name' => 'Karyawan Tamper Check',
+        ]);
+
+        // Attempt injecting 'direktur' via inspect element/tampered request (not permitted in employee form)
+        Livewire::test(Index::class)
+            ->call('edit', $emp->id)
+            ->set('form.role', 'direktur')
+            ->call('update')
+            ->assertHasErrors(['form.role']);
+
+        // Attempt injecting 'developer' via inspect element
+        Livewire::test(Index::class)
+            ->call('edit', $emp->id)
+            ->set('form.role', 'developer')
+            ->call('update')
+            ->assertHasErrors(['form.role']);
+
+        // Attempt injecting 'superadmin' / arbitrary string
+        Livewire::test(Index::class)
+            ->call('edit', $emp->id)
+            ->set('form.role', 'superadmin')
+            ->call('update')
+            ->assertHasErrors(['form.role']);
+    }
+
+    public function test_employee_actions_support_hashid_and_reject_tampered_id(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $emp = Employee::factory()->withDetail()->create([
+            'full_name' => 'Testing Hashid Employee',
+        ]);
+
+        $this->assertNotEmpty($emp->hashid);
+        $this->assertSame(8, strlen($emp->hashid));
+
+        // URL uses hashid
+        $this->assertStringContainsString($emp->hashid, route('employees.show', $emp));
+
+        // Call edit using hashid string
+        Livewire::test(Index::class)
+            ->call('edit', $emp->hashid)
+            ->assertSet('isEditMode', true)
+            ->assertSet('editingEmployeeId', $emp->id);
+
+        // Call confirmDelete using hashid string
+        Livewire::test(Index::class)
+            ->call('confirmDelete', $emp->hashid)
+            ->assertDispatched('swal:confirm-delete');
+
+        // Tampered hashid triggers 404
+        Livewire::test(Index::class)
+            ->call('edit', 'InvalidHash123')
+            ->assertNotFound();
+
+        // Route URL with tampered hashid also returns 404
+        $this->get('/employees/InvalidHash123')->assertNotFound();
+    }
+
+    public function test_admin_can_toggle_employee_account_status_via_sweetalert_flow(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $emp = Employee::factory()->withDetail()->create([
+            'full_name' => 'Akun Toggle Test',
+        ]);
+        $targetUser = User::factory()->create([
+            'is_active' => true,
+        ]);
+        $emp->update(['user_id' => $targetUser->id]);
+
+        // 1. Trigger confirm toggle (SweetAlert)
+        Livewire::test(Index::class)
+            ->call('confirmToggleAccountStatus', $emp->hashid)
+            ->assertDispatched('swal:confirm');
+
+        // 2. Dispatch confirmed event
+        Livewire::test(Index::class)
+            ->call('toggleEmployeeAccountStatus', ['id' => $emp->hashid])
+            ->assertDispatched('employee-account-status-updated')
+            ->assertDispatched('swal:alert');
+
+        $targetUser->refresh();
+        $this->assertFalse((bool) $targetUser->is_active);
     }
 
     public function test_updating_company_email_domain_syncs_all_employee_emails_and_user_logins(): void

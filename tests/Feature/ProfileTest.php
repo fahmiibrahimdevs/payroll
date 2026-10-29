@@ -103,4 +103,36 @@ class ProfileTest extends TestCase
 
         $this->assertNotNull($user->fresh());
     }
+
+    public function test_karyawan_cannot_delete_their_own_account(): void
+    {
+        $karyawan = $this->createKaryawanUser();
+        $this->actingAs($karyawan);
+
+        // Accessing delete action must return 403 Forbidden
+        Volt::test('profile.delete-user-form')
+            ->set('password', 'password')
+            ->call('deleteUser')
+            ->assertForbidden();
+
+        $this->assertTrue($karyawan->fresh()->is_active);
+    }
+
+    public function test_karyawan_cannot_tamper_with_email_via_profile(): void
+    {
+        $karyawan = $this->createKaryawanUser();
+        $originalEmail = $karyawan->email;
+        $this->actingAs($karyawan);
+
+        // Attempt to tamper with email via profile
+        Volt::test('profile.update-profile-information-form')
+            ->set('name', 'Nama Karyawan Update')
+            ->set('email', 'tampered_email@gmail.com')
+            ->call('updateProfileInformation');
+
+        $karyawan->refresh();
+        $this->assertEquals('Nama Karyawan Update', $karyawan->name);
+        // Email must remain original
+        $this->assertEquals($originalEmail, $karyawan->email);
+    }
 }

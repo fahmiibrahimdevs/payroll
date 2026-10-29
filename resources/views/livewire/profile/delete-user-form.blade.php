@@ -16,6 +16,7 @@ new class extends Component
      */
     public function confirmDeletion(): void
     {
+        abort_if(Auth::user()->hasRole('karyawan'), 403, 'Karyawan tidak diizinkan menonaktifkan akun sendiri. Silakan hubungi Administrator HRD.');
         $this->resetErrorBag();
         $this->password = '';
         $this->confirmingUserDeletion = true;
@@ -35,6 +36,8 @@ new class extends Component
      */
     public function deleteUser(Logout $logout, ActivityLogService $logger): void
     {
+        abort_if(Auth::user()->hasRole('karyawan'), 403, 'Karyawan tidak diizinkan menonaktifkan akun sendiri. Silakan hubungi Administrator HRD.');
+
         $this->validate([
             'password' => ['required', 'string', 'current_password'],
         ]);

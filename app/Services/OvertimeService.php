@@ -344,19 +344,17 @@ class OvertimeService
                 }
 
                 $durationHours = $this->calculateOvertimeDuration($startTime, $endTime);
-                if (isset($data['duration_hours']) && (float) $data['duration_hours'] > 0) {
-                    $durationHours = (float) $data['duration_hours'];
-                }
 
                 $startTimeVal = $data['start_time'];
                 $endTimeVal = $data['end_time'];
             }
 
-            $mealAllowance = isset($data['meal_allowance']) ? (float) $data['meal_allowance'] : 0;
+            $isAdmin = $actor->hasRole('admin');
+            // Karyawan cannot self-assign meal allowance via Inspect Element; only Admin can set it.
+            $mealAllowance = ($isAdmin && isset($data['meal_allowance'])) ? max(0, (float) $data['meal_allowance']) : 0;
             $baseOvertimePay = $isDaily ? $rate : ($durationHours * $rate);
             $totalAmount = round($baseOvertimePay + $mealAllowance, 2);
 
-            $isAdmin = $actor->hasRole('admin');
             $source = $isAdmin ? OvertimeSubmissionSource::ADMIN : OvertimeSubmissionSource::KARYAWAN;
             $status = $isAdmin ? OvertimeStatus::PENDING_DIREKTUR : OvertimeStatus::PENDING_ADMIN;
 

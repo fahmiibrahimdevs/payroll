@@ -182,6 +182,7 @@ class SalaryComponentForm extends Form
         $validated['code'] = ! empty(trim((string) ($validated['code'] ?? ''))) ? strtoupper(trim((string) $validated['code'])) : null;
         $validated['description'] = ! empty(trim((string) ($validated['description'] ?? ''))) ? trim((string) $validated['description']) : null;
         $validated['default_value'] = ($validated['default_value'] !== '' && $validated['default_value'] !== null) ? (float) $validated['default_value'] : null;
+        $validated['is_system'] = false; // User-created components are never system components
 
         $component = $service->createSalaryComponent($validated);
         $this->resetForm();
@@ -204,6 +205,7 @@ class SalaryComponentForm extends Form
         $validated['code'] = ! empty(trim((string) ($validated['code'] ?? ''))) ? strtoupper(trim((string) $validated['code'])) : null;
         $validated['description'] = ! empty(trim((string) ($validated['description'] ?? ''))) ? trim((string) $validated['description']) : null;
         $validated['default_value'] = ($validated['default_value'] !== '' && $validated['default_value'] !== null) ? (float) $validated['default_value'] : null;
+        $validated['is_system'] = (bool) ($this->salaryComponent?->is_system ?? false); // Preserve original immutable system status
 
         $component = $service->updateSalaryComponent($this->salaryComponent, $validated);
         $this->resetForm();

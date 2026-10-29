@@ -461,4 +461,40 @@ class SalaryComponentCrudTest extends TestCase
             'id' => $comp->id,
         ]);
     }
+
+    public function test_karyawan_cannot_crud_salary_components_and_is_system_is_immutable(): void
+    {
+        $karyawan = $this->createKaryawanUser();
+        $this->actingAs($karyawan);
+
+        // Karyawan route access is forbidden
+        $response = $this->get(route('salary-components.index'));
+        $response->assertForbidden();
+
+        // Direct Livewire mount is also forbidden
+        Livewire::test(Index::class)
+            ->assertForbidden();
+    }
+
+    public function test_is_system_flag_cannot_be_tampered_via_client(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        // Create component trying to set is_system = true
+        Livewire::test(Index::class)
+            ->call('create')
+            ->set('form.name', 'Tunjangan Khusus Coba Sistem')
+            ->set('form.type', SalaryComponentType::ALLOWANCE->value)
+            ->set('form.category', SalaryComponentCategory::FIXED_ALLOWANCE->value)
+            ->set('form.calculation_type', SalaryCalculationType::NOMINAL->value)
+            ->set('form.default_value', 100000)
+            ->set('form.is_system', true) // Injected tampering
+            ->call('store');
+
+        $comp = SalaryComponent::where('name', 'Tunjangan Khusus Coba Sistem')->first();
+        $this->assertNotNull($comp);
+        // Must remain false!
+        $this->assertFalse((bool) $comp->is_system);
+    }
 }

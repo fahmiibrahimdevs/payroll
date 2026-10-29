@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\RepaymentScheme;
+use App\Traits\HasObfuscatedId;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CashAdvance extends Model
 {
-    use HasFactory;
+    use HasFactory, HasObfuscatedId;
 
     /**
      * The attributes that are mass assignable.

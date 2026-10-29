@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
+use App\Traits\HasObfuscatedId;
 use Database\Factories\EmployeeFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -18,7 +19,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Employee extends Model
 {
     /** @use HasFactory<EmployeeFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, HasObfuscatedId, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.

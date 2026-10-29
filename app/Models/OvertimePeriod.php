@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OvertimePeriodStatus;
+use App\Traits\HasObfuscatedId;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class OvertimePeriod extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, HasObfuscatedId, SoftDeletes;
 
     protected $fillable = [
         'reference_number',

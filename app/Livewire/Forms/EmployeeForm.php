@@ -146,7 +146,7 @@ class EmployeeForm extends Form
                 Rule::unique(User::class, 'email')->ignore($this->employee?->user_id),
             ],
             'email_username' => ['nullable', 'string', 'max:100'],
-            'role' => ['required', 'string', 'in:karyawan,admin,direktur'],
+            'role' => ['required', 'string', Rule::in(['karyawan', 'admin'])],
             'password' => ['nullable', 'string', 'min:1', 'max:255'],
             'bank_name' => ['nullable', 'string', 'max:100'],
             'bank_account_number' => ['nullable', 'string', 'max:100'],
@@ -395,7 +395,7 @@ class EmployeeForm extends Form
         }
 
         $validated = $this->validate();
-        $validated['role'] = $this->role ?: 'karyawan';
+        $validated['role'] = in_array($this->role, ['karyawan', 'admin'], true) ? $this->role : 'karyawan';
         $validated['password'] = $this->password ?: '1';
 
         $companyProfile = CompanyProfile::getProfile();
@@ -440,7 +440,7 @@ class EmployeeForm extends Form
         }
 
         $validated = $this->validate();
-        $validated['role'] = $this->role ?: 'karyawan';
+        $validated['role'] = in_array($this->role, ['karyawan', 'admin'], true) ? $this->role : 'karyawan';
         if (! empty($this->password)) {
             $validated['password'] = $this->password;
         }

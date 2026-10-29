@@ -731,8 +731,8 @@ class OvertimeTest extends TestCase
 
         Livewire::actingAs($this->adminUser)
             ->test(\App\Livewire\Overtimes\Index::class)
-            ->assertSeeHtml('wire:click="confirmDelete(' . $submission->id . ')')
-            ->call('confirmDelete', $submission->id)
+            ->assertSeeHtml('wire:click="confirmDelete(\'' . $submission->hashid . '\')')
+            ->call('confirmDelete', $submission->hashid)
             ->assertDispatched('swal:confirm-delete')
             ->call('deleteSubmission', ['id' => $submission->id])
             ->assertDispatched('swal:alert');
@@ -1160,5 +1160,27 @@ class OvertimeTest extends TestCase
         $this->assertDatabaseHas('overtime_sequences', [
             'sequence_key' => 'PER-LMB-' . $now->format('Y-W'),
         ]);
+    }
+
+    public function test_duration_and_meal_allowance_tampering_via_client_payload_is_neutralized(): void
+    {
+        $service = app(OvertimeService::class);
+
+        // Karyawan submits 1 hour overtime (17:00 to 18:00), but injects 10 hours and 500,000 meal allowance
+        $submission = $service->createSubmission([
+            'employee_id' => $this->employee->id,
+            'overtime_type' => 'hourly',
+            'date' => '2026-11-20',
+            'start_time' => '17:00',
+            'end_time' => '18:00',
+            'duration_hours' => 10.0, // Injected tampering
+            'meal_allowance' => 500000, // Injected tampering
+            'reason' => 'Uji Coba Manipulasi Client Side',
+        ], $this->karyawanUser);
+
+        // Must strictly use calculated duration (1.0 hour) and ignore meal allowance (0)
+        $this->assertEquals(1.0, (float) $submission->duration_hours);
+        $this->assertEquals(0, (float) $submission->meal_allowance);
+        $this->assertEquals(25000, (float) $submission->total_amount); // 1 hr * 25,000 rate
     }
 }

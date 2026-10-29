@@ -63,14 +63,14 @@
                                     </div>
 
                                     <div class="d-flex align-items-center flex-shrink-0" style="gap: 6px;">
-                                        <a href="{{ route('employees.show', $emp->id) }}" class="btn btn-outline-primary btn-sm d-inline-flex align-items-center" style="font-size: 11.5px; border-radius: 8px; font-weight: 600; padding: 4px 10px; gap: 4px;" title="Lihat Profil Lengkap">
+                                        <a href="{{ route('employees.show', $emp) }}" class="btn btn-outline-primary btn-sm d-inline-flex align-items-center" style="font-size: 11.5px; border-radius: 8px; font-weight: 600; padding: 4px 10px; gap: 4px;" title="Lihat Profil Lengkap">
                                             <span>Profil</span>
                                             <i class="fas fa-eye" style="font-size: 10px;"></i>
                                         </a>
                                         @if (auth()->user()->hasRole('admin'))
-                                            <button type="button" onclick="$('#expiringContractsModal').modal('hide')" wire:click="edit({{ $emp->id }})" wire:loading.attr="disabled" wire:target="edit({{ $emp->id }})" class="btn btn-primary btn-sm d-inline-flex align-items-center" style="font-size: 11.5px; border-radius: 8px; font-weight: 600; padding: 4px 10px; gap: 4px;" title="Perbarui / Edit Kontrak">
-                                                <i wire:loading.remove wire:target="edit({{ $emp->id }})" class="fas fa-pencil-alt" style="font-size: 10px;"></i>
-                                                <i wire:loading wire:target="edit({{ $emp->id }})" class="fas fa-spinner fa-spin" style="font-size: 10px;"></i>
+                                            <button type="button" onclick="$('#expiringContractsModal').modal('hide')" wire:click="edit('{{ $emp->hashid }}')" wire:loading.attr="disabled" wire:target="edit('{{ $emp->hashid }}')" class="btn btn-primary btn-sm d-inline-flex align-items-center" style="font-size: 11.5px; border-radius: 8px; font-weight: 600; padding: 4px 10px; gap: 4px;" title="Perbarui / Edit Kontrak">
+                                                <i wire:loading.remove wire:target="edit('{{ $emp->hashid }}')" class="fas fa-pencil-alt" style="font-size: 10px;"></i>
+                                                <i wire:loading wire:target="edit('{{ $emp->hashid }}')" class="fas fa-spinner fa-spin" style="font-size: 10px;"></i>
                                                 <span>Perbarui</span>
                                             </button>
                                         @endif

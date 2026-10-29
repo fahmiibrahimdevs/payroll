@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimeSubmission;
 use App\Services\OvertimeService;
+use App\Support\IdObfuscator;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
@@ -225,11 +226,12 @@ class Index extends Component
     /**
      * Open admin adjustment modal.
      */
-    public function openAdjustModal(int $id): void
+    public function openAdjustModal(int|string $id): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403, 'Hanya Admin yang dapat menyesuaikan pengajuan lembur.');
 
-        $submission = OvertimeSubmission::with('employee')->findOrFail($id);
+        $realId = IdObfuscator::decodeOrFail($id, OvertimeSubmission::class);
+        $submission = OvertimeSubmission::with('employee')->findOrFail($realId);
 
         if ($submission->status !== OvertimeStatus::PENDING_ADMIN) {
             $this->dispatch('swal:alert', [
@@ -413,11 +415,12 @@ class Index extends Component
     /**
      * Open rejection modal.
      */
-    public function openRejectModal(int $id): void
+    public function openRejectModal(int|string $id): void
     {
         abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
 
-        $this->rejectingSubmissionId = $id;
+        $realId = IdObfuscator::decodeOrFail($id, OvertimeSubmission::class);
+        $this->rejectingSubmissionId = $realId;
         $this->rejectionReason = '';
         $this->dispatch('open-modal', id: 'overtimeRejectModal');
     }
@@ -456,11 +459,12 @@ class Index extends Component
     /**
      * Trigger SweetAlert2 confirmation dialog for deleting an overtime submission.
      */
-    public function confirmDelete(int $id): void
+    public function confirmDelete(int|string $id): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
 
-        $submission = OvertimeSubmission::with('employee')->findOrFail($id);
+        $realId = IdObfuscator::decodeOrFail($id, OvertimeSubmission::class);
+        $submission = OvertimeSubmission::with('employee')->findOrFail($realId);
 
         if ($submission->overtime_period_id !== null) {
             $this->dispatch('swal:alert', [
@@ -473,7 +477,7 @@ class Index extends Component
 
         $this->dispatch('swal:confirm-delete', [
             'action' => 'delete-overtime-submission',
-            'id' => $id,
+            'id' => $submission->hashid,
             'title' => "Pengajuan Lembur {$submission->reference_number}",
             'text' => "Data pengajuan lembur {$submission->reference_number} ({$submission->employee?->full_name}) akan dihapus permanen.",
         ]);
@@ -487,7 +491,8 @@ class Index extends Component
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
 
-        $submissionId = is_array($id) ? ($id['id'] ?? reset($id)) : (int) $id;
+        $rawId = is_array($id) ? ($id['id'] ?? reset($id)) : $id;
+        $submissionId = IdObfuscator::decodeOrFail($rawId, OvertimeSubmission::class);
 
         try {
             $service->deleteSubmission((int) $submissionId, auth()->user());
@@ -515,8 +520,9 @@ class Index extends Component
     /**
      * View detail of submission.
      */
-    public function openDetailModal(int $id): void
+    public function openDetailModal(int|string $id): void
     {
+        $realId = IdObfuscator::decodeOrFail($id, OvertimeSubmission::class);
         $submission = OvertimeSubmission::with([
             'employee.department',
             'employee.position',
@@ -525,7 +531,7 @@ class Index extends Component
             'approvedByDirektur',
             'rejectedBy',
             'overtimePeriod',
-        ])->findOrFail($id);
+        ])->findOrFail($realId);
 
         $user = auth()->user();
         if ($user->hasRole('karyawan')) {
@@ -541,8 +547,9 @@ class Index extends Component
     /**
      * Direct navigate from review modal to overtime submission row in table.
      */
-    public function directToSubmission(int $id): void
+    public function directToSubmission(int|string $id): void
     {
+        $realId = IdObfuscator::decodeOrFail($id, OvertimeSubmission::class);
         $this->activeTab = 'submissions';
         $this->statusFilter = 'all';
         $this->search = '';
@@ -563,7 +570,7 @@ class Index extends Component
             ->pluck('id')
             ->toArray();
 
-        $pos = array_search($id, $allIds);
+        $pos = array_search($realId, $allIds);
         if ($pos !== false) {
             $page = (int) ceil(($pos + 1) / $this->perPage);
             $this->setPage($page);
@@ -571,15 +578,16 @@ class Index extends Component
             $this->resetPage();
         }
 
-        $this->dispatch('scroll-to-submission-row', id: $id);
+        $this->dispatch('scroll-to-submission-row', id: $realId);
     }
 
     /**
      * Employee can re-submit a rejected overtime by copying old data into form.
      */
-    public function reSubmit(int $id): void
+    public function reSubmit(int|string $id): void
     {
-        $submission = OvertimeSubmission::findOrFail($id);
+        $realId = IdObfuscator::decodeOrFail($id, OvertimeSubmission::class);
+        $submission = OvertimeSubmission::findOrFail($realId);
         $user = auth()->user();
 
         if ($user->hasRole('karyawan')) {

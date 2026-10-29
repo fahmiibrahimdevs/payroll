@@ -429,10 +429,30 @@
                                         </td>
                                         <td class="align-middle text-nowrap !px-3 !py-2.5">
                                             @if ($employee->user)
-                                                <label class="custom-switch pl-0 m-0" title="{{ $employee->user->is_active ? 'Akun aktif' : 'Akun nonaktif' }}">
-                                                    <input type="checkbox" class="custom-switch-input" aria-label="Status akun {{ $employee->full_name }}" @checked($employee->user->is_active) @disabled(! auth()->user()->hasRole('admin')) wire:click.prevent="confirmToggleAccountStatus({{ $employee->id }})" wire:loading.attr="disabled" wire:target="confirmToggleAccountStatus({{ $employee->id }}),toggleEmployeeAccountStatus">
+                                                <label class="custom-switch pl-0 m-0 cursor-pointer"
+                                                       wire:key="emp-switch-{{ $employee->id }}"
+                                                       x-data="{
+                                                           active: @js((bool) $employee->user->is_active),
+                                                           sync(val) {
+                                                               this.active = !!val;
+                                                               if (this.$refs.checkbox) {
+                                                                   this.$refs.checkbox.checked = this.active;
+                                                               }
+                                                           }
+                                                       }"
+                                                       x-init="sync(active)"
+                                                       x-effect="sync(@js((bool) $employee->user->is_active))"
+                                                       @employee-account-status-updated.window="if ($event.detail && $event.detail.id === '{{ $employee->hashid }}') { sync($event.detail.status); }"
+                                                       title="{{ $employee->user->is_active ? 'Akun aktif' : 'Akun nonaktif' }}"
+                                                       @click.prevent="$wire.confirmToggleAccountStatus('{{ $employee->hashid }}')">
+                                                    <input type="checkbox"
+                                                           x-ref="checkbox"
+                                                           class="custom-switch-input"
+                                                           :checked="active"
+                                                           aria-label="Status akun {{ $employee->full_name }}"
+                                                           @disabled(! auth()->user()->hasRole('admin'))>
                                                     <span class="custom-switch-indicator"></span>
-                                                    <span class="custom-switch-description">{{ $employee->user->is_active ? 'Aktif' : 'Nonaktif' }}</span>
+                                                    <span class="custom-switch-description" x-text="active ? 'Aktif' : 'Nonaktif'">{{ $employee->user->is_active ? 'Aktif' : 'Nonaktif' }}</span>
                                                 </label>
                                             @else
                                                 <span class="text-dark">Belum ada akun</span>
@@ -444,8 +464,8 @@
                                         <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
                                             <a href="{{ route('employees.show', $employee) }}" class="btn btn-info btn-action mr-1" title="Lihat Profil"><i class="fas fa-eye"></i></a>
                                             @if (auth()->user()->hasRole('admin'))
-                                                <button type="button" wire:click="edit({{ $employee->id }})" wire:loading.attr="disabled" wire:target="edit({{ $employee->id }})" class="btn btn-primary btn-action mr-1" title="Edit Data"><i wire:loading wire:target="edit({{ $employee->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="edit({{ $employee->id }})" class="fas fa-pencil-alt"></i></button>
-                                                <button type="button" wire:click="confirmDelete({{ $employee->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $employee->id }})" class="btn btn-danger btn-action" title="Hapus Data"><i wire:loading wire:target="confirmDelete({{ $employee->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="confirmDelete({{ $employee->id }})" class="fas fa-trash"></i></button>
+                                                <button type="button" wire:click="edit('{{ $employee->hashid }}')" wire:loading.attr="disabled" wire:target="edit('{{ $employee->hashid }}')" class="btn btn-primary btn-action mr-1" title="Edit Data"><i wire:loading wire:target="edit('{{ $employee->hashid }}')" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="edit('{{ $employee->hashid }}')" class="fas fa-pencil-alt"></i></button>
+                                                <button type="button" wire:click="confirmDelete('{{ $employee->hashid }}')" wire:loading.attr="disabled" wire:target="confirmDelete('{{ $employee->hashid }}')" class="btn btn-danger btn-action" title="Hapus Data"><i wire:loading wire:target="confirmDelete('{{ $employee->hashid }}')" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="confirmDelete('{{ $employee->hashid }}')" class="fas fa-trash"></i></button>
                                             @endif
                                         </td>
                                     </tr>
@@ -716,5 +736,22 @@
                 }
             })();
         </script>
+    @endpush
+
+    @push('styles')
+        <style>
+            /* Smooth custom-switch transition matching corporate blue #0b52aa */
+            .custom-switch-indicator {
+                transition: background-color 0.25s ease, border-color 0.25s ease !important;
+                cursor: pointer;
+            }
+            .custom-switch-indicator:before {
+                transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            }
+            .custom-switch-input:checked ~ .custom-switch-indicator {
+                background-color: #0b52aa !important;
+                border-color: #0b52aa !important;
+            }
+        </style>
     @endpush
 </div>

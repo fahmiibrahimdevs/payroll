@@ -2079,4 +2079,83 @@ class CashAdvanceCrudTest extends TestCase
             ->assertSet('highlightPaymentId', $pendingPayment->id)
             ->assertDispatched('scroll-to-ledger-row');
     }
+
+    public function test_cash_advance_update_tampering_employee_id_is_neutralized(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        $advance = CashAdvance::create([
+            'reference_number' => 'KB-202610-0001',
+            'employee_id' => $this->employee->id,
+            'amount' => 1000000,
+            'remaining_amount' => 1000000,
+            'repayment_scheme' => 'salary_single',
+            'installment_count' => 1,
+            'monthly_installment' => 1000000,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'status' => CashAdvanceStatus::PENDING->value,
+            'reason' => 'Keperluan mendesak',
+            'submitted_by' => $this->adminUser->id,
+        ]);
+
+        $otherEmployee = Employee::create([
+            'department_id' => $this->employee->department_id,
+            'position_id' => $this->employee->position_id,
+            'full_name' => 'Karyawan Lain',
+            'join_date' => Carbon::now()->subMonths(6)->toDateString(),
+            'employment_status' => 'tetap',
+            'status' => 'active',
+            'basic_salary' => 5000000,
+        ]);
+
+        // Attempt to update cash advance while injecting $otherEmployee->id
+        Livewire::test(Index::class)
+            ->call('edit', $advance->id)
+            ->set('form.employee_id', $otherEmployee->id)
+            ->set('form.amount', 1200000)
+            ->call('update');
+
+        $advance->refresh();
+        // Employee ID must remain original ($this->employee->id)
+        $this->assertEquals($this->employee->id, $advance->employee_id);
+        $this->assertEquals(1200000, (float) $advance->amount);
+    }
+
+    public function test_cash_advance_actions_support_hashid_and_reject_tampered_id(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        $advance = CashAdvance::create([
+            'reference_number' => 'KB-202610-HASHID',
+            'employee_id' => $this->employee->id,
+            'amount' => 1000000,
+            'remaining_amount' => 1000000,
+            'repayment_scheme' => 'salary_single',
+            'installment_count' => 1,
+            'monthly_installment' => 1000000,
+            'disbursement_date' => Carbon::today()->toDateString(),
+            'status' => CashAdvanceStatus::PENDING->value,
+            'reason' => 'Hashid testing',
+            'submitted_by' => $this->adminUser->id,
+        ]);
+
+        $this->assertNotEmpty($advance->hashid);
+        $this->assertSame(8, strlen($advance->hashid));
+
+        // Call edit using hashid string
+        Livewire::test(Index::class)
+            ->call('edit', $advance->hashid)
+            ->assertSet('isEditMode', true)
+            ->assertSet('editingCashAdvanceId', $advance->id);
+
+        // Call confirmDelete using hashid string
+        Livewire::test(Index::class)
+            ->call('confirmDelete', $advance->hashid)
+            ->assertDispatched('swal:confirm-delete');
+
+        // Tampered hashid triggers 404
+        Livewire::test(Index::class)
+            ->call('edit', 'InvalidHashXYZ')
+            ->assertNotFound();
+    }
 }

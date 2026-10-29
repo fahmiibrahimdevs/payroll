@@ -2987,6 +2987,8 @@ class PayrollService
      */
     public function updateItemPayment(PayrollItem $item, array $data, User $user): PayrollItem
     {
+        Gate::forUser($user)->authorize('recordPayment', $item->payrollPeriod);
+
         if ($item->payment_status !== 'paid') {
             throw new InvalidArgumentException('Hanya data pembayaran gaji yang sudah dibayar yang dapat diperbarui.');
         }

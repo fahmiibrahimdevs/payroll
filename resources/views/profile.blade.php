@@ -62,6 +62,7 @@
                 </div>
             </div>
 
+            @if (! auth()->user()->hasRole('karyawan'))
             <!-- Delete Account Card -->
             <div class="card card-danger">
                 <div class="card-header">
@@ -71,6 +72,7 @@
                     <livewire:profile.delete-user-form />
                 </div>
             </div>
+            @endif
         </div>
 
         <!-- Kolom Kanan: Form Edit Profil & Ganti Password -->

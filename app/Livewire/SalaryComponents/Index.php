@@ -87,6 +87,7 @@ class Index extends Component
      */
     public function create(): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         $this->isEditMode = false;
         $this->editingSalaryComponentId = null;
         $this->form->resetForm();
@@ -100,6 +101,7 @@ class Index extends Component
      */
     public function store(SalaryComponentService $service): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $this->form->store($service);
             $this->dispatch('close-modal', id: 'salaryComponentModal');
@@ -124,6 +126,7 @@ class Index extends Component
      */
     public function edit(int $id): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $component = SalaryComponent::findOrFail($id);
             $this->isEditMode = true;
@@ -146,6 +149,7 @@ class Index extends Component
      */
     public function update(SalaryComponentService $service): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $this->form->update($service);
             $this->isEditMode = false;
@@ -172,6 +176,7 @@ class Index extends Component
      */
     public function toggleStatus(int $id, SalaryComponentService $service): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $component = SalaryComponent::findOrFail($id);
 
@@ -201,6 +206,7 @@ class Index extends Component
      */
     public function toggleTaxable(int $id, SalaryComponentService $service): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $component = SalaryComponent::findOrFail($id);
 
@@ -230,6 +236,7 @@ class Index extends Component
      */
     public function confirmDelete(int $id): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         $component = SalaryComponent::find($id);
 
         if (! $component) {
@@ -265,6 +272,7 @@ class Index extends Component
     #[On('delete-salary-component')]
     public function delete(int $id, SalaryComponentService $service): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $component = SalaryComponent::findOrFail($id);
             $service->deleteSalaryComponent($component);

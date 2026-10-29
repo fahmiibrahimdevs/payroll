@@ -268,9 +268,9 @@
                                                     @endif
                                                 </td>
                                                 <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
-                                                    <button type="button" wire:click="selectEmployee({{ $row['id'] }})" wire:loading.attr="disabled" wire:target="selectEmployee({{ $row['id'] }})" class="btn btn-primary btn-action" title="Lihat Tagihan & Buku Besar {{ $row['name'] }}">
-                                                        <i wire:loading.remove wire:target="selectEmployee({{ $row['id'] }})" class="fas fa-eye"></i>
-                                                        <i wire:loading wire:target="selectEmployee({{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
+                                                    <button type="button" wire:click="selectEmployee('{{ $row['hashid'] ?? $row['id'] }}')" wire:loading.attr="disabled" wire:target="selectEmployee('{{ $row['hashid'] ?? $row['id'] }}')" class="btn btn-primary btn-action" title="Lihat Tagihan & Buku Besar {{ $row['name'] }}">
+                                                        <i wire:loading.remove wire:target="selectEmployee('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-eye"></i>
+                                                        <i wire:loading wire:target="selectEmployee('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-spinner fa-spin"></i>
                                                     </button>
                                                 </td>
                                             </tr>
@@ -846,27 +846,27 @@
                                                         @if ($row['type'] === 'advance')
                                                             @if ($row['status'] === 'pending')
                                                                 @can('approve', $row['model'])
-                                                                    <button type="button" wire:click="openApproval({{ $row['id'] }})" wire:loading.attr="disabled" wire:target="openApproval({{ $row['id'] }})" class="btn btn-primary btn-action mr-1" title="Persetujuan Direktur">
-                                                                        <i wire:loading.remove wire:target="openApproval({{ $row['id'] }})" class="fas fa-clipboard-check"></i>
-                                                                        <i wire:loading wire:target="openApproval({{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
+                                                                    <button type="button" wire:click="openApproval('{{ $row['hashid'] ?? $row['id'] }}')" wire:loading.attr="disabled" wire:target="openApproval('{{ $row['hashid'] ?? $row['id'] }}')" class="btn btn-primary btn-action mr-1" title="Persetujuan Direktur">
+                                                                        <i wire:loading.remove wire:target="openApproval('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-clipboard-check"></i>
+                                                                        <i wire:loading wire:target="openApproval('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-spinner fa-spin"></i>
                                                                     </button>
                                                                 @endcan
                                                                 @can('update', $row['model'])
-                                                                    <button type="button" wire:click="edit({{ $row['id'] }})" wire:loading.attr="disabled" wire:target="edit({{ $row['id'] }})" class="btn btn-warning btn-action mr-1" title="Edit Data">
-                                                                        <i wire:loading.remove wire:target="edit({{ $row['id'] }})" class="fas fa-pencil-alt"></i>
-                                                                        <i wire:loading wire:target="edit({{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
+                                                                    <button type="button" wire:click="edit('{{ $row['hashid'] ?? $row['id'] }}')" wire:loading.attr="disabled" wire:target="edit('{{ $row['hashid'] ?? $row['id'] }}')" class="btn btn-warning btn-action mr-1" title="Edit Data">
+                                                                        <i wire:loading.remove wire:target="edit('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-pencil-alt"></i>
+                                                                        <i wire:loading wire:target="edit('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-spinner fa-spin"></i>
                                                                     </button>
                                                                 @endcan
                                                                 @can('delete', $row['model'])
-                                                                    <button type="button" wire:click="confirmDelete({{ $row['id'] }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $row['id'] }})" class="btn btn-danger btn-action" title="Hapus Pengajuan">
-                                                                        <i wire:loading.remove wire:target="confirmDelete({{ $row['id'] }})" class="fas fa-trash"></i>
-                                                                        <i wire:loading wire:target="confirmDelete({{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
+                                                                    <button type="button" wire:click="confirmDelete('{{ $row['hashid'] ?? $row['id'] }}')" wire:loading.attr="disabled" wire:target="confirmDelete('{{ $row['hashid'] ?? $row['id'] }}')" class="btn btn-danger btn-action" title="Hapus Pengajuan">
+                                                                        <i wire:loading.remove wire:target="confirmDelete('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-trash"></i>
+                                                                        <i wire:loading wire:target="confirmDelete('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-spinner fa-spin"></i>
                                                                     </button>
                                                                 @endcan
                                                             @else
-                                                                <button type="button" wire:click="showDetail({{ $row['id'] }})" wire:loading.attr="disabled" wire:target="showDetail({{ $row['id'] }})" class="btn btn-primary btn-action" title="Lihat Rincian Kasbon">
-                                                                    <i wire:loading.remove wire:target="showDetail({{ $row['id'] }})" class="fas fa-eye"></i>
-                                                                    <i wire:loading wire:target="showDetail({{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
+                                                                <button type="button" wire:click="showDetail('{{ $row['hashid'] ?? $row['id'] }}')" wire:loading.attr="disabled" wire:target="showDetail('{{ $row['hashid'] ?? $row['id'] }}')" class="btn btn-primary btn-action" title="Lihat Rincian Kasbon">
+                                                                    <i wire:loading.remove wire:target="showDetail('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-eye"></i>
+                                                                    <i wire:loading wire:target="showDetail('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-spinner fa-spin"></i>
                                                                 </button>
                                                             @endif
                                                         @else
@@ -883,9 +883,9 @@
                                                                     <i class="fas fa-times"></i>
                                                                 </button>
                                                             @endif
-                                                            <button type="button" wire:click="showDetail({{ $row['cash_advance_id'] }}, {{ $row['id'] }})" wire:loading.attr="disabled" wire:target="showDetail({{ $row['cash_advance_id'] }}, {{ $row['id'] }})" class="btn btn-info btn-action" title="Lihat Transaksi Pelunasan ({{ $row['reference_number'] }})">
-                                                                <i wire:loading.remove wire:target="showDetail({{ $row['cash_advance_id'] }}, {{ $row['id'] }})" class="fas fa-receipt"></i>
-                                                                <i wire:loading wire:target="showDetail({{ $row['cash_advance_id'] }}, {{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
+                                                            <button type="button" wire:click="showDetail('{{ $row['cash_advance_hashid'] ?? $row['cash_advance_id'] }}', {{ $row['id'] }})" wire:loading.attr="disabled" wire:target="showDetail('{{ $row['cash_advance_hashid'] ?? $row['cash_advance_id'] }}', {{ $row['id'] }})" class="btn btn-info btn-action" title="Lihat Transaksi Pelunasan ({{ $row['reference_number'] }})">
+                                                                <i wire:loading.remove wire:target="showDetail('{{ $row['cash_advance_hashid'] ?? $row['cash_advance_id'] }}', {{ $row['id'] }})" class="fas fa-receipt"></i>
+                                                                <i wire:loading wire:target="showDetail('{{ $row['cash_advance_hashid'] ?? $row['cash_advance_id'] }}', {{ $row['id'] }})" class="fas fa-spinner fa-spin"></i>
                                                             </button>
                                                         @endif
                                                     </td>

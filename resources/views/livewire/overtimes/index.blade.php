@@ -320,23 +320,23 @@
                                         <!-- Tombol Aksi Standar Kasbon / Stisla .btn-action -->
                                         <td class="text-center align-middle text-nowrap !px-2.5 !py-2">
                                             <!-- LIHAT DETAIL -->
-                                            <button type="button" class="btn btn-info btn-action mr-1" wire:click="openDetailModal({{ $sub->id }})" title="Rincian Detail Pengajuan">
+                                            <button type="button" class="btn btn-info btn-action mr-1" wire:click="openDetailModal('{{ $sub->hashid }}')" title="Rincian Detail Pengajuan">
                                                 <i class="fas fa-eye"></i>
                                             </button>
 
                                             <!-- AKSI ADMIN: VERIFIKASI JAM / TOLAK -->
                                             @if (auth()->user()->hasRole('admin') && $sub->status === \App\Enums\OvertimeStatus::PENDING_ADMIN)
-                                                <button type="button" class="btn btn-primary btn-action mr-1" wire:click="openAdjustModal({{ $sub->id }})" title="Koordinasi & Sesuaikan Jam Kerja">
+                                                <button type="button" class="btn btn-primary btn-action mr-1" wire:click="openAdjustModal('{{ $sub->hashid }}')" title="Koordinasi & Sesuaikan Jam Kerja">
                                                     <i class="fas fa-user-edit"></i>
                                                 </button>
-                                                <button type="button" class="btn btn-danger btn-action mr-1" wire:click="openRejectModal({{ $sub->id }})" title="Tolak Pengajuan Lembur">
+                                                <button type="button" class="btn btn-danger btn-action mr-1" wire:click="openRejectModal('{{ $sub->hashid }}')" title="Tolak Pengajuan Lembur">
                                                     <i class="fas fa-times"></i>
                                                 </button>
                                             @endif
 
                                             <!-- HAPUS UNTUK ADMIN JIKA DIINPUT ADMIN & BELUM MASUK PERIODE -->
                                             @if (auth()->user()->hasRole('admin') && $sub->submission_source === \App\Enums\OvertimeSubmissionSource::ADMIN && is_null($sub->overtime_period_id))
-                                                <button type="button" class="btn btn-danger btn-action" wire:click="confirmDelete({{ $sub->id }})" title="Hapus Pengajuan Lembur">
+                                                <button type="button" class="btn btn-danger btn-action" wire:click="confirmDelete('{{ $sub->hashid }}')" title="Hapus Pengajuan Lembur">
                                                     <i class="fas fa-trash"></i>
                                                 </button>
                                             @endif
@@ -353,7 +353,7 @@
 
                                             <!-- AJUKAN ULANG UNTUK KARYAWAN JIKA DITOLAK -->
                                             @if ($isKaryawan && in_array($sub->status, [\App\Enums\OvertimeStatus::REJECTED_ADMIN, \App\Enums\OvertimeStatus::REJECTED_DIREKTUR], true))
-                                                <button type="button" class="btn btn-warning btn-action" wire:click="reSubmit({{ $sub->id }})" title="Ajukan Ulang / Perbaiki Data">
+                                                <button type="button" class="btn btn-warning btn-action" wire:click="reSubmit('{{ $sub->hashid }}')" title="Ajukan Ulang / Perbaiki Data">
                                                     <i class="fas fa-redo"></i>
                                                 </button>
                                             @endif
@@ -1018,7 +1018,7 @@
 
                 <div class="modal-footer bg-white border-top px-4 py-3 d-flex justify-content-between align-items-center">
                     @if ($detailSubmission && auth()->user()->hasRole('admin') && $detailSubmission->submission_source === \App\Enums\OvertimeSubmissionSource::ADMIN && is_null($detailSubmission->overtime_period_id))
-                        <button type="button" class="btn btn-danger btn-sm" wire:click="confirmDelete({{ $detailSubmission->id }})" style="font-weight: 500; border-radius: 8px;">
+                        <button type="button" class="btn btn-danger btn-sm" wire:click="confirmDelete('{{ $detailSubmission->hashid }}')" style="font-weight: 500; border-radius: 8px;">
                             <i class="fas fa-trash-alt mr-1"></i> Hapus Pengajuan
                         </button>
                     @elseif ($detailSubmission && auth()->user()->hasRole('direktur') && $detailSubmission->status === \App\Enums\OvertimeStatus::PENDING_DIREKTUR)

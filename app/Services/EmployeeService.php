@@ -208,7 +208,7 @@ class EmployeeService
                     'is_active' => $employee->status === EmployeeStatus::ACTIVE,
                     'email_verified_at' => now(),
                 ]);
-                $roleName = ! empty($data['role']) ? $data['role'] : 'karyawan';
+                $roleName = in_array($data['role'] ?? '', ['karyawan', 'admin'], true) ? $data['role'] : 'karyawan';
                 Role::firstOrCreate(
                     ['name' => $roleName],
                     ['display_name' => ucfirst($roleName), 'description' => 'Role '.ucfirst($roleName)]
@@ -390,7 +390,7 @@ class EmployeeService
                 );
 
                 $employee->loadMissing('user');
-                $role = ! empty($data['role']) ? $data['role'] : null;
+                $role = ! empty($data['role']) && in_array($data['role'], ['karyawan', 'admin'], true) ? $data['role'] : null;
 
                 if ($employee->user) {
                     $userUpdate = [

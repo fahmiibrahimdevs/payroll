@@ -50,6 +50,7 @@ class Index extends Component
      */
     public function create(): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         $this->isEditMode = false;
         $this->editingPositionId = null;
         $this->form->resetForm();
@@ -63,6 +64,7 @@ class Index extends Component
      */
     public function store(PositionService $positionService): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $this->form->store($positionService);
             $this->dispatch('close-modal', id: 'positionModal');
@@ -87,6 +89,7 @@ class Index extends Component
      */
     public function edit(int $id): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $position = Position::findOrFail($id);
             $this->isEditMode = true;
@@ -109,6 +112,7 @@ class Index extends Component
      */
     public function update(PositionService $positionService): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $this->form->update($positionService);
             $this->isEditMode = false;
@@ -135,6 +139,7 @@ class Index extends Component
      */
     public function confirmDelete(int $id): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         $position = Position::find($id);
 
         if (! $position) {
@@ -160,6 +165,7 @@ class Index extends Component
     #[On('delete-position')]
     public function delete(int $id, PositionService $positionService): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $position = Position::findOrFail($id);
             $positionService->deletePosition($position);

@@ -50,6 +50,7 @@ class Index extends Component
      */
     public function create(): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         $this->isEditMode = false;
         $this->editingDepartmentId = null;
         $this->form->resetForm();
@@ -63,6 +64,7 @@ class Index extends Component
      */
     public function store(DepartmentService $departmentService): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $this->form->store($departmentService);
             $this->dispatch('close-modal', id: 'departmentModal');
@@ -87,6 +89,7 @@ class Index extends Component
      */
     public function edit(int $id): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $department = Department::findOrFail($id);
             $this->isEditMode = true;
@@ -109,6 +112,7 @@ class Index extends Component
      */
     public function update(DepartmentService $departmentService): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $this->form->update($departmentService);
             $this->isEditMode = false;
@@ -135,6 +139,7 @@ class Index extends Component
      */
     public function confirmDelete(int $id): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         $department = Department::find($id);
 
         if (! $department) {
@@ -160,6 +165,7 @@ class Index extends Component
     #[On('delete-department')]
     public function delete(int $id, DepartmentService $departmentService): void
     {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
         try {
             $department = Department::findOrFail($id);
             $departmentService->deleteDepartment($department);

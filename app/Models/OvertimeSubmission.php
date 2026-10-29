@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\OvertimeStatus;
 use App\Enums\OvertimeSubmissionSource;
 use App\Enums\OvertimeType;
+use App\Traits\HasObfuscatedId;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class OvertimeSubmission extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, HasObfuscatedId, SoftDeletes;
 
     protected $fillable = [
         'reference_number',
