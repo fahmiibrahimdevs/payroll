@@ -405,8 +405,13 @@
                                                 <img src="{{ $employee->photo_url }}" alt="{{ $employee->full_name }}" class="rounded-circle mr-2.5" style="width: 38px; height: 38px; object-fit: cover; border: 1.5px solid #cbd5e1; flex-shrink: 0;">
                                                 <div class="text-nowrap">
                                                     <div class="font-weight-600 leading-tight" style="color: #0f172a; font-size: 13.5px;">{{ $employee->full_name }}</div>
-                                                    <div class="leading-tight mt-1" style="font-size: 12px; color: #64748b; font-weight: 400;">
-                                                        {{ $employee->position?->name ?: 'Tanpa Jabatan' }}
+                                                    <div class="leading-tight mt-1 d-flex align-items-center flex-wrap" style="font-size: 12px; color: #64748b; font-weight: 400; gap: 4px;">
+                                                        <span>{{ $employee->position?->name ?: 'Tanpa Jabatan' }}</span>
+                                                        @if ($employee->user?->hasRole('direktur'))
+                                                            <span class="badge border font-weight-500 px-1.5 py-0.5" style="font-size: 10px; border-radius: 4px; background-color: #fef3c7; color: #92400e; border-color: #fde68a;">Direktur</span>
+                                                        @elseif ($employee->user?->hasRole('admin'))
+                                                            <span class="badge border font-weight-500 px-1.5 py-0.5" style="font-size: 10px; border-radius: 4px; background-color: #e0f2fe; color: #0369a1; border-color: #bae6fd;">Admin</span>
+                                                        @endif
                                                     </div>
                                                 </div>
                                             </div>
@@ -423,14 +428,14 @@
                                             {{ $employee->remaining_contract_label }}
                                         </td>
                                         <td class="align-middle text-nowrap !px-3 !py-2.5">
-                                            @if ($employee->user?->hasRole('karyawan'))
+                                            @if ($employee->user)
                                                 <label class="custom-switch pl-0 m-0" title="{{ $employee->user->is_active ? 'Akun aktif' : 'Akun nonaktif' }}">
                                                     <input type="checkbox" class="custom-switch-input" aria-label="Status akun {{ $employee->full_name }}" @checked($employee->user->is_active) @disabled(! auth()->user()->hasRole('admin')) wire:click.prevent="confirmToggleAccountStatus({{ $employee->id }})" wire:loading.attr="disabled" wire:target="confirmToggleAccountStatus({{ $employee->id }}),toggleEmployeeAccountStatus">
                                                     <span class="custom-switch-indicator"></span>
                                                     <span class="custom-switch-description">{{ $employee->user->is_active ? 'Aktif' : 'Nonaktif' }}</span>
                                                 </label>
                                             @else
-                                                <span class="text-muted">Belum ada akun</span>
+                                                <span class="text-dark">Belum ada akun</span>
                                             @endif
                                         </td>
                                         <td class="align-middle text-nowrap !px-3 !py-2.5" style="font-size: 12.5px; color: #475569; font-weight: 400; font-variant-numeric: tabular-nums;">

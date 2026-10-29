@@ -219,9 +219,9 @@ class CompanyProfile extends Model
     }
 
     /**
-     * Automatically generate employee email from their full name (e.g. Arif Fahmi Abdillah -> arif.fahmi.abdillah@company.com).
+     * Clean and generate employee username from full name (e.g. Arif Fahmi Abdillah -> arif.fahmi.abdillah).
      */
-    public static function generateEmployeeEmail(string $name, ?string $domain = null): string
+    public static function generateEmployeeUsername(string $name): string
     {
         $name = trim($name);
         if (empty($name)) {
@@ -230,9 +230,17 @@ class CompanyProfile extends Model
 
         // Clean out special characters and punctuation
         $cleaned = preg_replace('/[^a-zA-Z0-9\s]/', '', $name);
-        $words = array_values(array_filter(preg_split('/\s+/', strtolower($cleaned))));
-        $username = implode('.', $words);
+        $words = array_values(array_filter(preg_split('/\s+/', strtolower($cleaned)) ?: []));
 
+        return implode('.', $words);
+    }
+
+    /**
+     * Automatically generate employee email from their full name (e.g. Arif Fahmi Abdillah -> arif.fahmi.abdillah@company.com).
+     */
+    public static function generateEmployeeEmail(string $name, ?string $domain = null): string
+    {
+        $username = static::generateEmployeeUsername($name);
         if (empty($username)) {
             return '';
         }

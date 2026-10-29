@@ -12,6 +12,7 @@ use App\Models\Employee;
 use App\Models\EmployeeSalaryHistory;
 use App\Models\PayrollItem;
 use App\Models\Position;
+use App\Models\Role;
 use App\Models\SalaryComponent;
 use App\Models\User;
 use Carbon\Carbon;
@@ -203,11 +204,16 @@ class EmployeeService
                 $user = User::create([
                     'name' => $employee->full_name,
                     'email' => $detailData['email'],
-                    'password' => '1',
+                    'password' => ! empty($data['password']) ? $data['password'] : '1',
                     'is_active' => $employee->status === EmployeeStatus::ACTIVE,
                     'email_verified_at' => now(),
                 ]);
-                $user->syncRoles(['karyawan']);
+                $roleName = ! empty($data['role']) ? $data['role'] : 'karyawan';
+                Role::firstOrCreate(
+                    ['name' => $roleName],
+                    ['display_name' => ucfirst($roleName), 'description' => 'Role '.ucfirst($roleName)]
+                );
+                $user->syncRoles([$roleName]);
                 $employee->update(['user_id' => $user->id]);
 
                 if ((float) $employee->basic_salary > 0) {
@@ -384,11 +390,39 @@ class EmployeeService
                 );
 
                 $employee->loadMissing('user');
+                $role = ! empty($data['role']) ? $data['role'] : null;
+
                 if ($employee->user) {
-                    $employee->user->update([
+                    $userUpdate = [
                         'name' => $employee->full_name,
                         'email' => $detailData['email'],
+                    ];
+                    if (! empty($data['password'])) {
+                        $userUpdate['password'] = $data['password'];
+                    }
+                    $employee->user->update($userUpdate);
+                    if ($role) {
+                        Role::firstOrCreate(
+                            ['name' => $role],
+                            ['display_name' => ucfirst($role), 'description' => 'Role '.ucfirst($role)]
+                        );
+                        $employee->user->syncRoles([$role]);
+                    }
+                } elseif (! empty($detailData['email'])) {
+                    $user = User::create([
+                        'name' => $employee->full_name,
+                        'email' => $detailData['email'],
+                        'password' => ! empty($data['password']) ? $data['password'] : '1',
+                        'is_active' => $employee->status === EmployeeStatus::ACTIVE,
+                        'email_verified_at' => now(),
                     ]);
+                    $roleName = $role ?? 'karyawan';
+                    Role::firstOrCreate(
+                        ['name' => $roleName],
+                        ['display_name' => ucfirst($roleName), 'description' => 'Role '.ucfirst($roleName)]
+                    );
+                    $user->syncRoles([$roleName]);
+                    $employee->update(['user_id' => $user->id]);
                 }
 
                 // Sinkronisasi otomatis slip gaji yang masih draf / revisi jika data karyawan (gaji pokok, ptkp, pajak, bank) berubah

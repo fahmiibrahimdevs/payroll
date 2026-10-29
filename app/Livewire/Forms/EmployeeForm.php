@@ -12,6 +12,7 @@ use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\User;
 use App\Services\EmployeeService;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\Form;
@@ -68,6 +69,12 @@ class EmployeeForm extends Form
     public string $phone = '';
 
     public string $email = '';
+
+    public string $email_username = '';
+
+    public string $role = 'karyawan';
+
+    public string $password = '';
 
     public string $bank_name = '';
 
@@ -138,6 +145,9 @@ class EmployeeForm extends Form
                 Rule::unique('employee_details', 'email')->ignore($detailId),
                 Rule::unique(User::class, 'email')->ignore($this->employee?->user_id),
             ],
+            'email_username' => ['nullable', 'string', 'max:100'],
+            'role' => ['required', 'string', 'in:karyawan,admin,direktur'],
+            'password' => ['nullable', 'string', 'min:1', 'max:255'],
             'bank_name' => ['nullable', 'string', 'max:100'],
             'bank_account_number' => ['nullable', 'string', 'max:100'],
             'bank_account_name' => ['nullable', 'string', 'max:255'],
@@ -193,6 +203,9 @@ class EmployeeForm extends Form
             'address' => 'Alamat Domisili',
             'phone' => 'No. Telepon / WhatsApp',
             'email' => 'Alamat Email',
+            'email_username' => 'Username Email',
+            'role' => 'Role Akun Login',
+            'password' => 'Password Akun',
             'bank_name' => 'Nama Bank',
             'bank_account_number' => 'Nomor Rekening',
             'bank_account_name' => 'Nama Pemilik Rekening',
@@ -214,6 +227,7 @@ class EmployeeForm extends Form
     public function setEmployee(Employee $employee): void
     {
         $this->resetForm();
+        $employee->loadMissing(['detail', 'user.roles']);
         $this->employee = $employee;
         $this->fingerprint_id = $employee->fingerprint_id;
         $this->department_id = $employee->department_id;
@@ -246,6 +260,13 @@ class EmployeeForm extends Form
         $this->address = $detail?->address ?? '';
         $this->phone = $detail?->phone ?? '';
         $this->email = $detail?->email ?? '';
+        if (! empty($this->email) && str_contains($this->email, '@')) {
+            $this->email_username = Str::before($this->email, '@');
+        } else {
+            $this->email_username = $this->email;
+        }
+        $this->role = $employee->user?->roles->first()?->name ?? 'karyawan';
+        $this->password = '';
         $this->bank_name = $detail?->bank_name ?? '';
         $this->bank_account_number = $detail?->bank_account_number ?? '';
         $this->bank_account_name = $detail?->bank_account_name ?? '';
@@ -295,6 +316,9 @@ class EmployeeForm extends Form
             'address',
             'phone',
             'email',
+            'email_username',
+            'role',
+            'password',
             'bank_name',
             'bank_account_number',
             'bank_account_name',
@@ -311,6 +335,9 @@ class EmployeeForm extends Form
         ]);
         $this->employment_status = 'tetap';
         $this->status = 'active';
+        $this->role = 'karyawan';
+        $this->password = '';
+        $this->email_username = '';
         $this->gender = 'male';
         $this->join_date = date('Y-m-d');
         $this->basic_salary = 0;
@@ -349,11 +376,27 @@ class EmployeeForm extends Form
      */
     public function store(EmployeeService $employeeService): Employee
     {
-        if (empty($this->email) && ! empty($this->full_name)) {
+        $companyDomain = CompanyProfile::getProfile()->getEmailDomain();
+        if (! empty(trim($this->email))) {
+            if (! str_contains($this->email, '@')) {
+                $cleanUsername = ltrim(trim($this->email));
+                $this->email = strtolower($cleanUsername.'@'.$companyDomain);
+                $this->email_username = $cleanUsername;
+            } else {
+                $this->email_username = Str::before($this->email, '@');
+            }
+        } elseif (! empty(trim($this->email_username))) {
+            $cleanUsername = ltrim(trim(Str::before($this->email_username, '@')));
+            $this->email_username = $cleanUsername;
+            $this->email = strtolower($cleanUsername.'@'.$companyDomain);
+        } elseif (! empty($this->full_name)) {
             $this->email = CompanyProfile::generateEmployeeEmail($this->full_name);
+            $this->email_username = Str::before($this->email, '@');
         }
 
         $validated = $this->validate();
+        $validated['role'] = $this->role ?: 'karyawan';
+        $validated['password'] = $this->password ?: '1';
 
         $companyProfile = CompanyProfile::getProfile();
         $isUniform = (bool) ($companyProfile->is_uniform_meal_allowance ?? true);
@@ -382,7 +425,25 @@ class EmployeeForm extends Form
      */
     public function update(EmployeeService $employeeService): Employee
     {
+        $companyDomain = CompanyProfile::getProfile()->getEmailDomain();
+        $currentEmailUsername = str_contains($this->email, '@') ? Str::before($this->email, '@') : $this->email;
+
+        if (! empty(trim($this->email_username)) && $this->email_username !== $currentEmailUsername) {
+            $cleanUsername = ltrim(trim(Str::before($this->email_username, '@')));
+            $this->email_username = $cleanUsername;
+            $this->email = strtolower($cleanUsername.'@'.$companyDomain);
+        } elseif (! empty(trim($this->email))) {
+            if (! str_contains($this->email, '@')) {
+                $this->email = strtolower(trim($this->email).'@'.$companyDomain);
+            }
+            $this->email_username = Str::before($this->email, '@');
+        }
+
         $validated = $this->validate();
+        $validated['role'] = $this->role ?: 'karyawan';
+        if (! empty($this->password)) {
+            $validated['password'] = $this->password;
+        }
 
         $companyProfile = CompanyProfile::getProfile();
         $isUniform = (bool) ($companyProfile->is_uniform_meal_allowance ?? true);

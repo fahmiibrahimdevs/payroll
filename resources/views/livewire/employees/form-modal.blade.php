@@ -19,7 +19,7 @@
                         </li>
                         <li class="nav-item">
                             <a class="nav-link font-weight-600 text-center" id="personal-tab" data-toggle="pill" href="#emp-pill-pribadi" role="tab" aria-controls="emp-pill-pribadi" aria-selected="false">
-                                <i class="fas fa-user mr-1"></i> Pribadi
+                                <i class="fas fa-user mr-1"></i> Pribadi & Akun
                             </a>
                         </li>
                         <li class="nav-item">
@@ -462,21 +462,65 @@
                                     </div>
                                 </div>
 
-                                <!-- Email -->
+                                <!-- Email Akun Login (Global Company Domain) -->
                                 <div class="col-md-6">
                                     <div class="form-group mb-2">
                                         <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <label for="email" class="mb-0 d-flex align-items-center">
-                                                <span>Alamat Email</span>
-                                                <i class="fas fa-info-circle text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Otomatis dibuat dari nama karyawan & domain profil perusahaan via tombol Auto."></i>
+                                            <label for="email_username" class="mb-0 d-flex align-items-center">
+                                                <span>Email Akun Login</span>
+                                                <i class="fas fa-info-circle text-dark ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Domain email perusahaan bersifat global. Username otomatis dibuat dari nama karyawan."></i>
                                             </label>
-                                            <button type="button" wire:click="generateEmailFromName" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size: 11px;" title="Generate email otomatis dari nama karyawan">
+                                            <button type="button" wire:click="generateEmailFromName" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size: 11px;" title="Generate username email otomatis dari nama karyawan">
                                                 <i class="fas fa-magic mr-1"></i> Auto
                                             </button>
                                         </div>
-                                        <input type="email" id="email" wire:model.live.debounce.400ms="form.email" class="form-control @error('form.email') is-invalid @enderror" placeholder="karyawan@perusahaan.com" autocomplete="off">
+                                        <div class="input-group">
+                                            <input type="text" id="email_username" wire:model.live.debounce.400ms="form.email_username" class="form-control @error('form.email') is-invalid @enderror @error('form.email_username') is-invalid @enderror" placeholder="nama.karyawan" autocomplete="off">
+                                            <div class="input-group-append">
+                                                <span class="input-group-text font-weight-500 text-dark">@{{ $companyEmailDomain }}</span>
+                                            </div>
+                                        </div>
                                         @error('form.email')
+                                            <div class="text-danger small mt-1">{{ $message }}</div>
+                                        @enderror
+                                        @error('form.email_username')
+                                            <div class="text-danger small mt-1">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+
+                                <!-- Role Akun Login -->
+                                <div class="col-md-6">
+                                    <div class="form-group mb-2">
+                                        <label for="form_role">Role Akun Login <span class="text-danger">*</span></label>
+                                        <select id="form_role" wire:model="form.role" class="form-control @error('form.role') is-invalid @enderror">
+                                            <option value="karyawan">Karyawan</option>
+                                            <option value="admin">Administrator</option>
+                                            <option value="direktur">Direktur</option>
+                                        </select>
+                                        @error('form.role')
                                             <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+
+                                <!-- Password Akun -->
+                                <div class="col-md-6">
+                                    <div class="form-group mb-2">
+                                        <label for="form_password">
+                                            <span>Password Akun</span>
+                                            <small class="text-dark ml-1 font-weight-normal">({{ $isEditMode ? 'Kosongkan jika tidak diubah' : 'Default: 1' }})</small>
+                                        </label>
+                                        <div class="input-group" x-data="{ showPass: false }">
+                                            <input :type="showPass ? 'text' : 'password'" id="form_password" wire:model="form.password" class="form-control @error('form.password') is-invalid @enderror" placeholder="{{ $isEditMode ? 'Kosongkan jika tidak diubah' : '1' }}" autocomplete="new-password">
+                                            <div class="input-group-append">
+                                                <button type="button" class="btn btn-outline-secondary" @click="showPass = !showPass" tabindex="-1" title="Tampilkan/Sembunyikan Password">
+                                                    <i class="fas" :class="showPass ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        @error('form.password')
+                                            <div class="text-danger small mt-1">{{ $message }}</div>
                                         @enderror
                                     </div>
                                 </div>

@@ -13,6 +13,7 @@ use App\Models\Position;
 use App\Services\EmployeeService;
 use App\Services\UserService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
@@ -55,10 +56,14 @@ class Index extends Component
 
     public bool $isEmailManuallyModified = false;
 
+    public string $companyEmailDomain = '';
+
     public ?Employee $selectedEmployee = null;
 
     public function mount(): void
     {
+        $this->companyEmailDomain = CompanyProfile::getProfile()->getEmailDomain();
+
         $user = auth()->user();
         if ($user?->hasRole('karyawan')) {
             $emp = $user->getEmployeeRecord();
@@ -137,25 +142,36 @@ class Index extends Component
         $this->autoGenerateEmail($value);
     }
 
-    public function updatedFormEmail(): void
+    public function updatedFormEmail(string $value): void
     {
         $this->isEmailManuallyModified = true;
+        $this->form->email_username = Str::before($value, '@');
+    }
+
+    public function updatedFormEmailUsername(): void
+    {
+        $this->isEmailManuallyModified = true;
+        $domain = $this->companyEmailDomain ?: CompanyProfile::getProfile()->getEmailDomain();
+        $cleanUsername = ltrim(trim(Str::before($this->form->email_username, '@')));
+        $this->form->email = $cleanUsername !== '' ? strtolower($cleanUsername.'@'.$domain) : '';
     }
 
     public function updated(string $property, mixed $value): void
     {
         if ($property === 'form.full_name') {
             $this->autoGenerateEmail((string) $value);
-        } elseif ($property === 'form.email') {
+        } elseif ($property === 'form.email' || $property === 'form.email_username') {
             $this->isEmailManuallyModified = true;
         }
     }
 
     protected function autoGenerateEmail(string $name): void
     {
-        if (! $this->isEmailManuallyModified && (! $this->isEditMode || empty($this->form->email))) {
+        if (! $this->isEmailManuallyModified && (! $this->isEditMode || empty($this->form->email_username))) {
             if (! empty(trim($name))) {
-                $this->form->email = CompanyProfile::generateEmployeeEmail($name);
+                $this->form->email_username = CompanyProfile::generateEmployeeUsername($name);
+                $domain = $this->companyEmailDomain ?: CompanyProfile::getProfile()->getEmailDomain();
+                $this->form->email = strtolower($this->form->email_username.'@'.$domain);
             }
         }
     }
@@ -166,7 +182,9 @@ class Index extends Component
     public function generateEmailFromName(): void
     {
         if (! empty(trim($this->form->full_name))) {
-            $this->form->email = CompanyProfile::generateEmployeeEmail($this->form->full_name);
+            $this->form->email_username = CompanyProfile::generateEmployeeUsername($this->form->full_name);
+            $domain = $this->companyEmailDomain ?: CompanyProfile::getProfile()->getEmailDomain();
+            $this->form->email = strtolower($this->form->email_username.'@'.$domain);
             $this->isEmailManuallyModified = false;
         }
     }
@@ -180,6 +198,7 @@ class Index extends Component
         $this->isEditMode = false;
         $this->editingEmployeeId = null;
         $this->isEmailManuallyModified = false;
+        $this->companyEmailDomain = CompanyProfile::getProfile()->getEmailDomain();
         $this->form->resetForm();
         $this->dispatch('open-modal', [
             'id' => 'employeeModal',
@@ -201,14 +220,19 @@ class Index extends Component
             $employee = $this->form->store($employeeService);
             $this->resetPage('expiringPage');
             $this->dispatch('close-modal', id: 'employeeModal');
+            $roleName = $employee->user?->roles->first()?->name ?? 'karyawan';
             $this->dispatch('swal:alert', [
                 'type' => 'success',
                 'title' => 'Berhasil!',
-                'message' => 'Data karyawan ditambahkan. Akun login: '.($employee->detail?->email ?? '-').' dengan password awal 1.',
+                'message' => 'Data karyawan ditambahkan. Akun login: '.($employee->detail?->email ?? '-').' (Role: '.ucfirst($roleName).') dengan password awal 1.',
             ]);
         } catch (ValidationException $e) {
             throw $e;
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            report($e);
+            if (app()->environment('testing')) {
+                throw $e;
+            }
             $this->dispatch('swal:alert', [
                 'type' => 'error',
                 'title' => 'Gagal Menyimpan!',
@@ -224,10 +248,11 @@ class Index extends Component
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
         try {
-            $employee = Employee::with(['department', 'position', 'detail'])->findOrFail($id);
+            $employee = Employee::with(['department', 'position', 'detail', 'user.roles'])->findOrFail($id);
             $this->isEditMode = true;
             $this->editingEmployeeId = $id;
             $this->isEmailManuallyModified = true;
+            $this->companyEmailDomain = CompanyProfile::getProfile()->getEmailDomain();
             $this->form->setEmployee($employee);
             $this->dispatch('open-modal', [
                 'id' => 'employeeModal',
@@ -291,11 +316,21 @@ class Index extends Component
         abort_unless(auth()->user()?->hasRole('admin'), 403);
 
         $employee = Employee::with('user.roles')->findOrFail($id);
-        if (! $employee->user || ! $employee->user->hasRole('karyawan')) {
+        if (! $employee->user) {
             $this->dispatch('swal:alert', [
                 'type' => 'warning',
                 'title' => 'Akun Belum Tersedia',
                 'message' => 'Akun karyawan ini belum dibuat atau belum terhubung.',
+            ]);
+
+            return;
+        }
+
+        if ($employee->user->id === auth()->id()) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Aksi Ditolak',
+                'message' => 'Anda tidak dapat menonaktifkan akun yang sedang digunakan untuk login.',
             ]);
 
             return;
@@ -321,11 +356,21 @@ class Index extends Component
         abort_unless(auth()->user()?->hasRole('admin'), 403);
 
         $employee = Employee::with('user.roles')->findOrFail($id);
-        if (! $employee->user || ! $employee->user->hasRole('karyawan')) {
+        if (! $employee->user) {
             $this->dispatch('swal:alert', [
                 'type' => 'warning',
                 'title' => 'Akun Belum Tersedia',
                 'message' => 'Akun karyawan ini belum dibuat atau belum terhubung.',
+            ]);
+
+            return;
+        }
+
+        if ($employee->user->id === auth()->id()) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Aksi Ditolak',
+                'message' => 'Anda tidak dapat menonaktifkan akun yang sedang digunakan untuk login.',
             ]);
 
             return;
@@ -465,6 +510,7 @@ class Index extends Component
             'employeeStats' => $dashboardData['stats'],
             'expiringEmployees' => $dashboardData['expiring_employees'],
             'employeeCharts' => $dashboardData['charts'],
+            'companyEmailDomain' => $this->companyEmailDomain ?: CompanyProfile::getProfile()->getEmailDomain(),
         ]);
     }
 }

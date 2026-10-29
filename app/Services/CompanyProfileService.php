@@ -3,8 +3,12 @@
 namespace App\Services;
 
 use App\Models\CompanyProfile;
+use App\Models\EmployeeDetail;
+use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class CompanyProfileService
 {
@@ -71,9 +75,16 @@ class CompanyProfileService
             'logo_path' => $data['logo_path'] ?? $profile->logo_path,
         ];
 
+        $oldDomain = $profile->getEmailDomain();
+
         $profile->fill($attributes);
         $changedFields = array_keys($profile->getDirty());
         $profile->save();
+
+        $newDomain = $profile->getEmailDomain();
+        if (! empty($newDomain) && ! empty($oldDomain) && strcasecmp($oldDomain, $newDomain) !== 0) {
+            $this->syncEmployeeEmailDomains($newDomain);
+        }
 
         if ($changedFields !== []) {
             $this->logger->info(
@@ -90,5 +101,63 @@ class CompanyProfileService
         }
 
         return $profile;
+    }
+
+    /**
+     * Bulk update all employee emails and linked user accounts to a new company email domain.
+     */
+    public function syncEmployeeEmailDomains(string $newDomain): int
+    {
+        $newDomain = ltrim(trim($newDomain), '@');
+        if ($newDomain === '') {
+            return 0;
+        }
+
+        $updatedCount = 0;
+
+        DB::transaction(function () use ($newDomain, &$updatedCount) {
+            $details = EmployeeDetail::with('employee.user')
+                ->whereNotNull('email')
+                ->where('email', '!=', '')
+                ->get();
+
+            foreach ($details as $detail) {
+                $email = $detail->email;
+                $username = Str::before($email, '@');
+                if (empty($username)) {
+                    continue;
+                }
+
+                $newEmail = strtolower($username . '@' . $newDomain);
+                if (strtolower($email) === $newEmail) {
+                    continue;
+                }
+
+                $oldEmail = $detail->email;
+                $detail->update(['email' => $newEmail]);
+
+                if ($detail->employee?->user) {
+                    $detail->employee->user->update(['email' => $newEmail]);
+                } else {
+                    User::where('email', $oldEmail)->update(['email' => $newEmail]);
+                }
+
+                $updatedCount++;
+            }
+        });
+
+        if ($updatedCount > 0) {
+            $this->logger->info(
+                action: 'EMPLOYEE_EMAIL_DOMAINS_SYNCED',
+                module: 'company_profile',
+                message: "Bulk updated {$updatedCount} employee emails to domain @{$newDomain}",
+                context: [
+                    'new_domain' => $newDomain,
+                    'updated_count' => $updatedCount,
+                ]
+            );
+        }
+
+        return $updatedCount;
     }
 }

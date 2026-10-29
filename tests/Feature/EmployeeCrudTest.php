@@ -11,8 +11,11 @@ use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Position;
+use App\Models\User;
+use App\Services\CompanyProfileService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -578,5 +581,100 @@ class EmployeeCrudTest extends TestCase
             ->assertSet('form.overtime_rate_per_day', 75000)
             ->assertSet('form.overtime_rate_per_hour', 15000)
             ->assertSeeHtml('wire:key="emp-ot-day-wrap-' . $empB->id . '"');
+    }
+
+    public function test_admin_can_create_employee_with_custom_role_and_password(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $domain = CompanyProfile::getProfile()->getEmailDomain();
+
+        Livewire::test(Index::class)
+            ->call('create')
+            ->set('form.full_name', 'Bambang Direktur Testing')
+            ->set('form.email_username', 'bambang.direktur')
+            ->set('form.role', 'direktur')
+            ->set('form.password', 'rahasia123')
+            ->set('form.employment_status', EmploymentStatus::TETAP->value)
+            ->set('form.tax_recipient_type', TaxRecipientType::MonthlyEmployee->value)
+            ->set('form.status', EmployeeStatus::ACTIVE->value)
+            ->set('form.join_date', '2026-02-01')
+            ->set('form.basic_salary', 15000000)
+            ->call('store')
+            ->assertHasNoErrors()
+            ->assertDispatched('close-modal', id: 'employeeModal');
+
+        $expectedEmail = 'bambang.direktur@'.$domain;
+        $employee = Employee::where('full_name', 'Bambang Direktur Testing')->first();
+        $this->assertNotNull($employee);
+        $this->assertSame($expectedEmail, $employee->detail?->email);
+
+        $user = $employee->user;
+        $this->assertNotNull($user);
+        $this->assertSame($expectedEmail, $user->email);
+        $this->assertTrue($user->hasRole('direktur'));
+        $this->assertTrue(Hash::check('rahasia123', $user->password));
+    }
+
+    public function test_admin_can_update_employee_role_and_password(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $emp = Employee::factory()->withDetail()->create([
+            'full_name' => 'Staf Biasa Testing',
+        ]);
+
+        $user = User::factory()->create([
+            'name' => 'Staf Biasa Testing',
+            'email' => $emp->detail->email,
+            'password' => '1',
+            'is_active' => true,
+        ]);
+        $user->syncRoles(['karyawan']);
+        $emp->update(['user_id' => $user->id]);
+
+        Livewire::test(Index::class)
+            ->call('edit', $emp->id)
+            ->assertSet('form.role', 'karyawan')
+            ->set('form.role', 'admin')
+            ->set('form.password', 'adminbaru999')
+            ->call('update')
+            ->assertHasNoErrors();
+
+        $user->refresh();
+        $this->assertTrue($user->hasRole('admin'));
+        $this->assertTrue(Hash::check('adminbaru999', $user->password));
+    }
+
+    public function test_updating_company_email_domain_syncs_all_employee_emails_and_user_logins(): void
+    {
+        $companyProfileService = app(CompanyProfileService::class);
+
+        // Set baseline domain
+        $companyProfileService->updateProfile(['email_domain' => 'initialdomain.com']);
+
+        $emp1 = Employee::factory()->withDetail(['email' => 'andi@initialdomain.com'])->create(['full_name' => 'Andi Sync']);
+        $user1 = User::factory()->create(['name' => 'Andi Sync', 'email' => 'andi@initialdomain.com']);
+        $emp1->update(['user_id' => $user1->id]);
+
+        $emp2 = Employee::factory()->withDetail(['email' => 'budi.santoso@initialdomain.com'])->create(['full_name' => 'Budi Santoso Sync']);
+        $user2 = User::factory()->create(['name' => 'Budi Santoso Sync', 'email' => 'budi.santoso@initialdomain.com']);
+        $emp2->update(['user_id' => $user2->id]);
+
+        // Update company profile email domain to new domain
+        $companyProfileService->updateProfile(['email_domain' => 'percetakansubang.com']);
+
+        $emp1->detail->refresh();
+        $user1->refresh();
+        $emp2->detail->refresh();
+        $user2->refresh();
+
+        $this->assertSame('andi@percetakansubang.com', $emp1->detail->email);
+        $this->assertSame('andi@percetakansubang.com', $user1->email);
+
+        $this->assertSame('budi.santoso@percetakansubang.com', $emp2->detail->email);
+        $this->assertSame('budi.santoso@percetakansubang.com', $user2->email);
     }
 }
