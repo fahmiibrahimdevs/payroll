@@ -347,22 +347,15 @@ class SalaryComponentCrudTest extends TestCase
     {
         $this->seed(SalaryComponentSeeder::class);
 
-        // Verify total components seeded
-        $this->assertGreaterThanOrEqual(19, SalaryComponent::count());
+        // Verify total required & system components seeded
+        $this->assertGreaterThanOrEqual(8, SalaryComponent::count());
 
-        // Verify active vs inactive according to user spec
-        $activeCodes = ['GAJI_POKOK', 'TUNJ_JABATAN', 'TUNJ_MAKAN', 'TUNJ_TRANSPORT', 'LEMBUR', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP', 'KASBON'];
+        // Verify active system & required components
+        $activeCodes = ['GAJI_POKOK', 'TUNJ_MAKAN', 'LEMBUR', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP', 'PPH21', 'KASBON'];
         foreach ($activeCodes as $code) {
             $comp = SalaryComponent::where('code', $code)->first();
             $this->assertNotNull($comp, "Component {$code} must exist");
             $this->assertTrue($comp->is_active, "Component {$code} must be active");
-        }
-
-        $inactiveCodes = ['TUNJ_KEAHLIAN', 'TUNJ_MASA_KERJA', 'TUNJ_KELUARGA', 'TUNJ_KOMUNIKASI', 'BONUS', 'THR', 'REIMBURSE', 'PPH21', 'POT_TERLAMBAT', 'POT_ALPA'];
-        foreach ($inactiveCodes as $code) {
-            $comp = SalaryComponent::where('code', $code)->first();
-            $this->assertNotNull($comp, "Component {$code} must exist");
-            $this->assertFalse($comp->is_active, "Component {$code} must be inactive");
         }
 
         // Verify percentage defaults for BPJS
@@ -395,17 +388,30 @@ class SalaryComponentCrudTest extends TestCase
         $this->seed(SalaryComponentSeeder::class);
         $service = app(SalaryComponentService::class);
 
-        $results = $service->getPaginatedSalaryComponents(perPage: 19);
+        // Create an inactive component to verify ordering
+        SalaryComponent::create([
+            'code' => 'TUNJ_INACTIVE_TEST',
+            'name' => 'Tunjangan Nonaktif Test',
+            'category' => SalaryComponentCategory::VARIABLE_ALLOWANCE,
+            'type' => SalaryComponentType::ALLOWANCE,
+            'calculation_type' => SalaryCalculationType::NOMINAL,
+            'is_active' => false,
+            'is_system' => false,
+            'is_taxable' => true,
+            'sort_order' => 99,
+        ]);
 
-        // First 9 components must be active (including newly activated LEMBUR)
+        $results = $service->getPaginatedSalaryComponents(perPage: 20);
         $items = $results->items();
-        for ($i = 0; $i < 9; $i++) {
+
+        // The first 8 seeded components must be active
+        for ($i = 0; $i < 8; $i++) {
             $this->assertTrue($items[$i]->is_active, "Item index {$i} ({$items[$i]->name}) should be active");
         }
-        // Remaining components should be inactive
-        for ($i = 9; $i < count($items); $i++) {
-            $this->assertFalse($items[$i]->is_active, "Item index {$i} ({$items[$i]->name}) should be inactive");
-        }
+
+        // The newly created inactive component should be at the end
+        $lastItem = end($items);
+        $this->assertFalse($lastItem->is_active, 'Last item should be inactive');
     }
 
     public function test_director_can_view_and_crud_salary_components(): void

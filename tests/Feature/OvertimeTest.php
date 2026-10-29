@@ -840,6 +840,11 @@ class OvertimeTest extends TestCase
 
     public function test_all_active_employees_are_included_in_period_attendance(): void
     {
+        $this->employee->update([
+            'employment_status' => EmploymentStatus::HARIAN,
+            'daily_rate' => 125000,
+        ]);
+
         $service = app(OvertimeService::class);
         $period = $service->createPeriod([
             'name' => 'Periode Semua Karyawan Test',
@@ -897,6 +902,21 @@ class OvertimeTest extends TestCase
 
     public function test_period_attendance_excludes_zero_attended_days_from_view(): void
     {
+        $this->employee->update([
+            'employment_status' => EmploymentStatus::HARIAN,
+            'daily_rate' => 125000,
+        ]);
+
+        Employee::create([
+            'department_id' => $this->employee->department_id,
+            'position_id' => $this->employee->position_id,
+            'full_name' => 'Karyawan Harian Dua',
+            'join_date' => Carbon::now()->subMonths(3)->format('Y-m-d'),
+            'employment_status' => EmploymentStatus::HARIAN,
+            'status' => 'active',
+            'daily_rate' => 125000,
+        ]);
+
         $startDate = Carbon::now()->startOfWeek();
         $endDate = Carbon::now()->endOfWeek();
         $service = app(OvertimeService::class);
@@ -940,6 +960,21 @@ class OvertimeTest extends TestCase
 
     public function test_print_weekly_excludes_zero_work_days_employees(): void
     {
+        $this->employee->update([
+            'employment_status' => EmploymentStatus::HARIAN,
+            'daily_rate' => 125000,
+        ]);
+
+        Employee::create([
+            'department_id' => $this->employee->department_id,
+            'position_id' => $this->employee->position_id,
+            'full_name' => 'Karyawan Harian Tiga',
+            'join_date' => Carbon::now()->subMonths(3)->format('Y-m-d'),
+            'employment_status' => EmploymentStatus::HARIAN,
+            'status' => 'active',
+            'daily_rate' => 125000,
+        ]);
+
         $startDate = Carbon::now()->startOfWeek();
         $endDate = Carbon::now()->endOfWeek();
         $service = app(OvertimeService::class);
@@ -982,6 +1017,11 @@ class OvertimeTest extends TestCase
 
     public function test_admin_can_pay_and_edit_employee_weekly_salary(): void
     {
+        $this->employee->update([
+            'employment_status' => EmploymentStatus::HARIAN,
+            'daily_rate' => 125000,
+        ]);
+
         $startDate = Carbon::now()->startOfWeek();
         $endDate = Carbon::now()->endOfWeek();
         $service = app(OvertimeService::class);

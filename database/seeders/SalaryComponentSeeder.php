@@ -29,6 +29,7 @@ class SalaryComponentSeeder extends Seeder
                 'sort_order' => 1,
                 'description' => 'Upah dasar pokok karyawan sesuai perjanjian kerja/posisi.',
             ],
+            /*
             [
                 'code' => 'TUNJ_JABATAN',
                 'name' => 'Tunjangan Jabatan',
@@ -77,6 +78,7 @@ class SalaryComponentSeeder extends Seeder
                 'sort_order' => 5,
                 'description' => 'Bantuan tunjangan pasangan sah dan tanggungan anak.',
             ],
+            */
 
             // ==================== TUNJANGAN TIDAK TETAP ====================
             [
@@ -91,6 +93,7 @@ class SalaryComponentSeeder extends Seeder
                 'sort_order' => 6,
                 'description' => 'Uang makan operasional kehadiran harian atau bulanan.',
             ],
+            /*
             [
                 'code' => 'TUNJ_TRANSPORT',
                 'name' => 'Tunjangan Transport',
@@ -115,6 +118,7 @@ class SalaryComponentSeeder extends Seeder
                 'sort_order' => 8,
                 'description' => 'Penggantian kuota internet dan pulsa komunikasi koordinasi kerja.',
             ],
+            */
             [
                 'code' => 'LEMBUR',
                 'name' => 'Uang Lembur',
@@ -127,6 +131,7 @@ class SalaryComponentSeeder extends Seeder
                 'sort_order' => 9,
                 'description' => 'Upah jam kerja lembur di luar jam kerja reguler yang disetujui.',
             ],
+            /*
             [
                 'code' => 'BONUS',
                 'name' => 'Bonus / Insentif',
@@ -163,6 +168,7 @@ class SalaryComponentSeeder extends Seeder
                 'sort_order' => 12,
                 'description' => 'Klaim pengeluaran operasional perusahaan atas nama karyawan.',
             ],
+            */
 
             // ==================== POTONGAN ====================
             [
@@ -207,8 +213,8 @@ class SalaryComponentSeeder extends Seeder
                 'category' => SalaryComponentCategory::DEDUCTION,
                 'calculation_type' => SalaryCalculationType::NOMINAL,
                 'default_value' => null,
-                'is_active' => false,
-                'is_system' => false,
+                'is_active' => true,
+                'is_system' => true,
                 'is_taxable' => false,
                 'sort_order' => 16,
                 'description' => 'Pajak penghasilan pasal 21 atas penghasilan bruto karyawan.',
@@ -225,6 +231,7 @@ class SalaryComponentSeeder extends Seeder
                 'sort_order' => 17,
                 'description' => 'Cicilan pelunasan kasbon atau pinjaman internal karyawan.',
             ],
+            /*
             [
                 'code' => 'POT_TERLAMBAT',
                 'name' => 'Potongan Keterlambatan',
@@ -249,6 +256,7 @@ class SalaryComponentSeeder extends Seeder
                 'sort_order' => 19,
                 'description' => 'Pemotongan upah proporsional atas ketidakhadiran tanpa izin resmi.',
             ],
+            */
         ];
 
         foreach ($components as $data) {

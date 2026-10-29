@@ -21,9 +21,11 @@ class DatabaseSeeder extends Seeder
             SalaryComponentSeeder::class,
         ];
 
+        /*
         if (class_exists(\Faker\Factory::class)) {
             $seeders[] = PostSeeder::class;
         }
+        */
 
         $this->call($seeders);
 
@@ -55,8 +57,8 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->call([
-            EmployeeSeeder::class,
-            AttendanceSeeder::class,
+            // EmployeeSeeder::class,
+            // AttendanceSeeder::class,
             DeveloperUserSeeder::class,
         ]);
     }
