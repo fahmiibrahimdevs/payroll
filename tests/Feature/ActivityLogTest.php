@@ -89,6 +89,7 @@ class ActivityLogTest extends TestCase
 
         Livewire::test(Index::class)
             ->call('setPreset', '7days')
+            ->set('search', 'Log dibuat 3 hari lalu')
             ->assertSee('Log dibuat 3 hari lalu');
     }
 

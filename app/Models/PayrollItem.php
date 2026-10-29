@@ -452,11 +452,15 @@ class PayrollItem extends Model
     protected static function booted(): void
     {
         static::saved(function (PayrollItem $item) {
-            $year = $item->payrollPeriod?->year;
+            $year = $item->relationLoaded('payrollPeriod')
+                ? $item->payrollPeriod?->year
+                : ($item->payroll_period_id ? \App\Models\PayrollPeriod::where('id', $item->payroll_period_id)->value('year') : null);
             \App\Services\DashboardService::clearPayrollTrendCache($year);
         });
         static::deleted(function (PayrollItem $item) {
-            $year = $item->payrollPeriod?->year;
+            $year = $item->relationLoaded('payrollPeriod')
+                ? $item->payrollPeriod?->year
+                : ($item->payroll_period_id ? \App\Models\PayrollPeriod::where('id', $item->payroll_period_id)->value('year') : null);
             \App\Services\DashboardService::clearPayrollTrendCache($year);
         });
     }

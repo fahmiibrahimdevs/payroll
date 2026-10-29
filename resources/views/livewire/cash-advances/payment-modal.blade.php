@@ -83,17 +83,28 @@
                     <!-- Nominal Pembayaran -->
                     <div class="form-group mb-3">
                         <label for="pay_amount">Nominal Pembayaran (Rp) <span class="text-danger">*</span></label>
-                        <div class="input-group" x-data>
+                        <div class="input-group"
+                             wire:key="ca-pay-amount-wrap-{{ $payingCashAdvanceId ?? 'new' }}"
+                             x-data="{
+                                 amount: @entangle('paymentForm.amount'),
+                                 format(val) {
+                                     if (val === null || val === undefined || val === '') return '';
+                                     let num = parseInt(val, 10);
+                                     return isNaN(num) ? '' : new Intl.NumberFormat('id-ID').format(num);
+                                 }
+                             }"
+                             x-effect="$refs.input && ($refs.input.value = format(amount))">
                             <div class="input-group-prepend">
                                 <span class="input-group-text font-weight-500">Rp</span>
                             </div>
                             <input type="text"
+                                   x-ref="input"
                                    id="pay_amount"
                                    inputmode="numeric"
                                    x-on:input="
                                        let raw = $el.value.replace(/\D/g, '');
                                        $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
-                                       $wire.$set('paymentForm.amount', raw ? parseFloat(raw) : '', false);
+                                       amount = raw ? parseFloat(raw) : null;
                                    "
                                    value="{{ !empty($paymentForm->amount) ? number_format((float) $paymentForm->amount, 0, ',', '.') : '' }}"
                                    class="form-control text-right @error('paymentForm.amount') is-invalid @enderror"
@@ -169,8 +180,8 @@
                         @enderror
                     </div>
 
-                    <!-- Info Approval Direktur -->
-                    <div class="alert alert-light border mt-3 mb-0 d-flex align-items-center" style="font-size: 12px; color: #475569; border-color: #e2e8f0 !important; background-color: #f8fafc;">
+                    <!-- Info Approval Direktur (Clean White Card) -->
+                    <div class="alert alert-light border mt-3 mb-0 d-flex align-items-center" style="font-size: 12px; color: #475569; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
                         <i class="fas fa-info-circle text-primary mr-2" style="font-size: 14px;"></i>
                         <span>Pembayaran manual ini akan berstatus <strong>Menunggu Approval Direktur</strong> sebelum saldo kasbon dan cicilan berkurang.</span>
                     </div>

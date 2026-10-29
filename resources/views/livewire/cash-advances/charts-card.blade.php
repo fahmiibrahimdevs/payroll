@@ -19,13 +19,14 @@
                 <div style="font-size: 12px; font-weight: 700; color: #334155;">
                     Diberikan vs Dibayar
                 </div>
-                <span class="badge border font-weight-600 px-2 py-0.5" style="font-size: 10px; border-radius: 6px; background-color: #f8fafc; color: #64748b; border-color: #e2e8f0;">
+                <span class="badge border font-weight-600 px-2 py-0.5" style="font-size: 10px; border-radius: 6px; background-color: #ffffff; color: #64748b; border-color: #e2e8f0;">
                     6 bulan terakhir
                 </span>
             </div>
 
             <!-- Bar Chart Container -->
-            <div wire:key="ca-monthly-bar-chart-{{ md5(json_encode($chartData['monthly'] ?? [])) }}"
+            <div wire:ignore
+                 wire:key="ca-monthly-bar-chart-{{ md5(json_encode($chartData['monthly'] ?? [])) }}"
                  x-data="{
                      chartInstance: null,
                      initChart() {
@@ -159,13 +160,14 @@
                 <div style="font-size: 12px; font-weight: 700; color: #334155;">
                     Top 5 Kasbon Terbesar
                 </div>
-                <span class="badge border font-weight-600 px-2 py-0.5" style="font-size: 10px; border-radius: 6px; background-color: #f8fafc; color: #64748b; border-color: #e2e8f0;">
+                <span class="badge border font-weight-600 px-2 py-0.5" style="font-size: 10px; border-radius: 6px; background-color: #ffffff; color: #64748b; border-color: #e2e8f0;">
                     Sisa saldo
                 </span>
             </div>
 
             <!-- Donut Chart Container -->
-            <div wire:key="ca-top-debtors-donut-{{ md5(json_encode($chartData['top_debtors'] ?? [])) }}"
+            <div wire:ignore
+                 wire:key="ca-top-debtors-donut-{{ md5(json_encode($chartData['top_debtors'] ?? [])) }}"
                  x-data="{
                      chartInstance: null,
                      initChart() {
@@ -300,13 +302,14 @@
                 <div style="font-size: 12px; font-weight: 700; color: #334155;">
                     Distribusi Departemen
                 </div>
-                <span class="badge border font-weight-600 px-2 py-0.5" style="font-size: 10px; border-radius: 6px; background-color: #f8fafc; color: #64748b; border-color: #e2e8f0;">
+                <span class="badge border font-weight-600 px-2 py-0.5" style="font-size: 10px; border-radius: 6px; background-color: #ffffff; color: #64748b; border-color: #e2e8f0;">
                     Kasbon aktif
                 </span>
             </div>
 
             <!-- Donut Chart Container -->
-            <div wire:key="ca-dept-donut-{{ md5(json_encode($chartData['departments'] ?? [])) }}"
+            <div wire:ignore
+                 wire:key="ca-dept-donut-{{ md5(json_encode($chartData['departments'] ?? [])) }}"
                  x-data="{
                      chartInstance: null,
                      initChart() {

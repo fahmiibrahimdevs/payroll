@@ -20,6 +20,9 @@ class EmployeeForm extends Form
 {
     public ?Employee $employee = null;
 
+    // Fingerprint
+    public ?string $fingerprint_id = null;
+
     // Kepegawaian
     public ?int $department_id = null;
 
@@ -36,6 +39,16 @@ class EmployeeForm extends Form
     public string $status = 'active';
 
     public mixed $basic_salary = 0;
+
+    public mixed $daily_rate = 0;
+
+    public mixed $overtime_rate_per_hour = 0;
+
+    public mixed $overtime_rate_per_day = 0;
+
+    public string $meal_allowance_type = 'standar';
+
+    public mixed $meal_allowance_per_day = 25000;
 
     public string $formatted_total_cash_receipt = 'Rp 0';
 
@@ -93,6 +106,7 @@ class EmployeeForm extends Form
         $detailId = $this->employee?->detail?->id;
 
         return [
+            'fingerprint_id' => ['nullable', 'string', 'max:50', Rule::unique('employees', 'fingerprint_id')->ignore($this->employee?->id)],
             'department_id' => ['nullable', 'exists:departments,id'],
             'position_id' => ['nullable', 'exists:positions,id'],
             'full_name' => ['required', 'string', 'min:2', 'max:255'],
@@ -100,7 +114,16 @@ class EmployeeForm extends Form
             'contract_end_date' => ['nullable', 'date', 'after_or_equal:join_date'],
             'employment_status' => ['required', Rule::enum(EmploymentStatus::class)],
             'status' => ['required', Rule::enum(EmployeeStatus::class)],
-            'basic_salary' => ['required', 'numeric', 'min:0'],
+            'basic_salary' => $this->employment_status === EmploymentStatus::HARIAN->value
+                ? ['nullable', 'numeric', 'min:0']
+                : ['required', 'numeric', 'min:0'],
+            'daily_rate' => $this->employment_status === EmploymentStatus::HARIAN->value
+                ? ['required', 'numeric', 'min:0']
+                : ['nullable', 'numeric', 'min:0'],
+            'overtime_rate_per_hour' => ['nullable', 'numeric', 'min:0'],
+            'overtime_rate_per_day' => ['nullable', 'numeric', 'min:0'],
+            'meal_allowance_type' => ['nullable', Rule::in(['standar', 'khusus'])],
+            'meal_allowance_per_day' => ['nullable', 'numeric', 'min:0'],
             'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
             'employee_code' => ['nullable', 'string', 'max:50', Rule::unique('employee_details', 'employee_code')->ignore($detailId)],
             'gender' => ['nullable', Rule::enum(Gender::class)],
@@ -148,6 +171,7 @@ class EmployeeForm extends Form
     public function validationAttributes(): array
     {
         return [
+            'fingerprint_id' => 'ID Mesin Fingerprint / PIN',
             'department_id' => 'Department',
             'position_id' => 'Jabatan',
             'full_name' => 'Nama Lengkap',
@@ -156,6 +180,11 @@ class EmployeeForm extends Form
             'employment_status' => 'Status Kepegawaian',
             'status' => 'Status Akun',
             'basic_salary' => 'Gaji Pokok',
+            'daily_rate' => 'Upah Harian',
+            'overtime_rate_per_hour' => 'Nominal Lembur per Jam',
+            'overtime_rate_per_day' => 'Nominal Lembur Harian',
+            'meal_allowance_type' => 'Tipe Uang Makan',
+            'meal_allowance_per_day' => 'Nominal Uang Makan',
             'photo' => 'Foto Karyawan',
             'employee_code' => 'Kode Karyawan',
             'gender' => 'Jenis Kelamin',
@@ -184,7 +213,9 @@ class EmployeeForm extends Form
      */
     public function setEmployee(Employee $employee): void
     {
+        $this->resetForm();
         $this->employee = $employee;
+        $this->fingerprint_id = $employee->fingerprint_id;
         $this->department_id = $employee->department_id;
         $this->position_id = $employee->position_id;
         $this->full_name = $employee->full_name;
@@ -197,6 +228,11 @@ class EmployeeForm extends Form
             ? $employee->status->value
             : (string) $employee->status;
         $this->basic_salary = (float) $employee->basic_salary;
+        $this->daily_rate = (float) ($employee->daily_rate ?? 0);
+        $this->overtime_rate_per_hour = (float) ($employee->overtime_rate_per_hour ?? 0);
+        $this->overtime_rate_per_day = (float) ($employee->overtime_rate_per_day ?? 0);
+        $this->meal_allowance_type = $employee->meal_allowance_type ?: 'standar';
+        $this->meal_allowance_per_day = (float) ($employee->meal_allowance_per_day ?? 25000);
         $this->formatted_total_cash_receipt = $employee->formatted_total_cash_receipt;
         $this->photo = null;
 
@@ -217,8 +253,13 @@ class EmployeeForm extends Form
         $this->marital_status = $detail?->marital_status instanceof MaritalStatus ? $detail->marital_status->value : (string) ($detail?->marital_status ?? 'tk');
         $this->dependents_count = (int) ($detail?->dependents_count ?? 0);
         $this->tax_method = $detail?->tax_method instanceof TaxMethod ? $detail->tax_method->value : (string) ($detail?->tax_method ?? 'gross');
-        $this->tax_recipient_type = $detail?->tax_recipient_type?->value
-            ?? ($employee->employment_status === EmploymentStatus::TETAP ? TaxRecipientType::MonthlyEmployee->value : '');
+        if ($employee->employment_status === EmploymentStatus::MAGANG) {
+            $this->tax_recipient_type = TaxRecipientType::OutsideScope->value;
+        } elseif ($employee->employment_status === EmploymentStatus::TETAP) {
+            $this->tax_recipient_type = TaxRecipientType::MonthlyEmployee->value;
+        } else {
+            $this->tax_recipient_type = $detail?->tax_recipient_type?->value ?? TaxRecipientType::MonthlyEmployee->value;
+        }
         $this->has_npwp = (bool) ($detail?->has_npwp ?? false);
         $this->npwp_number = $detail?->npwp_number ?? '';
         $this->nik = $detail?->nik ?? '';
@@ -235,6 +276,7 @@ class EmployeeForm extends Form
     {
         $this->reset([
             'employee',
+            'fingerprint_id',
             'department_id',
             'position_id',
             'full_name',
@@ -243,6 +285,7 @@ class EmployeeForm extends Form
             'employment_status',
             'status',
             'basic_salary',
+            'daily_rate',
             'formatted_total_cash_receipt',
             'photo',
             'employee_code',
@@ -271,16 +314,34 @@ class EmployeeForm extends Form
         $this->gender = 'male';
         $this->join_date = date('Y-m-d');
         $this->basic_salary = 0;
+        $this->daily_rate = 0;
+        $this->overtime_rate_per_hour = 0;
+        $this->overtime_rate_per_day = 0;
+        $this->meal_allowance_type = 'standar';
+        $this->meal_allowance_per_day = 25000;
         $this->formatted_total_cash_receipt = 'Rp 0';
         $this->marital_status = 'tk';
         $this->dependents_count = 0;
         $this->tax_method = 'gross';
+        $this->tax_recipient_type = TaxRecipientType::MonthlyEmployee->value;
         $this->has_npwp = false;
         $this->npwp_number = '';
         $this->nik = '';
         $this->bpjs_kesehatan_number = '';
         $this->bpjs_ketenagakerjaan_number = '';
         $this->resetValidation();
+    }
+
+    /**
+     * Auto-sync tax recipient type when employment status changes.
+     */
+    public function updatedEmploymentStatus(string $status): void
+    {
+        if ($status === EmploymentStatus::MAGANG->value) {
+            $this->tax_recipient_type = TaxRecipientType::OutsideScope->value;
+        } elseif ($status === EmploymentStatus::TETAP->value) {
+            $this->tax_recipient_type = TaxRecipientType::MonthlyEmployee->value;
+        }
     }
 
     /**
@@ -293,6 +354,19 @@ class EmployeeForm extends Form
         }
 
         $validated = $this->validate();
+
+        $companyProfile = CompanyProfile::getProfile();
+        $isUniform = (bool) ($companyProfile->is_uniform_meal_allowance ?? true);
+        $defaultMealRate = (float) ($companyProfile->default_meal_allowance_per_day ?? 25000);
+
+        if ($isUniform) {
+            $validated['meal_allowance_per_day'] = $defaultMealRate;
+            $validated['meal_allowance_type'] = 'standar';
+        } else {
+            $empRate = isset($validated['meal_allowance_per_day']) ? (float) $validated['meal_allowance_per_day'] : $defaultMealRate;
+            $validated['meal_allowance_per_day'] = $empRate;
+            $validated['meal_allowance_type'] = (abs($empRate - $defaultMealRate) < 0.01) ? 'standar' : 'khusus';
+        }
 
         $photoFile = $this->photo instanceof TemporaryUploadedFile ? $this->photo : null;
         $cvFile = $this->curriculum_vitae instanceof TemporaryUploadedFile ? $this->curriculum_vitae : null;
@@ -309,6 +383,19 @@ class EmployeeForm extends Form
     public function update(EmployeeService $employeeService): Employee
     {
         $validated = $this->validate();
+
+        $companyProfile = CompanyProfile::getProfile();
+        $isUniform = (bool) ($companyProfile->is_uniform_meal_allowance ?? true);
+        $defaultMealRate = (float) ($companyProfile->default_meal_allowance_per_day ?? 25000);
+
+        if ($isUniform) {
+            $validated['meal_allowance_per_day'] = $defaultMealRate;
+            $validated['meal_allowance_type'] = 'standar';
+        } else {
+            $empRate = isset($validated['meal_allowance_per_day']) ? (float) $validated['meal_allowance_per_day'] : $defaultMealRate;
+            $validated['meal_allowance_per_day'] = $empRate;
+            $validated['meal_allowance_type'] = (abs($empRate - $defaultMealRate) < 0.01) ? 'standar' : 'khusus';
+        }
 
         $photoFile = $this->photo instanceof TemporaryUploadedFile ? $this->photo : null;
         $cvFile = $this->curriculum_vitae instanceof TemporaryUploadedFile ? $this->curriculum_vitae : null;

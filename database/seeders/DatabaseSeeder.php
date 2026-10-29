@@ -15,12 +15,11 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
         $this->call([
             LaratrustSeeder::class,
-            PostSeeder::class,
+            CompanyProfileSeeder::class,
             SalaryComponentSeeder::class,
+            PostSeeder::class,
         ]);
 
         User::query()
@@ -36,7 +35,6 @@ class DatabaseSeeder extends Seeder
         foreach ([
             ['role' => 'direktur', 'name' => 'Direktur Demo', 'email' => 'direktur@payroll.com'],
             ['role' => 'admin', 'name' => 'Admin Demo', 'email' => 'admin@payroll.com'],
-            ['role' => 'karyawan', 'name' => 'Karyawan Demo', 'email' => 'karyawan@payroll.com'],
         ] as $account) {
             $user = User::updateOrCreate(
                 ['email' => $account['email']],
@@ -52,6 +50,7 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
             EmployeeSeeder::class,
+            AttendanceSeeder::class,
             DeveloperUserSeeder::class,
         ]);
     }

@@ -12,7 +12,7 @@
                 @include('livewire.salary-components.filter-content', ['filterContext' => 'mobile'])
             </div>
 
-            <div class="modal-footer bg-whitesmoke br">
+            <div class="modal-footer bg-white border-top px-4 py-3">
                 <div class="row w-100 no-gutters">
                     <div class="col-6 pr-1">
                         <button type="button" wire:click="resetFilters" class="btn btn-danger btn-block shadow-none"><i class="fas fa-undo mr-1"></i> Reset</button>

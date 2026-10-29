@@ -55,6 +55,37 @@
                 margin-bottom: 0 !important;
             }
         }
+
+        /* ================= GLOBAL SELECT2 OPTGROUP & INDENTATION STYLING ================= */
+        .select2-container .select2-results__group {
+            background-color: #f1f5f9 !important;
+            color: #1e293b !important;
+            font-size: 11px !important;
+            font-weight: 700 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            padding: 7px 14px !important;
+            border-top: 1px solid #e2e8f0;
+            border-bottom: 1px solid #e2e8f0;
+            margin-top: 4px;
+            display: block;
+            cursor: default;
+        }
+        .select2-container .select2-results__optgroup:first-child .select2-results__group {
+            border-top: none;
+            margin-top: 0;
+        }
+        .select2-container .select2-results__options--nested .select2-results__option {
+            padding-left: 24px !important; /* Menjorok/tab ke depan */
+            font-size: 12.5px !important;
+            color: #334155;
+            border-bottom: 1px solid #f8fafc;
+        }
+        .select2-container .select2-results__options--nested .select2-results__option--highlighted[aria-selected],
+        .select2-container .select2-results__options--nested .select2-results__option--highlighted {
+            background-color: #0b52aa !important;
+            color: #ffffff !important;
+        }
     </style>
     @stack('styles')
     {{ $styles ?? '' }}
@@ -108,6 +139,9 @@
     <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <!-- Global Livewire & SweetAlert2 Bridge -->
     <script>
         document.addEventListener('livewire:init', () => {
@@ -137,13 +171,18 @@
             // 2. Alert Modal Dialog (Success, Info, Warning, Error)
             Livewire.on('swal:alert', (event) => {
                 const data = getPayload(event);
-                Swal.fire({
+                const swalConfig = {
                     icon: data.type || 'info',
                     title: data.title || 'Pemberitahuan',
-                    text: data.message || '',
                     confirmButtonText: 'Tutup',
                     confirmButtonColor: '#0b52aa'
-                });
+                };
+                if (data.html) {
+                    swalConfig.html = data.html;
+                } else {
+                    swalConfig.text = data.message || data.text || '';
+                }
+                Swal.fire(swalConfig);
             });
 
             // 3. Generic Confirmation Dialog (Livewire & SweetAlert2)

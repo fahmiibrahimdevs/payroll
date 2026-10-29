@@ -37,6 +37,16 @@
                         <i class="fas fa-hand-holding-usd"></i> <span>Kasbon Saya</span>
                     </a>
                 </li>
+                <li class="{{ request()->routeIs('overtimes.*') ? 'active' : '' }}">
+                    <a class="nav-link" href="{{ route('overtimes.index') }}">
+                        <i class="fas fa-business-time"></i> <span>Lembur Saya</span>
+                    </a>
+                </li>
+                <li class="{{ request()->routeIs('attendances.*') ? 'active' : '' }}">
+                    <a class="nav-link" href="{{ route('attendances.index') }}">
+                        <i class="fas fa-user-clock"></i> <span>Absensi Saya</span>
+                    </a>
+                </li>
             @else
                 <li class="menu-header">Main Menu</li>
                 {{-- <li class="{{ request()->routeIs('posts.*') ? 'active' : '' }}">
@@ -73,13 +83,31 @@
                     </a>
                 </li>
 
-                <li class="{{ request()->routeIs('payrolls.*') ? 'active' : '' }}">
-                    <a class="nav-link" href="{{ route('payrolls.index') }}">
-                        <i class="fas fa-money-check-alt"></i> <span>Penggajian</span>
+                <li class="{{ request()->routeIs('attendances.*') ? 'active' : '' }}">
+                    <a class="nav-link" href="{{ route('attendances.index') }}">
+                        <i class="fas fa-user-clock"></i> <span>Absensi</span>
+                    </a>
+                </li>
+
+                <li class="{{ request()->routeIs('overtimes.*') && !request()->routeIs('overtimes.periods.*') ? 'active' : '' }}">
+                    <a class="nav-link" href="{{ route('overtimes.index') }}">
+                        <i class="fas fa-business-time"></i> <span>Lembur</span>
                     </a>
                 </li>
 
                 @if (auth()->user()?->hasRole(['admin', 'direktur']))
+                    <li class="nav-item dropdown {{ request()->routeIs(['payrolls.*', 'weekly-payrolls.*']) ? 'active' : '' }}">
+                        <a href="#" class="nav-link has-dropdown"><i class="fas fa-money-check-alt"></i><span>Penggajian</span></a>
+                        <ul class="dropdown-menu">
+                            <li class="{{ request()->routeIs('payrolls.index') || (request()->routeIs('payrolls.*') && !request()->routeIs('payrolls.weekly*')) ? 'active' : '' }}">
+                                <a class="nav-link" href="{{ route('payrolls.index') }}">Gaji Bulanan</a>
+                            </li>
+                            <li class="{{ request()->routeIs(['payrolls.weekly*', 'weekly-payrolls.*']) ? 'active' : '' }}">
+                                <a class="nav-link" href="{{ route('payrolls.weekly') }}">Gaji Mingguan</a>
+                            </li>
+                        </ul>
+                    </li>
+
                     <li class="{{ request()->routeIs('company-profile.*') ? 'active' : '' }}">
                         <a class="nav-link" href="{{ route('company-profile.index') }}">
                             <i class="fas fa-building"></i> <span>Profil Perusahaan</span>

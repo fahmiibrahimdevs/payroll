@@ -14,7 +14,7 @@
         </p>
 
     <!-- 4 Modern Summary Statistic Cards (Iconless & Compact on Mobile 2x2, Rich with Stat-Icon on Desktop 1x4) -->
-    <div class="cash-advance-stat-grid">
+    <div class="cash-advance-stat-grid mb-4">
         <!-- 1. Sisa Kasbon Aktif (Gambar 2: Sisa kasbon aktif, Rp 1.300.000, 3 karyawan · 32% sudah terbayar) -->
         <div class="card cash-advance-stat-card">
             <div class="card-body cash-advance-stat-body">
@@ -24,7 +24,7 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Sisa Kasbon Aktif">Sisa kasbon aktif</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-dark" title="{{ $companyStats['formatted_total_remaining_balance'] ?? 'Rp 0' }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $companyStats['formatted_total_remaining_balance'] ?? 'Rp 0' }}">
                             {{ $companyStats['formatted_total_remaining_balance'] ?? 'Rp 0' }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
@@ -50,8 +50,9 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="ACC Pengajuan Kasbon">ACC Pengajuan Kasbon</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-warning" title="{{ $companyStats['total_pending_count'] ?? 0 }} pengajuan">
-                            {{ $companyStats['total_pending_count'] ?? 0 }} pengajuan
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $companyStats['total_pending_count'] ?? 0 }} Pengajuan">
+                            <span>{{ $companyStats['total_pending_count'] ?? 0 }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1f2937;">Pengajuan</span>
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-amber">
                             <i class="fas fa-hourglass-half"></i>
@@ -78,8 +79,9 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="ACC Pelunasan Kasbon">ACC Pelunasan Kasbon</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-success" title="{{ $companyStats['total_pending_payments_count'] ?? 0 }} pelunasan">
-                            {{ $companyStats['total_pending_payments_count'] ?? 0 }} pelunasan
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $companyStats['total_pending_payments_count'] ?? 0 }} Pelunasan">
+                            <span>{{ $companyStats['total_pending_payments_count'] ?? 0 }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1f2937;">Pelunasan</span>
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
                             <i class="fas fa-clipboard-check"></i>
@@ -106,8 +108,9 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Perlu Perhatian">Perlu perhatian</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value {{ ($companyStats['attention_employees_count'] ?? 0) > 0 ? 'text-danger' : 'text-dark' }}" title="{{ $companyStats['attention_employees_count'] ?? 0 }} karyawan">
-                            {{ $companyStats['attention_employees_count'] ?? 0 }} karyawan
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $companyStats['attention_employees_count'] ?? 0 }} Karyawan">
+                            <span>{{ $companyStats['attention_employees_count'] ?? 0 }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1f2937;">Karyawan</span>
                         </div>
                         <span class="cash-advance-stat-badge {{ ($companyStats['attention_employees_count'] ?? 0) > 0 ? 'bg-danger text-white' : 'cash-advance-stat-badge-amber' }}">
                             <i class="fas fa-bell"></i>
@@ -275,27 +278,15 @@
                                     @endforeach
                                 @else
                                     <tr>
-                                        <td colspan="8" class="text-center py-5 text-muted">
-                                            <div class="empty-state py-4">
-                                                <div class="empty-state-icon bg-light text-muted mx-auto mb-3" style="width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">
-                                                    <i class="fas fa-users"></i>
-                                                </div>
-                                                <h5 class="font-weight-bold text-dark mb-1">Tidak Ada Data Karyawan</h5>
-                                                <p class="text-muted small mb-3">
-                                                    @if ($search)
-                                                        Tidak ada karyawan yang cocok dengan pencarian "{{ $search }}".
-                                                    @else
-                                                        Tidak ada data karyawan yang ditemukan.
-                                                    @endif
-                                                </p>
-                                                @can('create', \App\Models\CashAdvance::class)
-                                                    <button type="button" wire:click="createPengajuan" wire:loading.attr="disabled" wire:target="createPengajuan" class="btn btn-primary btn-sm font-weight-bold">
-                                                        <i wire:loading.remove wire:target="createPengajuan" class="fas fa-plus mr-1"></i>
-                                                        <i wire:loading wire:target="createPengajuan" class="fas fa-spinner fa-spin mr-1"></i>
-                                                        Buat Pengajuan Baru
-                                                    </button>
-                                                @endcan
-                                            </div>
+                                        <td colspan="8" class="p-0 border-0">
+                                            <x-empty-state
+                                                icon="fas fa-wallet"
+                                                title="Tidak Ada Data Kasbon Karyawan"
+                                                :subtitle="$search ? 'Tidak ada catatan kasbon karyawan yang cocok dengan pencarian \"' . $search . '\".' : 'Belum ada data pengajuan atau saldo kasbon aktif saat ini.'"
+                                                :action-label="auth()->user()?->can('create', \App\Models\CashAdvance::class) ? 'Buat Pengajuan Baru' : null"
+                                                action-wire-click="createPengajuan"
+                                                action-icon="fas fa-plus"
+                                            />
                                         </td>
                                     </tr>
                                 @endif
@@ -516,7 +507,7 @@
                                     </div>
                                 </div>
                             @else
-                                <div class="text-center py-3 px-2 bg-light rounded mt-2" style="border: 1px dashed #e2e8f0;">
+                                <div class="text-center py-3 px-2 bg-white mt-2" style="border: 1px dashed #cbd5e1; border-radius: 12px;">
                                     <i class="fas fa-check-circle text-success mb-1" style="font-size: 20px;"></i>
                                     <div class="font-weight-600 text-dark" style="font-size: 12.5px;">Tidak Ada Tanggungan</div>
                                     <div class="text-muted text-xs">Karyawan ini sedang tidak memiliki kasbon aktif.</div>
@@ -1167,6 +1158,18 @@
                 const data = Array.isArray(event) ? event[0] : event;
                 const modalId = typeof data === 'object' ? data.id : data;
                 $('#' + modalId).modal('hide');
+            });
+
+            $('#cashAdvanceModal').on('hidden.bs.modal', function () {
+                @this.call('closeModal');
+            });
+
+            $('#cashAdvanceDetailModal').on('hidden.bs.modal', function () {
+                @this.call('closeDetailModal');
+            });
+
+            $('#cashAdvanceApprovalModal').on('hidden.bs.modal', function () {
+                @this.call('closeApprovalModal');
             });
 
             Livewire.on('swal:confirm-delete', (event) => {

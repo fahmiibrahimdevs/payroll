@@ -43,10 +43,17 @@
                                     <input type="hidden" wire:model="form.employee_id">
                                 @else
                                     <div wire:ignore>
+                                        @php
+                                            $groupedEmployees = $employees->groupBy(fn ($emp) => $emp->department?->name ?? 'Tanpa Departemen')->sortKeys();
+                                        @endphp
                                         <select id="form_employee_id" class="form-control select2 @error('form.employee_id') is-invalid @enderror">
                                             <option value="">-- Pilih Karyawan --</option>
-                                            @foreach ($employees as $emp)
-                                                <option value="{{ $emp->id }}">{{ $emp->full_name }} ({{ $emp->department?->name ?? 'Tanpa Cabang' }})</option>
+                                            @foreach ($groupedEmployees as $deptName => $deptEmployees)
+                                                <optgroup label="{{ $deptName }}">
+                                                    @foreach ($deptEmployees as $emp)
+                                                        <option value="{{ $emp->id }}">{{ $emp->full_name }}</option>
+                                                    @endforeach
+                                                </optgroup>
                                             @endforeach
                                         </select>
                                     </div>
@@ -71,17 +78,28 @@
                         <div class="col-md-6 col-12">
                             <div class="form-group">
                                 <label for="form_amount">Nominal Kasbon (Rp) <span class="text-danger">*</span></label>
-                                <div class="input-group" x-data>
+                                <div class="input-group"
+                                     wire:key="ca-form-amount-wrap-{{ $form->cashAdvance?->id ?? 'new' }}"
+                                     x-data="{
+                                         amount: @entangle('form.amount'),
+                                         format(val) {
+                                             if (val === null || val === undefined || val === '') return '';
+                                             let num = parseInt(val, 10);
+                                             return isNaN(num) ? '' : new Intl.NumberFormat('id-ID').format(num);
+                                         }
+                                     }"
+                                     x-effect="$refs.input && ($refs.input.value = format(amount))">
                                     <div class="input-group-prepend">
                                         <span class="input-group-text font-weight-500">Rp</span>
                                     </div>
                                     <input type="text"
+                                           x-ref="input"
                                            id="form_amount"
                                            inputmode="numeric"
                                            x-on:input="
                                                let raw = $el.value.replace(/\D/g, '');
                                                $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
-                                               $wire.$set('form.amount', raw ? parseFloat(raw) : '', false);
+                                               amount = raw ? parseFloat(raw) : null;
                                            "
                                            value="{{ !empty($form->amount) ? number_format((float) $form->amount, 0, ',', '.') : '' }}"
                                            class="form-control text-right @error('form.amount') is-invalid @enderror"

@@ -51,6 +51,15 @@
                             <div class="emp-tile-group">
                                 <div class="emp-tile-row">
                                     <div class="emp-tile-left">
+                                        <div class="emp-tile-icon"><i class="fas fa-fingerprint"></i></div>
+                                        <span>ID Mesin Fingerprint</span>
+                                    </div>
+                                    <div class="emp-tile-right">
+                                        <span class="badge badge-light font-weight-normal">{{ $selectedEmployee->fingerprint_id ?? '-' }}</span>
+                                    </div>
+                                </div>
+                                <div class="emp-tile-row">
+                                    <div class="emp-tile-left">
                                         <div class="emp-tile-icon"><i class="fas fa-calendar-check"></i></div>
                                         <span>Tanggal Bergabung</span>
                                     </div>
@@ -71,10 +80,33 @@
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
                                             <div class="emp-tile-icon"><i class="fas fa-money-bill-wave"></i></div>
-                                            <span>Gaji Pokok</span>
+                                            <span>{{ $selectedEmployee->employment_status === \App\Enums\EmploymentStatus::HARIAN ? 'Upah Harian' : 'Gaji Pokok' }}</span>
                                         </div>
                                         <div class="emp-tile-right">
-                                            {{ $selectedEmployee->formatted_basic_salary }}
+                                            {{ $selectedEmployee->employment_status === \App\Enums\EmploymentStatus::HARIAN ? $selectedEmployee->formatted_daily_rate . ' / hari' : $selectedEmployee->formatted_basic_salary }}
+                                        </div>
+                                    </div>
+                                    <div class="emp-tile-row">
+                                        <div class="emp-tile-left">
+                                            <div class="emp-tile-icon"><i class="fas fa-business-time"></i></div>
+                                            <span>Nominal Lembur</span>
+                                        </div>
+                                        <div class="emp-tile-right">
+                                            {{ $selectedEmployee->formatted_overtime_rate_per_hour }} / jam
+                                            <span class="text-muted small">&bull;</span>
+                                            {{ $selectedEmployee->formatted_overtime_rate_per_day }} / hari
+                                        </div>
+                                    </div>
+                                    <div class="emp-tile-row">
+                                        <div class="emp-tile-left">
+                                            <div class="emp-tile-icon"><i class="fas fa-utensils"></i></div>
+                                            <span>Uang Makan Harian</span>
+                                        </div>
+                                        <div class="emp-tile-right">
+                                            {{ $selectedEmployee->formatted_meal_allowance_per_day }} / hari
+                                            <span class="badge {{ $selectedEmployee->meal_allowance_type === 'khusus' ? 'badge-info' : 'badge-light border' }} text-xs ml-1">
+                                                {{ $selectedEmployee->meal_allowance_type === 'khusus' ? 'Khusus' : 'Standar' }}
+                                            </span>
                                         </div>
                                     </div>
                                     <div class="emp-tile-row">
@@ -276,7 +308,7 @@
                 @endif
             </div>
 
-            <div class="modal-footer bg-whitesmoke br">
+            <div class="modal-footer bg-white border-top px-4 py-3">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fas fa-times mr-1"></i> Tutup</button>
             </div>
         </div>

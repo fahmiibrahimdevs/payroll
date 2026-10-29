@@ -138,10 +138,33 @@
                                 <div class="emp-tile-row">
                                     <div class="emp-tile-left">
                                         <div class="emp-tile-icon"><i class="fas fa-money-bill-wave text-success"></i></div>
-                                        <span>Gaji Pokok</span>
+                                        <span>{{ $employee->employment_status === \App\Enums\EmploymentStatus::HARIAN ? 'Upah Harian' : 'Gaji Pokok' }}</span>
                                     </div>
                                     <div class="emp-tile-right text-primary font-weight-500">
-                                        {{ $employee->formatted_basic_salary }}
+                                        {{ $employee->employment_status === \App\Enums\EmploymentStatus::HARIAN ? $employee->formatted_daily_rate . ' / hari' : $employee->formatted_basic_salary }}
+                                    </div>
+                                </div>
+                                <div class="emp-tile-row">
+                                    <div class="emp-tile-left">
+                                        <div class="emp-tile-icon"><i class="fas fa-business-time text-info"></i></div>
+                                        <span>Nominal Lembur</span>
+                                    </div>
+                                    <div class="emp-tile-right text-primary font-weight-500">
+                                        {{ $employee->formatted_overtime_rate_per_hour }} / jam
+                                        <span class="text-muted small">&bull;</span>
+                                        {{ $employee->formatted_overtime_rate_per_day }} / hari
+                                    </div>
+                                </div>
+                                <div class="emp-tile-row">
+                                    <div class="emp-tile-left">
+                                        <div class="emp-tile-icon"><i class="fas fa-utensils text-warning"></i></div>
+                                        <span>Uang Makan Harian</span>
+                                    </div>
+                                    <div class="emp-tile-right text-primary font-weight-500">
+                                        {{ $employee->formatted_meal_allowance_per_day }} / hari
+                                        <span class="badge {{ $employee->meal_allowance_type === 'khusus' ? 'badge-info' : 'badge-light border' }} text-xs ml-1">
+                                            {{ $employee->meal_allowance_type === 'khusus' ? 'Khusus' : 'Standar' }}
+                                        </span>
                                     </div>
                                 </div>
                             @endif
@@ -542,7 +565,7 @@
                         </div>
                     </div>
                     @if ($this->monthlySalaryData['has_unapproved_items'] && (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur')))
-                        <div class="alert alert-light border d-flex align-items-center py-2 px-3 mb-2.5 text-muted" style="font-size: 12px; border-radius: 8px; background-color: #f8fafc; border-color: #e2e8f0 !important;">
+                        <div class="alert alert-light border d-flex align-items-center py-2 px-3 mb-2.5 text-muted" style="font-size: 12px; border-radius: 12px; background-color: #ffffff; border-color: #e2e8f0 !important; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
                             <i class="fas fa-info-circle text-warning mr-2" style="font-size: 14px;"></i>
                             <span>Penggajian yang masih berstatus <strong>Draf</strong> atau <strong>Menunggu Approval</strong> belum dimasukkan ke grafik penerimaan hingga disetujui Direktur.</span>
                         </div>
@@ -598,10 +621,14 @@
                                                 </span>
                                             </td>
                                             <td class="text-nowrap text-center">
-                                                @if ($this->isApprovedItem($item))
+                                                @if ($this->isApprovedItem($item) && $item->isPaid() && $item->payment_proof_path)
                                                     <a href="{{ route('payrolls.items.print', ['period' => $item->payroll_period_id, 'item' => $item->id]) }}" target="_blank" class="btn btn-sm btn-primary px-3 py-1 font-weight-600 shadow-sm" style="border-radius: 6px; font-size: 12px; background-color: #0b52aa; border-color: #0b52aa;" title="Buka / Cetak Slip Gaji Resmi">
                                                         <i class="fas fa-print mr-1"></i> Cetak Slip
                                                     </a>
+                                                @elseif ($this->isApprovedItem($item))
+                                                    <button type="button" class="btn btn-sm btn-secondary px-3 py-1 text-nowrap" disabled style="border-radius: 6px; font-size: 12px; opacity: 0.6; cursor: not-allowed;" title="Slip gaji belum dapat dicetak (menunggu pembayaran dan bukti transfer/kwitansi)">
+                                                        <i class="fas fa-hourglass-half mr-1"></i> Menunggu Bayar
+                                                    </button>
                                                 @else
                                                     <button type="button" class="btn btn-sm btn-secondary px-3 py-1 text-nowrap" disabled style="border-radius: 6px; font-size: 12px; opacity: 0.6; cursor: not-allowed;" title="Slip gaji menunggu persetujuan Direktur">
                                                         <i class="fas fa-clock mr-1"></i> Menunggu ACC
@@ -641,8 +668,8 @@
                         </div>
 
                         <div class="modal-body p-3 p-md-4">
-                            <!-- Info Singkat Karyawan -->
-                            <div class="p-2.5 d-flex align-items-center mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">
+                            <!-- Info Singkat Karyawan (Clean White Card) -->
+                            <div class="p-2.5 d-flex align-items-center mb-3" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
                                 <div class="mr-2.5">
                                     <img src="{{ $employee->photo_url }}" alt="{{ $employee->full_name }}" class="rounded-circle" style="width: 42px; height: 42px; object-fit: cover; border: 2px solid #e2e8f0;">
                                 </div>
@@ -657,17 +684,28 @@
                             <!-- Input Gaji Baru -->
                             <div class="form-group mb-3">
                                 <label for="adj_new_salary" class="font-weight-500 text-dark">Nominal Gaji Baru (Rp) <span class="text-danger">*</span></label>
-                                <div class="input-group" x-data>
+                                <div class="input-group"
+                                     x-data="{
+                                         amount: @entangle('adj_new_salary'),
+                                         format(val) {
+                                             if (val === null || val === undefined || val === '') return '';
+                                             let clean = String(val).replace(/\D/g, '');
+                                             let num = parseInt(clean, 10);
+                                             return isNaN(num) ? '' : new Intl.NumberFormat('id-ID').format(num);
+                                         }
+                                     }"
+                                     x-effect="$refs.input && ($refs.input.value = format(amount))">
                                     <div class="input-group-prepend">
                                         <span class="input-group-text font-weight-500">Rp</span>
                                     </div>
                                     <input type="text"
+                                           x-ref="input"
                                            id="adj_new_salary"
                                            inputmode="numeric"
                                            x-on:input="
                                                let raw = $el.value.replace(/\D/g, '');
                                                $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
-                                               $wire.$set('adj_new_salary', raw ? parseFloat(raw) : '', false);
+                                               amount = raw ? parseFloat(raw) : null;
                                            "
                                            value="{{ !empty($adj_new_salary) ? number_format((float) preg_replace('/[^0-9]/', '', (string) $adj_new_salary), 0, ',', '.') : '' }}"
                                            class="form-control text-right @error('adj_new_salary') is-invalid @enderror"

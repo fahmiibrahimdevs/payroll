@@ -1492,6 +1492,31 @@ HTML;
         $this->storeEarlyPayment($service, confirmed: true);
     }
 
+    /**
+     * Reset modal state on dismiss.
+     */
+    public function closeModal(): void
+    {
+        $this->isEditMode = false;
+        $this->editingCashAdvanceId = null;
+        $this->form->resetForm();
+    }
+
+    public function closeDetailModal(): void
+    {
+        $this->selectedCashAdvance = null;
+        $this->selectedCashAdvanceId = null;
+        $this->highlightPaymentId = null;
+    }
+
+    public function closeApprovalModal(): void
+    {
+        $this->selectedCashAdvance = null;
+        $this->selectedCashAdvanceId = null;
+        $this->approvalNotes = '';
+        $this->rejectionReason = '';
+    }
+
     private function safeErrorMessage(Throwable $exception, string $fallback): string
     {
         return $exception instanceof InvalidArgumentException && $exception->getMessage()
@@ -1562,18 +1587,30 @@ HTML;
         }
 
         if ($isKaryawan && $karyawanRecord) {
-            $approvedAdvances = CashAdvance::where('employee_id', $karyawanRecord->id)
-                ->whereIn('status', [CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::PAID->value]);
-            $totalApproved = (float) $approvedAdvances->sum('amount');
-            $totalRemaining = (float) $approvedAdvances->sum('remaining_amount');
-            $totalPaid = $totalApproved - $totalRemaining;
-            $approvedCount = $approvedAdvances->count();
-            $paidCount = CashAdvancePayment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id))->count();
+            $advRow = CashAdvance::query()
+                ->where('employee_id', $karyawanRecord->id)
+                ->selectRaw("
+                    COALESCE(SUM(CASE WHEN status IN (?, ?, ?) THEN amount ELSE 0 END), 0) as total_approved,
+                    COALESCE(SUM(CASE WHEN status IN (?, ?, ?) THEN remaining_amount ELSE 0 END), 0) as total_remaining,
+                    COUNT(CASE WHEN status IN (?, ?, ?) THEN 1 END) as approved_count,
+                    COUNT(CASE WHEN status = ? THEN 1 END) as pending_count,
+                    COALESCE(SUM(CASE WHEN status = ? THEN amount ELSE 0 END), 0) as pending_amount
+                ", [
+                    CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::PAID->value,
+                    CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::PAID->value,
+                    CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::PAID->value,
+                    CashAdvanceStatus::PENDING->value,
+                    CashAdvanceStatus::PENDING->value,
+                ])
+                ->first();
 
-            $pendingAdvances = CashAdvance::where('employee_id', $karyawanRecord->id)
-                ->where('status', CashAdvanceStatus::PENDING->value);
-            $pendingCount = $pendingAdvances->count();
-            $pendingAmount = (float) $pendingAdvances->sum('amount');
+            $totalApproved = (float) ($advRow?->total_approved ?? 0);
+            $totalRemaining = (float) ($advRow?->total_remaining ?? 0);
+            $totalPaid = $totalApproved - $totalRemaining;
+            $approvedCount = (int) ($advRow?->approved_count ?? 0);
+            $pendingCount = (int) ($advRow?->pending_count ?? 0);
+            $pendingAmount = (float) ($advRow?->pending_amount ?? 0);
+            $paidCount = CashAdvancePayment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id))->count();
 
             $activePaidPct = $totalApproved > 0 ? (int) round(($totalPaid / $totalApproved) * 100) : 0;
 
@@ -1581,17 +1618,16 @@ HTML;
             $startOfMonth = $now->copy()->startOfMonth()->toDateString();
             $endOfMonth = $now->copy()->endOfMonth()->toDateString();
 
-            $myMonthlyInstallment = (float) CashAdvanceInstallment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id)->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value]))
-                ->whereDate('due_date', '>=', $startOfMonth)
-                ->whereDate('due_date', '<=', $endOfMonth)
+            $instRow = CashAdvanceInstallment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id)->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value]))
                 ->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
-                ->selectRaw('SUM(amount - paid_amount) as remaining')
-                ->value('remaining') ?? 0.0;
+                ->selectRaw("
+                    COALESCE(SUM(CASE WHEN due_date >= ? AND due_date <= ? THEN (amount - paid_amount) ELSE 0 END), 0) as monthly_remaining,
+                    COUNT(CASE WHEN due_date < ? THEN 1 END) as overdue_count
+                ", [$startOfMonth, $endOfMonth, $startOfMonth])
+                ->first();
 
-            $myOverdueCount = (int) CashAdvanceInstallment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id)->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value]))
-                ->whereDate('due_date', '<', $startOfMonth)
-                ->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
-                ->count();
+            $myMonthlyInstallment = (float) ($instRow?->monthly_remaining ?? 0);
+            $myOverdueCount = (int) ($instRow?->overdue_count ?? 0);
 
             $companyStats = [
                 'total_approved_amount' => $totalApproved,
@@ -1654,9 +1690,15 @@ HTML;
             ? $service->getActiveAdvanceByEmployee($this->selectedEmployeeId)
             : null;
 
-        $pendingReviewAdvances = $service->getPendingAdvancesForReview();
-        $pendingReviewPayments = $service->getPendingPaymentsForReview();
-        $overdueReviewAdvances = $service->getOverdueAdvancesForReview();
+        $pendingReviewAdvances = (! $isKaryawan && ($companyStats['total_pending_count'] ?? 0) > 0)
+            ? $service->getPendingAdvancesForReview()
+            : collect();
+        $pendingReviewPayments = ! $isKaryawan
+            ? $service->getPendingPaymentsForReview()
+            : collect();
+        $overdueReviewAdvances = (! $isKaryawan && ($companyStats['attention_employees_count'] ?? 0) > 0)
+            ? $service->getOverdueAdvancesForReview()
+            : collect();
         $chartData = $service->getRecapChartData();
 
         return view('livewire.cash-advances.index', [

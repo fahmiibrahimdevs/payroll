@@ -5,7 +5,7 @@
                 <h5 class="modal-title" id="employeeModalLabel">
                     {{ $isEditMode ? 'Edit Data Karyawan' : 'Tambah Karyawan Baru' }}
                 </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close" wire:click="$set('form.employee', null)"><span aria-hidden="true">&times;</span></button>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" wire:click="closeModal"><span aria-hidden="true">&times;</span></button>
             </div>
 
             <form wire:submit="{{ $isEditMode ? 'update' : 'store' }}">
@@ -34,11 +34,22 @@
                         <div class="tab-pane fade show active" id="emp-pill-kepegawaian" role="tabpanel" aria-labelledby="employment-tab">
                             <div class="row">
                                 <!-- Nama Lengkap -->
-                                <div class="col-md-12">
+                                <div class="col-md-8">
                                     <div class="form-group mb-2">
                                         <label for="full_name">Nama Lengkap <span class="text-danger">*</span></label>
                                         <input type="text" id="full_name" wire:model.live.debounce.400ms="form.full_name" class="form-control @error('form.full_name') is-invalid @enderror" placeholder="Contoh: Muhammad Fahmi Ibrahim" autocomplete="off">
                                         @error('form.full_name')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+
+                                <!-- ID Mesin Fingerprint -->
+                                <div class="col-md-4">
+                                    <div class="form-group mb-2">
+                                        <label for="emp_fingerprint_id">ID Fingerprint / PIN</label>
+                                        <input type="text" id="emp_fingerprint_id" wire:model="form.fingerprint_id" class="form-control @error('form.fingerprint_id') is-invalid @enderror" placeholder="Contoh: 17, 28" autocomplete="off">
+                                        @error('form.fingerprint_id')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
                                     </div>
@@ -84,7 +95,7 @@
                                 <div class="col-md-6">
                                     <div class="form-group mb-2">
                                         <label for="employment_status">Status Kepegawaian <span class="text-danger">*</span></label>
-                                        <select id="employment_status" wire:model="form.employment_status" class="form-control @error('form.employment_status') is-invalid @enderror">
+                                        <select id="employment_status" wire:model.live="form.employment_status" class="form-control @error('form.employment_status') is-invalid @enderror">
                                             @foreach ($employmentStatuses as $empStat)
                                                 <option value="{{ $empStat->value }}">{{ $empStat->label() }}</option>
                                             @endforeach
@@ -124,37 +135,227 @@
                                 <!-- Tanggal Akhir Kontrak -->
                                 <div class="col-md-6">
                                     <div class="form-group mb-2">
-                                        <label for="contract_end_date">Tanggal Akhir Kontrak</label>
+                                        <label for="contract_end_date" class="d-flex align-items-center">
+                                            <span>Tanggal Akhir Kontrak</span>
+                                            <i class="fas fa-info-circle text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Jika pekerjaan berakhir sebelum Desember, tandai masa pajak terakhir pada slip bulan berhenti."></i>
+                                        </label>
                                         <input type="date" id="contract_end_date" wire:model="form.contract_end_date" class="form-control @error('form.contract_end_date') is-invalid @enderror">
-                                        <small class="form-text text-muted">Jika pekerjaan berakhir sebelum Desember, tandai masa pajak terakhir pada slip bulan berhenti.</small>
                                         @error('form.contract_end_date')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
                                     </div>
                                 </div>
 
-                                <!-- Gaji Pokok -->
+                                @if ($form->employment_status === 'harian')
+                                    <!-- Upah Harian Pegawai Harian -->
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-2">
+                                            <label for="daily_rate">Upah Harian (Rp/hari) <span class="text-danger">*</span></label>
+                                            <div class="input-group"
+                                                 wire:key="emp-daily-rate-wrap-{{ $form->employee?->id ?? 'new' }}"
+                                                 x-data="{
+                                                     rawVal: @entangle('form.daily_rate'),
+                                                     format(v) {
+                                                         if (!v || isNaN(v) || v == 0) return '';
+                                                         return new Intl.NumberFormat('id-ID').format(v);
+                                                     }
+                                                 }"
+                                                 x-init="$refs.input && ($refs.input.value = format(rawVal))"
+                                                 x-effect="if ($refs.input) { let f = format(rawVal); if ($refs.input.value !== f) { $refs.input.value = f; } }">
+                                                <div class="input-group-prepend">
+                                                    <span class="input-group-text font-weight-500">Rp</span>
+                                                </div>
+                                                <input type="text"
+                                                       x-ref="input"
+                                                       id="daily_rate"
+                                                       inputmode="numeric"
+                                                       x-on:input="
+                                                           let raw = $el.value.replace(/\D/g, '');
+                                                           $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                                           rawVal = raw ? parseFloat(raw) : 0;
+                                                       "
+                                                       class="form-control text-right @error('form.daily_rate') is-invalid @enderror"
+                                                       placeholder="0"
+                                                       autocomplete="off">
+                                            </div>
+                                            @error('form.daily_rate')
+                                                <div class="invalid-feedback d-block">{{ $message }}</div>
+                                            @enderror
+                                            <small class="form-text text-muted">Pegawai harian dibayar mingguan dan tidak ada gaji pokok bulanan.</small>
+                                        </div>
+                                    </div>
+                                @else
+                                    <!-- Gaji Pokok -->
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-2">
+                                            <label for="basic_salary">Gaji Pokok (Rp) <span class="text-danger">*</span></label>
+                                            <div class="input-group"
+                                                 wire:key="emp-basic-salary-wrap-{{ $form->employee?->id ?? 'new' }}"
+                                                 x-data="{
+                                                     rawVal: @entangle('form.basic_salary'),
+                                                     format(v) {
+                                                         if (!v || isNaN(v) || v == 0) return '';
+                                                         return new Intl.NumberFormat('id-ID').format(v);
+                                                     }
+                                                 }"
+                                                 x-init="$refs.input && ($refs.input.value = format(rawVal))"
+                                                 x-effect="if ($refs.input) { let f = format(rawVal); if ($refs.input.value !== f) { $refs.input.value = f; } }">
+                                                <div class="input-group-prepend">
+                                                    <span class="input-group-text font-weight-500">Rp</span>
+                                                </div>
+                                                <input type="text"
+                                                       x-ref="input"
+                                                       id="basic_salary"
+                                                       inputmode="numeric"
+                                                       x-on:input="
+                                                           let raw = $el.value.replace(/\D/g, '');
+                                                           $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                                           rawVal = raw ? parseFloat(raw) : 0;
+                                                       "
+                                                       class="form-control text-right @error('form.basic_salary') is-invalid @enderror"
+                                                       placeholder="0"
+                                                       autocomplete="off">
+                                            </div>
+                                            @error('form.basic_salary')
+                                                <div class="invalid-feedback d-block">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                    </div>
+                                @endif
+
+                                <!-- Nominal Lembur per Jam -->
                                 <div class="col-md-6">
                                     <div class="form-group mb-2">
-                                        <label for="basic_salary">Gaji Pokok (Rp) <span class="text-danger">*</span></label>
-                                        <div class="input-group" x-data>
+                                        <label for="overtime_rate_per_hour">Nominal Lembur per Jam (Rp)</label>
+                                        <div class="input-group"
+                                             wire:key="emp-ot-hour-wrap-{{ $form->employee?->id ?? 'new' }}"
+                                             x-data="{
+                                                 rawVal: @entangle('form.overtime_rate_per_hour'),
+                                                 format(v) {
+                                                     if (!v || isNaN(v) || v == 0) return '';
+                                                     return new Intl.NumberFormat('id-ID').format(v);
+                                                 }
+                                             }"
+                                             x-init="$refs.input && ($refs.input.value = format(rawVal))"
+                                             x-effect="if ($refs.input) { let f = format(rawVal); if ($refs.input.value !== f) { $refs.input.value = f; } }">
                                             <div class="input-group-prepend">
                                                 <span class="input-group-text font-weight-500">Rp</span>
                                             </div>
                                             <input type="text"
-                                                   id="basic_salary"
+                                                   x-ref="input"
+                                                   id="overtime_rate_per_hour"
                                                    inputmode="numeric"
                                                    x-on:input="
                                                        let raw = $el.value.replace(/\D/g, '');
                                                        $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
-                                                       $wire.$set('form.basic_salary', raw ? parseFloat(raw) : '', false);
+                                                       rawVal = raw ? parseFloat(raw) : 0;
                                                    "
-                                                   value="{{ !empty($form->basic_salary) ? number_format((float) $form->basic_salary, 0, ',', '.') : '' }}"
-                                                   class="form-control text-right @error('form.basic_salary') is-invalid @enderror"
+                                                   class="form-control text-right @error('form.overtime_rate_per_hour') is-invalid @enderror"
                                                    placeholder="0"
                                                    autocomplete="off">
                                         </div>
-                                        @error('form.basic_salary')
+                                        @error('form.overtime_rate_per_hour')
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+
+                                <!-- Nominal Lembur Harian (Seharian Penuh) -->
+                                <div class="col-md-6">
+                                    <div class="form-group mb-2">
+                                        <label for="overtime_rate_per_day">Nominal Lembur Harian (Rp)</label>
+                                        <div class="input-group"
+                                             wire:key="emp-ot-day-wrap-{{ $form->employee?->id ?? 'new' }}"
+                                             x-data="{
+                                                 rawVal: @entangle('form.overtime_rate_per_day'),
+                                                 format(v) {
+                                                     if (!v || isNaN(v) || v == 0) return '';
+                                                     return new Intl.NumberFormat('id-ID').format(v);
+                                                 }
+                                             }"
+                                             x-init="$refs.input && ($refs.input.value = format(rawVal))"
+                                             x-effect="if ($refs.input) { let f = format(rawVal); if ($refs.input.value !== f) { $refs.input.value = f; } }">
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text font-weight-500">Rp</span>
+                                            </div>
+                                            <input type="text"
+                                                   x-ref="input"
+                                                   id="overtime_rate_per_day"
+                                                   inputmode="numeric"
+                                                   x-on:input="
+                                                       let raw = $el.value.replace(/\D/g, '');
+                                                       $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                                       rawVal = raw ? parseFloat(raw) : 0;
+                                                   "
+                                                   class="form-control text-right @error('form.overtime_rate_per_day') is-invalid @enderror"
+                                                   placeholder="0"
+                                                   autocomplete="off">
+                                        </div>
+                                        @error('form.overtime_rate_per_day')
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+
+                                <!-- Pengaturan Uang Makan Harian -->
+                                @php
+                                    $companyProfile = \App\Models\CompanyProfile::getProfile();
+                                    $isUniformMeal = (bool) ($companyProfile->is_uniform_meal_allowance ?? true);
+                                    $defaultMealRate = (float) ($companyProfile->default_meal_allowance_per_day ?? 25000);
+                                @endphp
+                                <div class="col-md-6">
+                                    <div class="form-group mb-2">
+                                        <label for="meal_allowance_per_day" class="d-flex align-items-center">
+                                            <span>Uang Makan Harian (Rp)</span>
+                                            @if ($isUniformMeal)
+                                                <i class="fas fa-lock text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Terkunci: Mengikuti kebijakan standar profil perusahaan (Rp {{ number_format($defaultMealRate, 0, ',', '.') }}/hari). Ubah di menu Profil Perusahaan jika ingin mode nominal berbeda per karyawan."></i>
+                                            @else
+                                                <i class="fas fa-info-circle text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Mode Fleksibel Aktif: Nominal uang makan dapat disesuaikan secara khusus untuk karyawan ini."></i>
+                                            @endif
+                                        </label>
+
+                                        <div class="input-group"
+                                             wire:key="emp-meal-rate-wrap-{{ $form->employee?->id ?? 'new' }}"
+                                             x-data="{
+                                                 rawVal: @entangle('form.meal_allowance_per_day'),
+                                                 defaultRate: {{ $defaultMealRate }},
+                                                 format(v) {
+                                                     let num = (!v || isNaN(v) || v == 0) ? this.defaultRate : v;
+                                                     return new Intl.NumberFormat('id-ID').format(num);
+                                                 }
+                                             }"
+                                             @unless($isUniformMeal)
+                                             x-init="$refs.input && ($refs.input.value = format(rawVal))"
+                                             x-effect="if ($refs.input) { let f = format(rawVal); if ($refs.input.value !== f) { $refs.input.value = f; } }"
+                                             @endunless>
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text font-weight-500">Rp</span>
+                                            </div>
+                                            @if ($isUniformMeal)
+                                                <input type="text"
+                                                       id="meal_allowance_per_day"
+                                                       value="{{ number_format($defaultMealRate, 0, ',', '.') }}"
+                                                       class="form-control text-right font-weight-500"
+                                                       style="background-color: #f1f5f9; color: #475569;"
+                                                       readonly
+                                                       disabled
+                                                       title="Mengikuti nominal standar perusahaan">
+                                            @else
+                                                <input type="text"
+                                                       x-ref="input"
+                                                       id="meal_allowance_per_day"
+                                                       inputmode="numeric"
+                                                       x-on:input="
+                                                           let raw = $el.value.replace(/\D/g, '');
+                                                           $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
+                                                           rawVal = raw ? parseFloat(raw) : 0;
+                                                       "
+                                                       class="form-control text-right @error('form.meal_allowance_per_day') is-invalid @enderror"
+                                                       placeholder="{{ number_format($defaultMealRate, 0, ',', '.') }}"
+                                                       autocomplete="off">
+                                            @endif
+                                        </div>
+                                        @error('form.meal_allowance_per_day')
                                             <div class="invalid-feedback d-block">{{ $message }}</div>
                                         @enderror
                                     </div>
@@ -171,7 +372,10 @@
                                 <!-- Upload Foto (Template Custom-File Component) -->
                                 <div class="col-md-12">
                                     <div class="form-group mb-1">
-                                        <label for="photo">Foto Karyawan</label>
+                                        <label for="photo" class="d-flex align-items-center">
+                                            <span>Foto Karyawan</span>
+                                            <small class="text-muted ml-2 font-weight-normal">(JPG/PNG, maks. 2MB - Opsional)</small>
+                                        </label>
                                         <div class="d-flex align-items-center">
                                             @if ($form->photo)
                                                 <img src="{{ $form->photo->temporaryUrl() }}" alt="Preview" width="42" height="42" class="rounded-circle mr-3 shadow-sm border" style="object-fit: cover;">
@@ -185,7 +389,6 @@
                                                 </label>
                                             </div>
                                         </div>
-                                        <small class="form-text text-muted mt-1">Format JPG/PNG, Maksimal 2MB (Opsional).</small>
                                         @error('form.photo')
                                             <div class="text-danger small mt-1">{{ $message }}</div>
                                         @enderror
@@ -263,15 +466,15 @@
                                 <div class="col-md-6">
                                     <div class="form-group mb-2">
                                         <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <label for="email" class="mb-0">Alamat Email</label>
+                                            <label for="email" class="mb-0 d-flex align-items-center">
+                                                <span>Alamat Email</span>
+                                                <i class="fas fa-info-circle text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Otomatis dibuat dari nama karyawan & domain profil perusahaan via tombol Auto."></i>
+                                            </label>
                                             <button type="button" wire:click="generateEmailFromName" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size: 11px;" title="Generate email otomatis dari nama karyawan">
                                                 <i class="fas fa-magic mr-1"></i> Auto
                                             </button>
                                         </div>
                                         <input type="email" id="email" wire:model.live.debounce.400ms="form.email" class="form-control @error('form.email') is-invalid @enderror" placeholder="karyawan@perusahaan.com" autocomplete="off">
-                                        <small class="form-text text-muted mt-1" style="font-size: 11px;">
-                                            <i class="fas fa-info-circle mr-1"></i> Otomatis dibuat dari nama karyawan & domain profil perusahaan.
-                                        </small>
                                         @error('form.email')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
@@ -325,14 +528,16 @@
                                 <!-- Upload CV (Template Custom-File Component) -->
                                 <div class="col-md-12">
                                     <div class="form-group mb-1">
-                                        <label for="curriculum_vitae">File CV / Resume</label>
+                                        <label for="curriculum_vitae" class="d-flex align-items-center">
+                                            <span>File CV / Resume</span>
+                                            <small class="text-muted ml-2 font-weight-normal">(PDF/DOC/DOCX, maks. 5MB - Opsional)</small>
+                                        </label>
                                         <div class="custom-file">
                                             <input type="file" id="curriculum_vitae" wire:model="form.curriculum_vitae" accept=".pdf,.doc,.docx" class="custom-file-input @error('form.curriculum_vitae') is-invalid @enderror">
                                             <label class="custom-file-label text-truncate" for="curriculum_vitae">
                                                 {{ $form->curriculum_vitae ? $form->curriculum_vitae->getClientOriginalName() : ($form->employee?->detail?->curriculum_vitae ? basename($form->employee->detail->curriculum_vitae) : 'Pilih Berkas CV / Resume...') }}
                                             </label>
                                         </div>
-                                        <small class="form-text text-muted mt-1">Format PDF, DOC, atau DOCX. Maksimal 5MB (Opsional).</small>
                                         @error('form.curriculum_vitae')
                                             <div class="text-danger small mt-1">{{ $message }}</div>
                                         @enderror
@@ -380,13 +585,15 @@
 
                                 <div class="col-md-6">
                                     <div class="form-group mb-2">
-                                        <label for="tax_recipient_type">Jenis Penerima Penghasilan untuk Pajak <span class="text-danger">*</span></label>
+                                        <label for="tax_recipient_type" class="d-flex align-items-center">
+                                            <span>Jenis Penerima Penghasilan <span class="text-danger">*</span></span>
+                                            <i class="fas fa-info-circle text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Kontrak penuh waktu bergaji bulanan termasuk Pegawai Tetap untuk PPh 21. Pilih di luar cakupan untuk harian, borongan, atau magang."></i>
+                                        </label>
                                         <select id="tax_recipient_type" wire:model="form.tax_recipient_type" class="form-control @error('form.tax_recipient_type') is-invalid @enderror">
                                             <option value="">-- Pilih jenis pajak --</option>
-                                            <option value="monthly_employee">Pegawai Tetap PPh 21 (gaji bulanan, termasuk kontrak penuh waktu)</option>
+                                            <option value="monthly_employee">Pegawai Tetap PPh 21 (gaji bulanan, termasuk kontrak)</option>
                                             <option value="outside_scope">Di luar cakupan saat ini (harian, borongan, magang)</option>
                                         </select>
-                                        <small class="form-text text-muted">Kontrak penuh waktu bergaji bulanan termasuk Pegawai Tetap untuk PPh 21. Pilih di luar cakupan untuk harian, borongan, atau magang.</small>
                                         @error('form.tax_recipient_type')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
@@ -420,11 +627,13 @@
                                 </div>
 
                                 <!-- NPWP -->
-                                <div class="col-md-12">
+                                <div class="col-md-6">
                                     <div class="form-group mb-2">
-                                        <label for="npwp_number">Nomor NPWP</label>
+                                        <label for="npwp_number" class="d-flex align-items-center">
+                                            <span>Nomor NPWP</span>
+                                            <i class="fas fa-info-circle text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Jika belum memiliki kartu NPWP fisik, dapat menggunakan NIK 16 digit yang telah terintegrasi DJP."></i>
+                                        </label>
                                         <input type="text" id="npwp_number" wire:model="form.npwp_number" class="form-control @error('form.npwp_number') is-invalid @enderror" placeholder="Contoh: 12.345.678.9-012.000" autocomplete="off">
-                                        <small class="form-text text-muted">Jika belum memiliki kartu NPWP fisik, dapat menggunakan NIK 16 digit yang telah terintegrasi DJP.</small>
                                         @error('form.npwp_number')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
@@ -457,8 +666,8 @@
                     </div>
                 </div>
 
-                <div class="modal-footer bg-whitesmoke br">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fas fa-times mr-1"></i> Batal</button>
+                <div class="modal-footer bg-white border-top px-4 py-3">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" wire:click="closeModal"><i class="fas fa-times mr-1"></i> Batal</button>
                     <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="update, store"><span wire:loading wire:target="update, store"><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...</span><span wire:loading.remove wire:target="update, store"><i class="fas fa-save mr-1"></i> {{ $isEditMode ? 'Simpan Perubahan' : 'Tambah Data' }}</span></button>
                 </div>
             </form>
@@ -497,3 +706,14 @@
         }
     }
 </style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        $('#employeeModal').on('shown.bs.modal', function () {
+            $(this).find('[data-toggle="tooltip"]').tooltip({
+                boundary: 'window',
+                trigger: 'hover focus'
+            });
+        });
+    });
+</script>

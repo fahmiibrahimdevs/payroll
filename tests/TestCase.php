@@ -8,6 +8,15 @@ use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
 {
+    protected function setUp(): void
+    {
+        if (!is_dir('/tmp/hrm_test_views')) {
+            @mkdir('/tmp/hrm_test_views', 0777, true);
+        }
+
+        parent::setUp();
+    }
+
     protected function createAdminUser(): User
     {
         $role = Role::firstOrCreate(

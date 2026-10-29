@@ -108,29 +108,21 @@
             color: #000000;
         }
 
-        /* Subtle Watermark Logo */
-        .slip-watermark {
+        /* Full-Page Repeating Diagonal Watermark (45 Degrees) */
+        .slip-watermark-pattern {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 360px;
-            height: 360px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             pointer-events: none;
             z-index: 0;
-            opacity: 0.06;
             user-select: none;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
         }
 
-        .slip-watermark img {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
+        .slip-watermark-pattern image {
             filter: grayscale(100%);
         }
 
@@ -530,10 +522,15 @@
 
         /* PRINT MEDIA STYLING */
         @media print {
+            @page {
+                size: A4 portrait;
+                margin: 10mm 15mm;
+            }
+
             body {
-                background: #ffffff;
-                padding: 0;
-                margin: 0;
+                background: #ffffff !important;
+                padding: 0 !important;
+                margin: 0 !important;
             }
 
             .print-actions {
@@ -541,21 +538,70 @@
             }
 
             .slip-paper {
-                box-shadow: none;
-                border: none;
-                padding: 10px 15px;
-                max-width: 100%;
-                margin: 0;
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                max-width: 100% !important;
                 position: relative;
                 overflow: hidden;
+                box-sizing: border-box;
+                min-height: 270mm !important;
+                display: flex !important;
+                flex-direction: column !important;
             }
 
-            .slip-watermark {
-                opacity: 0.07 !important;
+            .signatures-grid {
+                margin-top: auto !important;
+                padding-top: 20px !important;
+            }
+
+            .doc-subtle-note {
+                margin-top: 15px !important;
+                padding-bottom: 5px !important;
+            }
+
+            .slip-watermark-pattern {
+                display: block !important;
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .unpaid-watermark {
                 display: flex !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
+        }
+
+        /* Large Diagonal Status Watermark for Unpaid Slips */
+        .unpaid-watermark {
+            position: absolute;
+            top: 48%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-28deg);
+            font-size: 56px;
+            font-weight: 900;
+            letter-spacing: 5px;
+            color: rgba(220, 38, 38, 0.14) !important;
+            border: 5px dashed rgba(220, 38, 38, 0.25) !important;
+            padding: 12px 36px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            pointer-events: none;
+            z-index: 50;
+            white-space: nowrap;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
     </style>
 </head>
@@ -606,7 +652,7 @@
         $waMsg = "Halo {$item->employee?->full_name},\n\n";
         $waMsg .= "Berikut adalah ringkasan slip gaji Anda untuk {$periodLabel} dari {$company->name}:\n";
         $waMsg .= "• No Slip: {$item->payslip_number}\n";
-        $waMsg .= "• Gaji Pokok: {$item->formatted_basic_salary}\n";
+        $waMsg .= "• Gaji Pokok" . ($item->human_notes ? " ({$item->human_notes})" : "") . ": {$item->formatted_basic_salary}\n";
         $waMsg .= "• Total Pendapatan (+): Rp " . number_format((float) $item->basic_salary + (float) $item->total_allowances, 0, ',', '.') . "\n";
         $waMsg .= "• Total Potongan (-): {$item->formatted_total_deductions}\n";
         $waMsg .= "• Gaji Bersih Diterima: {$item->formatted_net_salary}\n\n";
@@ -716,11 +762,26 @@
     <!-- Official Payslip Sheet (Standard Indonesian Corporate/School Template) -->
     <div class="slip-paper">
 
-        @if (!empty($company->logo_url))
-            <div class="slip-watermark">
-                <img src="{{ $company->logo_url }}" alt="Watermark Logo">
+        @if (! $item->isPaid())
+            <!-- Watermark Status Belum Lunas (User Request: Batch print tetap cetak semua namun diberi watermark) -->
+            <div class="unpaid-watermark">
+                DRAFT &bull; BELUM LUNAS
             </div>
         @endif
+
+        <!-- Full-Page Repeating Diagonal Watermark Pattern (45 Derajat) -->
+        <svg class="slip-watermark-pattern" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="100%">
+            <defs>
+                <pattern id="wmPattern-0" width="150" height="150" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+                    <image href="{{ $company->logo_url ?? asset('assets/img/larashiz-logo.jpg') }}"
+                           xlink:href="{{ $company->logo_url ?? asset('assets/img/larashiz-logo.jpg') }}"
+                           x="40" y="40" width="70" height="70"
+                           opacity="0.07"
+                           preserveAspectRatio="xMidYMid meet" />
+                </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#wmPattern-0)" />
+        </svg>
 
         <!-- KOP SLIP GAJI -->
         <div class="kop-container">
@@ -904,10 +965,10 @@
             </div>
         </div>
 
-        <!-- 3. KOTAK GAJI BERSIH YANG DITERIMA -->
+        <!-- 3. KOTAK GAJI BERSIH YANG DITERIMA (TAKE HOME PAY BULANAN) -->
         <div class="gaji-bersih-box">
             <div class="gaji-bersih-left">
-                <div class="gaji-bersih-title">GAJI BERSIH YANG DITERIMA</div>
+                <div class="gaji-bersih-title">GAJI BERSIH YANG DITERIMA (THP)</div>
                 <div class="gaji-bersih-sub">(TOTAL PENDAPATAN – TOTAL POTONGAN)</div>
             </div>
             <div class="gaji-bersih-right">
@@ -915,6 +976,38 @@
                 <div class="gaji-bersih-terbilang">({{ terbilang_id($item->net_salary) }} Rupiah)</div>
             </div>
         </div>
+
+        <!-- 3B. INFORMASI TAMBAHAN: TELAH DITERIMA MINGGUAN (NON-THP & READ-ONLY) -->
+        @if (isset($overtimeSummary) && $overtimeSummary['grand_total'] > 0)
+            <div class="data-karyawan-box mb-3" style="border: 1.5px dashed #0284c7; background-color: #f0f9ff;">
+                <div class="box-header d-flex justify-content-between align-items-center" style="background-color: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 11px;">
+                    <span><i class="fas fa-info-circle mr-1"></i> INFORMASI TAMBAHAN: TELAH DITERIMA MINGGUAN (NON-THP)</span>
+                    <span style="font-weight: 500; font-size: 10px; text-transform: none; color: #0284c7;">Sudah Dicairkan Mingguan</span>
+                </div>
+                <div class="box-body" style="padding: 8px 12px;">
+                    <table class="data-table" style="font-size: 11px;">
+                        <tr>
+                            <td style="width: 28%; font-weight: 600; color: #1e293b;">Total Uang Makan Mingguan:</td>
+                            <td style="width: 22%; font-weight: 700; color: #0284c7;">
+                                Rp {{ number_format($overtimeSummary['total_meal_allowance'], 0, ',', '.') }}
+                            </td>
+                            <td style="width: 28%; font-weight: 600; color: #1e293b;">Total Upah Lembur Mingguan:</td>
+                            <td style="width: 22%; font-weight: 700; color: #0b52aa;">
+                                Rp {{ number_format($overtimeSummary['total_overtime_pay'], 0, ',', '.') }}
+                                @if ($overtimeSummary['total_hours'] > 0)
+                                    <span style="font-size: 10px; font-weight: normal; color: #64748b;">({{ number_format($overtimeSummary['total_hours'], 1) }} jam)</span>
+                                @endif
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="4" style="padding-top: 4px; font-size: 10px; color: #64748b; font-style: italic;">
+                                * Catatan: Nominal uang makan dan upah lembur di atas telah diterima setiap minggu dan tidak diakumulasikan ke saldo transfer akhir bulan.
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        @endif
 
         <!-- 4. BAGIAN TANDA TANGAN: DITERIMA OLEH & DISETUJUI OLEH -->
         <div class="signatures-grid">

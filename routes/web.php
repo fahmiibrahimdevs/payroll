@@ -1,11 +1,13 @@
 <?php
 
+use App\Http\Controllers\OvertimePrintController;
 use App\Http\Controllers\PayrollPrintController;
 use App\Http\Controllers\SecureDocumentController;
 use App\Livewire\CashAdvances\Index as CashAdvanceIndex;
 use App\Livewire\Departments\Index as DepartmentIndex;
 use App\Livewire\Employees\Index as EmployeeIndex;
 use App\Livewire\Logs\Index as LogIndex;
+use App\Livewire\Overtimes\Index as OvertimeIndex;
 use App\Livewire\Payrolls\ManageItem;
 use App\Livewire\Payrolls\Show;
 use App\Livewire\Positions\Index as PositionIndex;
@@ -112,6 +114,26 @@ Route::get('cash-advances/review/{advance}/{action}/{payment?}', function (
 Route::get('cash-advances/payments/{payment}/proof', [SecureDocumentController::class, 'paymentProof'])
     ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
     ->name('cash-advances.documents.proof');
+
+Route::get('overtimes', OvertimeIndex::class)
+    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
+    ->name('overtimes.index');
+
+Route::get('overtimes/periods/{period}/attendances', App\Livewire\Overtimes\PeriodAttendance::class)
+    ->middleware(['auth', 'active', 'role:admin'])
+    ->name('overtimes.periods.attendances');
+
+Route::get('overtimes/periods/{period}/print/{employee?}', [OvertimePrintController::class, 'printWeekly'])
+    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
+    ->name('overtimes.periods.print');
+
+Route::get('attendances', App\Livewire\Attendances\Index::class)
+    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
+    ->name('attendances.index');
+
+Route::get('payrolls/weekly', App\Livewire\Payrolls\WeeklyPayrollIndex::class)
+    ->middleware(['auth', 'active', 'role:admin|direktur'])
+    ->name('payrolls.weekly');
 
 Route::get('payrolls', App\Livewire\Payrolls\Index::class)
     ->middleware(['auth', 'active', 'role:admin|direktur'])

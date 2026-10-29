@@ -248,6 +248,17 @@ class Index extends Component
     }
 
     /**
+     * Close modal and reset form state.
+     */
+    public function closeModal(): void
+    {
+        $this->isEditMode = false;
+        $this->editingEmployeeId = null;
+        $this->isEmailManuallyModified = false;
+        $this->form->resetForm();
+    }
+
+    /**
      * Update an existing employee.
      */
     public function update(EmployeeService $employeeService): void

@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\Gender;
+use App\Enums\TaxRecipientType;
 use App\Models\Employee;
 use App\Models\EmployeeDetail;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -31,6 +32,7 @@ class EmployeeDetailFactory extends Factory
             'bank_name' => fake()->randomElement(['BCA', 'Mandiri', 'BNI', 'BRI', 'BSI']),
             'bank_account_number' => fake()->bankAccountNumber(),
             'bank_account_name' => fake()->name(),
+            'tax_recipient_type' => TaxRecipientType::MonthlyEmployee,
             'curriculum_vitae' => null,
         ];
     }

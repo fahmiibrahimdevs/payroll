@@ -28,3 +28,9 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 /ssl/
+/.gitnexus/
+
+
+/.agents/
+/.claude/
+.mcp.json

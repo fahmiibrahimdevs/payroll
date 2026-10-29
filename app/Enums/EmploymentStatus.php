@@ -7,6 +7,7 @@ enum EmploymentStatus: string
     case TETAP = 'tetap';
     case KONTRAK = 'kontrak';
     case MAGANG = 'magang';
+    case HARIAN = 'harian';
 
     public function label(): string
     {
@@ -14,6 +15,7 @@ enum EmploymentStatus: string
             self::TETAP => 'Karyawan Tetap',
             self::KONTRAK => 'Kontrak',
             self::MAGANG => 'Magang',
+            self::HARIAN => 'Harian Lepas',
         };
     }
 
@@ -23,6 +25,7 @@ enum EmploymentStatus: string
             self::TETAP => 'badge badge-primary',
             self::KONTRAK => 'badge badge-info',
             self::MAGANG => 'badge badge-warning',
+            self::HARIAN => 'badge badge-secondary',
         };
     }
 
@@ -32,6 +35,7 @@ enum EmploymentStatus: string
             self::TETAP => '#0b52aa',
             self::KONTRAK => '#0284c7',
             self::MAGANG => '#d97706',
+            self::HARIAN => '#475569',
         };
     }
 }

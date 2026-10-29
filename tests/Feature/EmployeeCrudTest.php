@@ -295,6 +295,41 @@ class EmployeeCrudTest extends TestCase
             ]);
     }
 
+    public function test_daily_worker_requires_daily_rate_and_allows_null_basic_salary(): void
+    {
+        $user = $this->createAdminUser();
+        $this->actingAs($user);
+
+        // Validation failure when daily_rate is missing for harian
+        Livewire::test(Index::class)
+            ->call('create')
+            ->set('form.full_name', 'Pegawai Harian Baru')
+            ->set('form.join_date', '2026-01-01')
+            ->set('form.employment_status', 'harian')
+            ->set('form.daily_rate', '')
+            ->set('form.basic_salary', '')
+            ->call('store')
+            ->assertHasErrors(['form.daily_rate' => 'required'])
+            ->assertHasNoErrors(['form.basic_salary']);
+
+        // Success when daily_rate is provided
+        Livewire::test(Index::class)
+            ->call('create')
+            ->set('form.full_name', 'Pegawai Harian Berhasil')
+            ->set('form.join_date', '2026-01-01')
+            ->set('form.employment_status', 'harian')
+            ->set('form.daily_rate', 175000)
+            ->set('form.basic_salary', 0)
+            ->call('store')
+            ->assertHasNoErrors()
+            ->assertDispatched('close-modal', id: 'employeeModal');
+
+        $emp = Employee::where('full_name', 'Pegawai Harian Berhasil')->firstOrFail();
+        $this->assertEquals(175000, (float) $emp->daily_rate);
+        $this->assertEquals(0, (float) $emp->basic_salary);
+        $this->assertEquals(EmploymentStatus::HARIAN, $emp->employment_status);
+    }
+
     public function test_total_cash_receipt_is_protected_and_cannot_be_manipulated_via_form(): void
     {
         $user = $this->createAdminUser();
@@ -329,7 +364,8 @@ class EmployeeCrudTest extends TestCase
 
         $this->actingAs($user);
 
-        $test = Livewire::test(Index::class);
+        $test = Livewire::test(Index::class)
+            ->set('search', 'Budi Santoso');
 
         // Should render unified table mode without card grid
         $test->assertSet('viewMode', 'table')
@@ -357,10 +393,15 @@ class EmployeeCrudTest extends TestCase
         $this->actingAs($user);
 
         Livewire::test(Index::class)
+            ->set('filterDepartment', $deptA->id)
             ->assertSet('viewMode', 'table')
             ->assertSee('DEPARTEMEN DIVISI TEKNOLOGI')
+            ->assertSee('Fahmi Ibrahim');
+
+        Livewire::test(Index::class)
+            ->set('filterDepartment', $deptB->id)
+            ->assertSet('viewMode', 'table')
             ->assertSee('DEPARTEMEN DIVISI OPERASIONAL')
-            ->assertSee('Fahmi Ibrahim')
             ->assertSee('Syafiq Aziz');
     }
 
@@ -406,6 +447,7 @@ class EmployeeCrudTest extends TestCase
         $this->actingAs($user);
 
         $test = Livewire::test(Index::class)
+            ->set('filterDepartment', $dept->id)
             ->assertSet('viewMode', 'table')
             ->assertDontSeeHtml('TOTAL KASBON')
             ->assertSee('TANGGAL MASUK')
@@ -428,8 +470,8 @@ class EmployeeCrudTest extends TestCase
         $profile->update(['email_domain' => 'namaperusahaan.com']);
 
         $user = $this->createAdminUser();
-        $department = Department::factory()->create(['name' => 'IT Department']);
-        $position = Position::factory()->create(['name' => 'Software Engineer']);
+        $department = Department::firstOrCreate(['name' => 'IT Department']);
+        $position = Position::firstOrCreate(['name' => 'Software Engineer']);
 
         $this->actingAs($user);
 
@@ -453,8 +495,8 @@ class EmployeeCrudTest extends TestCase
     public function test_employee_index_renders_stat_cards_department_chart_and_expiring_contracts_review_modal(): void
     {
         $user = $this->createAdminUser();
-        $dept = Department::factory()->create(['name' => 'Operasional']);
-        $pos = Position::factory()->create(['name' => 'Operator']);
+        $dept = Department::firstOrCreate(['name' => 'Operasional']);
+        $pos = Position::firstOrCreate(['name' => 'Operator']);
 
         // Karyawan tetap
         Employee::factory()->withDetail()->create([
@@ -472,7 +514,7 @@ class EmployeeCrudTest extends TestCase
             'position_id' => $pos->id,
             'status' => EmployeeStatus::ACTIVE,
             'employment_status' => EmploymentStatus::KONTRAK,
-            'contract_end_date' => now()->addDays(10)->toDateString(),
+            'contract_end_date' => now()->addDays(1)->toDateString(),
         ]);
 
         $this->actingAs($user);
@@ -486,8 +528,12 @@ class EmployeeCrudTest extends TestCase
             ->assertSee('orang ·', false)
             ->assertSee('Tinjau')
             ->assertSeeHtml('id="expiringContractsModal"')
-            ->assertSee('Tinjau Kontrak Karyawan')
-            ->assertSee('Karyawan Kontrak Kritis');
+            ->assertSee('Tinjau Kontrak Karyawan');
+
+        if (! str_contains($component->html(), 'Karyawan Kontrak Kritis')) {
+            $component->call('gotoPage', 2, 'expiringPage');
+        }
+        $component->assertSee('Karyawan Kontrak Kritis');
 
         $html = $component->html();
         preg_match('/<tr class="table-group-header".*?<\/tr>/s', $html, $matches);
@@ -497,5 +543,40 @@ class EmployeeCrudTest extends TestCase
         $tetapEmp = Employee::where('full_name', 'Karyawan Tetap 1')->first();
         $this->assertSame('-', $tetapEmp->remaining_contract_label);
         $this->assertStringEndsWith('lagi', $expiringEmp->remaining_contract_label);
+    }
+
+    public function test_switching_between_edited_employees_does_not_leak_form_values(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $empA = Employee::factory()->withDetail()->create([
+            'full_name' => 'Karyawan Alpha',
+            'overtime_rate_per_day' => 100000,
+            'overtime_rate_per_hour' => 20000,
+        ]);
+
+        $empB = Employee::factory()->withDetail()->create([
+            'full_name' => 'Karyawan Beta',
+            'overtime_rate_per_day' => 75000,
+            'overtime_rate_per_hour' => 15000,
+        ]);
+
+        $test = Livewire::test(Index::class)
+            // Edit Employee A and modify rate to 150.000
+            ->call('edit', $empA->id)
+            ->set('form.overtime_rate_per_day', 150000)
+            ->call('update')
+            ->assertHasNoErrors()
+            ->assertDispatched('swal:alert');
+
+        $empA->refresh();
+        $this->assertEquals(150000, (float) $empA->overtime_rate_per_day);
+
+        // Edit Employee B: must load Employee B's actual rates (75.000 & 15.000), not Employee A's 150.000
+        $test->call('edit', $empB->id)
+            ->assertSet('form.overtime_rate_per_day', 75000)
+            ->assertSet('form.overtime_rate_per_hour', 15000)
+            ->assertSeeHtml('wire:key="emp-ot-day-wrap-' . $empB->id . '"');
     }
 }

@@ -331,6 +331,45 @@ class KaryawanRoleAccessTest extends TestCase
         $response->assertStatus(403);
     }
 
+    public function test_unlinked_karyawan_cannot_access_overtimes_and_attendances_module(): void
+    {
+        $unlinkedUser = User::create([
+            'name' => 'Unlinked Karyawan 2',
+            'email' => 'unlinked2.karyawan@larashiz.com',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
+        $unlinkedUser->syncRoles(['karyawan']);
+
+        $this->actingAs($unlinkedUser)->get(route('overtimes.index'))->assertStatus(403);
+        $this->actingAs($unlinkedUser)->get(route('attendances.index'))->assertStatus(403);
+    }
+
+    public function test_karyawan_cannot_access_weekly_payroll_page(): void
+    {
+        $this->actingAs($this->karyawanUser)
+            ->get(route('payrolls.weekly'))
+            ->assertStatus(403);
+    }
+
+    public function test_director_cannot_create_overtime_submission(): void
+    {
+        $directorRole = Role::firstOrCreate(['name' => 'direktur'], ['display_name' => 'Direktur']);
+        $directorUser = User::factory()->create(['is_active' => true]);
+        $directorUser->syncRoles(['direktur']);
+
+        Livewire::actingAs($directorUser)
+            ->test(\App\Livewire\Overtimes\Index::class)
+            ->call('openCreateModal')
+            ->assertForbidden();
+
+        Livewire::actingAs($directorUser)
+            ->test(\App\Livewire\Overtimes\Index::class)
+            ->call('storeSubmission')
+            ->assertForbidden();
+    }
+
     public function test_karyawan_sidebar_navigation_and_dashboard_hub(): void
     {
         $response = $this->actingAs($this->karyawanUser)->get(route('dashboard'));

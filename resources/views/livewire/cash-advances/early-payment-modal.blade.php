@@ -227,8 +227,8 @@
                         @enderror
                     </div>
 
-                    <!-- Info Approval Direktur -->
-                    <div class="alert alert-light border mt-3 mb-0 d-flex align-items-center" style="font-size: 12px; color: #475569; border-color: #e2e8f0 !important; background-color: #f8fafc;">
+                    <!-- Info Approval Direktur (Clean White Card) -->
+                    <div class="alert alert-light border mt-3 mb-0 d-flex align-items-center" style="font-size: 12px; color: #475569; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
                         <i class="fas fa-info-circle text-primary mr-2" style="font-size: 14px;"></i>
                         <span>Pelunasan manual ini akan berstatus <strong>Menunggu Approval Direktur</strong> sebelum saldo kasbon dan cicilan berkurang.</span>
                     </div>

@@ -13,6 +13,7 @@ use App\Enums\PayrollLineType;
 use App\Enums\PayrollPeriodStatus;
 use App\Enums\TaxMethod;
 use App\Enums\TaxRecipientType;
+use App\Models\Attendance;
 use App\Models\CashAdvance;
 use App\Models\CashAdvanceInstallment;
 use App\Models\CashAdvancePayment;
@@ -123,7 +124,9 @@ class PayrollService
 
         $pendingApprovalCount = PayrollPeriod::where('status', PayrollPeriodStatus::SUBMITTED->value)->count();
         $draftCount = PayrollPeriod::where('status', PayrollPeriodStatus::DRAFT->value)->count();
-        $totalActiveEmployees = Employee::where('status', EmployeeStatus::ACTIVE)->count();
+        $totalActiveEmployees = Employee::where('status', EmployeeStatus::ACTIVE)
+            ->where('employment_status', '!=', EmploymentStatus::HARIAN)
+            ->count();
 
         $activePeriod = PayrollPeriod::where('year', $currentYear)
             ->where('month', $currentMonth)
@@ -820,9 +823,10 @@ class PayrollService
                 'notes' => ! empty($data['notes']) ? trim((string) $data['notes']) : null,
             ]);
 
-            // Pull active employees with details
+            // Pull active monthly employees with details (Pegawai harian dibayar mingguan dan tidak masuk gaji bulanan)
             $activeEmployees = Employee::query()
                 ->where('status', EmployeeStatus::ACTIVE)
+                ->where('employment_status', '!=', EmploymentStatus::HARIAN)
                 ->employedDuring($startDate->toDateString(), $endDate->toDateString())
                 ->with('detail')
                 ->orderBy('full_name')
@@ -969,6 +973,42 @@ class PayrollService
             $curr->addDay();
         }
 
+        // Attendance-based proration policy:
+        // Basic salary is strictly calculated from actual attendance (fingerprint tap-ins with valid status).
+        // Sickness, leave, and permits without attendance tap-ins are excluded (No work, no pay).
+        $periodHasAttendance = Attendance::whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->exists();
+
+        if ($periodHasAttendance) {
+            $attendedDaysQuery = Attendance::where('employee_id', $employee->id)
+                ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+                ->whereNotNull('clock_in')
+                ->where('clock_in', '!=', '');
+
+            // Proteksi pengaman: Hanya hitung hari kerja reguler (exclude hari Minggu, dan Sabtu jika 5-hari kerja)
+            if ($workDaysPerWeek === 5) {
+                $attendedDaysQuery->whereRaw('DAYOFWEEK(date) NOT IN (1, 7)');
+            } else {
+                $attendedDaysQuery->whereRaw('DAYOFWEEK(date) != 1');
+            }
+
+            $attendedDays = $attendedDaysQuery->count();
+
+            $ratio = $totalWorkingDays > 0 ? (min($attendedDays, $totalWorkingDays) / $totalWorkingDays) : 0.0;
+            $calculatedSalary = round($fullSalary * $ratio);
+
+            return [
+                'basic_salary' => (float) $calculatedSalary,
+                'full_salary' => $fullSalary,
+                'is_prorated' => $attendedDays < $totalWorkingDays,
+                'worked_days' => $attendedDays,
+                'total_working_days' => $totalWorkingDays,
+                'ratio' => (float) $ratio,
+                'reason' => 'attendance',
+                'reason_text' => "{$attendedDays} dari {$totalWorkingDays} hari hadir",
+            ];
+        }
+
         $joinDate = $employee->join_date ? Carbon::parse($employee->join_date)->startOfDay() : null;
         $contractEndDate = $employee->contract_end_date ? Carbon::parse($employee->contract_end_date)->endOfDay() : null;
         $workedStart = $joinDate && $joinDate->gt($startDate) ? $joinDate : $startDate->copy();
@@ -1047,6 +1087,13 @@ class PayrollService
      */
     public function formatProrateNote(array $salaryInfo, Employee $employee): ?string
     {
+        if (($salaryInfo['reason'] ?? '') === 'attendance') {
+            $worked = $salaryInfo['worked_days'] ?? 0;
+            $total = $salaryInfo['total_working_days'] ?? 0;
+
+            return "{$worked} dari {$total} hari hadir";
+        }
+
         if (empty($salaryInfo['is_prorated'])) {
             return null;
         }
@@ -1069,6 +1116,10 @@ class PayrollService
 
         if (! $period->status->isEditable()) {
             throw new InvalidArgumentException('Karyawan hanya dapat ditambahkan pada periode berstatus Draf atau Revisi.');
+        }
+
+        if ($employee->employment_status === EmploymentStatus::HARIAN) {
+            throw new InvalidArgumentException('Pegawai Harian dibayar secara mingguan dan tidak dapat dimasukkan ke dalam daftar payroll bulanan.');
         }
 
         if ($employee->join_date && $employee->join_date->gt($period->end_date)) {
@@ -1177,6 +1228,7 @@ class PayrollService
         $missingEmployees = Employee::query()
             ->with(['detail', 'position', 'department'])
             ->where('status', EmployeeStatus::ACTIVE)
+            ->where('employment_status', '!=', EmploymentStatus::HARIAN)
             ->whereNotIn('id', $existingIds)
             ->employedDuring($period->start_date->toDateString(), $period->end_date->toDateString())
             ->orderBy('full_name')

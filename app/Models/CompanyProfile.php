@@ -14,6 +14,13 @@ class CompanyProfile extends Model
 {
     use HasFactory;
 
+    public const OVERTIME_ROUNDING_MODES = [
+        'round_30_min' => 'Kelipatan 30 Menit (0.5 Jam) — Rekomendasi',
+        'round_60_min' => 'Kelipatan 1 Jam Penuh',
+        'floor_hour' => 'Jam Penuh ke Bawah (Floor)',
+        'exact' => 'Menit Riil / Eksak (Tanpa Pembulatan)',
+    ];
+
     protected $fillable = [
         'name',
         'code',
@@ -28,6 +35,10 @@ class CompanyProfile extends Model
         'logo_path',
         'tax_identification_number',
         'work_days_per_week',
+        'default_meal_allowance_per_day',
+        'overtime_rounding_mode',
+        'overtime_rounding_threshold_minutes',
+        'is_uniform_meal_allowance',
         'payroll_cutoff_day',
         'payroll_pay_day',
         'enable_pph21',
@@ -56,6 +67,10 @@ class CompanyProfile extends Model
     {
         return [
             'work_days_per_week' => 'integer',
+            'default_meal_allowance_per_day' => 'decimal:2',
+            'overtime_rounding_mode' => 'string',
+            'overtime_rounding_threshold_minutes' => 'integer',
+            'is_uniform_meal_allowance' => 'boolean',
             'payroll_cutoff_day' => 'integer',
             'payroll_pay_day' => 'integer',
             'enable_pph21' => 'boolean',
@@ -245,6 +260,13 @@ class CompanyProfile extends Model
             ->implode('');
 
         return $initials !== '' ? $initials : 'HRM';
+    }
+
+    protected function formattedDefaultMealAllowancePerDay(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): string => 'Rp '.number_format((float) ($this->default_meal_allowance_per_day ?? 0), 0, ',', '.'),
+        );
     }
 
     /**

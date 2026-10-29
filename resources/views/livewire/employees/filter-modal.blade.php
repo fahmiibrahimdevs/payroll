@@ -12,7 +12,7 @@
                 @include('livewire.employees.filter-content', ['filterContext' => 'mobile'])
             </div>
 
-            <div class="modal-footer bg-whitesmoke br">
+            <div class="modal-footer bg-white border-top px-4 py-3">
                 <button type="button" class="btn btn-primary btn-block shadow-none" data-dismiss="modal">Tutup / Terapkan</button>
             </div>
         </div>

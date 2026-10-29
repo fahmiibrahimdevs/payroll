@@ -270,6 +270,11 @@
 
                     initSelect2();
 
+                    // Modal hidden cleanup to prevent DOM persistence
+                    $('#salaryComponentModal').on('hidden.bs.modal', function () {
+                        @this.call('closeModal');
+                    });
+
                     // Listen reset-salary-component-filters event
                     Livewire.on('reset-salary-component-filters', () => {
                         $('#filterCategory_desktop, #filterCategory_mobile').val('').trigger('change.select2');

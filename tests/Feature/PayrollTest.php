@@ -25,6 +25,7 @@ use App\Livewire\Payrolls\ManageItem;
 use App\Livewire\Payrolls\ManageItem as PayrollManageItem;
 use App\Livewire\Payrolls\Show;
 use App\Livewire\Payrolls\Show as PayrollShow;
+use App\Models\Attendance;
 use App\Models\CashAdvance;
 use App\Models\CashAdvanceInstallment;
 use App\Models\CashAdvancePayment;
@@ -312,6 +313,8 @@ class PayrollTest extends TestCase
         $item->refresh();
         $this->assertEquals($initialNet + 500000, (float) $item->net_salary);
         $this->assertEquals(500000, (float) $item->total_allowances);
+
+        $service->verifyAllItems($period, $admin);
 
         // Submit to director
         Livewire::test(PayrollShow::class, ['period' => $period])
@@ -1145,13 +1148,13 @@ class PayrollTest extends TestCase
         $admin = $this->createAdminUser();
         $director = $this->createDirectorUser();
 
-        $dept = Department::firstOrCreate(['name' => 'Support Dept'], ['description' => 'Support']);
-        $pos = Position::firstOrCreate(['name' => 'Agent'], ['description' => 'Support Agent']);
+        $dept = Department::firstOrCreate(['name' => 'AAA Support Dept'], ['description' => 'Support']);
+        $pos = Position::firstOrCreate(['name' => 'AAA Agent'], ['description' => 'Support Agent']);
 
         $employee = Employee::create([
             'department_id' => $dept->id,
             'position_id' => $pos->id,
-            'full_name' => 'Ratna Sari',
+            'full_name' => 'AAA Ratna Sari',
             'join_date' => Carbon::now()->subMonths(5),
             'status' => EmployeeStatus::ACTIVE,
             'basic_salary' => 5000000,
@@ -1185,7 +1188,7 @@ class PayrollTest extends TestCase
         // Director can access manage components directly
         $editResponse = $this->get(route('payrolls.items.edit', [$period, $item]));
         $editResponse->assertOk();
-        $editResponse->assertSee('Ratna Sari');
+        $editResponse->assertSee('AAA Ratna Sari');
     }
 
     public function test_payroll_show_groups_items_by_department_and_orders_by_position_hierarchy(): void
@@ -1193,7 +1196,7 @@ class PayrollTest extends TestCase
         $admin = $this->createAdminUser();
         $this->actingAs($admin);
 
-        $dept = Department::firstOrCreate(['name' => 'Mikrokontroler'], ['description' => 'Mikro']);
+        $dept = Department::firstOrCreate(['name' => 'AAA Mikrokontroler'], ['description' => 'Mikro']);
         $posSupervisor = Position::firstOrCreate(['name' => 'Supervisor'], ['description' => 'SPV']);
         $posStaff = Position::firstOrCreate(['name' => 'Staff'], ['description' => 'Staff']);
 
@@ -1224,7 +1227,7 @@ class PayrollTest extends TestCase
 
         $response = $this->get(route('payrolls.show', $period));
         $response->assertOk();
-        $response->assertSee('DEPARTEMEN MIKROKONTROLER');
+        $response->assertSee('DEPARTEMEN AAA MIKROKONTROLER');
         $response->assertSee('Subtotal Ditransfer:');
     }
 
@@ -3013,6 +3016,7 @@ class PayrollTest extends TestCase
 
         // View in Livewire Show again: verify badge displays Verif HRD: {Nama}
         Livewire::test(PayrollShow::class, ['period' => $period])
+            ->set('search', $item->employee->full_name)
             ->assertSee('Verif HRD: '.$admin->name)
             ->assertSeeHtml('title="Terverifikasi HRD (Klik untuk Batalkan)"');
     }
@@ -3253,7 +3257,7 @@ class PayrollTest extends TestCase
         $this->assertEquals(366667, $component->get("deductionRows.{$caIdx}.amount"));
 
         // Verify HRD
-        $service->verifyItem($item->fresh(), $admin);
+        $service->verifyAllItems($period, $admin);
 
         // Submit Period
         $period->refresh();
@@ -3376,7 +3380,7 @@ class PayrollTest extends TestCase
         $this->assertEquals(1500000, (float) $component->get("deductionRows.{$caIdx}.amount"));
 
         // Verify, Submit, Approve, and Mark as Paid
-        $service->verifyItem($item->fresh(), $admin);
+        $service->verifyAllItems($period, $admin);
         $period->refresh();
         $service->submitPeriod($period, $admin);
 
@@ -3517,8 +3521,8 @@ class PayrollTest extends TestCase
         $admin = $this->createAdminUser();
         $director = $this->createDirectorUser();
 
-        $emp1 = Employee::factory()->active()->create(['basic_salary' => 5000000, 'full_name' => 'Budi Cetak']);
-        $emp2 = Employee::factory()->active()->create(['basic_salary' => 6000000, 'full_name' => 'Siti Cetak']);
+        $emp1 = Employee::factory()->active()->create(['basic_salary' => 5000000, 'full_name' => 'Budi Cetak', 'join_date' => '2026-01-01']);
+        $emp2 = Employee::factory()->active()->create(['basic_salary' => 6000000, 'full_name' => 'Siti Cetak', 'join_date' => '2026-01-01']);
 
         $service = app(PayrollService::class);
         $period = $service->createPeriod([
@@ -3547,5 +3551,216 @@ class PayrollTest extends TestCase
         $this->actingAs($karyawanUser);
         $responseKaryawan = $this->get(route('payrolls.print-all', $period));
         $responseKaryawan->assertForbidden();
+    }
+
+    public function test_basic_salary_is_calculated_from_actual_attendance_days(): void
+    {
+        $admin = $this->createAdminUser();
+        $service = app(PayrollService::class);
+
+        $company = CompanyProfile::getProfile();
+        $company->update(['work_days_per_week' => 6]); // Mon-Sat (27 working days in Oct 2026)
+
+        // 1. Employee A: Contract salary 5,400,000, attends 20 working days, 2 sakit, 2 izin/cuti
+        $empA = Employee::factory()->active()->create([
+            'basic_salary' => 5400000,
+            'full_name' => 'Karyawan Kehadiran A',
+            'join_date' => '2026-01-01',
+        ]);
+
+        // 2. Employee B: Contract salary 2,700,000, full attendance 27 working days
+        $empB = Employee::factory()->active()->create([
+            'basic_salary' => 2700000,
+            'full_name' => 'Karyawan Kehadiran B',
+            'join_date' => '2026-01-01',
+        ]);
+
+        // 3. Employee C: Contract salary 3,000,000, 0 attendance
+        $empC = Employee::factory()->active()->create([
+            'basic_salary' => 3000000,
+            'full_name' => 'Karyawan Mangkir C',
+            'join_date' => '2026-01-01',
+        ]);
+
+        // Seed attendances for Employee A (20 days with clock_in, 2 sakit, 2 cuti without clock_in)
+        $day = 1;
+        $attendedCount = 0;
+        while ($day <= 31 && $attendedCount < 20) {
+            $date = sprintf('2026-10-%02d', $day);
+            $cDate = Carbon::parse($date);
+            if (! $cDate->isSunday()) {
+                Attendance::create([
+                    'employee_id' => $empA->id,
+                    'date' => $date,
+                    'clock_in' => '08:00:00',
+                    'clock_out' => '17:00:00',
+                    'status' => 'hadir',
+                    'duration_minutes' => 540,
+                    'source' => 'fingerprint',
+                ]);
+                $attendedCount++;
+            }
+            $day++;
+        }
+
+        // Sick and leave days for Employee A (no tap in)
+        Attendance::create([
+            'employee_id' => $empA->id,
+            'date' => '2026-10-27',
+            'clock_in' => null,
+            'status' => 'sakit',
+            'source' => 'manual',
+        ]);
+        Attendance::create([
+            'employee_id' => $empA->id,
+            'date' => '2026-10-28',
+            'clock_in' => null,
+            'status' => 'cuti',
+            'source' => 'manual',
+        ]);
+
+        // Seed attendances for Employee B (full 27 working days)
+        for ($d = 1; $d <= 31; $d++) {
+            $date = sprintf('2026-10-%02d', $d);
+            $cDate = Carbon::parse($date);
+            if (! $cDate->isSunday()) {
+                Attendance::create([
+                    'employee_id' => $empB->id,
+                    'date' => $date,
+                    'clock_in' => '07:55:00',
+                    'clock_out' => '17:05:00',
+                    'status' => 'hadir',
+                    'duration_minutes' => 550,
+                    'source' => 'fingerprint',
+                ]);
+            }
+        }
+
+        // Create draft payroll period for October 2026
+        // Delete any existing period for Oct 2026 if seeded
+        PayrollPeriod::where('month', 10)->where('year', 2026)->delete();
+
+        $period = $service->createPeriod([
+            'month' => 10,
+            'year' => 2026,
+            'name' => 'Payroll Presensi Okt 2026',
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-10-31',
+        ], $admin);
+
+        $itemA = $period->items()->where('employee_id', $empA->id)->firstOrFail();
+        $itemB = $period->items()->where('employee_id', $empB->id)->firstOrFail();
+        $itemC = $period->items()->where('employee_id', $empC->id)->firstOrFail();
+
+        // 20/27 * 5,400,000 = 4,000,000
+        $this->assertEquals(4000000, (float) $itemA->basic_salary);
+        $this->assertEquals('20 dari 27 hari hadir', $itemA->notes);
+
+        // 27/27 * 2,700,000 = 2,700,000
+        $this->assertEquals(2700000, (float) $itemB->basic_salary);
+        $this->assertEquals('27 dari 27 hari hadir', $itemB->notes);
+
+        // 0/27 * 3,000,000 = 0
+        $this->assertEquals(0, (float) $itemC->basic_salary);
+        $this->assertEquals('0 dari 27 hari hadir', $itemC->notes);
+
+        // Verify Printable Payslip renders "Gaji Pokok (20 dari 27 hari hadir)"
+        $this->actingAs($admin);
+        $responseA = $this->get(route('payrolls.items.print', [$period, $itemA]));
+        $responseA->assertOk();
+        $responseA->assertSee('Gaji Pokok (20 dari 27 hari hadir)');
+
+        // Verify Printable Payslip renders "Gaji Pokok (27 dari 27 hari hadir)"
+        $responseB = $this->get(route('payrolls.items.print', [$period, $itemB]));
+        $responseB->assertOk();
+        $responseB->assertSee('Gaji Pokok (27 dari 27 hari hadir)');
+    }
+
+    public function test_sunday_attendance_is_excluded_from_monthly_salary_and_daily_workers_are_excluded_from_monthly_payroll(): void
+    {
+        $admin = $this->createAdminUser();
+        $service = app(PayrollService::class);
+
+        $dept = Department::firstOrCreate(['name' => 'IT System']);
+        $pos = Position::firstOrCreate(['name' => 'Backend Engineer']);
+
+        // 1. Regular permanent employee with attendance including Sunday
+        $empTetap = Employee::factory()->create([
+            'full_name' => 'Karyawan Tetap Sunday Test',
+            'employment_status' => EmploymentStatus::TETAP,
+            'status' => EmployeeStatus::ACTIVE,
+            'basic_salary' => 5400000,
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'join_date' => '2026-01-01',
+        ]);
+
+        // 2. Daily worker (harian)
+        $empHarian = Employee::factory()->create([
+            'full_name' => 'Pegawai Harian Test',
+            'employment_status' => EmploymentStatus::HARIAN,
+            'status' => EmployeeStatus::ACTIVE,
+            'basic_salary' => 0,
+            'daily_rate' => 150000,
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'join_date' => '2026-01-01',
+        ]);
+
+        // Create 20 attendance records on weekdays (Mon-Sat) for empTetap
+        // Plus 2 attendance records on Sundays (e.g., 2026-10-04, 2026-10-11)
+        Attendance::where('date', 'like', '2026-10-%')->delete();
+
+        $cur = Carbon::parse('2026-10-01');
+        $weekdayCount = 0;
+        while ($cur->month === 10) {
+            if (! $cur->isSunday() && $weekdayCount < 20) {
+                Attendance::create([
+                    'employee_id' => $empTetap->id,
+                    'date' => $cur->toDateString(),
+                    'clock_in' => '08:00:00',
+                    'clock_out' => '17:00:00',
+                    'status' => 'hadir',
+                    'duration_minutes' => 540,
+                    'source' => 'fingerprint',
+                ]);
+                $weekdayCount++;
+            } elseif ($cur->isSunday()) {
+                // Sunday tap!
+                Attendance::create([
+                    'employee_id' => $empTetap->id,
+                    'date' => $cur->toDateString(),
+                    'clock_in' => '08:00:00',
+                    'clock_out' => '17:00:00',
+                    'status' => 'hadir',
+                    'duration_minutes' => 540,
+                    'source' => 'fingerprint',
+                ]);
+            }
+            $cur->addDay();
+        }
+
+        PayrollPeriod::where('month', 10)->where('year', 2026)->delete();
+
+        $period = $service->createPeriod([
+            'month' => 10,
+            'year' => 2026,
+            'name' => 'Payroll Presensi Okt 2026 - Sunday Test',
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-10-31',
+        ], $admin);
+
+        // Daily worker must NOT be in monthly payroll items!
+        $this->assertNull($period->items()->where('employee_id', $empHarian->id)->first());
+
+        // Regular employee must have Sunday excluded from basic salary calculation!
+        // Exactly 20 weekdays present out of 27 working days (Sundays ignored)
+        $itemTetap = $period->items()->where('employee_id', $empTetap->id)->firstOrFail();
+        $this->assertEquals(4000000, (float) $itemTetap->basic_salary);
+        $this->assertEquals('20 dari 27 hari hadir', $itemTetap->notes);
+
+        // Trying to manually add daily worker to monthly period should throw exception
+        $this->expectException(\InvalidArgumentException::class);
+        $service->addEmployeeToPeriod($period, $empHarian, $admin);
     }
 }

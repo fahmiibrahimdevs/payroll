@@ -363,8 +363,14 @@
   .-mx-3 {
     margin-inline: calc(var(--spacing) * -3);
   }
+  .mx-0 {
+    margin-inline: 0px;
+  }
   .mx-1 {
     margin-inline: var(--spacing);
+  }
+  .mx-1\.5 {
+    margin-inline: calc(var(--spacing) * 1.5);
   }
   .mx-auto {
     margin-inline: auto;
@@ -470,6 +476,9 @@
   }
   .mb-3 {
     margin-bottom: calc(var(--spacing) * 3);
+  }
+  .mb-3\.5 {
+    margin-bottom: calc(var(--spacing) * 3.5);
   }
   .mb-4 {
     margin-bottom: calc(var(--spacing) * 4);
@@ -773,9 +782,6 @@
   .rounded-\[10px\] {
     border-radius: 10px;
   }
-  .rounded-\[12px\] {
-    border-radius: 12px;
-  }
   .rounded-full {
     border-radius: calc(infinity * 1px);
   }
@@ -787,6 +793,9 @@
   }
   .rounded-sm {
     border-radius: var(--radius-sm);
+  }
+  .rounded-xl {
+    border-radius: var(--radius-xl);
   }
   .border {
     border-style: var(--tw-border-style);
@@ -822,9 +831,6 @@
   }
   .\!border-slate-300 {
     border-color: var(--color-slate-300) !important;
-  }
-  .border-\[\#e9edf2\] {
-    border-color: #e9edf2;
   }
   .border-blue-500 {
     border-color: var(--color-blue-500);
@@ -1012,6 +1018,12 @@
   .p-6 {
     padding: calc(var(--spacing) * 6);
   }
+  .\!px-1 {
+    padding-inline: var(--spacing) !important;
+  }
+  .\!px-2\.5 {
+    padding-inline: calc(var(--spacing) * 2.5) !important;
+  }
   .\!px-3 {
     padding-inline: calc(var(--spacing) * 3) !important;
   }
@@ -1038,9 +1050,6 @@
   }
   .px-6 {
     padding-inline: calc(var(--spacing) * 6);
-  }
-  .px-\[25px\] {
-    padding-inline: 25px;
   }
   .\!py-1\.5 {
     padding-block: calc(var(--spacing) * 1.5) !important;
@@ -1111,8 +1120,14 @@
   .pt-4 {
     padding-top: calc(var(--spacing) * 4);
   }
+  .pr-0 {
+    padding-right: 0px;
+  }
   .pr-1 {
     padding-right: var(--spacing);
+  }
+  .pr-1\.5 {
+    padding-right: calc(var(--spacing) * 1.5);
   }
   .pr-2 {
     padding-right: calc(var(--spacing) * 2);
@@ -1143,6 +1158,9 @@
   }
   .pl-1 {
     padding-left: var(--spacing);
+  }
+  .pl-1\.5 {
+    padding-left: calc(var(--spacing) * 1.5);
   }
   .pl-2 {
     padding-left: calc(var(--spacing) * 2);
@@ -1422,10 +1440,6 @@
   }
   .shadow {
     --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-  .shadow-\[0_2px_6px_0_rgba\(0\,0\,0\,0\.06\)\,0_1px_2px_0_rgba\(0\,0\,0\,0\.04\)\] {
-    --tw-shadow: 0 2px 6px 0 var(--tw-shadow-color, rgba(0,0,0,0.06)), 0 1px 2px 0 var(--tw-shadow-color, rgba(0,0,0,0.04));
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
   .shadow-\[0px_14px_34px_0px_rgba\(0\,0\,0\,0\.08\)\] {

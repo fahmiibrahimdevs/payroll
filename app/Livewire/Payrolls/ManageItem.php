@@ -1300,7 +1300,11 @@ class ManageItem extends Component
     {
         return $this->period->items()
             ->select(['id', 'payroll_period_id', 'employee_id'])
-            ->with(['employee:id,full_name', 'employee.detail:id,employee_id,employee_code'])
+            ->with([
+                'employee:id,full_name,department_id',
+                'employee.department:id,name',
+                'employee.detail:id,employee_id,employee_code',
+            ])
             ->orderBy('id')
             ->get();
     }

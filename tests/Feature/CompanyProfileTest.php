@@ -136,4 +136,68 @@ class CompanyProfileTest extends TestCase
             'payroll_pay_day' => 27,
         ]);
     }
+
+    public function test_admin_can_toggle_meal_allowance_mode_and_update_standard_amount(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        Livewire::test(Index::class)
+            ->set('is_uniform_meal_allowance', false)
+            ->set('default_meal_allowance_per_day', 30000)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseHas('company_profiles', [
+            'is_uniform_meal_allowance' => false,
+            'default_meal_allowance_per_day' => 30000,
+        ]);
+
+        // Toggle back to uniform true
+        Livewire::test(Index::class)
+            ->set('is_uniform_meal_allowance', true)
+            ->set('default_meal_allowance_per_day', 25000)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('company_profiles', [
+            'is_uniform_meal_allowance' => true,
+            'default_meal_allowance_per_day' => 25000,
+        ]);
+    }
+
+    public function test_admin_can_update_overtime_rounding_mode(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        Livewire::test(Index::class)
+            ->set('overtime_rounding_mode', 'round_60_min')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseHas('company_profiles', [
+            'overtime_rounding_mode' => 'round_60_min',
+        ]);
+    }
+
+    public function test_admin_can_update_overtime_rounding_threshold_minutes(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        Livewire::test(Index::class)
+            ->set('overtime_rounding_mode', 'round_60_min')
+            ->set('overtime_rounding_threshold_minutes', 15)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseHas('company_profiles', [
+            'overtime_rounding_mode' => 'round_60_min',
+            'overtime_rounding_threshold_minutes' => 15,
+        ]);
+    }
 }

@@ -41,6 +41,14 @@ class Index extends Component
 
     public int $work_days_per_week = 6;
 
+    public bool $is_uniform_meal_allowance = true;
+
+    public mixed $default_meal_allowance_per_day = 25000;
+
+    public string $overtime_rounding_mode = 'round_60_min';
+
+    public int $overtime_rounding_threshold_minutes = 10;
+
     public int $payroll_cutoff_day = 20;
 
     public int $payroll_pay_day = 25;
@@ -79,6 +87,13 @@ class Index extends Component
 
     public ?string $currentLogoUrl = null;
 
+    public string $activeTab = 'identitas';
+
+    public function setTab(string $tab): void
+    {
+        $this->activeTab = $tab;
+    }
+
     public function mount(CompanyProfileService $service): void
     {
         abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
@@ -97,6 +112,10 @@ class Index extends Component
         $this->postal_code = $profile->postal_code;
         $this->tax_identification_number = $profile->tax_identification_number;
         $this->work_days_per_week = (int) ($profile->work_days_per_week ?? 6);
+        $this->is_uniform_meal_allowance = (bool) ($profile->is_uniform_meal_allowance ?? true);
+        $this->default_meal_allowance_per_day = (float) ($profile->default_meal_allowance_per_day ?? 25000);
+        $this->overtime_rounding_mode = (string) ($profile->overtime_rounding_mode ?? 'round_60_min');
+        $this->overtime_rounding_threshold_minutes = (int) ($profile->overtime_rounding_threshold_minutes ?? 10);
         $this->payroll_cutoff_day = (int) ($profile->payroll_cutoff_day ?? 20);
         $this->payroll_pay_day = (int) ($profile->payroll_pay_day ?? 25);
         $this->enable_pph21 = (bool) $profile->enable_pph21;
@@ -132,6 +151,10 @@ class Index extends Component
             'postal_code' => 'nullable|string|max:20',
             'tax_identification_number' => 'nullable|string|max:50',
             'work_days_per_week' => 'required|integer|in:5,6',
+            'is_uniform_meal_allowance' => 'boolean',
+            'default_meal_allowance_per_day' => 'required|numeric|min:0',
+            'overtime_rounding_mode' => 'required|string|in:round_30_min,round_60_min,floor_hour,exact',
+            'overtime_rounding_threshold_minutes' => 'required|integer|min:1|max:60',
             'payroll_cutoff_day' => 'required|integer|min:1|max:31',
             'payroll_pay_day' => 'required|integer|min:1|max:31',
             'enable_pph21' => 'boolean',
@@ -172,7 +195,21 @@ class Index extends Component
     {
         abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
 
-        $this->validate();
+        try {
+            $this->validate();
+        } catch (ValidationException $e) {
+            $failedKeys = array_keys($e->validator->failed());
+            if (array_intersect($failedKeys, ['name', 'code', 'email', 'phone', 'website', 'email_domain', 'address', 'city', 'province', 'postal_code', 'tax_identification_number', 'logo'])) {
+                $this->activeTab = 'identitas';
+            } elseif (array_intersect($failedKeys, ['work_days_per_week', 'payroll_cutoff_day', 'payroll_pay_day', 'default_meal_allowance_per_day', 'overtime_rounding_mode', 'overtime_rounding_threshold_minutes'])) {
+                $this->activeTab = 'penggajian';
+            } elseif (array_intersect($failedKeys, ['bpjs_jkk_risk_rate', 'bpjs_jkm_rate', 'bpjs_kes_emp_rate', 'bpjs_kes_comp_rate', 'bpjs_jht_emp_rate', 'bpjs_jht_comp_rate', 'bpjs_jp_emp_rate', 'bpjs_jp_comp_rate', 'bpjs_kes_cap', 'bpjs_jp_cap'])) {
+                $this->activeTab = 'pajak';
+            } elseif (array_intersect($failedKeys, ['bank_name', 'bank_account_number', 'bank_account_name'])) {
+                $this->activeTab = 'bank';
+            }
+            throw $e;
+        }
 
         try {
             $profile = $service->updateProfile([
@@ -188,6 +225,10 @@ class Index extends Component
                 'postal_code' => $this->postal_code,
                 'tax_identification_number' => $this->tax_identification_number,
                 'work_days_per_week' => (int) $this->work_days_per_week,
+                'is_uniform_meal_allowance' => (bool) $this->is_uniform_meal_allowance,
+                'default_meal_allowance_per_day' => (float) $this->default_meal_allowance_per_day,
+                'overtime_rounding_mode' => $this->overtime_rounding_mode,
+                'overtime_rounding_threshold_minutes' => (int) $this->overtime_rounding_threshold_minutes,
                 'payroll_cutoff_day' => (int) $this->payroll_cutoff_day,
                 'payroll_pay_day' => (int) $this->payroll_pay_day,
                 'enable_pph21' => $this->enable_pph21,

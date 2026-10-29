@@ -290,6 +290,16 @@ class Index extends Component
     }
 
     /**
+     * Reset modal state on dismiss.
+     */
+    public function closeModal(): void
+    {
+        $this->isEditMode = false;
+        $this->editingSalaryComponentId = null;
+        $this->form->resetForm();
+    }
+
+    /**
      * Render the Livewire component view.
      */
     public function render(SalaryComponentService $service): View

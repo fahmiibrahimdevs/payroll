@@ -1,388 +1,343 @@
-# LARASHIZ FRONTEND & UI/UX GUIDELINES
+# LARASHIZ FRONTEND & UI/UX GUIDELINES (EXECUTIVE UI STANDARD)
 
-Dokumen ini adalah acuan standar baku pengembangan antarmuka (UI/UX), komponen styling, struktur tabel data, modal, dan tata letak Blade pada project **Larashiz**. Setiap penambahan atau perubahan fitur frontend **WAJIB** mematuhi aturan di bawah ini.
-
----
-
-## 1. Standar Prioritas Komponen Bawaan Template (Template-First Principle)
-
-1. **Wajib Cek Komponen Template Terlebih Dahulu**:
-   - Setiap ingin membuat elemen antarmuka (seperti badge, alert, tombol, modal, pagination, card, list-group, breadcrumb, dropdown, dll), **WAJIB** mengecek terlebih dahulu apakah komponen tersebut sudah disediakan oleh template bawaan (Shizuefi / Stisla).
-   - Contoh pada Badge: Gunakan class murni bawaan template seperti:
-     - Primary: `<span class="badge badge-primary">`
-     - Success: `<span class="badge badge-success">`
-     - Danger: `<span class="badge badge-danger">`
-     - Warning: `<span class="badge badge-warning">`
-     - Info: `<span class="badge badge-info">`
-     - Secondary: `<span class="badge badge-secondary">`
-     - Light: `<span class="badge badge-light border">`
-2. **Dilarang Menambahkan Class Ad-Hoc / Custom pada Komponen Bawaan**:
-   - Dilarang menambahkan modifier arbitrary/ad-hoc (seperti menambahkan `text-dark` pada `badge-warning`). Gunakan tampilan murni template.
-   - Dilarang membuat class custom baru (misal `.custom-badge`, `.log-badge-soft-*`) untuk elemen yang sudah ada bawaannya di template.
-3. **Persetujuan Wajib untuk Komponen Kustom Baru**:
-   - Jika suatu komponen memang **belum ada** di template bawaan dan benar-benar memerlukan custom component CSS baru, **WAJIB** meminta persetujuan terlebih dahulu kepada pengguna sebelum membuatnya.
+Dokumen ini adalah acuan standar baku pengembangan antarmuka (UI/UX), komponen styling, struktur tabel data, modal, chart analitik, dan tata letak Blade pada aplikasi **Larashiz**. Setiap penambahan atau perubahan fitur frontend **WAJIB** mematuhi aturan baku di bawah ini, mengacu pada standar visual eksekutif modern yang telah diterapkan pada modul **Kasbon** (`cash-advances`), **Penggajian** (`payrolls`), **Karyawan** (`employees`), dan **Lembur** (`overtimes`).
 
 ---
 
-## 2. Larangan Utility Class Ad-Hoc di Blade (Component-First CSS)
+## 1. Prinsip Utama: Executive UI Modern (Bukan Template Shizuefi Mentah)
 
-1. **Dilarang Menuliskan Utility Arbitrary Tailwind di Blade**:
-   - ❌ Jangan gunakan: `text-[11px]`, `text-[#1e293b]`, `px-[25px]`, `bg-[#f8fafc]`, inline `style="..."`.
-   - ✅ Gunakan class komponen semantik terdaftar (contoh: `.filter-chip-item`, `.log-list-tile`).
-2. **Alur Pembuatan Style Baru**:
-   - Definisikan class komponen baru di `public/assets/css/components-tailwind.css` menggunakan sintaks `@apply` Tailwind.
-   - Jalankan kompilasi: `npm run build:shizuefi`.
-   - Panggil nama class komponen semantik tersebut di file Blade.
+1. **Executive UI Standard**:
+   - Seluruh halaman utama menggunakan antarmuka modern eksekutif dengan palet warna bersih, kontras tinggi, elevasi kartu halus (*soft elevation*), dan tipografi proporsional.
+   - **Dilarang** menggunakan styling badge solid pekat klasik bawaan Stisla/Shizuefi mentah (`badge-primary`, `badge-danger` tebal) untuk indikator status data.
+   - Komponen visual harus konsisten lintas modul (Kasbon, Payrolls, Employees, Overtimes).
 
----
-
-## 3. Standar Struktur Header Halaman & Section Title (Page Header Standard)
-
-1. **Header Slot & Breadcrumb Baku (`<x-slot name="header">`)**:
-   - Setiap halaman Blade / Livewire wajib mendefinisikan `<x-slot name="header">` yang berisi judul halaman `<h1>` dan breadcrumb navigasi:
-     ```blade
-     <x-slot name="header">
-         <h1>Kelola Posts</h1>
-         <div class="section-header-breadcrumb">
-             <div class="breadcrumb-item active"><a href="{{ route('dashboard') }}">Dashboard</a></div>
-             <div class="breadcrumb-item">Posts</div>
-         </div>
-     </x-slot>
-     ```
-2. **Section Title & Section Lead Wajib**:
-   - Tepat di bawah slot header, setiap halaman **wajib** menyertakan judul section dan deskripsi ringkas:
-     ```blade
-     <h2 class="section-title">Postingan</h2>
-     <p class="section-lead mb-3">
-         Kelola seluruh postingan artikel, berita, dan publikasi konten Anda di halaman ini.
-     </p>
-     ```
-3. **Dilarang Menuliskan Ulang Tag `<section>` dan `<div class="section-body">`**:
-   - Layout utama [`layouts/app.blade.php`](file:///var/www/projects/laravel/larashiz/resources/views/layouts/app.blade.php) sudah secara otomatis membungkus `$slot` dengan `<section class="section custom-section">` dan `<div class="section-body">`.
-   - **DILARANG KERAS** menambahkan wrapper `<section>` atau `<div class="section-body">` di dalam file view karena akan menciptakan nesting ganda (*redundant wrapper*) dan merusak kalkulasi margin pada mode mobile.
+2. **Konsistensi Warna Primary Proyek (`#0b52aa`)**:
+   - Seluruh elemen warna utama (tombol `.btn-primary`, tombol FAB, tab aktif `.nav-pills .nav-link.active`, highlight nominal, border fokus) **WAJIB** menggunakan warna primary resmi proyek: `#0b52aa`.
+   - **Dilarang** menggunakan warna default Stisla lama ungu/indigo (`#6777ef`).
 
 ---
 
-## 4. Standar Desain Tabel Data (Table Component Standard)
+## 2. Standar Struktur Header Halaman & Breadcrumb
 
-Semua halaman yang menampilkan tabel data (seperti pada modul **Posts** dan **Logs**) wajib mengikuti pola struktur HTML & class komponen baku berikut:
+Setiap view utama Blade / Livewire wajib mendefinisikan slot header dan seksi lead:
 
-### Struktur Hierarki Tabel
-```html
-<div class="card">
-    <!-- 1. Card Header -->
-    <div class="card-header">
-        <h4>Judul Tabel</h4>
+```blade
+<x-slot name="header">
+    <h1>Nama Modul</h1>
+    <div class="section-header-breadcrumb">
+        <div class="breadcrumb-item active"><a href="{{ route('dashboard') }}">Dashboard</a></div>
+        <div class="breadcrumb-item">Kategori</div>
+        <div class="breadcrumb-item">Nama Modul</div>
+    </div>
+</x-slot>
+
+<!-- Header Section & Action Button -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-2 mb-md-3">
+    <div class="mr-md-3">
+        <h2 class="section-title mt-0">Judul Fitur Lengkap</h2>
+        <p class="section-lead mb-0">
+            Deskripsi fungsional ringkas dan jelas mengenai apa yang dapat dikelola pada halaman ini.
+        </p>
     </div>
 
-    <div class="card-body p-0">
-        <!-- 2. Controls: Show Entries & Search Bar -->
-        <div class="dt-control-wrapper">
-            <div class="dt-show-entries">
-                Show
-                <select wire:model.live="perPage" class="dt-select-entries">
-                    <option value="5">5</option>
-                    <option value="10">10</option>
-                    <option value="25">25</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                </select>
-                Entries
-            </div>
+    <!-- Tombol Aksi Utama di Kanan Atas -->
+    <div class="mt-3 mt-md-0 flex-shrink-0 d-flex align-items-center" style="gap: 8px;">
+        <button type="button" wire:click="openModal" class="btn btn-primary d-inline-flex align-items-center font-weight-bold shadow-sm" style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; padding: 9px 16px; font-size: 13px;">
+            <i class="fas fa-plus mr-1.5"></i> Tambah Data
+        </button>
+    </div>
+</div>
+```
 
-            <div class="dt-search-wrapper">
-                <span class="mr-1">Search:</span>
-                <input type="text" wire:model.live.debounce.300ms="search" class="dt-search-input" placeholder="Search here...">
+> [!IMPORTANT]
+> **Dilarang Menuliskan Ulang Tag `<section>` dan `<div class="section-body">`**:
+> Layout utama [`resources/views/layouts/app.blade.php`](file:///var/www/projects/laravel/hrm/resources/views/layouts/app.blade.php) sudah otomatis membungkus `$slot` dengan `<section class="section custom-section">` dan `<div class="section-body">`. Jangan membuat wrapper nesting ganda.
+
+---
+
+## 3. Top Metric Cards (Grid Ringkasan KPI 4-Card)
+
+Tepat di bawah header, setiap modul utama menyajikan 4 kartu ringkasan metrik menggunakan struktur baku `.cash-advance-stat-grid`:
+
+```blade
+<div class="cash-advance-stat-grid mb-4">
+    <!-- Card 1: Biru (Total / Volume Utama) -->
+    <div class="card cash-advance-stat-card">
+        <div class="card-body cash-advance-stat-body">
+            <div class="cash-advance-stat-icon cash-advance-stat-icon-blue">
+                <i class="fas fa-wallet"></i>
+            </div>
+            <div class="cash-advance-stat-content">
+                <div class="cash-advance-stat-title">Metrik Utama</div>
+                <div class="cash-advance-stat-value-row">
+                    <div class="cash-advance-stat-value text-dark">Rp 12.500.000</div>
+                    <span class="cash-advance-stat-badge cash-advance-stat-badge-blue"><i class="fas fa-chart-line"></i></span>
+                </div>
+                <div class="cash-advance-stat-subtext">Sub-keterangan ringkas</div>
             </div>
         </div>
+    </div>
 
-        <!-- 3. Table Responsive Container (Smooth Horizontal Scroll) -->
-        <div class="table-responsive">
-            <table class="table table-clean">
-                <thead class="bg-gray-100">
-                    <tr>
-                        <th class="text-center text-nowrap" style="width: 60px;">NO</th>
-                        <th class="text-nowrap">KOLOM UTAMA</th>
-                        <th class="text-nowrap" style="width: 160px;">KATEGORI</th>
-                        <th class="text-nowrap" style="width: 140px;">STATUS</th>
-                        <th class="text-center text-nowrap" style="width: 110px;"><i class="fas fa-cog text-muted" title="Aksi"></i></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($items as $index => $item)
-                        <tr wire:key="item-{{ $item->id }}">
-                            <td class="text-center font-weight-600 text-muted align-middle">
-                                {{ $items->firstItem() + $index }}
-                            </td>
-                            <!-- Kolom Konten Utama -->
-                            <td class="align-middle">...</td>
-                            <!-- Kolom Aksi -->
-                            <td class="text-center align-middle text-nowrap">
-                                <button type="button" class="btn btn-primary btn-action mr-1" title="Edit">
-                                    <i class="fas fa-pencil-alt"></i>
-                                </button>
-                                <button type="button" class="btn btn-danger btn-action" title="Hapus">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">
-                                <div class="py-4">
-                                    <i class="fas fa-folder-open text-muted mb-2" style="font-size: 32px;"></i>
-                                    <div class="font-weight-600 mt-2">Tidak ada data ditemukan</div>
-                                </div>
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        <!-- 4. Footer: Info & Pagination -->
-        <div class="dt-footer-wrapper">
-            <div>
-                Showing {{ $items->total() > 0 ? $items->firstItem() : 0 }} to {{ $items->total() > 0 ? $items->lastItem() : 0 }} of {{ $items->total() }} entries
+    <!-- Card 2: Kuning / Amber (Pending / Verifikasi) -->
+    <div class="card cash-advance-stat-card">
+        <div class="card-body cash-advance-stat-body">
+            <div class="cash-advance-stat-icon cash-advance-stat-icon-amber">
+                <i class="fas fa-hourglass-half"></i>
             </div>
-            <div>
-                {{ $items->links('livewire.custom-pagination') }}
+            <div class="cash-advance-stat-content">
+                <div class="cash-advance-stat-title">Menunggu Verifikasi</div>
+                <div class="cash-advance-stat-value-row">
+                    <div class="cash-advance-stat-value text-warning">3 Pengajuan</div>
+                    <span class="cash-advance-stat-badge cash-advance-stat-badge-amber"><i class="fas fa-clock"></i></span>
+                </div>
+                <div class="cash-advance-stat-subtext">Perlu tindakan review</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 3: Ungu / Purple (Approval Tingkat Lanjut) -->
+    <div class="card cash-advance-stat-card">
+        <div class="card-body cash-advance-stat-body">
+            <div class="cash-advance-stat-icon cash-advance-stat-icon-purple">
+                <i class="fas fa-user-check"></i>
+            </div>
+            <div class="cash-advance-stat-content">
+                <div class="cash-advance-stat-title">Approval Direktur</div>
+                <div class="cash-advance-stat-value-row">
+                    <div class="cash-advance-stat-value text-primary">2 Pengajuan</div>
+                    <span class="cash-advance-stat-badge cash-advance-stat-badge-blue"><i class="fas fa-stamp"></i></span>
+                </div>
+                <div class="cash-advance-stat-subtext">Telah lolos verifikasi awal</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 4: Hijau / Green (Disetujui / Selesai / Terbayar) -->
+    <div class="card cash-advance-stat-card">
+        <div class="card-body cash-advance-stat-body">
+            <div class="cash-advance-stat-icon cash-advance-stat-icon-green">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="cash-advance-stat-content">
+                <div class="cash-advance-stat-title">Selesai / Disetujui</div>
+                <div class="cash-advance-stat-value-row">
+                    <div class="cash-advance-stat-value text-success">15 Berkas</div>
+                    <span class="cash-advance-stat-badge cash-advance-stat-badge-green"><i class="fas fa-check"></i></span>
+                </div>
+                <div class="cash-advance-stat-subtext">Rp 8.750.000 tereksekusi</div>
             </div>
         </div>
     </div>
 </div>
 ```
 
-### Aturan Wajib Tabel:
-1. **Header Anti-Wrap (`text-nowrap`)**: Semua tag `<th>` pada `<thead>` **wajib** menggunakan class `text-nowrap` agar judul kolom tidak terlipat/patah ke bawah.
-2. **Auto-Width untuk Kolom Utama**: Berikan ukuran width pasti pada kolom metadata ringkas (`NO`, `STATUS`, `AKSI`), dan biarkan kolom teks utama tanpa width tetap agar leluasa beradaptasi dengan lebar layar.
-3. **Penomoran Konsisten**: Selalu gunakan formula `{{ $items->firstItem() + $index }}` agar nomor halaman pagination berlanjut dengan benar.
-4. **Wire Key Wajib**: Setiap row `<tr>` dalam loop wajib memiliki `wire:key="item-{{ $item->id }}"`.
-5. **Pagination Custom**: Gunakan view pagination kustom `$items->links('livewire.custom-pagination')`.
-
 ---
 
-## 4. Standar Modal & Form Interactivity
+## 4. Tata Letak 1 Baris 2 Card (1 Row Split Layout: Analisis Kiri & Tabel Kanan)
 
-1. **Header & Footer Standar Bawaan**:
-   - Header: `<div class="modal-header">` polos (dilarang menambahkan background color custom seperti `bg-light`).
-   - Footer: `<div class="modal-footer bg-whitesmoke br">` (mengikuti standar modal template Stisla).
-2. **Layout Detail Modal (Mobile / Flutter-Style ListTile)**:
-   - Menampilkan header status banner terpadu (`.log-detail-banner`).
-   - Menggunakan grup list-tile bergaya mobile card (`.log-list-tile-group` dan `.log-list-tile`) untuk menyajikan metadata (User, IP, User-Agent, Request ID) daripada tabel HTML biasa.
-3. **Form & Filter Real-Time**:
-   - Pada filter/modal Livewire yang sudah berjalan reaktif secara *real-time*, **dilarang** menambahkan tombol "Terapkan Filter / Submit" ganda di modal kecuali jika form tersebut memerlukan submit manual.
-4. **Standar Select2 di Dalam Bootstrap Modal & Pencegahan Focus Trap**:
-   - **Hapus `tabindex="-1"` pada Modal**: Atribut `tabindex="-1"` pada modal mengaktifkan *Focus Trap* bawaan Bootstrap yang menyebabkan kotak pencarian (search box) Select2 tidak bisa diketik / kehilangan fokus. Hapus atribut `tabindex="-1"` pada elemen modal pembungkus.
-   - **Wajib `dropdownParent`**: Selalu konfigurasi `dropdownParent: $('#modalId')` saat inisialisasi Select2 di dalam modal agar dropdown terpasang di konteks modal dan tidak tertutup backdrop.
-   - **Override Enforce Focus di JavaScript**:
-     ```javascript
-     if ($.fn.modal && $.fn.modal.Constructor) {
-         $.fn.modal.Constructor.prototype._enforceFocus = function() {};
-     }
-     ```
-   - **Wajib `wire:ignore` pada Wrapper Select**: Selalu bungkus form-group Select2 dengan `wire:ignore` agar Livewire DOM morphing tidak mereset atau merusak instance Select2 saat komponen melakukan re-render.
-   - **Sinkronisasi Dua Arah (`@this.set()`)**: Ikat event `change` Select2 ke state Livewire via `@this.set('form.field', value)` dan trigger update value Select2 saat modal dibuka (`open-modal`).
+Untuk halaman modul utama dengan analitik visual (seperti Kasbon, Payrolls, dan Lembur), gunakan tata letak terbagi (*split layout*) dalam 1 baris:
 
----
+```blade
+<div class="row align-items-start">
+    <!-- Kolom Kiri: 1 Card Berisi 2 Grafik & Analisis Eksekutif (col-12 col-lg-3 col-md-4) -->
+    <div class="col-12 col-lg-3 col-md-4 mb-4">
+        @include('livewire.[modul].charts-card')
+    </div>
 
-## 5. Standar Warna Primary & Konsistensi Tema Proyek
-
-1. **Warna Primary Resmi Proyek (`#0b52aa`)**:
-   - Seluruh elemen yang merepresentasikan warna utama/primary (tombol `.btn-primary`, tombol melayang / FAB `.btn-floating-filter`, active chip filters, active borders, SweetAlert confirm button) **WAJIB** menggunakan warna primary resmi proyek yaitu `#0b52aa` (atau class utility bawaan tema `.btn-primary` / `.bg-primary` / `var(--primary)`).
-   - **DILARANG** menggunakan warna default Stisla lama ungu/indigo (`#6777ef`) pada styling baru, komponen baru, ataupun konfigurasi script dialog.
-2. **Tombol Melayang (Floating Action Button / FAB)**:
-   - Menggunakan background color primary `#0b52aa` dengan efek hover `#09458f` dan shadow lembut yang serasi (`rgba(11,82,170,0.4)`).
-
----
-
-## 6. Standar Global Card & Spacing
-
-1. **Tingkat Ketebalan Shadow**:
-   - Seluruh kartu (`.card`, `.card-statistic-1`, `.shadow-sm`) menggunakan bayangan medium-soft yang seimbang:
-     `box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04)` dengan border halus `border: 1px solid #e9edf2`.
-   - Dilarang menggunakan shadow hitam pekat/tebal atau shadow yang terlalu transparan/mati.
-2. **Spacing Mobile Responsive**:
-   - Pada layar mobile (`max-width: 767.98px`), margin bawah card diset `margin-bottom: 14px !important` agar jarak vertikal antar card tetap rapat dan proporsional.
-   - Hindari menambahkan class `mb-4` ganda pada elemen kolom pembungkus card.
-
----
-
-## 7. Alur Kompilasi Aset Frontend
-
-Setiap perubahan CSS di `public/assets/css/components-tailwind.css` atau `style-tailwind.css` **wajib** dikompilasi ulang:
-```bash
-npm run build:shizuefi
+    <!-- Kolom Kanan: Card Tabel Data Utama (col-12 col-lg-9 col-md-8) -->
+    <div class="col-12 col-lg-9 col-md-8 mb-4">
+        <div class="card cash-advance-main-card shadow-sm mb-0" style="border-radius: 12px; border: 1px solid #e9edf2;">
+            ...
+        </div>
+    </div>
+</div>
 ```
 
----
-
-## 8. Standar Notifikasi & Konfirmasi SweetAlert2 (Mandatory SweetAlert2 Rules)
-
-1. **Wajib Menggunakan SweetAlert2 Modal Pop-up untuk Semua Notifikasi**:
-   - Seluruh pesan feedback/notifikasi (berhasil, gagal, peringatan, info) **WAJIB** menggunakan **SweetAlert2 Modal Pop-up** (`swal:alert` di tengah layar dengan judul, pesan, dan tombol OK):
-     ```php
-     // Notifikasi Sukses
-     $this->dispatch('swal:alert', [
-         'type' => 'success',
-         'title' => 'Berhasil!',
-         'message' => 'Status akun pengguna berhasil diaktifkan.',
-     ]);
-
-     // Notifikasi Error / Gagal
-     $this->dispatch('swal:alert', [
-         'type' => 'error',
-         'title' => 'Gagal!',
-         'message' => 'Terjadi kesalahan sistem saat memproses data.',
-     ]);
-     ```
-   - **Dilarang** menggunakan toastr/toast pojok atau alert banner statis di dalam blade. Seluruh interaksi notifikasi wajib tampil terpusat dan konsisten menggunakan modal pop-up SweetAlert2.
-
-2. **Wajib Menggunakan SweetAlert2 Konfirmasi untuk Aksi Berdampak Signifikan**:
-   - Tindakan destruktif (seperti menghapus data/pengguna) dan tindakan perubahan status (seperti aktifkan / nonaktifkan akun pengguna) **WAJIB** memicu dialog konfirmasi SweetAlert2 terlebih dahulu (`swal:confirm` atau `swal:confirm-delete`) sebelum aksi dieksekusi di backend.
-
-3. **Wajib Meminta Konfirmasi Pengguna Sebelum Menerapkan SweetAlert2 Konfirmasi Baru**:
-   - Jika saat merancang fitur baru ditemukan aksi yang berpotensi memerlukan dialog konfirmasi SweetAlert2, AI / developer **WAJIB meminta konfirmasi dan persetujuan pengguna (USER) terlebih dahulu** sebelum menambahkan flow konfirmasi tersebut.
+### Spesifikasi Card Grafik Kiri:
+- **Card Container**: Border radius `12px`, border `1px solid #e9edf2`, shadow halus.
+- **Grafik 1 (Bar Chart Tren 6 Bulan)**: Menampilkan tren bulanan (jam, nominal, atau frekuensi) dengan ApexCharts warna `#0b52aa`.
+- **Grafik 2 (Donut Chart Distribusi Departemen)**: Donut chart dengan counter total di tengah (*center overlay text*), legenda metrik, dan bar progres persentase per departemen.
 
 ---
 
-## 9. Standar Kode Bersih Blade (Clean Blade & Presentation Logic Standard)
+## 5. Standar Judul Card Header & Bar Kontrol Tabel
 
-1. **Dilarang Menuliskan Logic / Komputasi di File Blade**:
-   - **DILARANG KERAS** menuliskan blok `@php ... @endphp` untuk komputasi data, percabangan `match()`, `switch()`, manipulasi string kompleks, atau penentuan class CSS kondisional di dalam file view Blade.
-   - File Blade harus **langsung siap pakai (ready-to-render)** dan fokus hanya pada penyajian antarmuka HTML.
-2. **Gunakan Eloquent Accessor / Model Attribute**:
-   - Semua pemetaan representasi tampilan (seperti penentuan class badge, label status, format warna) **WAJIB** dipindahkan ke **Model Eloquent** sebagai Attribute Accessor (contoh: `$log->level_badge_class` pada Model `ActivityLog`).
-   - Panggil langsung atribut tersebut di Blade:
-     ```blade
-     <!-- Bersih & Langsung Siap Pakai -->
-     <span class="{{ $log->level_badge_class }}">
-         {{ strtoupper($log->level) }}
-     </span>
-     ```
-3. **Wajib Konsistensi Section Title & Lead**:
-   - Setiap halaman utama aplikasi **WAJIB** menyertakan `<h2 class="section-title">` dan `<p class="section-lead mb-3">` tepat di bawah `<x-slot name="header">` untuk menjaga konsistensi visual layout template.
+### 1. Format Judul Card Header:
+- Format baku: `[Nama Modul] - [Scope / Status]` dengan penekanan warna primary pada scope:
+  - Contoh: `<h4>Lembur - <span class="text-primary font-weight-bold">Semua Karyawan</span></h4>`
+  - Mode karyawan: `<h4>Lembur - <span class="text-primary font-weight-bold">Pengajuan Saya</span></h4>`
+  - Tab riwayat periode: `<h4>Daftar Riwayat Periode</h4>`
 
----
+### 2. Bar Kontrol DataTables (`.dt-control-wrapper`):
+- Terdiri dari:
+  - **Kiri**: `Show [perPage] Entries` (select dropdown 10, 15, 25, 50).
+  - **Kanan**: `Search: [input]` text input dengan debounce 300ms.
+- **Larangan Filter Dropdown Status Berlebih**: Dilarang menambahkan select dropdown filter status ganda di dalam bar kontrol tabel jika tidak diminta secara spesifik oleh user, agar tampilan tetap ringkas dan tidak memakan ruang horizontal.
 
-## 10. Standar Loading State & Animasi Spinner Livewire (Wire Loading Standard)
+### 3. Segmented Native Tabs (`.nav-pills`):
+- Gunakan `.nav.nav-pills` di bawah kontrol tabel atau di card header untuk beralih antar tab (misal: *Daftar Pengajuan* vs *Periode Mingguan*).
 
-1. **Wajib `wire:loading.attr="disabled"` pada Seluruh Tombol Aksi**:
-   - Setiap tombol interaktif yang memicu aksi Livewire (tombol submit form, tombol edit modal, tombol hapus, tombol toggle status, tombol reset filter, tombol floating FAB) **WAJIB** memiliki atribut `wire:loading.attr="disabled"` dan `wire:target="..."` spesifik untuk mencegah klik berulang (*double-submit / spamming*).
-2. **Wajib Indikator Spinner Loading**:
-   - Setiap tombol aksi wajib menyertakan icon animasi spinner FontAwesome (`<i class="fas fa-spinner fa-spin"></i>`) yang tampil secara dinamis saat request Livewire sedang diproses:
-     ```blade
-     <!-- 1. Contoh pada Tombol Aksi Tabel / Icon Button -->
-     <button
-         type="button"
-         wire:click="edit({{ $item->id }})"
-         wire:loading.attr="disabled"
-         wire:target="edit({{ $item->id }})"
-         class="btn btn-primary btn-action"
-         title="Edit Data"
-     >
-         <i wire:loading wire:target="edit({{ $item->id }})" class="fas fa-spinner fa-spin"></i>
-         <i wire:loading.remove wire:target="edit({{ $item->id }})" class="fas fa-pencil-alt"></i>
-     </button>
-
-     <!-- 2. Contoh pada Tombol Submit Form Modal -->
-     <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="store">
-         <i wire:loading wire:target="store" class="fas fa-spinner fa-spin mr-1"></i>
-         <i wire:loading.remove wire:target="store" class="fas fa-save mr-1"></i>
-         Simpan Data
-     </button>
-
-     <!-- 3. Contoh pada Floating Action Button (FAB) -->
-     <button type="button" wire:click="create" wire:loading.attr="disabled" wire:target="create" class="btn-floating-add" title="Tambah Data" aria-label="Tambah Data">
-         <i wire:loading wire:target="create" class="fas fa-spinner fa-spin"></i>
-         <i wire:loading.remove wire:target="create" class="fas fa-plus"></i>
-     </button>
-     ```
+### 4. Larangan Tombol Aksi Redundan (Prinsip Single Primary Action):
+- **DILARANG KERAS** membuat tombol aksi utama (seperti Tambah Data / Buat Pengajuan) berulang-ulang di berbagai tempat dalam satu halaman yang sama sehingga membingungkan user.
+- Jika modul sudah memiliki **Floating Action Button** (`.btn-floating-add`) di pojok kanan bawah, Card Header tabel **wajib bersih hanya berisi judul modul** dan **DILARANG** menambahkan tombol tambah lagi di Card Header (tiru halaman Kasbon).
+- Tombol aksi tambah di dalam area tabel hanya diperbolehkan pada kondisi **`empty-state`** (ketika data tabel benar-benar kosong 0 baris) sebagai panduan first-time user.
 
 ---
 
-## 11. Standar Format Tag HTML Satu Baris (Single-Line Tag & Element Standard)
+## 6. Standar Desain Tabel Data (`.table.table-clean`)
 
-1. **Tag Input, Select, Textarea, dan Tombol Wajib Satu Baris**:
-   - **DILARANG** memecah/wrap atribut tag HTML (`<input>`, `<select>`, `<textarea>`, `<button>`) menjadi banyak baris ke bawah (*multi-line attribute wrapping*).
-   - Tuliskan seluruh atribut tag HTML secara ringkas dan bersih dalam **satu baris (one line)**:
-     ```blade
-     <!-- ✅ BENAR (Satu Baris Bersih) -->
-     <input type="text" id="title" wire:model="form.title" class="form-control @error('form.title') is-invalid @enderror" placeholder="Masukkan judul post..." autocomplete="off">
-     <button type="button" wire:click="edit({{ $item->id }})" wire:loading.attr="disabled" wire:target="edit({{ $item->id }})" class="btn btn-primary btn-action" data-toggle="tooltip" title="Edit Data">
+1. **Header Tabel (`<thead>`)**:
+   - Huruf kapital tebal (`font-weight: 800`, font-size `11px` - `11.5px`, color `#1e293b`, letter-spacing `0.5px`).
+   - Seluruh tag `<th>` **wajib** menggunakan kelas `text-nowrap`.
+   - Ditulis rapi dalam satu baris.
 
-     <!-- ❌ SALAH (Dilarang dibungkus baris panjang ke bawah) -->
-     <input
-         type="text"
-         id="title"
-         wire:model="form.title"
-         class="form-control @error('form.title') is-invalid @enderror"
-         placeholder="Masukkan judul post..."
-         autocomplete="off"
-     >
-     ```
+2. **Kolom Identitas Karyawan**:
+   - Menampilkan avatar lingkaran dengan inisial nama berlatar soft pastel (`width: 32px; height: 32px; background-color: #eff6ff; color: #0284c7; border: 1.5px solid #bae6fd; font-weight: 700; font-size: 11px;`).
+   - Nama karyawan tebal (`font-weight: 700; color: #0f172a;`).
+   - Subteks departemen dan jabatan dengan warna netral (`font-size: 11.5px; color: #64748b;`).
 
-2. **Tag Table Header (`<th>`) Wajib Ditulis Satu Baris Penuh**:
-   - Semua tag `<th>` pada `<thead>` wajib ditulis dalam **satu baris penuh (one line)** bersama isi labelnya:
-     ```blade
-     <!-- ✅ BENAR -->
-     <th class="text-center text-nowrap" style="width: 50px;">NO</th>
-     <th class="text-nowrap" style="width: 125px;">MODUL & AKSI</th>
-     <th class="text-nowrap">PESAN LOG</th>
+3. **Status Badges (Soft Pastel Standard)**:
+   - Status badge **wajib** menggunakan palet pastel lembut dengan border tipis 1px dan teks kontras tinggi (tersedia via enum `badgeStyle()`):
+     - **Pending / Menunggu**: `background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a;`
+     - **Disetujui / Aktif**: `background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;`
+     - **Selesai / Lunas**: `background-color: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0;`
+     - **Ditolak / Batal**: `background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;`
 
-     <!-- ❌ SALAH -->
-     <th class="text-nowrap" style="width: 125px;">
-         MODUL & AKSI
-     </th>
-     ```
-
-3. **Pengecualian untuk Kolom Data Dinamis (`<td>`)**:
-   - Kolom data tabel (`<td>`) yang berisi sintaks Blade dinamis `{{ ... }}`, badge, wrapper div, atau manipulasi format tanggal diperbolehkan ditulis multi-line agar kode tetap terstruktur dan rapi.
+4. **Kolom Aksi**:
+   - Tombol aksi rapi dengan icon proporsional (lihat rincian, edit, verifikasi, hapus).
 
 ---
 
-## 12. Standar Anti-Wrapping Teks & Label (Zero-Wrap UI Standard)
+## 7. Standar Modal, Form Input, & Label
 
-1. **Dilarang Ada Teks/Label/Badge/Nav Pills Terpotong atau Ter-wrap ke Baris Baru**:
-   - Seluruh label input form, nav-pills, badges, tombol aksi, dan header tabel **DILARANG** ter-wrap secara canggung (*awkward line breaks*) ke bawah, baik pada tampilan desktop maupun mobile viewport.
-2. **Penulisan Label Ringkas & Padat**:
-   - Gunakan nama label yang ringkas, jelas, dan lugas (contoh: `Total Kasbon`, `Kepegawaian & Gaji`, `Pribadi & Bank`).
-   - Hindari menulis teks keterangan panjang di dalam label (seperti keterangan di dalam kurung) yang memicu pemecahan baris.
-3. **Pills & Tabs Responsif**:
-   - Pada modal atau form yang memiliki nav-pills/tabs, wajib selalu mengunci tata letak dalam 1 baris horizontal (`.nav-fill.flex-row.flex-nowrap`, `style="flex: 1 1 50%;"`, dan `.text-nowrap`) agar tidak pernah menumpuk ke bawah di layar mobile.
+Setiap modal pop-up wajib mengikuti struktur baku berikut:
+
+### 1. Struktur Kontainer & Header Modal:
+```blade
+<div wire:ignore.self class="modal fade" id="modalId" tabindex="-1" role="dialog" aria-labelledby="modalLabel" aria-hidden="true" data-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+        <div class="modal-content bg-white" style="border: 1px solid #eaedf2; border-radius: 8px;">
+            <div class="modal-header bg-white border-bottom py-3">
+                <h5 class="modal-title text-dark" id="modalLabel" style="font-weight: 500;">
+                    Judul Modal
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+
+            <form wire:submit.prevent="submitMethod">
+                <div class="modal-body py-3 px-4 bg-white">
+                    ...
+                </div>
+
+                <div class="modal-footer bg-white border-top px-4 py-3">
+                    <button type="button" class="btn btn-secondary shadow-none" data-dismiss="modal" style="font-weight: 500;">Batal</button>
+                    <button type="submit" class="btn btn-primary shadow-none" wire:loading.attr="disabled" wire:target="submitMethod" style="font-weight: 500;">
+                        <span wire:loading wire:target="submitMethod"><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...</span>
+                        <span wire:loading.remove wire:target="submitMethod"><i class="fas fa-save mr-1"></i> Simpan Data</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+```
+
+### 2. Standar Form Group & Label:
+- Gunakan `<div class="form-group">`.
+- Label wajib bersih: `<label for="field">Nama Label <span class="text-danger">*</span></label>` atau `<label for="field">Nama Label <small class="text-muted">(Opsional)</small></label>`.
+- Input control: Gunakan class murni `class="form-control @error('...') is-invalid @enderror"`. **DILARANG** menambahkan inline style `border-radius: 8px` pada setiap tag input karena styling form-control sudah diatur global oleh tema.
+
+### 3. Box Notice & Callout di Dalam Modal:
+- Gunakan box alert putih bersih dengan sudut rounded 12px dan soft shadow:
+  ```blade
+  <div class="alert alert-light border small text-muted mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
+      <div class="d-flex align-items-center text-dark font-weight-500 mb-1" style="font-size: 12px;">
+          <i class="fas fa-info-circle text-primary mr-1.5"></i>
+          <span>Judul Informasi</span>
+      </div>
+      <div style="font-size: 11px; line-height: 1.45; color: #64748b;">
+          Penjelasan detail mengenai proses terkait.
+      </div>
+  </div>
+  ```
+
+### 4. Modal Rincian / Detail:
+- Menampilkan avatar inisial karyawan (lingkaran 60x60px).
+- Garis pemisah putus-putus (*dashed divider*): `<div style="border-top: 1px dashed #e2e8f0; margin: 14px 0;"></div>`.
+- Highlight angka besar: `font-size: 26px; font-weight: 800; color: #0f172a;`.
+- Rincian box dengan border halus `1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);` dan ikon berwarna `#0b52aa`.
+- **Nilai Data dalam Kotak Rincian**: Seluruh teks baris data (nomor referensi, tanggal, jam kerja, nominal, dll.) menggunakan bobot Reguler/Normal (`font-weight: 400` / `500`). Dilarang mem-bold baris demi baris secara seragam. Semi-bold (`font-weight: 600`) hanya boleh ada pada teks badge atau penekanan yang benar-benar bermakna.
+- **Kotak Uraian / Catatan / Callout**: Wajib berlatar putih bersih (`background: #ffffff;`), sudut `border-radius: 12px;`, border halus `#e2e8f0`, dan `box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);`. Dilarang menggunakan latar abu-abu pudar (`#f8fafc`) atau biru muda (`#eff6ff`).
 
 ---
 
-## 13. Standar Shadow & Border Radius Card (Card Shadow Standard)
+## 8. Konvensi Wording & Terminologi Kompensasi
 
-1. **Wajib Menggunakan Standar Card Shadow & Border Radius Larashiz**:
-   - Seluruh elemen card di aplikasi (termasuk `.card`, card Filter Log, card Riwayat Aktivitas, card Data Karyawan, widget statistik, serta `.activity-detail` pada timeline) **WAJIB TANPA KECUALI** menggunakan spesifikasi baku:
-     - **Shadow**: `box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04);` (`shadow-[0_2px_6px_0_rgba(0,0,0,0.06),0_1px_2px_0_rgba(0,0,0,0.04)]`)
-     - **Border**: `1px solid #e9edf2` (`border border-[#e9edf2]`)
-     - **Border Radius**: `12px` (`rounded-[12px]`)
-     - **Background**: `bg-white` (`#ffffff`)
-   - ✅ **BENAR**: Semua card (baik container utama maupun item activities timeline) memiliki shadow yang sangat bersih, crisp, modern depth, dan memiliki border halus yang 100% identik dengan Card Filter Log.
-2. **Dilarang Mengubah Ukuran Shadow / Radius Card**:
-   - ❌ **DILARANG**: Mengubah atau membedakan nilai shadow dan radius pada card apapun di seluruh sistem (jangan gunakan shadow tebal seperti `0 8px 20px rgba(0,0,0,0.08)`).
+1. **Dilarang Menggunakan Kata "Tarif" atau "Lokal"**:
+   - Untuk skema uang makan, kompensasi harian, atau uang lembur, **DILARANG** menggunakan kata *"Tarif"* atau *"Lokal"*.
+2. **Gunakan Terminologi Baku**:
+   - Gunakan kata **"Nominal"** (misal: *Nominal per Jam*, *Nominal Uang Makan*).
+   - Gunakan **"Nominal Standar"** untuk skema global/perusahaan.
+   - Gunakan **"Nominal Khusus"** untuk skema perorangan/karyawan tertentu.
 
 ---
 
-## 14. Standar Kontras Teks & Background Bersih (Anti-Washed-Out Standard)
+## 9. Loading State & Dialog SweetAlert2
 
-1. **Dilarang Teks Abu-abu Pudar di Atas Background Terang**:
-   - **DILARANG KERAS** menggunakan kombinasi teks abu-abu pudar (`.text-muted` tanpa penyesuaian kontras) di atas latar putih atau off-white (seperti pada card, modal body, dan modal footer) karena menyebabkan teks nyaru dan tidak terbaca.
-   - Gunakan warna slate/gelap yang tegas dan kontras tinggi (`#0f172a`, `#1e293b`, `#334155`, atau `#475569` untuk teks pendukung).
-2. **Dilarang Kotak Latar Abu-abu Kusam (No Dull Gray Boxes)**:
-   - Hindari membuat kotak berlatar abu-abu kusam (`.bg-light`, `.bg-whitesmoke`) di dalam elemen kartu atau modal. Gunakan latar putih bersih (`#ffffff`) dengan border tipis halus (`#e2e8f0` / `#f1f5f9`).
+1. **Wajib `wire:loading.attr="disabled"`**:
+   - Setiap tombol submit atau tombol aksi interaktif wajib dilengkapi `wire:loading.attr="disabled"` dan `wire:target="..."` spesifik untuk mencegah double-click / race conditions.
+2. **Indikator Spinner FontAwesome**:
+   - Gunakan `<span wire:loading wire:target="..."><i class="fas fa-spinner fa-spin mr-1"></i> Memproses...</span>` berdampingan dengan `<span wire:loading.remove wire:target="...">`.
+3. **SweetAlert2 untuk Feedback & Konfirmasi**:
+   - Seluruh notifikasi sukses/gagal menggunakan `swal:alert` modal pop-up terpusat.
+   - Aksi berdampak signifikan (penolakan, penghapusan, pembatalan) memicu dialog konfirmasi `swal:confirm`.
 
 ---
 
-## 15. Standar Hierarki Tipografi Proporsional (Zero "All-Bold" Rule)
+## 10. Standar Tipografi Bermakna (Meaningful Typography & Zero Blanket-Bold Principle)
 
-1. **Dilarang Mem-bold Seluruh Teks Secara Serentak**:
-   - **DILARANG** memberikan `font-weight: 600` atau `700` pada semua elemen teks dalam satu kartu, notifikasi, atau modal. Tipografi harus memiliki variasi dan hierarki yang berimbang agar nyaman di mata.
-2. **Pedoman Pembagian Bobot Font**:
-   - **Semibold (`font-weight: 600`)**: Digunakan secara selektif HANYA untuk subjek/judul, nama, label utama (misal: `Alasan:`), dan nilai metrik penekanan.
-   - **Reguler / Medium (`font-weight: 400` / `500`)**: Digunakan untuk deskripsi, teks penjelasan, sub-informasi, tanggal, dan catatan tambahan.
-   - **Hindari Bold Tebal (700)**: Batasi penggunaan `font-weight: 700` hanya untuk judul halaman utama atau counter KPI angka besar.
+1. **Default Bobot Teks Selalu Reguler/Normal (`font-weight: 400` / `500`)**:
+   - Seluruh teks nilai data, nomor referensi, tanggal, waktu, nominal angka, uraian pekerjaan, deskripsi, dan catatan **WAJIB** menggunakan bobot normal (`font-weight: 400` atau `500`).
+   - **DILARANG KERAS** mem-bold atau semi-bold data baris demi baris secara serentak (*blanket-bold*) tanpa alasan, karena menghilangkan hierarki visual dan melelahkan mata pembaca.
+
+2. **Semi-Bold (`font-weight: 600`) HANYA Diperuntukkan Jika Memiliki Makna/Tujuan Tertentu**:
+   - Teks di dalam **Badge** (status pengajuan, badge durasi seperti `(2 jam)` atau `1 Hari Penuh`, tag kategori/asal pengajuan) agar kontras di atas warna badge tetap terbaca tegas.
+   - **Nama Subjek/Entitas Utama** pada kartu rincian (misal nama karyawan).
+   - **Peringatan / Alert Kritis** yang membutuhkan atensi segera pengguna.
+
+---
+
+## 11. Standar Desain Kartu (Clean Executive White Card Standard)
+
+1. **Background Putih Bersih 100% (No Gray / No Light Blue)**:
+   - **DILARANG KERAS** menggunakan background abu-abu muda (`.bg-light`, `.bg-whitesmoke`, `#f8fafc`, `#f1f5f9`) atau biru muda (`#eff6ff`, `#dbeafe`) pada Card, Card Header, Card Body, maupun Card Footer.
+   - Seluruh card dan kotak informasi (termasuk kotak uraian/alasan/catatan di modal) **WAJIB** berlatar putih murni (`#ffffff` / `bg-white`).
+   - Card Footer wajib menggunakan `bg-white border-top` (bukan `.bg-whitesmoke`).
+
+2. **Sudut Rounded Modern (Sesuai Card Analisis & Data)**:
+   - **Card Data & Form Utama:** `border-radius: 12px;` (atau `rounded-xl`).
+   - **Card Analisis & Grafik Metrik:** `border-radius: 16px;`.
+   - **Kotak Rincian/Callout:** `border-radius: 12px;`.
+   - Dilarang menggunakan sudut kotak kaku bawaan template lama (radius 3px–4px).
+
+3. **Elevasi Halus (Soft Shadow) & Border Penegas**:
+   - Card dilengkapi bayangan modern: `box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03);` atau `shadow-sm`.
+   - Garis tepi halus: `border: 1px solid #e9edf2;` (atau `#e2e8f0`).
+
+---
+
+## 12. Standar Kontras Teks Tinggi (Zero Faint-Gray Text Principle)
+
+1. **Dilarang Menggunakan Teks Abu-Abu Pudar**:
+   - **DILARANG KERAS** menggunakan styling teks abu-abu pudar atau *washed-out light gray* (`.text-muted`, `#94a3b8`, `#98a6ad`, `#a0aec0`, `#cbd5e1`) untuk teks deskripsi, instruksi petunjuk modal, keterangan box form, atau sub-label di atas background putih (`#ffffff`).
+   - Teks yang terlalu terang/pudar akan menyatu dengan background putih sehingga tidak terbaca dan merusak kenyamanan mata pengguna.
+
+2. **Gunakan Warna Slate Berkontras Tinggi**:
+   - Seluruh teks petunjuk, deskripsi, sub-label, helper text, dan uraian penjelasan **WAJIB** menggunakan warna ber-kontras tinggi yang tajam, tegas, dan nyaman dibaca:
+     - **Teks Judul & Label Utama:** Slate 900 (`#0f172a`) atau Slate 800 (`#1e293b`).
+     - **Teks Deskripsi & Paragraf Penjelasan:** Slate 700 (`#334155`).
+     - **Teks Sub-label / Sub-teks Keterangan:** Slate 600 (`#475569`).
+
 

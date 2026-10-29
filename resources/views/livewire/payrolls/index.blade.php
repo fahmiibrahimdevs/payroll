@@ -30,7 +30,7 @@
     </div>
 
     <!-- 4 Modern Stat Cards (Rekap Tahunan HRD & Keuangan) -->
-    <div class="payroll-stat-grid mb-4">
+    <div class="cash-advance-stat-grid mb-4">
         <!-- 1. Total Biaya Perusahaan -->
         <div class="card cash-advance-stat-card">
             <div class="card-body cash-advance-stat-body">
@@ -40,7 +40,7 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Total Biaya Perusahaan">Total biaya perusahaan</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-primary" title="{{ $statistics['formatted_yearly_total_company_cost'] }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $statistics['formatted_yearly_total_company_cost'] }}">
                             {{ $statistics['compact_yearly_company_cost'] }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
@@ -63,7 +63,7 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Total THP Ditransfer">Total THP ditransfer</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-success" title="{{ $statistics['formatted_yearly_total_thp'] }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $statistics['formatted_yearly_total_thp'] }}">
                             {{ $statistics['compact_yearly_thp'] }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
@@ -86,7 +86,7 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Total Setoran PPh 21 & BPJS">Total setoran</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-danger" title="{{ $statistics['formatted_yearly_total_setoran'] }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $statistics['formatted_yearly_total_setoran'] }}">
                             {{ $statistics['compact_yearly_setoran'] }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-red">
@@ -109,7 +109,7 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Sisa Kasbon Belum Lunas">Sisa kasbon</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-warning" title="{{ $statistics['formatted_remaining_kasbon'] }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $statistics['formatted_remaining_kasbon'] }}">
                             {{ $statistics['compact_remaining_kasbon'] }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-amber">
@@ -281,7 +281,7 @@
                             </div>
                         </div>
 
-                        <div style="font-size: 11.5px; font-weight: 400; color: #94a3b8; line-height: 1.35;">
+                        <div style="font-size: 11.5px; font-weight: 400; color: #475569; line-height: 1.35;">
                             Gaji bruto + BPJS porsi perusahaan
                         </div>
                     </div>
@@ -289,7 +289,7 @@
                     <!-- 3. Dual Metric Tiles: Rata-rata/bulan & Biaya/orang/bulan -->
                     <div style="padding: 0 20px 14px;">
                         <div class="row no-gutters" style="gap: 8px;">
-                            <div class="col" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px;">
+                            <div class="col" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 12px;">
                                 <div style="font-size: 11px; font-weight: 500; color: #64748b; line-height: 1.3;">
                                     Rata-rata / bulan
                                 </div>
@@ -297,7 +297,7 @@
                                     {{ $statistics['formatted_yearly_avg_cost_per_month'] }}
                                 </div>
                             </div>
-                            <div class="col" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px;">
+                            <div class="col" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 12px;">
                                 <div style="font-size: 11px; font-weight: 500; color: #64748b; line-height: 1.3;">
                                     Biaya / orang / bulan
                                 </div>
@@ -374,7 +374,7 @@
                                     </div>
                                 </div>
                             @empty
-                                <div style="font-size: 11.5px; color: #94a3b8;">Belum ada rincian departemen</div>
+                                <div style="font-size: 11.5px; color: #475569;">Belum ada rincian departemen</div>
                             @endforelse
                         </div>
                     </div>
@@ -383,7 +383,7 @@
                     <div class="border-top" style="background-color: #ffffff; padding: 14px 20px;">
                         <a href="{{ route('payrolls.yearly-summary.print', $selectedYear) }}" target="_blank"
                            class="btn btn-block d-flex align-items-center justify-content-center font-weight-bold shadow-none"
-                           style="border-radius: 10px; border: 1px solid #cbd5e1; color: #0f172a; background-color: #f8fafc; padding: 8px 14px; font-size: 12px; transition: all 0.15s ease;">
+                           style="border-radius: 10px; border: 1px solid #cbd5e1; color: #0f172a; background-color: #ffffff; padding: 8px 14px; font-size: 12px; transition: all 0.15s ease;">
                             <i class="fas fa-file-pdf mr-1.5" style="color: #ef4444; font-size: 13px;"></i>
                             <span>Export rekap tahunan (PDF)</span>
                         </a>
@@ -506,12 +506,15 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="7" class="text-center py-5 text-muted">
-                                            <div class="py-4">
-                                                <i class="fas fa-folder-open text-muted mb-2" style="font-size: 32px;"></i>
-                                                <div class="font-weight-600 mt-2">Belum ada periode penggajian</div>
-                                                <p class="small text-muted mb-0">Gunakan tombol "+ Buat Periode Baru" di atas untuk memulai perhitungan gaji bulan ini.</p>
-                                            </div>
+                                        <td colspan="7" class="p-0 border-0">
+                                            <x-empty-state
+                                                icon="fas fa-file-invoice"
+                                                title="Belum Ada Periode Penggajian"
+                                                subtitle="Mulai perhitungan gaji bulanan seluruh karyawan dengan membuat periode baru."
+                                                :action-label="auth()->user()?->hasRole(['admin', 'direktur']) ? 'Buat Periode Baru' : null"
+                                                action-wire-click="openCreateModal"
+                                                action-icon="fas fa-plus"
+                                            />
                                         </td>
                                     </tr>
                                 @endforelse
@@ -603,8 +606,8 @@
                             @enderror
                         </div>
 
-                        <div class="alert alert-light border small text-muted mb-0" style="background-color: #f8fafc; border-radius: 8px;">
-                            <div class="d-flex align-items-center mb-1 text-dark font-weight-600" style="font-size: 12px;">
+                        <div class="alert alert-light border small text-muted mb-0" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
+                            <div class="d-flex align-items-center mb-1 text-dark font-weight-500" style="font-size: 12px;">
                                 <i class="fas fa-calendar-alt text-primary mr-1.5"></i>
                                 <span>Siklus Cut-Off: {{ $this->estimatedCycle['start_date']->translatedFormat('d M Y') }} &ndash; {{ $this->estimatedCycle['end_date']->translatedFormat('d M Y') }}</span>
                                 <span class="badge badge-light border text-primary ml-2 font-weight-600" style="font-size: 10.5px;">Gajian: {{ $this->estimatedCycle['payment_date']->translatedFormat('d M Y') }}</span>
@@ -614,7 +617,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer bg-whitesmoke br">
+                    <div class="modal-footer bg-white border-top px-4 py-3">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
                         <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" {{ in_array($newMonth, $existingMonthsForNewYear ?? [], true) ? 'disabled' : '' }}>
                             <span wire:loading.remove wire:target="storePeriod">
@@ -641,32 +644,6 @@
 
 @push('styles')
     <style>
-        .payroll-stat-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .payroll-stat-grid .card {
-            margin-bottom: 0 !important;
-        }
-        @media (min-width: 576px) {
-            .payroll-stat-grid {
-                gap: 12px;
-            }
-        }
-        @media (min-width: 992px) {
-            .payroll-stat-grid {
-                grid-template-columns: repeat(4, minmax(0, 1fr));
-                gap: 14px;
-                margin-bottom: 24px;
-            }
-        }
-        @media (min-width: 1200px) {
-            .payroll-stat-grid {
-                gap: 16px;
-            }
-        }
         .cash-advance-stat-icon-red {
             background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
             box-shadow: 0 4px 10px rgba(220, 38, 38, 0.28) !important;

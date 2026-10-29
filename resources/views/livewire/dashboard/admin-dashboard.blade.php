@@ -33,7 +33,7 @@
     </div>
 
     <!-- 4 Modern Stat Cards (Desain Clean & Identik Gambar ke-1) -->
-    <div class="payroll-stat-grid mb-4">
+    <div class="cash-advance-stat-grid mb-4">
         <!-- 1. Total Karyawan Aktif -->
         <div class="card cash-advance-stat-card">
             <div class="card-body cash-advance-stat-body">
@@ -41,10 +41,11 @@
                     <i class="fas fa-users"></i>
                 </div>
                 <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Total Karyawan Aktif">Total karyawan aktif</div>
+                    <div class="cash-advance-stat-title" title="Total Karyawan Aktif">Total Karyawan Aktif</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-primary" title="{{ $stats['active_employees_count'] }} Orang">
-                            {{ number_format($stats['active_employees_count']) }} <span style="font-size: 13px; font-weight: 600; color: #64748b;">Orang</span>
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $stats['active_employees_count'] }} Orang">
+                            <span>{{ number_format($stats['active_employees_count']) }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1f2937;">Orang</span>
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
                             <i class="fas fa-user-check text-[10px]"></i>
@@ -64,9 +65,9 @@
                     <i class="fas fa-wallet"></i>
                 </div>
                 <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Total Gaji Bersih">Total gaji bersih</div>
+                    <div class="cash-advance-stat-title" title="Total Gaji Bersih">Total Gaji Bersih</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-success" title="{{ $stats['formatted_net_salary'] }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $stats['formatted_net_salary'] }}">
                             {{ $stats['formatted_net_salary'] }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
@@ -91,9 +92,9 @@
                     <i class="fas fa-landmark"></i>
                 </div>
                 <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Total PPh 21 yang tercatat pada slip payroll">PPh 21 tercatat</div>
+                    <div class="cash-advance-stat-title" title="Total PPh 21 yang tercatat pada slip payroll">PPh 21 Tercatat</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-danger" title="{{ $stats['formatted_pph21'] }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $stats['formatted_pph21'] }}">
                             {{ $stats['formatted_pph21'] }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-red">
@@ -118,9 +119,9 @@
                     <i class="fas fa-hand-holding-usd"></i>
                 </div>
                 <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Sisa Kasbon Belum Lunas">Sisa kasbon aktif</div>
+                    <div class="cash-advance-stat-title" title="Sisa Kasbon Belum Lunas">Sisa Kasbon Aktif</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-warning" title="{{ $stats['formatted_remaining_cash_advance'] }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $stats['formatted_remaining_cash_advance'] }}">
                             {{ $stats['formatted_remaining_cash_advance'] }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-amber">
@@ -381,7 +382,7 @@
                             <span style="font-size: 20px; font-weight: 800; color: #0f172a; line-height: 1.15;">
                                 {{ $stats['department_distribution']['total'] }}
                             </span>
-                            <span style="font-size: 10px; font-weight: 500; color: #94a3b8;">
+                            <span style="font-size: 10px; font-weight: 500; color: #475569;">
                                 Karyawan
                             </span>
                         </div>
@@ -487,7 +488,7 @@
                                                         {{ $p->formatted_total_gross_salary }}
                                                     </div>
                                                 </div>
-                                                <div class="cash-advance-stat-subtext" style="font-size: 10px; color: #94a3b8; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                <div class="cash-advance-stat-subtext" style="font-size: 10px; color: #475569; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                                     {{ $stats['payroll_total_items_count'] }} penerima
                                                 </div>
                                             </div>
@@ -509,7 +510,7 @@
                                                         -{{ $p->formatted_total_deductions }}
                                                     </div>
                                                 </div>
-                                                <div class="cash-advance-stat-subtext" style="font-size: 10px; color: #94a3b8; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                <div class="cash-advance-stat-subtext" style="font-size: 10px; color: #475569; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                                     PPh 21 & BPJS
                                                 </div>
                                             </div>
@@ -531,7 +532,7 @@
                                                         {{ $p->formatted_total_net_salary }}
                                                     </div>
                                                 </div>
-                                                <div class="cash-advance-stat-subtext" style="font-size: 10px; color: #94a3b8; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                <div class="cash-advance-stat-subtext" style="font-size: 10px; color: #475569; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                                     @if ($p->status === \App\Enums\PayrollPeriodStatus::DRAFT)
                                                         Masih dalam draf
                                                     @elseif ($p->status === \App\Enums\PayrollPeriodStatus::SUBMITTED)
@@ -570,7 +571,7 @@
 
                 <!-- Footer Card -->
                 @if ($stats['current_payroll_period'])
-                    <div style="border-top: 1px solid #f1f5f9; padding: 13px 20px; background-color: #fafbfc; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="border-top: 1px solid #f1f5f9; padding: 13px 20px; background-color: #ffffff; display: flex; align-items: center; justify-content: space-between;">
                         <div class="d-flex align-items-center text-muted" style="font-size: 11.5px;">
                             <i class="fas fa-file-invoice-dollar text-primary mr-1.5" style="font-size: 13px;"></i>
                             @if ($isDirector && $p->status === \App\Enums\PayrollPeriodStatus::SUBMITTED)
@@ -674,33 +675,6 @@
 
 @push('styles')
 <style>
-    .payroll-stat-grid {
-        display: grid;
-        grid-template-columns: repeat(1, minmax(0, 1fr));
-        gap: 12px;
-        margin-bottom: 20px;
-    }
-    .payroll-stat-grid .card {
-        margin-bottom: 0 !important;
-    }
-    @media (min-width: 576px) {
-        .payroll-stat-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 14px;
-        }
-    }
-    @media (min-width: 992px) {
-        .payroll-stat-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 14px;
-            margin-bottom: 24px;
-        }
-    }
-    @media (min-width: 1200px) {
-        .payroll-stat-grid {
-            gap: 16px;
-        }
-    }
     .cash-advance-stat-icon-red {
         background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
         box-shadow: 0 4px 10px rgba(220, 38, 38, 0.28) !important;

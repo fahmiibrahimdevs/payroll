@@ -153,6 +153,7 @@ class EmployeeService
 
             return DB::transaction(function () use ($data, $photoPath, $cvPath) {
                 $employeeData = [
+                    'fingerprint_id' => ! empty($data['fingerprint_id']) ? (string) $data['fingerprint_id'] : null,
                     'department_id' => ! empty($data['department_id']) ? (int) $data['department_id'] : null,
                     'position_id' => ! empty($data['position_id']) ? (int) $data['position_id'] : null,
                     'full_name' => $data['full_name'],
@@ -161,6 +162,11 @@ class EmployeeService
                     'employment_status' => $data['employment_status'] ?? 'tetap',
                     'status' => $data['status'] ?? 'active',
                     'basic_salary' => ! empty($data['basic_salary']) ? (float) $data['basic_salary'] : 0,
+                    'daily_rate' => ! empty($data['daily_rate']) ? (float) $data['daily_rate'] : 0,
+                    'overtime_rate_per_hour' => ! empty($data['overtime_rate_per_hour']) ? (float) $data['overtime_rate_per_hour'] : 0,
+                    'overtime_rate_per_day' => ! empty($data['overtime_rate_per_day']) ? (float) $data['overtime_rate_per_day'] : 0,
+                    'meal_allowance_type' => $data['meal_allowance_type'] ?? 'standar',
+                    'meal_allowance_per_day' => isset($data['meal_allowance_per_day']) ? (float) $data['meal_allowance_per_day'] : 25000,
                     'photo_path' => $photoPath,
                 ];
 
@@ -297,6 +303,7 @@ class EmployeeService
                 $newBasicSalary = isset($data['basic_salary']) ? (float) $data['basic_salary'] : $oldBasicSalary;
 
                 $employeeData = [
+                    'fingerprint_id' => array_key_exists('fingerprint_id', $data) ? ($data['fingerprint_id'] ?: null) : $employee->fingerprint_id,
                     'department_id' => ! empty($data['department_id']) ? (int) $data['department_id'] : null,
                     'position_id' => ! empty($data['position_id']) ? (int) $data['position_id'] : null,
                     'full_name' => $data['full_name'],
@@ -305,6 +312,11 @@ class EmployeeService
                     'employment_status' => $data['employment_status'] ?? $employee->employment_status,
                     'status' => $data['status'] ?? $employee->status,
                     'basic_salary' => $newBasicSalary,
+                    'daily_rate' => isset($data['daily_rate']) ? (float) $data['daily_rate'] : (float) ($employee->daily_rate ?? 0),
+                    'overtime_rate_per_hour' => isset($data['overtime_rate_per_hour']) ? (float) $data['overtime_rate_per_hour'] : (float) ($employee->overtime_rate_per_hour ?? 0),
+                    'overtime_rate_per_day' => isset($data['overtime_rate_per_day']) ? (float) $data['overtime_rate_per_day'] : (float) ($employee->overtime_rate_per_day ?? 0),
+                    'meal_allowance_type' => $data['meal_allowance_type'] ?? ($employee->meal_allowance_type ?? 'standar'),
+                    'meal_allowance_per_day' => isset($data['meal_allowance_per_day']) ? (float) $data['meal_allowance_per_day'] : (float) ($employee->meal_allowance_per_day ?? 25000),
                     'photo_path' => $photoPath,
                 ];
 

@@ -99,6 +99,7 @@ class CashAdvanceForm extends Form
      */
     public function setCashAdvance(CashAdvance $cashAdvance): void
     {
+        $this->resetForm();
         $this->cashAdvance = $cashAdvance;
         $this->employee_id = $cashAdvance->employee_id;
         $this->amount = (float) $cashAdvance->amount;

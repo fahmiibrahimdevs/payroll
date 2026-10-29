@@ -44,7 +44,7 @@ class AdminDashboardTest extends TestCase
 
     public function test_admin_can_access_dashboard_and_see_executive_kpi_cards(): void
     {
-        $dept = Department::factory()->create(['name' => 'Teknologi Informasi']);
+        $dept = Department::firstOrCreate(['name' => 'Teknologi Informasi'], ['description' => 'IT Dept']);
         Employee::factory()->create([
             'status' => EmployeeStatus::ACTIVE,
             'employment_status' => EmploymentStatus::TETAP,

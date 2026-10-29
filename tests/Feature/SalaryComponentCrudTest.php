@@ -351,14 +351,14 @@ class SalaryComponentCrudTest extends TestCase
         $this->assertGreaterThanOrEqual(19, SalaryComponent::count());
 
         // Verify active vs inactive according to user spec
-        $activeCodes = ['GAJI_POKOK', 'TUNJ_JABATAN', 'TUNJ_MAKAN', 'TUNJ_TRANSPORT', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP', 'KASBON'];
+        $activeCodes = ['GAJI_POKOK', 'TUNJ_JABATAN', 'TUNJ_MAKAN', 'TUNJ_TRANSPORT', 'LEMBUR', 'BPJS_KES', 'BPJS_JHT', 'BPJS_JP', 'KASBON'];
         foreach ($activeCodes as $code) {
             $comp = SalaryComponent::where('code', $code)->first();
             $this->assertNotNull($comp, "Component {$code} must exist");
             $this->assertTrue($comp->is_active, "Component {$code} must be active");
         }
 
-        $inactiveCodes = ['TUNJ_KEAHLIAN', 'TUNJ_MASA_KERJA', 'TUNJ_KELUARGA', 'TUNJ_KOMUNIKASI', 'LEMBUR', 'BONUS', 'THR', 'REIMBURSE', 'PPH21', 'POT_TERLAMBAT', 'POT_ALPA'];
+        $inactiveCodes = ['TUNJ_KEAHLIAN', 'TUNJ_MASA_KERJA', 'TUNJ_KELUARGA', 'TUNJ_KOMUNIKASI', 'BONUS', 'THR', 'REIMBURSE', 'PPH21', 'POT_TERLAMBAT', 'POT_ALPA'];
         foreach ($inactiveCodes as $code) {
             $comp = SalaryComponent::where('code', $code)->first();
             $this->assertNotNull($comp, "Component {$code} must exist");
@@ -382,6 +382,12 @@ class SalaryComponentCrudTest extends TestCase
 
         $kasbon = SalaryComponent::where('code', 'KASBON')->first();
         $this->assertTrue($kasbon->is_system);
+
+        $tunjMakan = SalaryComponent::where('code', 'TUNJ_MAKAN')->first();
+        $this->assertTrue($tunjMakan->is_system);
+
+        $lembur = SalaryComponent::where('code', 'LEMBUR')->first();
+        $this->assertTrue($lembur->is_system);
     }
 
     public function test_active_components_are_ordered_first_in_paginated_list(): void
@@ -391,13 +397,13 @@ class SalaryComponentCrudTest extends TestCase
 
         $results = $service->getPaginatedSalaryComponents(perPage: 19);
 
-        // First 8 components must be active
+        // First 9 components must be active (including newly activated LEMBUR)
         $items = $results->items();
-        for ($i = 0; $i < 8; $i++) {
+        for ($i = 0; $i < 9; $i++) {
             $this->assertTrue($items[$i]->is_active, "Item index {$i} ({$items[$i]->name}) should be active");
         }
         // Remaining components should be inactive
-        for ($i = 8; $i < count($items); $i++) {
+        for ($i = 9; $i < count($items); $i++) {
             $this->assertFalse($items[$i]->is_active, "Item index {$i} ({$items[$i]->name}) should be inactive");
         }
     }

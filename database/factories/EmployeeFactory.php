@@ -23,8 +23,8 @@ class EmployeeFactory extends Factory
     public function definition(): array
     {
         return [
-            'department_id' => Department::factory(),
-            'position_id' => Position::factory(),
+            'department_id' => Department::inRandomOrder()->value('id') ?? Department::factory(),
+            'position_id' => Position::inRandomOrder()->value('id') ?? Position::factory(),
             'full_name' => fake()->name(),
             'join_date' => fake()->dateTimeBetween('-3 years', 'now')->format('Y-m-d'),
             'contract_end_date' => fake()->optional(0.5)->dateTimeBetween('now', '+2 years')?->format('Y-m-d'),
@@ -62,8 +62,13 @@ class EmployeeFactory extends Factory
     public function withDetail(array $detailAttributes = []): static
     {
         return $this->afterCreating(function (Employee $employee) use ($detailAttributes) {
+            $defaultTax = $employee->employment_status === EmploymentStatus::MAGANG
+                ? \App\Enums\TaxRecipientType::OutsideScope
+                : \App\Enums\TaxRecipientType::MonthlyEmployee;
+
             EmployeeDetail::factory()->create(array_merge([
                 'employee_id' => $employee->id,
+                'tax_recipient_type' => $defaultTax,
             ], $detailAttributes));
         });
     }

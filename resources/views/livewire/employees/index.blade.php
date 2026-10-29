@@ -24,8 +24,9 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Total Karyawan Aktif">Total Karyawan Aktif</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-dark" title="{{ $employeeStats['total_active'] ?? 0 }} Orang">
-                            {{ $employeeStats['total_active'] ?? 0 }} <span style="font-size: 13px; font-weight: 500; color: #64748b;">Orang</span>
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $employeeStats['total_active'] ?? 0 }} Orang">
+                            <span>{{ $employeeStats['total_active'] ?? 0 }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1f2937;">Orang</span>
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
                             <i class="fas fa-user-check"></i>
@@ -47,8 +48,9 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Karyawan Tetap">Karyawan Tetap</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-success" title="{{ $employeeStats['permanent_count'] ?? 0 }} Orang">
-                            {{ $employeeStats['permanent_count'] ?? 0 }} <span style="font-size: 13px; font-weight: 500; color: #10b981;">Orang</span>
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $employeeStats['permanent_count'] ?? 0 }} Orang">
+                            <span>{{ $employeeStats['permanent_count'] ?? 0 }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1f2937;">Orang</span>
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
                             <i class="fas fa-check-circle"></i>
@@ -73,8 +75,9 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Kontrak & Magang">Kontrak &amp; Magang</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-warning" title="{{ $employeeStats['contract_and_intern_count'] ?? 0 }} Orang">
-                            {{ $employeeStats['contract_and_intern_count'] ?? 0 }} <span style="font-size: 13px; font-weight: 500; color: #f59e0b;">Orang</span>
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $employeeStats['contract_and_intern_count'] ?? 0 }} Orang">
+                            <span>{{ $employeeStats['contract_and_intern_count'] ?? 0 }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1f2937;">Orang</span>
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-amber">
                             <i class="fas fa-business-time"></i>
@@ -96,8 +99,9 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Perlu Perhatian Kontrak">Perlu Perhatian Kontrak</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value {{ ($employeeStats['expiring_contracts_count'] ?? 0) > 0 ? 'text-danger' : 'text-dark' }}" title="{{ $employeeStats['expiring_contracts_count'] ?? 0 }} Karyawan">
-                            {{ $employeeStats['expiring_contracts_count'] ?? 0 }} <span style="font-size: 13px; font-weight: 500; color: #64748b;">Karyawan</span>
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $employeeStats['expiring_contracts_count'] ?? 0 }} Karyawan">
+                            <span>{{ $employeeStats['expiring_contracts_count'] ?? 0 }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1f2937;">Karyawan</span>
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-purple">
                             <i class="fas fa-exclamation-triangle"></i>
@@ -298,15 +302,8 @@
             <div class="card cash-advance-main-card mb-0">
                 <!-- Row 1: Header & Controls Card -->
                 <div class="cash-advance-top-card">
-                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 12px;">
+                    <div class="card-header">
                         <h4 class="mb-0">Data Karyawan</h4>
-                        @if (auth()->user()->hasRole('admin'))
-                            <button type="button" wire:click="create" wire:loading.attr="disabled" wire:target="create" class="btn btn-sm btn-primary font-weight-600 shadow-sm" style="border-radius: 8px;">
-                                <i wire:loading.remove wire:target="create" class="fas fa-plus mr-1.5"></i>
-                                <i wire:loading wire:target="create" class="fas fa-spinner fa-spin mr-1.5"></i>
-                                Tambah Karyawan
-                            </button>
-                        @endif
                     </div>
 
                     <!-- Controls: Show Entries & Search Bar -->
@@ -450,20 +447,17 @@
                                 @endforeach
                             @empty
                                 <tr>
-                                    <td colspan="8" class="text-center py-5 text-muted">
-                                        <div class="empty-state py-4">
-                                            <div class="empty-state-icon bg-light text-muted mx-auto mb-3" style="width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">
-                                                <i class="fas fa-users"></i>
-                                            </div>
-                                            <h5 class="font-weight-600 text-dark mb-1">Tidak Ada Data Karyawan</h5>
-                                            <p class="text-muted small mb-0">
-                                                @if ($search || $filterDepartment || $filterPosition || $filterStatus || $filterEmploymentStatus)
-                                                    Tidak ada karyawan yang sesuai dengan kriteria filter pencarian.
-                                                @else
-                                                    Belum ada data master karyawan yang tersedia.
-                                                @endif
-                                            </p>
-                                        </div>
+                                    <td colspan="8" class="p-0 border-0">
+                                        <x-empty-state
+                                            icon="fas fa-users"
+                                            title="Tidak Ada Data Karyawan"
+                                            :subtitle="($search || $filterDepartment || $filterPosition || $filterStatus || $filterEmploymentStatus)
+                                                ? 'Tidak ditemukan data karyawan yang cocok dengan kriteria filter pencarian.'
+                                                : 'Belum ada data master karyawan yang terdaftar di dalam sistem.'"
+                                            :action-label="auth()->user()?->hasRole(['admin', 'direktur']) ? 'Tambah Karyawan Baru' : null"
+                                            action-wire-click="openCreateModal"
+                                            action-icon="fas fa-user-plus"
+                                        />
                                     </td>
                                 </tr>
                             @endforelse
@@ -670,6 +664,10 @@
                     // Handle bootstrap modal tab active
                     $('#employeeModal').on('show.bs.modal', function () {
                         $('#employment-tab').tab('show');
+                    }).on('hidden.bs.modal', function () {
+                        if (typeof @this !== 'undefined') {
+                            @this.call('closeModal');
+                        }
                     });
                     $('#employeeDetailModal').on('show.bs.modal', function () {
                         $('#detail-employment-tab').tab('show');

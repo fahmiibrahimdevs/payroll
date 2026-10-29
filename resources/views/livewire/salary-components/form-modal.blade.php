@@ -82,17 +82,28 @@
                                         </div>
                                     </div>
                                 @else
-                                    <div class="input-group" x-data>
+                                    <div class="input-group"
+                                         wire:key="comp-default-val-wrap-{{ $form->salaryComponent?->id ?? 'new' }}"
+                                         x-data="{
+                                             amount: @entangle('form.default_value'),
+                                             format(val) {
+                                                 if (val === null || val === undefined || val === '') return '';
+                                                 let num = parseInt(val, 10);
+                                                 return isNaN(num) ? '' : new Intl.NumberFormat('id-ID').format(num);
+                                             }
+                                         }"
+                                         x-effect="$refs.input && ($refs.input.value = format(amount))">
                                         <div class="input-group-prepend">
                                             <span class="input-group-text font-weight-500">Rp</span>
                                         </div>
                                         <input type="text"
+                                               x-ref="input"
                                                id="comp_default_value"
                                                inputmode="numeric"
                                                x-on:input="
                                                    let raw = $el.value.replace(/\D/g, '');
                                                    $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
-                                                   $wire.$set('form.default_value', raw ? parseFloat(raw) : '', false);
+                                                   amount = raw ? parseFloat(raw) : null;
                                                "
                                                value="{{ !empty($form->default_value) ? number_format((float) $form->default_value, 0, ',', '.') : '' }}"
                                                class="form-control text-right @error('form.default_value') is-invalid @enderror"
@@ -148,7 +159,7 @@
                     </div>
                 </div>
 
-                <div class="modal-footer bg-whitesmoke br">
+                <div class="modal-footer bg-white border-top px-4 py-3">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
                     <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="{{ $isEditMode ? 'update' : 'store' }}"><i wire:loading wire:target="{{ $isEditMode ? 'update' : 'store' }}" class="fas fa-spinner fa-spin mr-1"></i><i wire:loading.remove wire:target="{{ $isEditMode ? 'update' : 'store' }}" class="fas fa-save mr-1"></i>{{ $isEditMode ? 'Simpan Perubahan' : 'Simpan Komponen' }}</button>
                 </div>

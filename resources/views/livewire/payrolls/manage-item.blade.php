@@ -231,11 +231,18 @@
                     <div class="form-group mb-3 text-left">
                         <label for="select_employee">Pilih Karyawan</label>
                         <div wire:ignore>
+                            @php
+                                $groupedItems = $this->otherItems->groupBy(fn ($o) => $o->employee?->department?->name ?? 'Tanpa Departemen')->sortKeys();
+                            @endphp
                             <select id="select_employee" class="form-control select2" style="width: 100%;" onchange="if (this.value && this.value != '{{ $item->id }}') { window.location.href = '/payrolls/{{ $period->id }}/items/' + this.value + '/edit'; }">
-                                @foreach ($this->otherItems as $other)
-                                    <option value="{{ $other->id }}" @selected($other->id === $item->id)>
-                                        {{ $other->employee?->full_name ?? 'Karyawan' }} ({{ $other->employee?->detail?->employee_code ?? 'EMP' }})
-                                    </option>
+                                @foreach ($groupedItems as $deptName => $deptItems)
+                                    <optgroup label="{{ $deptName }}">
+                                        @foreach ($deptItems as $other)
+                                            <option value="{{ $other->id }}" @selected($other->id === $item->id)>
+                                                {{ $other->employee?->full_name ?? 'Karyawan' }} ({{ $other->employee?->detail?->employee_code ?? 'EMP' }})
+                                            </option>
+                                        @endforeach
+                                    </optgroup>
                                 @endforeach
                             </select>
                         </div>
@@ -403,14 +410,14 @@
                         </div>
                     </div>
 
-                    <!-- 3. Take Home Pay Card (FinTech Wallet Card matching Kasbon tile group) -->
-                    <div class="emp-tile-group mb-3 text-left">
-                        <div class="p-3" style="background-color: #f8fafc; border-bottom: 1px solid #f1f5f9;">
+                    <!-- 3. Take Home Pay Card (Clean White Tile matching Kasbon) -->
+                    <div class="emp-tile-group mb-3 text-left" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
+                        <div class="p-3" style="background-color: #ffffff; border-bottom: 1px solid #f1f5f9;">
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <div style="color: #64748b; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
                                     Ringkasan Slip Gaji
                                 </div>
-                                <span class="badge badge-light border text-primary" style="font-size: 10.5px; font-weight: 500;">Take Home Pay</span>
+                                <span class="badge badge-light border text-primary font-weight-600" style="font-size: 10.5px;">Take Home Pay</span>
                             </div>
                             <div class="font-weight-bold mb-0 text-primary" style="font-size: 22px; color: #0b52aa !important;">
                                 Rp {{ number_format($this->estimatedNetSalary, 0, ',', '.') }}
@@ -423,7 +430,7 @@
                                 <div class="emp-tile-icon"><i class="fas fa-wallet text-primary" style="color: #0b52aa !important;"></i></div>
                                 <span>Gaji Pokok</span>
                             </div>
-                            <div class="emp-tile-right font-weight-600 text-dark">
+                            <div class="emp-tile-right font-weight-500 text-dark">
                                 {{ $item->formatted_basic_salary }}
                             </div>
                         </div>
@@ -434,18 +441,18 @@
                                 <div class="emp-tile-icon"><i class="fas fa-plus-circle text-success"></i></div>
                                 <span>Total Tunjangan</span>
                             </div>
-                            <div class="emp-tile-right font-weight-600 text-success">
+                            <div class="emp-tile-right font-weight-500 text-success">
                                 +Rp {{ number_format($this->totalAllowances, 0, ',', '.') }}
                             </div>
                         </div>
 
                         <!-- Gaji Kotor (Bruto) -->
-                        <div class="emp-tile-row" style="background-color: #f8fafc; border-top: 1px dashed #e2e8f0; border-bottom: 1px dashed #e2e8f0;">
+                        <div class="emp-tile-row" style="background-color: #ffffff; border-top: 1px dashed #e2e8f0; border-bottom: 1px dashed #e2e8f0;">
                             <div class="emp-tile-left">
                                 <div class="emp-tile-icon"><i class="fas fa-coins" style="color: #0b52aa !important;"></i></div>
-                                <span class="font-weight-600 text-dark">Gaji Kotor (Bruto)</span>
+                                <span class="font-weight-500 text-dark">Gaji Kotor (Bruto)</span>
                             </div>
-                            <div class="emp-tile-right font-weight-700 text-dark" style="font-size: 13.5px;">
+                            <div class="emp-tile-right font-weight-600 text-dark" style="font-size: 13.5px;">
                                 Rp {{ number_format($this->grossSalary, 0, ',', '.') }}
                             </div>
                         </div>
@@ -456,7 +463,7 @@
                                 <div class="emp-tile-icon"><i class="fas fa-minus-circle text-danger"></i></div>
                                 <span>Total Potongan</span>
                             </div>
-                            <div class="emp-tile-right font-weight-600 text-danger">
+                            <div class="emp-tile-right font-weight-500 text-danger">
                                 -Rp {{ number_format($this->totalDeductions, 0, ',', '.') }}
                             </div>
                         </div>
@@ -467,18 +474,18 @@
                                 <div class="emp-tile-icon"><i class="fas fa-building text-info"></i></div>
                                 <span>Tanggungan Perusahaan</span>
                             </div>
-                            <div class="emp-tile-right font-weight-600" style="color: #0b52aa !important;">
+                            <div class="emp-tile-right font-weight-500" style="color: #0b52aa !important;">
                                 Rp {{ number_format($this->totalCompanyContributions, 0, ',', '.') }}
                             </div>
                         </div>
 
                         <!-- Total Biaya Perusahaan (Cost to Company / CTC) -->
-                        <div class="emp-tile-row" style="background-color: #f8fafc;">
+                        <div class="emp-tile-row" style="background-color: #ffffff;">
                             <div class="emp-tile-left">
                                 <div class="emp-tile-icon"><i class="fas fa-calculator text-secondary"></i></div>
-                                <span class="font-weight-600 text-dark">Total Biaya Perusahaan</span>
+                                <span class="font-weight-500 text-dark">Total Biaya Perusahaan</span>
                             </div>
-                            <div class="emp-tile-right font-weight-700 text-dark" style="font-size: 13.5px;">
+                            <div class="emp-tile-right font-weight-600 text-dark" style="font-size: 13.5px;">
                                 Rp {{ number_format($this->costToCompany, 0, ',', '.') }}
                             </div>
                         </div>

@@ -805,7 +805,7 @@ class Show extends Component
         $rules = [
             'itemPaymentDate' => 'required|date',
             'itemPaymentMethod' => 'required|in:bank_transfer,cash',
-            'itemPaymentProof' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:3072',
+            'itemPaymentProof' => $this->isEditingPayment ? 'nullable|file|mimes:jpg,jpeg,png,pdf|max:3072' : 'required|file|mimes:jpg,jpeg,png,pdf|max:3072',
             'itemPaymentNotes' => 'nullable|string|max:500',
         ];
 
@@ -820,6 +820,7 @@ class Show extends Component
             'itemPaymentMethod.required' => 'Metode pembayaran wajib dipilih.',
             'itemBankName.required' => 'Nama bank atau e-wallet wajib diisi.',
             'itemBankAccountNumber.required' => 'Nomor rekening atau nomor HP wajib diisi.',
+            'itemPaymentProof.required' => 'Bukti pembayaran (transfer / kwitansi fisik) wajib dilampirkan.',
             'itemPaymentProof.max' => 'Ukuran file bukti pembayaran maksimal 3MB.',
             'itemPaymentProof.mimes' => 'Format bukti pembayaran harus JPG, PNG, atau PDF.',
         ]);

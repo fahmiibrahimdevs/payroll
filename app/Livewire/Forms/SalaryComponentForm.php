@@ -124,6 +124,7 @@ class SalaryComponentForm extends Form
      */
     public function setSalaryComponent(SalaryComponent $salaryComponent): void
     {
+        $this->resetForm();
         $this->salaryComponent = $salaryComponent;
         $this->name = $salaryComponent->name;
         $this->code = $salaryComponent->code ?? '';

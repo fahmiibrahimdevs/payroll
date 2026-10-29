@@ -40,7 +40,7 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Total Gaji Pokok">Total Gaji Pokok</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-primary" title="{{ $period->formatted_total_basic_salary }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $period->formatted_total_basic_salary }}">
                             {{ $period->formatted_total_basic_salary }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
@@ -61,7 +61,7 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="BPJS Perusahaan (CTC)">BPJS Perusahaan</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-warning" title="{{ (float) $period->total_company_contributions > 0 ? $period->formatted_total_company_contributions : 'Rp 0' }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ (float) $period->total_company_contributions > 0 ? $period->formatted_total_company_contributions : 'Rp 0' }}">
                             {{ (float) $period->total_company_contributions > 0 ? $period->formatted_total_company_contributions : 'Rp 0' }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-amber">
@@ -82,7 +82,7 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Total Tunjangan (+)">Total Tunjangan (+)</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-success" title="+{{ $period->formatted_total_allowances }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="+{{ $period->formatted_total_allowances }}">
                             +{{ $period->formatted_total_allowances }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
@@ -103,7 +103,7 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Total Potongan (-)">Total Potongan (-)</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-danger" title="-{{ $period->formatted_total_deductions }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="-{{ $period->formatted_total_deductions }}">
                             -{{ $period->formatted_total_deductions }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-red">
@@ -124,7 +124,7 @@
                 <div class="cash-advance-stat-content">
                     <div class="cash-advance-stat-title" title="Total Take Home Pay">Total Take Home Pay</div>
                     <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-dark" title="{{ $period->formatted_total_net_salary }}">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $period->formatted_total_net_salary }}">
                             {{ $period->formatted_total_net_salary }}
                         </div>
                         <span class="cash-advance-stat-badge cash-advance-stat-badge-purple">
@@ -728,6 +728,19 @@
                                         <i class="fas {{ auth()->user()?->hasRole('direktur') ? 'fa-eye' : 'fa-sliders-h' }}"></i>
                                     </a>
 
+                                    <!-- Cetak Slip Gaji Karyawan (Hanya jika sudah dibayar & ada bukti transfer/kwitansi) -->
+                                    @if ($item->isPaid() && $item->payment_proof_path)
+                                        <a href="{{ route('payrolls.items.print', [$period, $item]) }}" target="_blank" class="btn btn-warning btn-action" data-toggle="tooltip" title="Cetak Slip Gaji">
+                                            <i class="fas fa-print"></i>
+                                        </a>
+                                    @else
+                                        <span class="d-inline-block" data-toggle="tooltip" title="{{ ! $item->isPaid() ? 'Slip gaji belum dapat dicetak (menunggu konfirmasi pembayaran)' : 'Slip gaji belum dapat dicetak (menunggu bukti transfer/kwitansi)' }}">
+                                            <button type="button" class="btn btn-light btn-action border text-muted" style="opacity: 0.45; cursor: not-allowed;" disabled>
+                                                <i class="fas fa-print"></i>
+                                            </button>
+                                        </span>
+                                    @endif
+
                                     <!-- Tombol Verifikasi / Batal Verifikasi HRD (Untuk Admin saat Draf / Revisi) -->
                                     @if ($period->status->isEditable() && auth()->user()?->hasRole('admin'))
                                         @if (! $item->isVerified())
@@ -780,20 +793,12 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ auth()->user()?->hasRole('direktur') ? 11 : 10 }}" class="text-center py-5 text-muted">
-                                <div class="empty-state py-4">
-                                    <div class="empty-state-icon bg-light text-muted mx-auto mb-3" style="width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">
-                                        <i class="fas fa-users"></i>
-                                    </div>
-                                    <h5 class="font-weight-bold text-dark mb-1">Tidak Ada Data Karyawan</h5>
-                                    <p class="text-muted small mb-0">
-                                        @if ($search)
-                                            Tidak ada karyawan yang cocok dengan pencarian "{{ $search }}".
-                                        @else
-                                            Tidak ada data karyawan dalam periode penggajian ini.
-                                        @endif
-                                    </p>
-                                </div>
+                            <td colspan="{{ auth()->user()?->hasRole('direktur') ? 11 : 10 }}" class="p-0 border-0">
+                                <x-empty-state
+                                    icon="fas fa-file-invoice-dollar"
+                                    title="Tidak Ada Data Slip Penggajian"
+                                    :subtitle="$search ? 'Tidak ada karyawan yang cocok dengan kata kunci pencarian \"' . $search . '\".' : 'Tidak ada catatan slip karyawan dalam periode penggajian ini.'"
+                                />
                             </td>
                         </tr>
                     @endforelse
@@ -1091,9 +1096,17 @@
                             <a href="{{ $this->getWhatsappLink($previewItem) }}" target="_blank" class="btn btn-success px-3 py-2 font-weight-bold shadow-sm" style="border-radius: 8px;">
                                 <i class="fab fa-whatsapp mr-1.5"></i> Kirim Slip via WA
                             </a>
-                            <a href="{{ route('payrolls.items.print', [$period, $previewItem]) }}" target="_blank" class="btn btn-primary px-3 py-2 font-weight-bold shadow-sm" style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px;">
-                                <i class="fas fa-print mr-1.5"></i> Cetak / Simpan PDF
-                            </a>
+                            @if ($previewItem->isPaid() && $previewItem->payment_proof_path)
+                                <a href="{{ route('payrolls.items.print', [$period, $previewItem]) }}" target="_blank" class="btn btn-primary px-3 py-2 font-weight-bold shadow-sm" style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px;">
+                                    <i class="fas fa-print mr-1.5"></i> Cetak / Simpan PDF
+                                </a>
+                            @else
+                                <span class="d-inline-block" data-toggle="tooltip" title="Slip gaji belum dapat dicetak (menunggu bukti pembayaran)">
+                                    <button type="button" class="btn btn-light border text-muted px-3 py-2 font-weight-500 shadow-sm" style="border-radius: 8px; opacity: 0.5; cursor: not-allowed;" disabled>
+                                        <i class="fas fa-print mr-1.5"></i> Cetak / Simpan PDF
+                                    </button>
+                                </span>
+                            @endif
                         @endif
                     </div>
                     <button type="button" class="btn btn-secondary px-3 py-2 font-weight-500" data-dismiss="modal" style="border-radius: 8px;">Tutup</button>
@@ -1132,7 +1145,7 @@
                             </small>
                         </div>
                     </div>
-                    <div class="modal-footer px-4 py-3 bg-light d-flex justify-content-end" style="border-top: 1px solid #edf2f7; gap: 8px;">
+                    <div class="modal-footer px-4 py-3 bg-white border-top d-flex justify-content-end" style="gap: 8px;">
                         <button type="button" class="btn btn-secondary px-3 py-2 font-weight-500" data-dismiss="modal" style="border-radius: 8px;">Batal</button>
                         <button type="submit" class="btn btn-danger px-3 py-2 font-weight-bold shadow-sm" style="border-radius: 8px;">
                             <i class="fas fa-times mr-1"></i> Tolak Penggajian
@@ -1201,7 +1214,7 @@
                             <strong>PENTING:</strong> Menekan tombol konfirmasi akan mengubah status menjadi <strong>Dibayar</strong> dan otomatis mencatat pelunasan cicilan kasbon karyawan yang ada di periode ini.
                         </div>
                     </div>
-                    <div class="modal-footer px-4 py-3 bg-light d-flex justify-content-end" style="border-top: 1px solid #edf2f7; gap: 8px;">
+                    <div class="modal-footer px-4 py-3 bg-white border-top d-flex justify-content-end" style="gap: 8px;">
                         <button type="button" class="btn btn-secondary px-3 py-2 font-weight-500" data-dismiss="modal" style="border-radius: 8px;">Batal</button>
                         <button type="submit" class="btn btn-success px-3 py-2 font-weight-bold shadow-sm" wire:loading.attr="disabled" style="border-radius: 8px;">
                             <span wire:loading.remove wire:target="processPayment">
@@ -1247,7 +1260,7 @@
                             </small>
                         </div>
                     </div>
-                    <div class="modal-footer px-4 py-3 bg-light d-flex justify-content-end" style="border-top: 1px solid #edf2f7; gap: 8px;">
+                    <div class="modal-footer px-4 py-3 bg-white border-top d-flex justify-content-end" style="gap: 8px;">
                         <button type="button" class="btn btn-secondary px-3 py-2 font-weight-500" data-dismiss="modal" style="border-radius: 8px;">Batal</button>
                         <button type="submit" class="btn btn-danger px-3 py-2 font-weight-bold shadow-sm" style="border-radius: 8px;">
                             <i class="fas fa-times mr-1"></i> Kirim Revisi
@@ -1273,17 +1286,33 @@
                 <form wire:submit="processItemPayment">
                     <div class="modal-body py-3 px-4">
                         @if ($payingItem)
-                            <!-- Card Info Karyawan & Gaji Bersih (Bawaan Template) -->
-                            <div class="card border mb-3">
-                                <div class="card-body p-3 d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <div class="text-muted small">Penerima Gaji:</div>
-                                        <div class="font-weight-bold text-dark" style="font-size: 15px;">{{ $payingItem->employee?->full_name ?? '-' }}</div>
-                                        <div class="text-muted small">{{ $payingItem->payslip_number }} &bull; {{ $payingItem->employee?->position?->name ?? 'Tanpa Jabatan' }}</div>
+                            <!-- Card Info Karyawan & Gaji Bersih (Modern Executive Card) -->
+                            <div class="card mb-3.5" style="border-radius: 12px; border: 1px solid #e2e8f0; border-left: 4px solid #0b52aa; background: #ffffff; box-shadow: 0 2px 6px -1px rgba(15, 23, 42, 0.05);">
+                                <div class="card-body p-3 d-flex align-items-center justify-content-between flex-wrap" style="gap: 12px;">
+                                    <div class="d-flex align-items-center">
+                                        <img src="{{ $payingItem->employee?->photo_url ?? asset('assets/img/avatar/avatar-1.png') }}"
+                                             alt="{{ $payingItem->employee?->full_name }}"
+                                             class="rounded-circle mr-3 flex-shrink-0"
+                                             style="width: 42px; height: 42px; object-fit: cover; border: 1.5px solid #cbd5e1;">
+                                        <div>
+                                            <div class="font-weight-600" style="font-size: 14.5px; color: #0f172a; line-height: 1.3;">
+                                                {{ $payingItem->employee?->full_name ?? '-' }}
+                                            </div>
+                                            <div class="mt-0.5" style="font-size: 12px; color: #475569; font-weight: 400; line-height: 1.3;">
+                                                @if ($payingItem->employee?->department)
+                                                    {{ $payingItem->employee->department->name }} &bull;
+                                                @endif
+                                                {{ $payingItem->employee?->position?->name ?? 'Karyawan' }}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="text-right">
-                                        <div class="text-muted small">Gaji Bersih:</div>
-                                        <div class="font-weight-bold text-success" style="font-size: 18px;">{{ $payingItem->formatted_net_salary }}</div>
+                                    <div class="flex-shrink-0 text-right ml-auto">
+                                        <div class="px-3 py-1.5" style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px;">
+                                            <div style="font-size: 10px; font-weight: 600; color: #15803d; text-transform: uppercase; letter-spacing: 0.5px;">TOTAL DITERIMA</div>
+                                            <div class="font-weight-700" style="font-size: 16.5px; color: #166534; font-variant-numeric: tabular-nums; line-height: 1.25;">
+                                                {{ $payingItem->formatted_net_salary }}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1347,14 +1376,24 @@
 
                         <!-- Upload Bukti Pembayaran (Custom File Bootstrap) -->
                         <div class="form-group mb-3">
-                            <label for="item_payment_proof">Bukti Pembayaran <small class="text-muted">(JPG, PNG, PDF maks. 3MB - Opsional)</small></label>
+                            <label for="item_payment_proof" class="font-weight-500" style="color: #334155; font-size: 12.5px;">
+                                Bukti Pembayaran <span class="text-danger">*</span>
+                                <small class="text-muted">(JPG, PNG, PDF maks. 3MB{{ $isEditingPayment && $payingItem?->payment_proof_path ? ' - Kosongkan jika tidak diubah' : '' }})</small>
+                            </label>
                             <div class="custom-file">
                                 <input type="file" id="item_payment_proof" wire:model="itemPaymentProof" class="custom-file-input @error('itemPaymentProof') is-invalid @enderror" accept=".jpg,.jpeg,.png,.pdf">
                                 <label class="custom-file-label text-truncate" for="item_payment_proof">
                                     @if ($itemPaymentProof && is_object($itemPaymentProof))
-                                        <i class="fas fa-check-circle text-success mr-1"></i> {{ $itemPaymentProof->getClientOriginalName() }}
+                                        @php
+                                            $isNewPdf = \Illuminate\Support\Str::endsWith(strtolower($itemPaymentProof->getClientOriginalName()), '.pdf');
+                                        @endphp
+                                        @if ($isNewPdf)
+                                            <i class="fas fa-file-pdf text-danger mr-1"></i> {{ $itemPaymentProof->getClientOriginalName() }}
+                                        @else
+                                            <i class="fas fa-file-image text-success mr-1"></i> {{ $itemPaymentProof->getClientOriginalName() }}
+                                        @endif
                                     @else
-                                        <i class="fas fa-file-upload text-muted mr-1"></i> Pilih file bukti transfer / kwitansi...
+                                        <i class="fas fa-file-upload text-muted mr-1"></i> Pilih file bukti transfer / kwitansi (JPG, PNG, PDF)...
                                     @endif
                                 </label>
                             </div>
@@ -1383,7 +1422,7 @@
                         </div>
                     </div>
 
-                    <div class="modal-footer bg-whitesmoke br">
+                    <div class="modal-footer bg-white border-top px-4 py-3">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
                         <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="processItemPayment">
                             <span wire:loading wire:target="processItemPayment"><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...</span>
@@ -1506,6 +1545,34 @@
                                     {{ $paidDetailItem->payer?->name ?? ($paidDetailItem->updater?->name ?? 'Admin') }}
                                 </div>
                             </div>
+                            @if ($paidDetailItem->payment_proof_path)
+                                @php
+                                    $isPdfProof = \Illuminate\Support\Str::endsWith(strtolower($paidDetailItem->payment_proof_path), '.pdf');
+                                @endphp
+                                <div class="emp-tile-row">
+                                    <div class="emp-tile-left">
+                                        <div class="emp-tile-icon">
+                                            @if ($isPdfProof)
+                                                <i class="fas fa-file-pdf text-danger"></i>
+                                            @else
+                                                <i class="fas fa-paperclip text-primary"></i>
+                                            @endif
+                                        </div>
+                                        <span>Bukti Pembayaran</span>
+                                    </div>
+                                    <div class="emp-tile-right">
+                                        @if ($isPdfProof)
+                                            <a href="{{ asset('storage/' . $paidDetailItem->payment_proof_path) }}" target="_blank" class="badge badge-light border text-danger font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #fca5a5 !important; background-color: #fef2f2 !important; text-decoration: none;" title="Buka lampiran bukti transfer (PDF)">
+                                                <i class="fas fa-file-pdf mr-1 text-danger"></i> Buka Dokumen Bukti (PDF) <i class="fas fa-external-link-alt ml-1" style="font-size: 9px;"></i>
+                                            </a>
+                                        @else
+                                            <a href="{{ asset('storage/' . $paidDetailItem->payment_proof_path) }}" target="_blank" class="badge badge-light border text-primary font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #cbd5e1 !important; text-decoration: none;" title="Buka lampiran foto bukti transfer / kwitansi">
+                                                <i class="fas fa-file-image mr-1 text-success"></i> Lihat Foto Bukti Transfer <i class="fas fa-external-link-alt ml-1" style="font-size: 9px;"></i>
+                                            </a>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
                             @if ($paidDetailItem->payment_notes)
                                 <div class="emp-tile-row">
                                     <div class="emp-tile-left">
@@ -1521,23 +1588,14 @@
                     @endif
                 </div>
                 @if ($paidDetailItem)
-                    <div class="modal-footer bg-whitesmoke br p-3">
+                    <div class="modal-footer bg-white border-top p-3">
                         <div class="d-flex w-100" style="gap: 10px;">
-                            @if ($paidDetailItem->payment_proof_path)
-                                <button type="button" wire:click="openEditItemPaymentModal({{ $paidDetailItem->id }})" class="btn btn-light border text-dark flex-fill font-weight-600 shadow-sm" style="border-radius: 8px; font-size: 13px; padding: 9px 12px;">
-                                    <i class="fas fa-edit mr-1"></i> Edit
-                                </button>
-                                <a href="{{ asset('storage/' . $paidDetailItem->payment_proof_path) }}" target="_blank" class="btn btn-primary flex-fill font-weight-600 shadow-sm text-center" style="border-radius: 8px; font-size: 13px; padding: 9px 12px;">
-                                    <i class="fas fa-file-download mr-1"></i> Download Bukti
-                                </a>
-                            @else
-                                <button type="button" wire:click="openEditItemPaymentModal({{ $paidDetailItem->id }})" class="btn btn-primary flex-fill font-weight-600 shadow-sm" style="border-radius: 8px; font-size: 13px; padding: 9px 12px;">
-                                    <i class="fas fa-edit mr-1"></i> Edit
-                                </button>
-                                <button type="button" class="btn btn-secondary flex-fill font-weight-600" data-dismiss="modal" style="border-radius: 8px; font-size: 13px; padding: 9px 12px;">
-                                    <i class="fas fa-times mr-1"></i> Tutup
-                                </button>
-                            @endif
+                            <button type="button" wire:click="openEditItemPaymentModal({{ $paidDetailItem->id }})" class="btn btn-primary flex-fill font-weight-600 shadow-sm" style="border-radius: 8px; font-size: 13px; padding: 9px 12px; background-color: #0b52aa; border-color: #0b52aa;">
+                                <i class="fas fa-edit mr-1"></i> Edit
+                            </button>
+                            <a href="{{ route('payrolls.items.print', [$period, $paidDetailItem]) }}" target="_blank" class="btn btn-success flex-fill font-weight-600 shadow-sm text-center" style="border-radius: 8px; font-size: 13px; padding: 9px 12px;">
+                                <i class="fas fa-print mr-1"></i> Cetak Slip
+                            </a>
                         </div>
                     </div>
                 @endif

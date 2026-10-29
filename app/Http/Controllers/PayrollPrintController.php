@@ -6,13 +6,15 @@ use App\Models\CompanyProfile;
 use App\Models\PayrollItem;
 use App\Models\PayrollPeriod;
 use App\Services\ActivityLogService;
+use App\Services\OvertimeService;
 use App\Services\PayrollService;
 use Illuminate\Contracts\View\View;
 
 class PayrollPrintController extends Controller
 {
     public function __construct(
-        protected ActivityLogService $logger
+        protected ActivityLogService $logger,
+        protected OvertimeService $overtimeService
     ) {}
 
     /**
@@ -53,10 +55,17 @@ class PayrollPrintController extends Controller
             ]
         );
 
+        $overtimeSummary = $this->overtimeService->getEmployeeMonthlyOvertimeSummary(
+            $item->employee_id,
+            (int) $period->year,
+            (int) $period->month
+        );
+
         return view('payrolls.print', [
             'period' => $period,
             'item' => $item,
             'company' => $company,
+            'overtimeSummary' => $overtimeSummary,
         ]);
     }
 
@@ -94,10 +103,20 @@ class PayrollPrintController extends Controller
             ]
         );
 
+        $overtimeSummaries = [];
+        foreach ($items as $it) {
+            $overtimeSummaries[$it->id] = $this->overtimeService->getEmployeeMonthlyOvertimeSummary(
+                $it->employee_id,
+                (int) $period->year,
+                (int) $period->month
+            );
+        }
+
         return view('payrolls.print-batch', [
             'period' => $period,
             'items' => $items,
             'company' => $company,
+            'overtimeSummaries' => $overtimeSummaries,
         ]);
     }
 

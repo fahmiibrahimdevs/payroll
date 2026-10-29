@@ -26,6 +26,7 @@ class Employee extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'fingerprint_id',
         'user_id',
         'department_id',
         'position_id',
@@ -35,6 +36,11 @@ class Employee extends Model
         'employment_status',
         'status',
         'basic_salary',
+        'daily_rate',
+        'overtime_rate_per_hour',
+        'overtime_rate_per_day',
+        'meal_allowance_type',
+        'meal_allowance_per_day',
         'photo_path',
     ];
 
@@ -51,6 +57,10 @@ class Employee extends Model
             'employment_status' => EmploymentStatus::class,
             'status' => EmployeeStatus::class,
             'basic_salary' => 'decimal:2',
+            'daily_rate' => 'decimal:2',
+            'overtime_rate_per_hour' => 'decimal:2',
+            'overtime_rate_per_day' => 'decimal:2',
+            'meal_allowance_per_day' => 'decimal:2',
             'total_cash_receipt' => 'decimal:2',
         ];
     }
@@ -117,6 +127,21 @@ class Employee extends Model
     public function payrollItems(): HasMany
     {
         return $this->hasMany(PayrollItem::class);
+    }
+
+    public function overtimeSubmissions(): HasMany
+    {
+        return $this->hasMany(OvertimeSubmission::class);
+    }
+
+    public function periodAttendances(): HasMany
+    {
+        return $this->hasMany(OvertimePeriodAttendance::class);
+    }
+
+    public function attendances(): HasMany
+    {
+        return $this->hasMany(Attendance::class);
     }
 
     /**
@@ -276,6 +301,82 @@ class Employee extends Model
     {
         return Attribute::make(
             get: fn (): string => 'Rp '.number_format((float) ($this->basic_salary ?? 0), 0, ',', '.'),
+        );
+    }
+
+    /**
+     * Get formatted Indonesian rupiah currency for daily wage / rate.
+     */
+    protected function formattedDailyRate(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): string => 'Rp '.number_format((float) ($this->daily_rate ?? 0), 0, ',', '.'),
+        );
+    }
+
+    /**
+     * Get formatted Indonesian rupiah currency for overtime rate per hour.
+     */
+    protected function formattedOvertimeRatePerHour(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): string => 'Rp '.number_format((float) ($this->overtime_rate_per_hour ?? 0), 0, ',', '.'),
+        );
+    }
+
+    /**
+     * Get formatted Indonesian rupiah currency for daily overtime rate.
+     */
+    protected function formattedOvertimeRatePerDay(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): string => 'Rp '.number_format((float) ($this->overtime_rate_per_day ?? 0), 0, ',', '.'),
+        );
+    }
+
+    /**
+     * Get effective meal allowance per day (respecting company uniform policy vs individual custom rate).
+     */
+    public function getEffectiveMealAllowancePerDay(): float
+    {
+        $company = CompanyProfile::getProfile();
+
+        if ($company->is_uniform_meal_allowance ?? true) {
+            return (float) ($company->default_meal_allowance_per_day ?? 25000);
+        }
+
+        if ($this->meal_allowance_type === 'khusus' && (float) $this->meal_allowance_per_day > 0) {
+            return (float) $this->meal_allowance_per_day;
+        }
+
+        if ((float) $this->meal_allowance_per_day > 0) {
+            return (float) $this->meal_allowance_per_day;
+        }
+
+        return (float) ($company->default_meal_allowance_per_day ?? 25000);
+    }
+
+    /**
+     * Check if employee uses special/custom meal allowance rate.
+     */
+    public function isKhususMealAllowance(): bool
+    {
+        $company = CompanyProfile::getProfile();
+
+        if ($company->is_uniform_meal_allowance ?? true) {
+            return false;
+        }
+
+        return $this->meal_allowance_type === 'khusus';
+    }
+
+    /**
+     * Get formatted Indonesian rupiah currency for meal allowance per day.
+     */
+    protected function formattedMealAllowancePerDay(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): string => 'Rp '.number_format($this->getEffectiveMealAllowancePerDay(), 0, ',', '.'),
         );
     }
 
