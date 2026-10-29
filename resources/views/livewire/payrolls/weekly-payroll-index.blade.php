@@ -494,7 +494,7 @@
                                                 title="Belum Ada Periode Gaji Mingguan"
                                                 subtitle="Kelompokkan upah harian, uang makan, dan lembur mingguan dengan siklus Jum'at s/d Kamis."
                                                 :action-label="auth()->user()?->hasRole(['admin', 'direktur']) ? 'Buat Periode Mingguan' : null"
-                                                action-wire-click="openCreateModal"
+                                                action-wire-click="openCreatePeriodModal"
                                                 action-icon="fas fa-plus"
                                             />
                                         </td>

@@ -212,6 +212,14 @@ class Index extends Component
     }
 
     /**
+     * Alias for create() to support openCreateModal callers.
+     */
+    public function openCreateModal(): void
+    {
+        $this->create();
+    }
+
+    /**
      * Store a newly created employee.
      */
     public function store(EmployeeService $employeeService): void

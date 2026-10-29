@@ -479,8 +479,8 @@
                                             :subtitle="($search || $filterDepartment || $filterPosition || $filterStatus || $filterEmploymentStatus)
                                                 ? 'Tidak ditemukan data karyawan yang cocok dengan kriteria filter pencarian.'
                                                 : 'Belum ada data master karyawan yang terdaftar di dalam sistem.'"
-                                            :action-label="auth()->user()?->hasRole(['admin', 'direktur']) ? 'Tambah Karyawan Baru' : null"
-                                            action-wire-click="openCreateModal"
+                                            :action-label="auth()->user()?->hasRole('admin') ? 'Tambah Karyawan Baru' : null"
+                                            action-wire-click="create"
                                             action-icon="fas fa-user-plus"
                                         />
                                     </td>

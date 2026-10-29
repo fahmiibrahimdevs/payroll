@@ -103,6 +103,14 @@ class WeeklyPayrollIndex extends Component
         $this->dispatch('open-modal', id: 'weeklyPeriodModal');
     }
 
+    /**
+     * Alias for openCreatePeriodModal() to support openCreateModal callers.
+     */
+    public function openCreateModal(): void
+    {
+        $this->openCreatePeriodModal();
+    }
+
     public function storePeriod(OvertimeService $service, AttendanceService $attendanceService): void
     {
         abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);

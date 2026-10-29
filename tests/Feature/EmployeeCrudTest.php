@@ -11,6 +11,7 @@ use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Position;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\CompanyProfileService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -770,5 +771,35 @@ class EmployeeCrudTest extends TestCase
 
         $this->assertSame('budi.santoso@percetakansubang.com', $emp2->detail->email);
         $this->assertSame('budi.santoso@percetakansubang.com', $user2->email);
+    }
+
+    public function test_empty_state_create_button_visibility_and_actions(): void
+    {
+        // Ensure no employees exist
+        Employee::query()->forceDelete();
+
+        $admin = $this->createAdminUser();
+
+        // Admin can see the action button and trigger create & openCreateModal alias
+        Livewire::actingAs($admin)
+            ->test(Index::class)
+            ->assertSee('Tidak Ada Data Karyawan')
+            ->assertSee('Tambah Karyawan Baru')
+            ->call('create')
+            ->assertDispatched('open-modal')
+            ->call('openCreateModal')
+            ->assertDispatched('open-modal');
+
+        // Director should see empty state text but NOT the action button in empty state
+        $directorRole = Role::firstOrCreate(['name' => 'direktur'], ['display_name' => 'Direktur']);
+        $directorUser = User::factory()->create(['is_active' => true]);
+        $directorUser->syncRoles(['direktur']);
+
+        Livewire::actingAs($directorUser)
+            ->test(Index::class)
+            ->assertSee('Tidak Ada Data Karyawan')
+            ->assertDontSeeHtml('wire:click="create"')
+            ->call('create')
+            ->assertForbidden();
     }
 }
