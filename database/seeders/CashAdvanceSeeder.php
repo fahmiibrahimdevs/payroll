@@ -71,8 +71,8 @@ class CashAdvanceSeeder extends Seeder
             ]
         );
 
-        $admin = User::where('email', 'admin@payroll.com')->first() ?? User::first();
-        $direktur = User::where('email', 'direktur@payroll.com')->first() ?? $admin;
+        $admin = User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->first() ?? User::first();
+        $direktur = User::whereHas('roles', fn ($q) => $q->where('name', 'direktur'))->first() ?? $admin;
 
         if (! $admin) {
             return;

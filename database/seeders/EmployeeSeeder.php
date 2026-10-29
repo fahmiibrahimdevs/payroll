@@ -1471,7 +1471,12 @@ class EmployeeSeeder extends Seeder
                         'email_verified_at' => now(),
                     ]
                 );
-                $user->syncRoles(['karyawan']);
+                $roleName = match ($data['name']) {
+                    'Eka' => 'direktur',
+                    'Nisa' => 'admin',
+                    default => 'karyawan',
+                };
+                $user->syncRoles([$roleName]);
                 $employee->update(['user_id' => $user->id]);
             }
         });
