@@ -650,7 +650,8 @@
         } elseif ($period->approver && $period->approver->hasRole('admin')) {
             $adminUser = $period->approver;
         } else {
-            $adminUser = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->first() ?? $period->approver;
+            $adminUser = \App\Models\User::whereNotIn('email', \App\Services\UserService::HIDDEN_DUMMY_EMAILS)
+                ->whereHas('roles', fn ($q) => $q->where('name', 'admin'))->first() ?? $period->approver;
         }
 
         $adminName = $adminUser?->name ?? 'Admin Demo';

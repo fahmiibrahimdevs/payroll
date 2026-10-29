@@ -71,8 +71,10 @@ class CashAdvanceSeeder extends Seeder
             ]
         );
 
-        $admin = User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->first() ?? User::first();
-        $direktur = User::whereHas('roles', fn ($q) => $q->where('name', 'direktur'))->first() ?? $admin;
+        $admin = User::whereNotIn('email', \App\Services\UserService::HIDDEN_DUMMY_EMAILS)
+            ->whereHas('roles', fn ($q) => $q->where('name', 'admin'))->first() ?? User::first();
+        $direktur = User::whereNotIn('email', \App\Services\UserService::HIDDEN_DUMMY_EMAILS)
+            ->whereHas('roles', fn ($q) => $q->where('name', 'direktur'))->first() ?? $admin;
 
         if (! $admin) {
             return;

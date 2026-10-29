@@ -198,4 +198,33 @@ class UserManagementTest extends TestCase
             'id' => $admin->id,
         ]);
     }
+
+    public function test_dummy_demo_accounts_are_hidden_from_user_management(): void
+    {
+        $admin = User::factory()->create();
+        $admin->addRole('admin');
+
+        $dummy = User::updateOrCreate(
+            ['email' => 'admin@payroll.com'],
+            [
+                'name' => 'Admin Demo',
+                'password' => '31750321@admin',
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]
+        );
+        $dummy->syncRoles(['admin']);
+
+        $this->actingAs($admin->fresh());
+
+        $component = Volt::test('pages.admin.user-index');
+        $users = $component->viewData('users');
+        $this->assertFalse(collect($users->items())->contains('email', 'admin@payroll.com'));
+
+        $component->call('confirmToggleStatus', $dummy->id)
+            ->assertDispatched('swal:alert');
+
+        $component->call('confirmDelete', $dummy->id)
+            ->assertDispatched('swal:alert');
+    }
 }

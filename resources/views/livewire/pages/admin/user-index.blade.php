@@ -45,7 +45,7 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $user = User::find($userId);
-        if (! $user) {
+        if (! $user || in_array($user->email, UserService::HIDDEN_DUMMY_EMAILS, true)) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
                 'title' => 'Gagal!',
@@ -124,7 +124,7 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $user = User::find($userId);
-        if (! $user) {
+        if (! $user || in_array($user->email, UserService::HIDDEN_DUMMY_EMAILS, true)) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
                 'title' => 'Gagal!',

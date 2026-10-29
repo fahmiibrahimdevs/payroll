@@ -96,6 +96,7 @@ class DashboardService
     public function getStatistics(): array
     {
         $userCounts = User::query()
+            ->whereNotIn('email', UserService::HIDDEN_DUMMY_EMAILS)
             ->selectRaw('COUNT(*) as total_users')
             ->selectRaw('SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_users')
             ->selectRaw('SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) as inactive_users')

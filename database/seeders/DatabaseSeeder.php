@@ -37,25 +37,22 @@ class DatabaseSeeder extends Seeder
             ])
             ->delete();
 
-        // Akun dummy dinonaktifkan / dicomment sesuai permintaan
-        /*
         foreach ([
-            ['role' => 'direktur', 'name' => 'Direktur Demo', 'email' => 'direktur@payroll.com'],
-            ['role' => 'admin', 'name' => 'Admin Demo', 'email' => 'admin@payroll.com'],
-            ['role' => 'karyawan', 'name' => 'Karyawan Demo', 'email' => 'karyawan@payroll.com'],
+            ['role' => 'direktur', 'name' => 'Direktur Demo', 'email' => 'direktur@payroll.com', 'password' => '31750321@direktur'],
+            ['role' => 'admin', 'name' => 'Admin Demo', 'email' => 'admin@payroll.com', 'password' => '31750321@admin'],
+            ['role' => 'karyawan', 'name' => 'Karyawan Demo', 'email' => 'karyawan@payroll.com', 'password' => '31750321@karyawan'],
         ] as $account) {
             $user = User::updateOrCreate(
                 ['email' => $account['email']],
                 [
                     'name' => $account['name'],
-                    'password' => '1',
+                    'password' => $account['password'],
                     'is_active' => true,
                     'email_verified_at' => now(),
                 ]
             );
             $user->syncRoles([$account['role']]);
         }
-        */
 
         $this->call([
             EmployeeSeeder::class,

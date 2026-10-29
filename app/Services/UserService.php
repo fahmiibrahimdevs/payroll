@@ -12,6 +12,18 @@ use Throwable;
 
 class UserService
 {
+    /**
+     * Hidden dummy/system demo accounts that should not be visible in user management.
+     *
+     * @var array<int, string>
+     */
+    public const HIDDEN_DUMMY_EMAILS = [
+        'direktur@payroll.com',
+        'admin@payroll.com',
+        'karyawan@payroll.com',
+        'dev@payroll.com',
+    ];
+
     public function __construct(
         protected ActivityLogService $logger
     ) {}
@@ -27,6 +39,7 @@ class UserService
         $perPage = max(1, min($perPage, 100));
 
         return User::query()
+            ->whereNotIn('email', self::HIDDEN_DUMMY_EMAILS)
             ->with('roles')
             ->when($search, function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
@@ -51,11 +64,13 @@ class UserService
      */
     public function getUserStatistics(): array
     {
+        $baseQuery = User::query()->whereNotIn('email', self::HIDDEN_DUMMY_EMAILS);
+
         return [
-            'total' => User::count(),
-            'active' => User::where('is_active', true)->count(),
-            'inactive' => User::where('is_active', false)->count(),
-            'admins' => User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->count(),
+            'total' => (clone $baseQuery)->count(),
+            'active' => (clone $baseQuery)->where('is_active', true)->count(),
+            'inactive' => (clone $baseQuery)->where('is_active', false)->count(),
+            'admins' => (clone $baseQuery)->whereHas('roles', fn ($q) => $q->where('name', 'admin'))->count(),
         ];
     }
 
@@ -74,6 +89,11 @@ class UserService
         try {
             return DB::transaction(function () use ($userId, $currentAdminId) {
                 $user = User::with('roles')->findOrFail($userId);
+
+                if (in_array($user->email, self::HIDDEN_DUMMY_EMAILS, true)) {
+                    throw new InvalidArgumentException('Akun sistem demo tidak dapat diubah.');
+                }
+
                 $oldStatus = $user->is_active;
                 $newStatus = ! $oldStatus;
 
@@ -145,6 +165,11 @@ class UserService
         try {
             return DB::transaction(function () use ($userId, $currentAdminId) {
                 $user = User::with('roles')->findOrFail($userId);
+
+                if (in_array($user->email, self::HIDDEN_DUMMY_EMAILS, true)) {
+                    throw new InvalidArgumentException('Akun sistem demo tidak dapat diarsipkan.');
+                }
+
                 if ($user->hasRole('admin') && User::whereHas('roles', fn ($query) => $query->where('name', 'admin'))->count() <= 1) {
                     throw new InvalidArgumentException('Akun admin terakhir tidak boleh dihapus.');
                 }
