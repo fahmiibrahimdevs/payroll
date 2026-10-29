@@ -15,12 +15,17 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call([
+        $seeders = [
             LaratrustSeeder::class,
             CompanyProfileSeeder::class,
             SalaryComponentSeeder::class,
-            PostSeeder::class,
-        ]);
+        ];
+
+        if (class_exists(\Faker\Factory::class)) {
+            $seeders[] = PostSeeder::class;
+        }
+
+        $this->call($seeders);
 
         User::query()
             ->whereIn('email', [
