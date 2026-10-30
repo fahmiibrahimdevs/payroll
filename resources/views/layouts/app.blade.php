@@ -208,7 +208,11 @@
             // 4. Delete Confirmation Dialog
             Livewire.on('swal:confirm-delete', (event) => {
                 const data = getPayload(event);
-                const action = data.action || 'delete-post';
+                if (! data.action) {
+                    console.warn('swal:confirm-delete dipanggil tanpa "action" - konfirmasi dibatalkan.');
+                    return;
+                }
+                const action = data.action;
                 Swal.fire({
                     title: data.title ? `Hapus "${data.title}"?` : 'Apakah Anda Yakin?',
                     text: data.text || (data.title ? `Data "${data.title}" akan dihapus permanen!` : 'Data ini akan dihapus permanen!'),
@@ -229,14 +233,19 @@
             // 4. Bootstrap Modal Handler
             Livewire.on('open-modal', (event) => {
                 const data = getPayload(event);
-                const modalId = data.id || 'postModal';
-                $('#' + modalId).modal('show');
+                if (! data.id) {
+                    console.warn('open-modal dipanggil tanpa "id" - diabaikan.');
+                    return;
+                }
+                $('#' + data.id).modal('show');
             });
 
             Livewire.on('close-modal', (event) => {
                 const data = getPayload(event);
-                const modalId = data.id || 'postModal';
-                $('#' + modalId).modal('hide');
+                if (! data.id) {
+                    return;
+                }
+                $('#' + data.id).modal('hide');
             });
         });
 

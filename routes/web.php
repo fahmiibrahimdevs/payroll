@@ -115,6 +115,14 @@ Route::get('cash-advances/payments/{payment}/proof', [SecureDocumentController::
     ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
     ->name('cash-advances.documents.proof');
 
+Route::get('payrolls/items/{item}/proof', [SecureDocumentController::class, 'payrollItemProof'])
+    ->middleware(['auth', 'active', 'role:admin|direktur'])
+    ->name('payrolls.documents.item-proof');
+
+Route::get('overtimes/attendances/{attendance}/proof', [SecureDocumentController::class, 'overtimeAttendanceProof'])
+    ->middleware(['auth', 'active', 'role:admin|direktur'])
+    ->name('overtimes.documents.attendance-proof');
+
 Route::get('overtimes', OvertimeIndex::class)
     ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
     ->name('overtimes.index');

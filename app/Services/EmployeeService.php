@@ -204,7 +204,7 @@ class EmployeeService
                 $user = User::create([
                     'name' => $employee->full_name,
                     'email' => $detailData['email'],
-                    'password' => ! empty($data['password']) ? $data['password'] : '1',
+                    'password' => ! empty($data['password']) ? $data['password'] : \Illuminate\Support\Str::password(10, symbols: false),
                     'is_active' => $employee->status === EmployeeStatus::ACTIVE,
                     'email_verified_at' => now(),
                 ]);
@@ -412,7 +412,7 @@ class EmployeeService
                     $user = User::create([
                         'name' => $employee->full_name,
                         'email' => $detailData['email'],
-                        'password' => ! empty($data['password']) ? $data['password'] : '1',
+                        'password' => ! empty($data['password']) ? $data['password'] : \Illuminate\Support\Str::password(10, symbols: false),
                         'is_active' => $employee->status === EmployeeStatus::ACTIVE,
                         'email_verified_at' => now(),
                     ]);
@@ -528,7 +528,9 @@ class EmployeeService
             $historyId = $history->id;
             $history->delete();
 
+            // Gaji berjalan hanya boleh mengikuti riwayat yang sudah efektif, bukan kenaikan terjadwal di masa depan.
             $latest = $employee->salaryHistories()
+                ->where('effective_date', '<=', Carbon::now()->toDateString())
                 ->orderByDesc('effective_date')
                 ->orderByDesc('id')
                 ->first();

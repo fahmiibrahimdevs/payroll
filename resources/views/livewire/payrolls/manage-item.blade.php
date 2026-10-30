@@ -536,7 +536,7 @@
                                         if (empty($prorateNoteText)) {
                                             $prorateNoteText = "Gaji prorata {$fmtBasic} dari {$fmtFull}";
                                         } elseif (! str_contains($prorateNoteText, 'dari Rp')) {
-                                            $prorateNoteText = preg_replace('/^Gaji prorata\s*/i', "Gaji prorata {$fmtBasic} dari {$fmtFull} &bull; ", $prorateNoteText);
+                                            $prorateNoteText = preg_replace('/^Gaji prorata\s*/i', "Gaji prorata {$fmtBasic} dari {$fmtFull} - ", $prorateNoteText);
                                         }
                                     }
                                 @endphp
@@ -544,7 +544,7 @@
                                     <td class="text-center text-muted align-middle !px-3 !py-2.5" style="font-size: 12.5px;">1</td>
                                     <td class="align-middle !px-3 !py-2.5">
                                         <div class="text-dark" style="font-weight: 500; font-size: 13px;">Gaji Pokok Karyawan</div>
-                                        <div class="text-muted text-xs">{!! $prorateNoteText ?: 'Komponen dasar dari data master karyawan (otomatis tersinkron)' !!}</div>
+                                        <div class="text-muted text-xs">{{ $prorateNoteText ?: 'Komponen dasar dari data master karyawan (otomatis tersinkron)' }}</div>
                                     </td>
                                     <td class="text-right align-middle text-dark !px-3 !py-2.5" style="font-weight: 600; font-size: 13px;">
                                         {{ $item->formatted_basic_salary }}

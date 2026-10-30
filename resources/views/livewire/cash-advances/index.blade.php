@@ -1040,18 +1040,6 @@
             }
 
             const initSelect2 = () => {
-                // Info Sidebar: Select Karyawan
-                if ($('#main_employee_selector').length) {
-                    $('#main_employee_selector').select2({
-                        width: '100%',
-                        placeholder: '-- Semua Karyawan --',
-                        allowClear: true
-                    }).off('change').on('change', function () {
-                        const val = $(this).val();
-                        @this.set('selectedEmployeeId', val ? parseInt(val) : null);
-                    });
-                }
-
                 // Modal Form: Select Karyawan
                 if ($('#form_employee_id').length) {
                     $('#form_employee_id').select2({
@@ -1091,12 +1079,6 @@
             };
 
             initSelect2();
-
-            Livewire.on('employee-selected', (event) => {
-                const data = Array.isArray(event) ? event[0] : event;
-                const empId = typeof data === 'object' && data !== null ? data.id : data;
-                $('#main_employee_selector').val(empId || '').trigger('change.select2');
-            });
 
             // Listen direct navigation to ledger transaction row
             Livewire.on('scroll-to-ledger-row', (event) => {

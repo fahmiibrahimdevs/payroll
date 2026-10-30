@@ -27,6 +27,7 @@ use App\Models\SalaryComponent;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,9 @@ use InvalidArgumentException;
 
 class PayrollService
 {
+    /** Cache per-request: apakah ada absensi pada rentang tanggal periode (hindari query ulang per karyawan). */
+    private array $periodHasAttendanceCache = [];
+
     public function __construct(
         protected ActivityLogService $logger
     ) {}
@@ -795,6 +799,15 @@ class PayrollService
         if (! empty($data['start_date']) && ! empty($data['end_date'])) {
             $startDate = Carbon::parse($data['start_date'])->startOfDay();
             $endDate = Carbon::parse($data['end_date'])->endOfDay();
+
+            if ($startDate->gte($endDate)) {
+                throw new InvalidArgumentException('Tanggal mulai periode harus sebelum tanggal akhir periode.');
+            }
+
+            if ($startDate->month !== $month || $startDate->year !== $year || $endDate->month !== $month || $endDate->year !== $year) {
+                throw new InvalidArgumentException("Tanggal periode harus berada di dalam bulan {$monthName} {$year}.");
+            }
+
             $paymentDate = ! empty($data['payment_date'])
                 ? Carbon::parse($data['payment_date'])->startOfDay()
                 : $endDate->copy()->startOfDay();
@@ -823,18 +836,23 @@ class PayrollService
 
             $refNumber = $this->generatePeriodReferenceNumber($date);
 
-            $period = PayrollPeriod::create([
-                'reference_number' => $refNumber,
-                'name' => $name,
-                'month' => $month,
-                'year' => $year,
-                'start_date' => $startDate->toDateString(),
-                'end_date' => $endDate->toDateString(),
-                'payment_date' => $paymentDate->toDateString(),
-                'status' => PayrollPeriodStatus::DRAFT,
-                'created_by' => $user->id,
-                'notes' => ! empty($data['notes']) ? trim((string) $data['notes']) : null,
-            ]);
+            try {
+                $period = PayrollPeriod::create([
+                    'reference_number' => $refNumber,
+                    'name' => $name,
+                    'month' => $month,
+                    'year' => $year,
+                    'start_date' => $startDate->toDateString(),
+                    'end_date' => $endDate->toDateString(),
+                    'payment_date' => $paymentDate->toDateString(),
+                    'status' => PayrollPeriodStatus::DRAFT,
+                    'created_by' => $user->id,
+                    'notes' => ! empty($data['notes']) ? trim((string) $data['notes']) : null,
+                ]);
+            } catch (UniqueConstraintViolationException) {
+                // unique index (year, month) menutup celah TOCTOU pada pengecekan exists() di atas
+                throw new InvalidArgumentException("Periode penggajian untuk bulan {$monthName} {$year} sudah ada.");
+            }
 
             $payslipNumbers = $this->reserveSequenceNumbers(
                 'SLP-'.$date->format('Ym'),
@@ -980,20 +998,27 @@ class PayrollService
         // Attendance-based proration policy:
         // Basic salary is strictly calculated from actual attendance (fingerprint tap-ins with valid status).
         // Sickness, leave, and permits without attendance tap-ins are excluded (No work, no pay).
-        $periodHasAttendance = Attendance::whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->exists();
+        $periodKey = $startDate->toDateString().'|'.$endDate->toDateString();
+        $this->periodHasAttendanceCache[$periodKey] ??= Attendance::whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->exists();
 
-        if ($periodHasAttendance) {
+        if ($this->periodHasAttendanceCache[$periodKey]) {
+            // Hari libur dihitung di PHP (portabel antar driver DB, bukan DAYOFWEEK() yang MySQL-only)
+            $weekendDates = [];
+            for ($curr = $startDate->copy(); $curr->lte($endDate); $curr->addDay()) {
+                $isOffDay = $workDaysPerWeek === 5 ? $curr->isWeekend() : $curr->isSunday();
+                if ($isOffDay) {
+                    $weekendDates[] = $curr->toDateString();
+                }
+            }
+
             $attendedDaysQuery = Attendance::where('employee_id', $employee->id)
                 ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
                 ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
                 ->whereNotNull('clock_in')
                 ->where('clock_in', '!=', '');
 
-            // Proteksi pengaman: Hanya hitung hari kerja reguler (exclude hari Minggu, dan Sabtu jika 5-hari kerja)
-            if ($workDaysPerWeek === 5) {
-                $attendedDaysQuery->whereRaw('DAYOFWEEK(date) NOT IN (1, 7)');
-            } else {
-                $attendedDaysQuery->whereRaw('DAYOFWEEK(date) != 1');
+            if ($weekendDates !== []) {
+                $attendedDaysQuery->whereNotIn('date', $weekendDates);
             }
 
             $attendedDays = $attendedDaysQuery->count();
@@ -2755,6 +2780,23 @@ class PayrollService
                 }
 
                 $totalToDeduct = min((float) $line->amount, (float) $cashAdvance->remaining_amount);
+                // Line payroll lebih besar dari sisa hutang: gaji sudah terpotong penuh
+                // tetapi kasbon hanya dikredit sebesar sisa hutang - beri peringatan untuk tindak lanjut.
+                if ((float) $line->amount > (float) $cashAdvance->remaining_amount + 0.01) {
+                    $this->logger->warning(
+                        action: 'PAYROLL_CASH_ADVANCE_OVER_DEDUCTION',
+                        module: 'payrolls',
+                        message: 'Payroll deduction line exceeds remaining cash advance balance',
+                        context: [
+                            'period_reference' => $period->reference_number,
+                            'payroll_line_id' => $line->id,
+                            'cash_advance_id' => $cashAdvance->id,
+                            'line_amount' => (float) $line->amount,
+                            'remaining_amount' => (float) $cashAdvance->remaining_amount,
+                        ],
+                        userId: $user->id
+                    );
+                }
                 if ($totalToDeduct <= 0) {
                     continue;
                 }
@@ -2899,6 +2941,23 @@ class PayrollService
                 }
 
                 $totalToDeduct = min((float) $line->amount, (float) $cashAdvance->remaining_amount);
+                // Line payroll lebih besar dari sisa hutang: gaji sudah terpotong penuh
+                // tetapi kasbon hanya dikredit sebesar sisa hutang - beri peringatan untuk tindak lanjut.
+                if ((float) $line->amount > (float) $cashAdvance->remaining_amount + 0.01) {
+                    $this->logger->warning(
+                        action: 'PAYROLL_CASH_ADVANCE_OVER_DEDUCTION',
+                        module: 'payrolls',
+                        message: 'Payroll deduction line exceeds remaining cash advance balance',
+                        context: [
+                            'period_reference' => $period->reference_number,
+                            'payroll_line_id' => $line->id,
+                            'cash_advance_id' => $cashAdvance->id,
+                            'line_amount' => (float) $line->amount,
+                            'remaining_amount' => (float) $cashAdvance->remaining_amount,
+                        ],
+                        userId: $user->id
+                    );
+                }
                 if ($totalToDeduct <= 0) {
                     continue;
                 }
@@ -2973,6 +3032,7 @@ class PayrollService
                 $period->update([
                     'status' => PayrollPeriodStatus::PAID,
                     'payment_date' => $paymentDate->toDateString(),
+                    'payment_method' => $paymentMethod,
                     'updated_by' => $user->id,
                 ]);
             }
@@ -3003,10 +3063,10 @@ class PayrollService
         $updateData = [
             'paid_at' => $paymentDate,
             'payment_method' => $paymentMethod,
-            'payment_notes' => ! empty($data['payment_notes']) ? trim((string) $data['payment_notes']) : null,
-            'bank_name' => $data['bank_name'] ?? null,
-            'bank_account_number' => $data['bank_account_number'] ?? null,
-            'bank_account_name' => $data['bank_account_name'] ?? null,
+            'payment_notes' => array_key_exists('payment_notes', $data) ? (trim((string) $data['payment_notes']) ?: null) : $item->payment_notes,
+            'bank_name' => array_key_exists('bank_name', $data) ? $data['bank_name'] : $item->bank_name,
+            'bank_account_number' => array_key_exists('bank_account_number', $data) ? $data['bank_account_number'] : $item->bank_account_number,
+            'bank_account_name' => array_key_exists('bank_account_name', $data) ? $data['bank_account_name'] : $item->bank_account_name,
             'updated_by' => $user->id,
         ];
 

@@ -77,6 +77,10 @@ class SalaryComponentForm extends Form
                 'max:30',
                 Rule::unique('salary_components', 'code')->ignore($this->salaryComponent?->id),
             ],
+            'type' => [
+                'required',
+                Rule::in(['allowance', 'deduction']),
+            ],
             'category' => [
                 'required',
                 Rule::enum(SalaryComponentCategory::class),

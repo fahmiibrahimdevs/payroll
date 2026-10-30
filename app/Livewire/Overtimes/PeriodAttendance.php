@@ -468,7 +468,7 @@ class PeriodAttendance extends Component
         try {
             $proofPath = null;
             if ($this->itemPaymentProof) {
-                $proofPath = $this->itemPaymentProof->store('payroll-proofs', 'public');
+                $proofPath = $this->itemPaymentProof->store('payroll-proofs', 'local');
             }
 
             $bankName = $this->itemPaymentMethod === 'bank_transfer' ? $this->itemBankName : null;

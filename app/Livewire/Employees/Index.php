@@ -233,7 +233,7 @@ class Index extends Component
             $this->dispatch('swal:alert', [
                 'type' => 'success',
                 'title' => 'Berhasil!',
-                'message' => 'Data karyawan ditambahkan. Akun login: '.($employee->detail?->email ?? '-').' (Role: '.ucfirst($roleName).') dengan password awal 1.',
+                'message' => 'Data karyawan ditambahkan. Akun login: '.($employee->detail?->email ?? '-').' (Role: '.ucfirst($roleName).') dengan password awal: '.$this->form->generatedPassword,
             ]);
         } catch (ValidationException $e) {
             throw $e;

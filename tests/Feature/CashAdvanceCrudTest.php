@@ -1863,9 +1863,11 @@ class CashAdvanceCrudTest extends TestCase
 
         $this->actingAs($this->adminUser);
 
+        // Penolakan policy kini dilempar ulang oleh komponen (bukan ditelan menjadi
+        // toast generik) sehingga Livewire merespons dengan 403.
         Livewire::test(Index::class)
             ->call('approveDirect', $advance->id)
-            ->assertDispatched('swal:alert');
+            ->assertStatus(403);
 
         $this->assertEquals(CashAdvanceStatus::PENDING, $advance->fresh()->status);
     }

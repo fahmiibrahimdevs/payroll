@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Overtimes;
 
+use App\Enums\EmploymentStatus;
 use App\Enums\OvertimePeriodStatus;
 use App\Enums\OvertimeStatus;
 use App\Livewire\Forms\OvertimeSubmissionForm;
@@ -698,29 +699,74 @@ class Index extends Component
         $this->managingPeriodId = $period->id;
         $this->managingPeriod = $period;
 
-        // Ensure all active employees (and any with overtime in this period) exist in attendance
+        // Ensure all eligible employees exist in attendance, with days derived from
+        // real attendance logs (sama seperti PeriodAttendance::syncActiveEmployees) agar
+        // tunjangan makan tidak dibuatkan default 6 hari untuk karyawan yang tidak hadir.
         $linkedEmpIds = $period->submissions()->pluck('employee_id')->unique()->all();
+
+        $startDate = \Carbon\Carbon::parse($period->start_date)->toDateString();
+        $endDate = \Carbon\Carbon::parse($period->end_date)->toDateString();
+        $attendances = \App\Models\Attendance::whereBetween('date', [$startDate, $endDate])
+            ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+            ->get()
+            ->groupBy('employee_id');
+
+        $hasAttendanceLog = $attendances->isNotEmpty();
+        $attendedEmpIds = $attendances->keys()->all();
+
         $targetEmployees = Employee::where('status', 'active')
-            ->orWhereIn('id', $linkedEmpIds)
+            ->where(function ($q) use ($linkedEmpIds, $attendedEmpIds, $hasAttendanceLog) {
+                $q->where('employment_status', EmploymentStatus::HARIAN)
+                    ->orWhereIn('id', $linkedEmpIds);
+                if ($hasAttendanceLog) {
+                    $q->orWhereIn('id', $attendedEmpIds);
+                }
+            })
             ->orderBy('full_name')
             ->get();
 
         $existingEmpIds = $period->attendances->pluck('employee_id')->all();
         $defaultDaysCount = 6;
         $defaultDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        $dayKeyMap = [1 => 'mon', 2 => 'tue', 3 => 'wed', 4 => 'thu', 5 => 'fri', 6 => 'sat', 0 => 'sun'];
         $hasNew = false;
 
         foreach ($targetEmployees as $emp) {
             if (! in_array($emp->id, $existingEmpIds, true)) {
                 $rate = $emp->getEffectiveMealAllowancePerDay();
+                $hasOvertime = in_array($emp->id, $linkedEmpIds, true);
+
+                if ($hasAttendanceLog) {
+                    $attendedDaysKeys = [];
+                    foreach ($attendances->get($emp->id, collect()) as $att) {
+                        $k = $dayKeyMap[\Carbon\Carbon::parse($att->date)->dayOfWeek] ?? null;
+                        if ($k && ! in_array($k, $attendedDaysKeys, true)) {
+                            $attendedDaysKeys[] = $k;
+                        }
+                    }
+
+                    // Lewati karyawan tanpa kehadiran dan tanpa lembur (hindari tunjangan fiktif)
+                    if (count($attendedDaysKeys) <= 0 && ! $hasOvertime) {
+                        continue;
+                    }
+
+                    $daysCount = count($attendedDaysKeys);
+                    $daysList = $attendedDaysKeys;
+                } else {
+                    $daysCount = $defaultDaysCount;
+                    $daysList = $defaultDays;
+                }
+
                 $att = \App\Models\OvertimePeriodAttendance::create([
                     'overtime_period_id' => $period->id,
                     'employee_id' => $emp->id,
                     'meal_allowance_type' => $emp->meal_allowance_type ?: 'standar',
                     'meal_allowance_per_day' => $rate,
-                    'attended_days' => $defaultDaysCount,
-                    'attendance_days' => $defaultDays,
-                    'total_meal_allowance' => $defaultDaysCount * $rate,
+                    'daily_rate' => $emp->employment_status === EmploymentStatus::HARIAN ? (float) ($emp->daily_rate ?? 0) : 0.0,
+                    'attended_days' => $daysCount,
+                    'attendance_days' => $daysList,
+                    'total_meal_allowance' => $daysCount * $rate,
+                    'total_daily_wage' => ($emp->employment_status === EmploymentStatus::HARIAN ? (float) ($emp->daily_rate ?? 0) : 0.0) * $daysCount,
                 ]);
                 $period->attendances->push($att);
                 $hasNew = true;

@@ -793,7 +793,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ auth()->user()?->hasRole('direktur') ? 11 : 10 }}" class="p-0 border-0">
+                            <td colspan="{{ (auth()->user()?->hasRole('direktur') && $period->status->value === 'submitted') ? 11 : 10 }}" class="p-0 border-0">
                                 <x-empty-state
                                     icon="fas fa-file-invoice-dollar"
                                     title="Tidak Ada Data Slip Penggajian"
@@ -986,12 +986,12 @@
                                                                     if (empty($prevNoteText)) {
                                                                         $prevNoteText = "Gaji prorata {$fmtPBasic} dari {$fmtPFull}";
                                                                     } elseif (! str_contains($prevNoteText, 'dari Rp')) {
-                                                                        $prevNoteText = preg_replace('/^Gaji prorata\s*/i', "Gaji prorata {$fmtPBasic} dari {$fmtPFull} &bull; ", $prevNoteText);
+                                                                        $prevNoteText = preg_replace('/^Gaji prorata\s*/i', "Gaji prorata {$fmtPBasic} dari {$fmtPFull} - ", $prevNoteText);
                                                                     }
                                                                 }
                                                             @endphp
                                                             @if ($prevNoteText)
-                                                                <div class="text-muted font-normal" style="font-size: 11px;">{!! $prevNoteText !!}</div>
+                                                                <div class="text-muted font-normal" style="font-size: 11px;">{{ $prevNoteText }}</div>
                                                             @endif
                                                         </td>
                                                         <td class="!px-3 !py-2.5 align-middle text-right font-weight-600 text-dark" style="font-size: 12.5px;">
@@ -1562,11 +1562,11 @@
                                     </div>
                                     <div class="emp-tile-right">
                                         @if ($isPdfProof)
-                                            <a href="{{ asset('storage/' . $paidDetailItem->payment_proof_path) }}" target="_blank" class="badge badge-light border text-danger font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #fca5a5 !important; background-color: #fef2f2 !important; text-decoration: none;" title="Buka lampiran bukti transfer (PDF)">
+                                            <a href="{{ route('payrolls.documents.item-proof', $paidDetailItem) }}" target="_blank" class="badge badge-light border text-danger font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #fca5a5 !important; background-color: #fef2f2 !important; text-decoration: none;" title="Buka lampiran bukti transfer (PDF)">
                                                 <i class="fas fa-file-pdf mr-1 text-danger"></i> Buka Dokumen Bukti (PDF) <i class="fas fa-external-link-alt ml-1" style="font-size: 9px;"></i>
                                             </a>
                                         @else
-                                            <a href="{{ asset('storage/' . $paidDetailItem->payment_proof_path) }}" target="_blank" class="badge badge-light border text-primary font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #cbd5e1 !important; text-decoration: none;" title="Buka lampiran foto bukti transfer / kwitansi">
+                                            <a href="{{ route('payrolls.documents.item-proof', $paidDetailItem) }}" target="_blank" class="badge badge-light border text-primary font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #cbd5e1 !important; text-decoration: none;" title="Buka lampiran foto bukti transfer / kwitansi">
                                                 <i class="fas fa-file-image mr-1 text-success"></i> Lihat Foto Bukti Transfer <i class="fas fa-external-link-alt ml-1" style="font-size: 9px;"></i>
                                             </a>
                                         @endif

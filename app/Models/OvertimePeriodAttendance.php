@@ -115,6 +115,6 @@ class OvertimePeriodAttendance extends Model
 
     public function formattedPaymentProofUrl(): ?string
     {
-        return $this->payment_proof_path ? asset('storage/'.$this->payment_proof_path) : null;
+        return $this->payment_proof_path ? route('overtimes.documents.attendance-proof', $this) : null;
     }
 }

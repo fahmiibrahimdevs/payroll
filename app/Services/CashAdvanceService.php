@@ -892,7 +892,7 @@ class CashAdvanceService
                     throw new InvalidArgumentException('Nominal pembayaran harus lebih besar dari 0.');
                 }
 
-                if ($paymentAmount > $remaining + 0.001) {
+                if ($paymentAmount > $remaining + 0.01) {
                     throw new InvalidArgumentException('Nominal pembayaran (Rp '.number_format($paymentAmount, 0, ',', '.').') tidak boleh melebihi sisa kasbon (Rp '.number_format($remaining, 0, ',', '.').').');
                 }
 
@@ -941,10 +941,12 @@ class CashAdvanceService
                     'approved_at' => $isAutoSalary ? Carbon::now() : null,
                 ]);
 
+                $allocatedInstallmentNumbers = [];
+
                 if ($isAutoSalary) {
                     // Reduce remaining amount
                     $newRemaining = max(0, round($remaining - $paymentAmount, 2));
-                    $newStatus = ($newRemaining <= 0.001) ? CashAdvanceStatus::PAID->value : $lockedCashAdvance->status->value;
+                    $newStatus = ($newRemaining <= 0.01) ? CashAdvanceStatus::PAID->value : $lockedCashAdvance->status->value;
 
                     $lockedCashAdvance->update([
                         'remaining_amount' => $newRemaining,
@@ -962,7 +964,7 @@ class CashAdvanceService
                         $allocation = min($leftToAllocate, $installmentRemaining);
 
                         $newPaidAmount = round((float) $installment->paid_amount + $allocation, 2);
-                        $installmentStatus = ($newPaidAmount >= (float) $installment->amount)
+                        $installmentStatus = ($newPaidAmount >= (float) $installment->amount - 0.01)
                             ? InstallmentStatus::PAID->value
                             : InstallmentStatus::PARTIALLY_PAID->value;
 
@@ -974,11 +976,21 @@ class CashAdvanceService
 
                         $this->syncOpenPayrollLinesForInstallment($installment);
 
+                        $allocatedInstallmentNumbers[] = $installment->installment_number;
                         $leftToAllocate -= $allocation;
                     }
 
-                    if ($unpaidInstallments->isNotEmpty() && $leftToAllocate > 0.001) {
+                    if ($unpaidInstallments->isNotEmpty() && $leftToAllocate > 0.01) {
                         throw new InvalidArgumentException('Nominal pembayaran tidak dapat dialokasikan ke cicilan kasbon.');
+                    }
+
+                    // Satu baris pembayaran bisa meng-cover beberapa cicilan; baris installment hanya menunjuk target,
+                    // jadi alokasi lengkap didokumentasikan di notes agar buku besar tidak menyesatkan.
+                    if (count($allocatedInstallmentNumbers) > 1) {
+                        $payment->update([
+                            'notes' => trim(($payment->notes ? $payment->notes.' ' : '')
+                                .'(Meng-cover cicilan #'.implode(', #', $allocatedInstallmentNumbers).')'),
+                        ]);
                     }
                 }
 
@@ -1041,7 +1053,7 @@ class CashAdvanceService
             $paymentAmount = (float) $lockedPayment->amount;
             $remaining = (float) $lockedCashAdvance->remaining_amount;
 
-            if ($paymentAmount > $remaining + 0.001) {
+            if ($paymentAmount > $remaining + 0.01) {
                 throw new InvalidArgumentException('Nominal pembayaran (Rp '.number_format($paymentAmount, 0, ',', '.').') melebihi sisa kasbon saat ini (Rp '.number_format($remaining, 0, ',', '.').').');
             }
 
@@ -1060,7 +1072,7 @@ class CashAdvanceService
 
             // Reduce remaining amount
             $newRemaining = max(0, round($remaining - $paymentAmount, 2));
-            $newStatus = ($newRemaining <= 0.001) ? CashAdvanceStatus::PAID->value : $lockedCashAdvance->status->value;
+            $newStatus = ($newRemaining <= 0.01) ? CashAdvanceStatus::PAID->value : $lockedCashAdvance->status->value;
 
             $lockedCashAdvance->update([
                 'remaining_amount' => $newRemaining,
@@ -1937,7 +1949,7 @@ class CashAdvanceService
             $totalAmount = (float) $items->sum(fn ($i) => (float) $i['installment']->amount);
             $totalPaid = (float) $items->sum(fn ($i) => (float) $i['installment']->paid_amount);
             $remaining = max(0.0, round($totalAmount - $totalPaid, 2));
-            $isPaid = $remaining <= 0.001;
+            $isPaid = $remaining <= 0.01;
 
             $itemList = $items->map(function ($item) {
                 /** @var CashAdvanceInstallment $inst */
@@ -1946,7 +1958,7 @@ class CashAdvanceService
                 $adv = $item['cash_advance'];
 
                 $instRemaining = max(0.0, round((float) $inst->amount - (float) $inst->paid_amount, 2));
-                $isInstPaid = $instRemaining <= 0.001;
+                $isInstPaid = $instRemaining <= 0.01;
 
                 $tenorInfo = "[{$inst->installment_number}/{$adv->installment_count}]";
                 $title = "{$tenorInfo} ".($adv->reason ?: 'Kasbon Karyawan');
@@ -2124,7 +2136,7 @@ class CashAdvanceService
             $totalAmount = (float) $row->total_amount;
             $paidAmount = (float) $row->paid_amount;
             $remaining = max(0.0, round($totalAmount - $paidAmount, 2));
-            $isPaid = $remaining <= 0.001;
+            $isPaid = $remaining <= 0.01;
 
             return [
                 'month_key' => $monthKey,
@@ -2228,7 +2240,7 @@ class CashAdvanceService
             $paidAmount = (float) $row->paid_amount;
             $remainingAmount = max(0.0, round($totalAmount - $paidAmount, 2));
 
-            if ($remainingAmount <= 0.001) {
+            if ($remainingAmount <= 0.01) {
                 return null;
             }
 
@@ -2282,7 +2294,7 @@ class CashAdvanceService
         $items = $installments->map(function (CashAdvanceInstallment $installment): array {
             $advance = $installment->cashAdvance;
             $remaining = max(0.0, round((float) $installment->amount - (float) $installment->paid_amount, 2));
-            $isPaid = $remaining <= 0.001;
+            $isPaid = $remaining <= 0.01;
             $tenorInfo = "[{$installment->installment_number}/{$advance->installment_count}]";
 
             return [
@@ -2315,7 +2327,7 @@ class CashAdvanceService
         $totalAmount = (float) $installments->sum('amount');
         $totalPaid = (float) $installments->sum('paid_amount');
         $remaining = max(0.0, round($totalAmount - $totalPaid, 2));
-        $isPaid = $remaining <= 0.001;
+        $isPaid = $remaining <= 0.01;
 
         return [
             'month_key' => $monthKey,
@@ -2417,7 +2429,7 @@ class CashAdvanceService
                 $maxAllowed = $totalRemainingDue;
                 $customAmount = isset($paymentData['amount']) ? (float) $paymentData['amount'] : $totalRemainingDue;
 
-                if ($customAmount <= 0 || $customAmount > $maxAllowed + 0.001) {
+                if ($customAmount <= 0 || $customAmount > $maxAllowed + 0.01) {
                     throw new InvalidArgumentException('Nominal pembayaran tidak boleh melebihi total tagihan bulan terpilih (Rp '.number_format($maxAllowed, 0, ',', '.').').');
                 }
 
@@ -2427,7 +2439,7 @@ class CashAdvanceService
                 $itemsCount = $sortedItems->count();
 
                 foreach ($sortedItems as $index => $item) {
-                    if ($leftToAllocate <= 0.001) {
+                    if ($leftToAllocate <= 0.01) {
                         break;
                     }
 
@@ -2441,7 +2453,7 @@ class CashAdvanceService
                     $leftToAllocate -= $allocation;
                 }
 
-                if ($leftToAllocate > 0.001) {
+                if ($leftToAllocate > 0.01) {
                     throw new InvalidArgumentException('Nominal pembayaran tidak dapat dialokasikan ke tagihan yang dipilih.');
                 }
 
@@ -2451,7 +2463,7 @@ class CashAdvanceService
 
                 foreach ($allocatedItems as $item) {
                     $allocation = (float) $item['allocation'];
-                    if ($allocation <= 0.001) {
+                    if ($allocation <= 0.01) {
                         continue;
                     }
 
@@ -2546,8 +2558,12 @@ class CashAdvanceService
         $unpaidBalance = max(0.0, round((float) $installment->amount - (float) $installment->paid_amount, 2));
         $payrollService = app(PayrollService::class);
 
+        // Saldo hutang hanya boleh muncul sekali: baris pertama (tertua) memegang saldo penuh,
+        // baris lain yang mereferensi installment yang sama di-nol-kan agar potongan tidak terhitung ganda.
+        $primaryLine = $openLines->sortBy('id')->first();
+
         foreach ($openLines as $line) {
-            $line->update(['amount' => $unpaidBalance]);
+            $line->update(['amount' => $line->is($primaryLine) ? $unpaidBalance : 0.0]);
             if ($line->item) {
                 $payrollService->recalculateItem($line->item);
             }

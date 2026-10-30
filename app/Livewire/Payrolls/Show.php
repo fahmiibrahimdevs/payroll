@@ -107,7 +107,9 @@ class Show extends Component
         $this->period = $period->load(['creator', 'submitter', 'approver', 'updater']);
         $this->paymentDate = Carbon::now()->toDateString();
 
-        if ($this->period->status->isEditable()) {
+        // Cleanup hanya untuk pengguna yang berhak mengubah periode (admin);
+        // direktur yang sekadar melihat tidak boleh memicu penghapusan permanen.
+        if ($this->period->status->isEditable() && auth()->user()?->can('update', $this->period)) {
             $this->cleanupTrashedEmployees();
         }
     }
@@ -334,7 +336,9 @@ class Show extends Component
             'employee.detail',
             'lines.salaryComponent',
             'lines.cashAdvanceInstallment',
-        ])->findOrFail($itemId);
+        ])
+            ->where('payroll_period_id', $this->period->id)
+            ->findOrFail($itemId);
 
         $this->allowanceRows = [];
         $this->deductionRows = [];
@@ -699,7 +703,7 @@ class Show extends Component
     public function processPayment(PayrollService $service): void
     {
         $this->validate([
-            'paymentDate' => 'required|date',
+            'paymentDate' => 'required|date|before_or_equal:today',
             'paymentMethod' => 'required|in:bank_transfer,cash',
             'paymentNotes' => 'nullable|string|max:500',
         ], [
@@ -737,7 +741,9 @@ class Show extends Component
     {
         Gate::authorize('recordPayment', $this->period);
 
-        $item = PayrollItem::with(['employee.detail', 'payrollPeriod'])->findOrFail($itemId);
+        $item = PayrollItem::with(['employee.detail', 'payrollPeriod'])
+            ->where('payroll_period_id', $this->period->id)
+            ->findOrFail($itemId);
 
         if (! $item->isApproved() && $item->payrollPeriod->status->value !== 'approved') {
             $this->dispatch('swal:alert', [
@@ -782,7 +788,9 @@ class Show extends Component
     {
         Gate::authorize('recordPayment', $this->period);
 
-        $item = PayrollItem::with(['employee.detail', 'payrollPeriod'])->findOrFail($itemId);
+        $item = PayrollItem::with(['employee.detail', 'payrollPeriod'])
+            ->where('payroll_period_id', $this->period->id)
+            ->findOrFail($itemId);
 
         $this->payingItem = $item;
         $this->isEditingPayment = true;
@@ -808,7 +816,7 @@ class Show extends Component
         }
 
         $rules = [
-            'itemPaymentDate' => 'required|date',
+            'itemPaymentDate' => 'required|date|before_or_equal:today',
             'itemPaymentMethod' => 'required|in:bank_transfer,cash',
             'itemPaymentProof' => $this->isEditingPayment ? 'nullable|file|mimes:jpg,jpeg,png,pdf|max:3072' : 'required|file|mimes:jpg,jpeg,png,pdf|max:3072',
             'itemPaymentNotes' => 'nullable|string|max:500',
@@ -833,7 +841,7 @@ class Show extends Component
         try {
             $proofPath = null;
             if ($this->itemPaymentProof) {
-                $proofPath = $this->itemPaymentProof->store('payroll-proofs', 'public');
+                $proofPath = $this->itemPaymentProof->store('payroll-proofs', 'local');
             }
 
             $bankName = $this->itemPaymentMethod === 'bank_transfer' ? $this->itemBankName : null;
@@ -898,7 +906,9 @@ class Show extends Component
             'employee.position',
             'payer',
             'updater',
-        ])->findOrFail($itemId);
+        ])
+            ->where('payroll_period_id', $this->period->id)
+            ->findOrFail($itemId);
 
         $this->dispatch('open-modal', ['id' => 'paymentDetailModal']);
     }
@@ -916,7 +926,9 @@ class Show extends Component
             'payrollPeriod',
             'payer',
             'approver',
-        ])->findOrFail($itemId);
+        ])
+            ->where('payroll_period_id', $this->period->id)
+            ->findOrFail($itemId);
 
         $this->dispatch('open-modal', ['id' => 'previewSlipModal']);
     }

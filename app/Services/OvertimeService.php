@@ -223,10 +223,12 @@ class OvertimeService
         }
 
         $prevDate = Carbon::parse($date)->subDay()->toDateString();
+        // Lembur lewat tengah malam dapat bertumpuk dengan pengajuan bertanggal hari berikutnya
+        $nextDate = Carbon::parse($date)->addDay()->toDateString();
 
         $candidates = OvertimeSubmission::query()
             ->where('employee_id', $employeeId)
-            ->whereIn('date', [$prevDate, $date])
+            ->whereIn('date', [$prevDate, $date, $nextDate])
             ->where('overtime_type', OvertimeType::HOURLY)
             ->whereIn('status', [
                 OvertimeStatus::PENDING_ADMIN,
@@ -753,8 +755,8 @@ class OvertimeService
 
             // Hapus file fisik bukti transfer dari storage agar tidak menjadi file sampah
             foreach ($period->attendances()->whereNotNull('payment_proof_path')->get() as $att) {
-                if ($att->payment_proof_path && Storage::disk('public')->exists($att->payment_proof_path)) {
-                    Storage::disk('public')->delete($att->payment_proof_path);
+                if ($att->payment_proof_path && Storage::disk('local')->exists($att->payment_proof_path)) {
+                    Storage::disk('local')->delete($att->payment_proof_path);
                 }
             }
 
@@ -794,11 +796,19 @@ class OvertimeService
             $attendanceDays = $data['attendance_days'] ?? $attendance->attendance_days;
             $rate = isset($data['meal_allowance_per_day']) ? (float) $data['meal_allowance_per_day'] : (float) $attendance->meal_allowance_per_day;
             $type = $data['meal_allowance_type'] ?? $attendance->meal_allowance_type;
+
+            // Clamp input client: nilai negatif/ekstrem tidak boleh mengubah payout mingguan.
+            $attendedDays = max(0, min(7, $attendedDays));
+            $rate = max(0.0, $rate);
+            if (! in_array($type, ['standar', 'khusus'], true)) {
+                $type = $attendance->meal_allowance_type;
+            }
             $totalMeal = round($attendedDays * $rate, 2);
 
             $employee = $attendance->employee ?? Employee::find($employeeId);
             $isHarian = $employee && $employee->employment_status === EmploymentStatus::HARIAN;
-            $dailyRate = isset($data['daily_rate']) ? (float) $data['daily_rate'] : ($isHarian ? (float) ($employee->daily_rate ?? 0) : 0.0);
+            // daily_rate selalu dari data master karyawan, bukan dari input client (read-only di UI).
+            $dailyRate = $isHarian ? (float) ($employee->daily_rate ?? 0) : 0.0;
             $totalDailyWage = round($attendedDays * $dailyRate, 2);
 
             $attendance->update([
@@ -846,6 +856,10 @@ class OvertimeService
                 throw new InvalidArgumentException('Periode lembur ini sudah ditandai selesai dibayar.');
             }
 
+            if ($lockedPeriod->status === OvertimePeriodStatus::CANCELLED) {
+                throw new InvalidArgumentException('Periode lembur yang dibatalkan tidak dapat ditandai dibayar.');
+            }
+
             $lockedPeriod->update([
                 'status' => OvertimePeriodStatus::PAID,
                 'paid_by' => $actor->id,
@@ -884,6 +898,11 @@ class OvertimeService
     public function payEmployeeWeekly(OvertimePeriodAttendance $attendance, array $data, User $actor): OvertimePeriodAttendance
     {
         return DB::transaction(function () use ($attendance, $data, $actor) {
+            // Guard pembayaran ganda: pembaruan data untuk yang sudah dibayar wajib lewat updateEmployeeWeeklyPayment().
+            if ($attendance->payment_status === 'paid') {
+                throw new InvalidArgumentException('Gaji mingguan karyawan ini sudah ditandai dibayar. Gunakan menu ubah data pembayaran untuk memperbarui detailnya.');
+            }
+
             $attendance->update([
                 'payment_status' => 'paid',
                 'paid_at' => $data['payment_date'] ?? now(),
@@ -952,6 +971,13 @@ class OvertimeService
      */
     public function getEmployeeMonthlyOvertimeSummary(int $employeeId, int $year, int $month): array
     {
+        // Memoization per-request: print batch memanggil ringkasan ini per payslip (ratusan kali per cetak).
+        static $summaryCache = [];
+        $cacheKey = $employeeId.'|'.$year.'|'.$month;
+        if (isset($summaryCache[$cacheKey])) {
+            return $summaryCache[$cacheKey];
+        }
+
         $startDate = Carbon::create($year, $month, 1)->startOfMonth();
         $endDate = Carbon::create($year, $month, 1)->endOfMonth();
 
@@ -980,11 +1006,13 @@ class OvertimeService
             }
         }
 
-        // Meal allowances from period attendances in this month
+        // Meal allowances from period attendances overlapping this month
+        // (periode mingguan boleh dimulai bulan sebelumnya namun mencakup hari bulan ini)
         $attendances = \App\Models\OvertimePeriodAttendance::query()
             ->where('employee_id', $employeeId)
             ->whereHas('overtimePeriod', function ($q) use ($startDate, $endDate) {
-                $q->whereBetween('start_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+                $q->whereDate('start_date', '<=', $endDate->format('Y-m-d'))
+                    ->whereDate('end_date', '>=', $startDate->format('Y-m-d'));
             })
             ->get();
 
@@ -995,7 +1023,7 @@ class OvertimeService
 
         $grandTotal = $totalOvertimePay + $totalMealAllowance;
 
-        return [
+        return $summaryCache[$cacheKey] = [
             'count' => $submissions->count(),
             'total_hours' => $totalHours,
             'total_overtime_pay' => $totalOvertimePay,

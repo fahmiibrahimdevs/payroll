@@ -2,6 +2,7 @@
 
 namespace App\Livewire\CashAdvances;
 
+use App\Enums\CashAdvancePaymentStatus;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\PaymentMethod;
@@ -381,6 +382,8 @@ class Index extends Component
             ]);
         } catch (ValidationException $e) {
             throw $e;
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -506,6 +509,8 @@ class Index extends Component
                 'tab' => $this->detailModalTab,
                 'highlightPaymentId' => $paymentId,
             ]);
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (Throwable) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -530,6 +535,8 @@ class Index extends Component
             $this->approvalNotes = '';
             $this->rejectionReason = '';
             $this->dispatch('open-modal', id: 'cashAdvanceApprovalModal');
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (Throwable) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -571,6 +578,8 @@ class Index extends Component
             $this->selectedCashAdvanceId = null;
             $this->approvalNotes = '';
             $this->rejectionReason = '';
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -621,6 +630,8 @@ class Index extends Component
             $this->rejectionReason = '';
         } catch (ValidationException $e) {
             throw $e;
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -649,6 +660,8 @@ class Index extends Component
                 'title' => 'Kasbon Disetujui!',
                 'message' => "Pengajuan kasbon {$cashAdvance->reference_number} telah disetujui dan jadwal cicilan telah digenerate.",
             ]);
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -688,6 +701,8 @@ class Index extends Component
                 'title' => 'Kasbon Ditolak',
                 'message' => "Pengajuan kasbon {$cashAdvance->reference_number} telah ditolak.",
             ]);
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -728,6 +743,8 @@ class Index extends Component
             $this->selectedCashAdvance = $cashAdvance;
             $this->paymentForm->setCashAdvance($cashAdvance);
             $this->dispatch('open-modal', id: 'cashAdvancePaymentModal');
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (Throwable) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -771,6 +788,8 @@ class Index extends Component
             $this->paymentForm->setCashAdvance($cashAdvance);
             $this->paymentForm->applyPaymentTarget('installment', $installmentId);
             $this->dispatch('open-modal', id: 'cashAdvancePaymentModal');
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (Throwable) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -839,6 +858,8 @@ class Index extends Component
                 'title' => 'Pembayaran Disetujui!',
                 'message' => "Pembayaran {$payment->payment_number} sebesar {$payment->formatted_amount} telah disetujui (ACC). Saldo dan cicilan kasbon telah diperbarui.",
             ]);
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -882,6 +903,8 @@ class Index extends Component
                 'title' => 'Pembayaran Ditolak',
                 'message' => "Pembayaran {$payment->payment_number} telah ditolak.",
             ]);
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -1623,7 +1646,9 @@ HTML;
             $approvedCount = (int) ($advRow?->approved_count ?? 0);
             $pendingCount = (int) ($advRow?->pending_count ?? 0);
             $pendingAmount = (float) ($advRow?->pending_amount ?? 0);
-            $paidCount = CashAdvancePayment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id))->count();
+            $paidCount = CashAdvancePayment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id))
+                ->where('status', CashAdvancePaymentStatus::APPROVED->value)
+                ->count();
 
             $activePaidPct = $totalApproved > 0 ? (int) round(($totalPaid / $totalApproved) * 100) : 0;
 

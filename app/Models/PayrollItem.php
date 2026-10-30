@@ -279,7 +279,7 @@ class PayrollItem extends Model
     protected function paymentProofUrl(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->payment_proof_path ? asset('storage/'.$this->payment_proof_path) : null
+            get: fn () => $this->payment_proof_path ? route('payrolls.documents.item-proof', $this) : null
         );
     }
 

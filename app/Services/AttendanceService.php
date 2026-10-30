@@ -224,12 +224,24 @@ class AttendanceService
                         }
 
                         $dayNum = (int) $m[1];
-                        $dateObj = $startDate->copy();
-                        if ($dayNum < $startDate->day && $endDate->gt($startDate)) {
-                            $dateObj = $endDate->copy()->day($dayNum);
-                        } else {
-                            $dateObj->day($dayNum);
+                        if ($dayNum < 1 || $dayNum > 31) {
+                            continue;
                         }
+
+                        $dateObj = $startDate->copy();
+                        if ($dayNum < $startDate->day && $endDate->gt($startDate) && $endDate->month !== $startDate->month) {
+                            $dateObj = $endDate->copy();
+                        }
+
+                        // Hari tidak ada pada bulan kandidat (mis. 31 di April/Februari) - coba bulan lainnya dalam rentang
+                        if ($dayNum > $dateObj->daysInMonth) {
+                            $alt = $dateObj->isSameMonth($startDate) ? $endDate->copy() : $startDate->copy();
+                            if ($dayNum > $alt->daysInMonth || $alt->lt($startDate) || $alt->gt($endDate)) {
+                                continue;
+                            }
+                            $dateObj = $alt;
+                        }
+                        $dateObj->day($dayNum);
                         $dateString = $dateObj->toDateString();
 
                         // Proteksi strictly: abaikan tanggal di luar rentang $startDate s.d. $endDate

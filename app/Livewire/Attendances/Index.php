@@ -190,7 +190,7 @@ class Index extends Component
         abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
 
         $this->validate([
-            'excelFile' => ['required', 'file', 'extensions:xls,xlsx', 'max:10240'],
+            'excelFile' => ['required', 'file', 'mimes:xls,xlsx', 'extensions:xls,xlsx', 'max:10240'],
         ], [
             'excelFile.required' => 'Silakan pilih berkas Excel laporan absensi terlebih dahulu.',
             'excelFile.extensions' => 'Format berkas harus berupa .xls atau .xlsx.',

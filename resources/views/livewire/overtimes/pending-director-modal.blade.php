@@ -81,7 +81,7 @@
                                         @if (auth()->user()?->hasRole('direktur'))
                                             <!-- Setujui Lembur (SweetAlert2) -->
                                             <button type="button" 
-                                                    onclick="$('#pendingDirectorReviewModal').modal('hide'); confirmApproveOvertime({{ $item->id }}, '{{ $item->reference_number }}');" 
+                                                    onclick="$('#pendingDirectorReviewModal').modal('hide'); confirmApproveOvertime({{ $item->id }}, @js($item->reference_number));" 
                                                     class="btn btn-success d-inline-flex align-items-center justify-content-center shadow-xs" 
                                                     style="width: 32px; height: 32px; border-radius: 8px; padding: 0;" 
                                                     title="Setujui Lembur">
@@ -90,7 +90,7 @@
 
                                             <!-- Tolak Pengajuan (SweetAlert2) -->
                                             <button type="button" 
-                                                    onclick="$('#pendingDirectorReviewModal').modal('hide'); confirmRejectOvertime({{ $item->id }}, '{{ $item->reference_number }}');" 
+                                                    onclick="$('#pendingDirectorReviewModal').modal('hide'); confirmRejectOvertime({{ $item->id }}, @js($item->reference_number));" 
                                                     class="btn btn-danger d-inline-flex align-items-center justify-content-center shadow-xs" 
                                                     style="width: 32px; height: 32px; border-radius: 8px; padding: 0;" 
                                                     title="Tolak Pengajuan">

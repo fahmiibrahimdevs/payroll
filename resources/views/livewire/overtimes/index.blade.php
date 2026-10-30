@@ -343,10 +343,10 @@
 
                                             <!-- AKSI DIREKTUR: APPROVE / TOLAK DENGAN SWEETALERT2 -->
                                             @if (auth()->user()->hasRole('direktur') && $sub->status === \App\Enums\OvertimeStatus::PENDING_DIREKTUR)
-                                                <button type="button" class="btn btn-success btn-action mr-1" onclick="confirmApproveOvertime({{ $sub->id }}, '{{ $sub->reference_number }}')" title="Setujui Lembur">
+                                                <button type="button" class="btn btn-success btn-action mr-1" onclick="confirmApproveOvertime({{ $sub->id }}, @js($sub->reference_number))" title="Setujui Lembur">
                                                     <i class="fas fa-check"></i>
                                                 </button>
-                                                <button type="button" class="btn btn-danger btn-action" onclick="confirmRejectOvertime({{ $sub->id }}, '{{ $sub->reference_number }}')" title="Tolak Pengajuan Lembur">
+                                                <button type="button" class="btn btn-danger btn-action" onclick="confirmRejectOvertime({{ $sub->id }}, @js($sub->reference_number))" title="Tolak Pengajuan Lembur">
                                                     <i class="fas fa-times"></i>
                                                 </button>
                                             @endif
@@ -1023,10 +1023,10 @@
                         </button>
                     @elseif ($detailSubmission && auth()->user()->hasRole('direktur') && $detailSubmission->status === \App\Enums\OvertimeStatus::PENDING_DIREKTUR)
                         <div class="d-flex align-items-center" style="gap: 8px;">
-                            <button type="button" class="btn btn-danger btn-sm" onclick="$('#overtimeDetailModal').modal('hide'); confirmRejectOvertime({{ $detailSubmission->id }}, '{{ $detailSubmission->reference_number }}');" style="font-weight: 500; border-radius: 8px;">
+                            <button type="button" class="btn btn-danger btn-sm" onclick="$('#overtimeDetailModal').modal('hide'); confirmRejectOvertime({{ $detailSubmission->id }}, @js($detailSubmission->reference_number));" style="font-weight: 500; border-radius: 8px;">
                                 <i class="fas fa-times mr-1"></i> Tolak Pengajuan
                             </button>
-                            <button type="button" class="btn btn-success btn-sm" onclick="$('#overtimeDetailModal').modal('hide'); confirmApproveOvertime({{ $detailSubmission->id }}, '{{ $detailSubmission->reference_number }}');" style="font-weight: 500; border-radius: 8px;">
+                            <button type="button" class="btn btn-success btn-sm" onclick="$('#overtimeDetailModal').modal('hide'); confirmApproveOvertime({{ $detailSubmission->id }}, @js($detailSubmission->reference_number));" style="font-weight: 500; border-radius: 8px;">
                                 <i class="fas fa-check mr-1"></i> Setujui Lembur
                             </button>
                         </div>

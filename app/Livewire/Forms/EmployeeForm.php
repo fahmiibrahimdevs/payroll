@@ -76,6 +76,9 @@ class EmployeeForm extends Form
 
     public string $password = '';
 
+    /** Password awal yang dibuat otomatis (untuk ditampilkan satu kali ke admin). */
+    public string $generatedPassword = '';
+
     public string $bank_name = '';
 
     public string $bank_account_number = '';
@@ -147,7 +150,7 @@ class EmployeeForm extends Form
             ],
             'email_username' => ['nullable', 'string', 'max:100'],
             'role' => ['required', 'string', Rule::in(['karyawan', 'admin'])],
-            'password' => ['nullable', 'string', 'min:1', 'max:255'],
+            'password' => ['nullable', 'string', 'min:8', 'max:255'],
             'bank_name' => ['nullable', 'string', 'max:100'],
             'bank_account_number' => ['nullable', 'string', 'max:100'],
             'bank_account_name' => ['nullable', 'string', 'max:255'],
@@ -396,7 +399,9 @@ class EmployeeForm extends Form
 
         $validated = $this->validate();
         $validated['role'] = in_array($this->role, ['karyawan', 'admin'], true) ? $this->role : 'karyawan';
-        $validated['password'] = $this->password ?: '1';
+        // Akun baru tanpa password eksplisit mendapat password acak yang kuat, bukan default yang mudah ditebak.
+        $validated['password'] = $this->password ?: \Illuminate\Support\Str::password(10, symbols: false);
+        $this->generatedPassword = $validated['password'];
 
         $companyProfile = CompanyProfile::getProfile();
         $isUniform = (bool) ($companyProfile->is_uniform_meal_allowance ?? true);

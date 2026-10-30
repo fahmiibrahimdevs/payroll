@@ -2738,7 +2738,8 @@ class ManageItem extends Component
                 ->all();
 
             $service = $service ?? app(PayrollService::class);
-            $user = auth()->user() ?? $this->period->creator ?? User::first();
+            // Perubahan payroll wajib teratribusi ke user sesi nyata; fallback ke user arbitrer merusak jejak audit.
+            $user = auth()->user() ?? $this->period->creator;
             if (! $user) {
                 return false;
             }

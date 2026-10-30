@@ -72,8 +72,9 @@ class IdObfuscator
             return (int) $decoded[0];
         }
 
-        // Fallback for purely numeric integer string (backward-compatibility / testing)
-        if (ctype_digit($strValue)) {
+        // Fallback menerima ID numerik mentah HANYA di environment testing,
+        // agar route ber-hashid tidak dapat dienumerasi lewat 1, 2, 3, ... di production.
+        if (ctype_digit($strValue) && app()->environment('testing')) {
             $numericVal = (int) $strValue;
             if ($numericVal > 0) {
                 return $numericVal;

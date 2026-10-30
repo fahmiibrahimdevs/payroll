@@ -596,11 +596,11 @@
                                             $isPdfProof = \Illuminate\Support\Str::endsWith(strtolower($selectedAttendance->payment_proof_path), '.pdf');
                                         @endphp
                                         @if ($isPdfProof)
-                                            <a href="{{ asset('storage/' . $selectedAttendance->payment_proof_path) }}" target="_blank" class="badge badge-light border text-danger font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #fca5a5 !important; background-color: #fef2f2 !important; text-decoration: none;" title="Buka lampiran bukti transfer (PDF)">
+                                            <a href="{{ route('overtimes.documents.attendance-proof', $selectedAttendance) }}" target="_blank" class="badge badge-light border text-danger font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #fca5a5 !important; background-color: #fef2f2 !important; text-decoration: none;" title="Buka lampiran bukti transfer (PDF)">
                                                 <i class="fas fa-file-pdf mr-1 text-danger"></i> Buka Dokumen Bukti (PDF) <i class="fas fa-external-link-alt ml-1" style="font-size: 9px;"></i>
                                             </a>
                                         @else
-                                            <a href="{{ asset('storage/' . $selectedAttendance->payment_proof_path) }}" target="_blank" class="badge badge-light border text-primary font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #cbd5e1 !important; text-decoration: none;" title="Buka lampiran foto bukti transfer / kwitansi">
+                                            <a href="{{ route('overtimes.documents.attendance-proof', $selectedAttendance) }}" target="_blank" class="badge badge-light border text-primary font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #cbd5e1 !important; text-decoration: none;" title="Buka lampiran foto bukti transfer / kwitansi">
                                                 <i class="fas fa-file-image mr-1 text-success"></i> Buka Foto Bukti <i class="fas fa-external-link-alt ml-1" style="font-size: 9px;"></i>
                                             </a>
                                         @endif

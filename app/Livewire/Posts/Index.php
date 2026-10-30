@@ -70,6 +70,8 @@ class Index extends Component
      */
     public function create(): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
         $this->isEditMode = false;
         $this->editingPostId = null;
         $this->form->resetForm();
@@ -85,6 +87,8 @@ class Index extends Component
      */
     public function store(PostService $postService): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
         try {
             $this->form->store($postService);
             $this->dispatch('close-modal', id: 'postModal');
@@ -109,6 +113,8 @@ class Index extends Component
      */
     public function edit(int $id): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
         try {
             $post = Post::findOrFail($id);
             $this->isEditMode = true;
@@ -133,6 +139,8 @@ class Index extends Component
      */
     public function update(PostService $postService): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
         try {
             $this->form->update($postService);
             $this->isEditMode = false;
@@ -159,6 +167,8 @@ class Index extends Component
      */
     public function confirmDelete(int $id): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
         $post = Post::find($id);
 
         if (! $post) {
@@ -183,6 +193,8 @@ class Index extends Component
     #[On('delete-post')]
     public function delete(int $id, PostService $postService): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
         try {
             $post = Post::findOrFail($id);
             $postService->deletePost($post);

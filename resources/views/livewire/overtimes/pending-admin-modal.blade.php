@@ -86,7 +86,7 @@
 
                                             <!-- Tolak Pengajuan -->
                                             <button type="button" 
-                                                    onclick="$('#pendingAdminReviewModal').modal('hide'); confirmRejectOvertime({{ $item->id }}, '{{ $item->reference_number }}');" 
+                                                    onclick="$('#pendingAdminReviewModal').modal('hide'); confirmRejectOvertime({{ $item->id }}, @js($item->reference_number));" 
                                                     class="btn btn-danger d-inline-flex align-items-center justify-content-center shadow-xs" 
                                                     style="width: 32px; height: 32px; border-radius: 8px; padding: 0;" 
                                                     title="Tolak Pengajuan">

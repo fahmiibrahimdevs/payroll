@@ -1044,7 +1044,7 @@ class OvertimeTest extends TestCase
 
         $this->actingAs($this->adminUser);
 
-        Storage::fake('public');
+        Storage::fake('local');
         $fakeProof = UploadedFile::fake()->image('bukti_transfer.jpg');
 
         // 1. Bayar Gaji Karyawan
@@ -1067,7 +1067,7 @@ class OvertimeTest extends TestCase
         $this->assertEquals('BCA Demo', $attendance->bank_name);
         $this->assertEquals('1234567890', $attendance->bank_account_number);
         $this->assertNotNull($attendance->payment_proof_path);
-        Storage::disk('public')->assertExists($attendance->payment_proof_path);
+        Storage::disk('local')->assertExists($attendance->payment_proof_path);
         $this->assertEquals($this->adminUser->id, $attendance->paid_by);
 
         // 2. Buka Modal Detail Pembayaran
