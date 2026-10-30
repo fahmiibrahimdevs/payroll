@@ -734,7 +734,7 @@ class CashAdvanceService
         Gate::forUser($approver)->authorize('approve', $cashAdvance);
 
         try {
-            return DB::transaction(function () use ($cashAdvance, $approver, $notes) {
+            $approved = DB::transaction(function () use ($cashAdvance, $approver, $notes) {
                 $lockedCashAdvance = CashAdvance::query()
                     ->lockForUpdate()
                     ->findOrFail($cashAdvance->id);
@@ -792,6 +792,21 @@ class CashAdvanceService
 
                 return $lockedCashAdvance->fresh(['installments']);
             });
+
+            $recipient = $approved->employee?->user;
+            if ($recipient && $recipient->id !== $approver->id) {
+                app(NotificationService::class)->send(
+                    $recipient,
+                    'cash_advance',
+                    'Kasbon Disetujui',
+                    "Pengajuan kasbon {$approved->reference_number} Anda telah disetujui dan dicairkan. Jadwal cicilan sudah dibuat.",
+                    route('cash-advances.index'),
+                    'fas fa-hand-holding-usd',
+                    'success',
+                );
+            }
+
+            return $approved;
         } catch (Throwable $e) {
             $this->logger->error(
                 action: 'APPROVE_FAILED',
@@ -815,7 +830,7 @@ class CashAdvanceService
         Gate::forUser($approver)->authorize('reject', $cashAdvance);
 
         try {
-            return DB::transaction(function () use ($cashAdvance, $approver, $reason) {
+            $rejected = DB::transaction(function () use ($cashAdvance, $approver, $reason) {
                 $lockedCashAdvance = CashAdvance::query()
                     ->lockForUpdate()
                     ->findOrFail($cashAdvance->id);
@@ -845,6 +860,21 @@ class CashAdvanceService
 
                 return $lockedCashAdvance;
             });
+
+            $recipient = $rejected->employee?->user;
+            if ($recipient && $recipient->id !== $approver->id) {
+                app(NotificationService::class)->send(
+                    $recipient,
+                    'cash_advance',
+                    'Kasbon Ditolak',
+                    "Pengajuan kasbon {$rejected->reference_number} Anda ditolak. Alasan: {$reason}",
+                    route('cash-advances.index'),
+                    'fas fa-hand-holding-usd',
+                    'danger',
+                );
+            }
+
+            return $rejected;
         } catch (Throwable $e) {
             $this->logger->error(
                 action: 'REJECT_FAILED',
@@ -1037,7 +1067,7 @@ class CashAdvanceService
     {
         Gate::forUser($user)->authorize('approve', $payment);
 
-        return DB::transaction(function () use ($payment, $user) {
+        $approvedPayment = DB::transaction(function () use ($payment, $user) {
             $lockedPayment = CashAdvancePayment::query()
                 ->lockForUpdate()
                 ->findOrFail($payment->id);
@@ -1128,6 +1158,24 @@ class CashAdvanceService
 
             return $lockedPayment;
         });
+
+        $recipient = $approvedPayment->cashAdvance?->employee?->user;
+        if ($recipient && $recipient->id !== $user->id) {
+            $isFullyPaid = (float) $approvedPayment->cashAdvance?->remaining_amount <= 0.01;
+            app(NotificationService::class)->send(
+                $recipient,
+                'cash_advance',
+                $isFullyPaid ? 'Kasbon Lunas' : 'Pembayaran Kasbon Disetujui',
+                $isFullyPaid
+                    ? "Pembayaran {$approvedPayment->payment_number} Anda disetujui dan kasbon {$approvedPayment->cashAdvance->reference_number} kini LUNAS."
+                    : "Pembayaran {$approvedPayment->payment_number} sebesar Rp ".number_format((float) $approvedPayment->amount, 0, ',', '.').' telah disetujui Direktur.',
+                route('cash-advances.index'),
+                'fas fa-hand-holding-usd',
+                'success',
+            );
+        }
+
+        return $approvedPayment;
     }
 
     /**
@@ -1144,7 +1192,7 @@ class CashAdvanceService
             throw new InvalidArgumentException('Alasan penolakan pembayaran wajib diisi.');
         }
 
-        return DB::transaction(function () use ($payment, $trimmedReason, $user) {
+        $rejectedPayment = DB::transaction(function () use ($payment, $trimmedReason, $user) {
             $lockedPayment = CashAdvancePayment::query()
                 ->lockForUpdate()
                 ->findOrFail($payment->id);
@@ -1175,6 +1223,21 @@ class CashAdvanceService
 
             return $lockedPayment;
         });
+
+        $recipient = $rejectedPayment->cashAdvance?->employee?->user;
+        if ($recipient && $recipient->id !== $user->id) {
+            app(NotificationService::class)->send(
+                $recipient,
+                'cash_advance',
+                'Pembayaran Kasbon Ditolak',
+                "Pembayaran {$rejectedPayment->payment_number} Anda ditolak Direktur. Alasan: {$trimmedReason}",
+                route('cash-advances.index'),
+                'fas fa-hand-holding-usd',
+                'danger',
+            );
+        }
+
+        return $rejectedPayment;
     }
 
     /**

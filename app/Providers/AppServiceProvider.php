@@ -34,15 +34,20 @@ class AppServiceProvider extends ServiceProvider
         });
 
         View::composer('layouts.shizuefi.navbar', function ($view): void {
-            if (auth()->check() && (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur'))) {
-                $user = auth()->user();
-                $notifications = Cache::remember('navbar_notifications_'.$user->id, 30, function () {
-                    return app(DashboardService::class)->getActionItems();
-                });
-                $view->with('navbarNotifications', $notifications);
-            } else {
-                $view->with('navbarNotifications', []);
-            }
+            $user = auth()->user();
+
+            $notifications = ($user && ($user->hasRole('admin') || $user->hasRole('direktur') || $user->hasRole('karyawan')))
+                ? $this->cachedActionItems($user)
+                : [];
+
+            $view->with('navbarNotifications', $notifications);
+        });
+    }
+
+    private function cachedActionItems($user): array
+    {
+        return Cache::remember('navbar_notifications_'.$user->id, 30, function () {
+            return app(DashboardService::class)->getActionItems();
         });
     }
 }

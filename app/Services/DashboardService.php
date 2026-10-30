@@ -7,12 +7,14 @@ use App\Enums\CashAdvanceStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
 use App\Enums\InstallmentStatus;
+use App\Enums\OvertimeStatus;
 use App\Enums\PayrollPeriodStatus;
 use App\Models\CashAdvance;
 use App\Models\CashAdvanceInstallment;
 use App\Models\CashAdvancePayment;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\OvertimeSubmission;
 use App\Models\PayrollItem;
 use App\Models\PayrollPeriod;
 use App\Models\Role;
@@ -311,6 +313,31 @@ class DashboardService
 
         $isDirector = $currentUser?->hasRole('direktur') ?? false;
         $isAdmin = $currentUser?->hasRole('admin') ?? false;
+        $isKaryawan = ! $isDirector && ! $isAdmin;
+
+        if ($isKaryawan && $currentUser !== null) {
+            return $this->karyawanActionItems($currentUser);
+        }
+
+        $pendingOvertimeAdminCount = $isAdmin
+            ? OvertimeSubmission::query()->where('status', OvertimeStatus::PENDING_ADMIN->value)->count()
+            : 0;
+
+        $pendingOvertimeDirectorCount = $isDirector
+            ? OvertimeSubmission::query()->where('status', OvertimeStatus::PENDING_DIREKTUR->value)->count()
+            : 0;
+
+        $pendingOvertimeAgingCount = $isAdmin && $pendingOvertimeAdminCount > 0
+            ? OvertimeSubmission::query()
+                ->where('status', OvertimeStatus::PENDING_ADMIN->value)
+                ->where('created_at', '<=', now()->subDays(3))
+                ->count()
+            : ($isDirector && $pendingOvertimeDirectorCount > 0
+                ? OvertimeSubmission::query()
+                    ->where('status', OvertimeStatus::PENDING_DIREKTUR->value)
+                    ->where('created_at', '<=', now()->subDays(3))
+                    ->count()
+                : 0);
 
         $currentPayrollPeriod = PayrollPeriod::query()
             ->where('month', $month)
@@ -344,6 +371,9 @@ class DashboardService
             $payrollVerifiedCount,
             $pendingCashAdvancesCount,
             $pendingCashAdvancePaymentsCount,
+            $pendingOvertimeAdminCount,
+            $pendingOvertimeDirectorCount,
+            $pendingOvertimeAgingCount,
             $isDirector,
             $isAdmin,
         );
@@ -360,8 +390,11 @@ class DashboardService
         int $payrollVerifiedCount,
         int $pendingCashAdvancesCount,
         int $pendingCashAdvancePaymentsCount,
-        bool $isDirector,
-        bool $isAdmin,
+        int $pendingOvertimeAdminCount = 0,
+        int $pendingOvertimeDirectorCount = 0,
+        int $pendingOvertimeAgingCount = 0,
+        bool $isDirector = false,
+        bool $isAdmin = false,
     ): array {
         $monthsList = [
             1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
@@ -842,6 +875,127 @@ class DashboardService
                     'url' => route('employees.index'),
                 ];
             }
+        }
+
+        if ($isAdmin && $pendingOvertimeAdminCount > 0) {
+            $actionItems[] = [
+                'type' => $pendingOvertimeAgingCount > 0 ? 'danger' : 'info',
+                'icon' => 'fas fa-user-clock',
+                'icon_color' => 'text-info',
+                'title' => 'Verifikasi Lembur',
+                'text' => "Terdapat {$pendingOvertimeAdminCount} pengajuan lembur menunggu verifikasi Admin."
+                    .($pendingOvertimeAgingCount > 0 ? " {$pendingOvertimeAgingCount} pengajuan sudah lebih dari 3 hari." : ''),
+                'action_label' => 'Verifikasi Lembur',
+                'url' => route('overtimes.index'),
+            ];
+        }
+
+        if ($isDirector && $pendingOvertimeDirectorCount > 0) {
+            $actionItems[] = [
+                'type' => $pendingOvertimeAgingCount > 0 ? 'danger' : 'info',
+                'icon' => 'fas fa-user-clock',
+                'icon_color' => 'text-info',
+                'title' => 'Persetujuan Lembur',
+                'text' => "Terdapat {$pendingOvertimeDirectorCount} pengajuan lembur menunggu persetujuan Direktur."
+                    .($pendingOvertimeAgingCount > 0 ? " {$pendingOvertimeAgingCount} pengajuan sudah lebih dari 3 hari." : ''),
+                'action_label' => 'Tinjau Lembur',
+                'url' => route('overtimes.index'),
+            ];
+        }
+
+        return $actionItems;
+    }
+
+    /**
+     * Action items for the employee role — scoped strictly to their own data.
+     *
+     * @return array<int, array{type: string, icon: string, icon_color: string, title: string, text: string, action_label: string, url: string}>
+     */
+    private function karyawanActionItems(User $user): array
+    {
+        $employee = $user->getEmployeeRecord();
+
+        if (! $employee) {
+            return [];
+        }
+
+        $actionItems = [];
+
+        // 1. Overdue & upcoming cash advance installments (own)
+        $ownInstallments = CashAdvanceInstallment::query()
+            ->whereHas('cashAdvance', function ($query) use ($employee) {
+                $query->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
+                    ->where('employee_id', $employee->id);
+            })
+            ->whereIn('cash_advance_installments.status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value]);
+
+        $overdueCount = (clone $ownInstallments)->whereDate('due_date', '<', now()->toDateString())->count();
+        $upcoming = (clone $ownInstallments)
+            ->whereBetween('due_date', [now()->toDateString(), now()->addDays(7)->toDateString()])
+            ->orderBy('due_date')
+            ->first(['due_date', 'installment_number']);
+
+        if ($overdueCount > 0) {
+            $actionItems[] = [
+                'type' => 'danger',
+                'icon' => 'fas fa-hand-holding-usd',
+                'icon_color' => 'text-danger',
+                'title' => 'Cicilan Kasbon Terlewat',
+                'text' => "Anda memiliki {$overdueCount} cicilan kasbon yang sudah lewat jatuh tempo. Segera lakukan pembayaran atau hubungi Admin.",
+                'action_label' => 'Lihat Kasbon Saya',
+                'url' => route('cash-advances.index'),
+            ];
+        } elseif ($upcoming) {
+            $actionItems[] = [
+                'type' => 'warning',
+                'icon' => 'fas fa-hand-holding-usd',
+                'icon_color' => 'text-warning',
+                'title' => 'Cicilan Kasbon Jatuh Tempo',
+                'text' => "Cicilan #{$upcoming->installment_number} kasbon Anda jatuh tempo pada {$upcoming->due_date->translatedFormat('d M Y')}.",
+                'action_label' => 'Lihat Kasbon Saya',
+                'url' => route('cash-advances.index'),
+            ];
+        }
+
+        // 2. Own overtime submissions rejected by Admin — eligible for resubmit
+        $rejectedOvertime = OvertimeSubmission::query()
+            ->where('employee_id', $employee->id)
+            ->where('status', OvertimeStatus::REJECTED_ADMIN->value)
+            ->orderByDesc('date')
+            ->first(['id', 'date']);
+
+        if ($rejectedOvertime) {
+            $actionItems[] = [
+                'type' => 'warning',
+                'icon' => 'fas fa-clock',
+                'icon_color' => 'text-warning',
+                'title' => 'Lembur Ditolak Admin',
+                'text' => 'Pengajuan lembur Anda tanggal '.$rejectedOvertime->date->translatedFormat('d M Y').' ditolak Admin. Periksa dan ajukan ulang bila perlu.',
+                'action_label' => 'Buka Lembur',
+                'url' => route('overtimes.index'),
+            ];
+        }
+
+        // 3. Payslip ready — approved/paid period containing the employee's item
+        $readySlip = PayrollItem::query()
+            ->where('payroll_items.employee_id', $employee->id)
+            ->whereIn('payroll_periods.status', [PayrollPeriodStatus::APPROVED->value, PayrollPeriodStatus::PAID->value])
+            ->join('payroll_periods', 'payroll_periods.id', '=', 'payroll_items.payroll_period_id')
+            ->orderByDesc('payroll_periods.year')
+            ->orderByDesc('payroll_periods.month')
+            ->first(['payroll_items.*', 'payroll_periods.month', 'payroll_periods.year']);
+
+        if ($readySlip) {
+            $periodName = Carbon::createFromDate($readySlip->year, $readySlip->month, 1)->translatedFormat('F Y');
+            $actionItems[] = [
+                'type' => 'info',
+                'icon' => 'fas fa-file-invoice-dollar',
+                'icon_color' => 'text-info',
+                'title' => 'Slip Gaji Siap',
+                'text' => "Slip gaji Anda periode {$periodName} sudah tersedia dan dapat dibuka atau dicetak.",
+                'action_label' => 'Buka Slip Gaji',
+                'url' => route('payrolls.items.print', ['period' => $readySlip->payroll_period_id, 'item' => $readySlip->id]),
+            ];
         }
 
         return $actionItems;

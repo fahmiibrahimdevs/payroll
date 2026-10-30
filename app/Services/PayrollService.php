@@ -2389,7 +2389,7 @@ class PayrollService
     {
         Gate::forUser($user)->authorize('approve', $period);
 
-        return DB::transaction(function () use ($period, $user): PayrollPeriod {
+        $approvedPeriod = DB::transaction(function () use ($period, $user): PayrollPeriod {
             $lockedPeriod = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
             if ($lockedPeriod->status !== PayrollPeriodStatus::SUBMITTED) {
                 throw new InvalidArgumentException('Hanya periode yang sudah diajukan dan menunggu persetujuan yang dapat disetujui.');
@@ -2420,6 +2420,12 @@ class PayrollService
 
             return $lockedPeriod;
         });
+
+        $this->notifyPeriodEmployees($approvedPeriod, 'Slip Gaji Siap', function (string $periodName): string {
+            return "Slip gaji Anda periode {$periodName} sudah disetujui dan dapat dibuka atau dicetak.";
+        }, 'success');
+
+        return $approvedPeriod;
     }
 
     /**
@@ -2433,7 +2439,7 @@ class PayrollService
             throw new InvalidArgumentException('Alasan penolakan wajib diisi.');
         }
 
-        return DB::transaction(function () use ($period, $reason, $user): PayrollPeriod {
+        $rejectedPeriod = DB::transaction(function () use ($period, $reason, $user): PayrollPeriod {
             $lockedPeriod = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
             if ($lockedPeriod->status !== PayrollPeriodStatus::SUBMITTED) {
                 throw new InvalidArgumentException('Hanya periode yang diajukan dan menunggu persetujuan yang dapat ditolak.');
@@ -2459,6 +2465,49 @@ class PayrollService
 
             return $lockedPeriod;
         });
+
+        $submitter = $rejectedPeriod->creator;
+        if ($submitter && $submitter->id !== $user->id) {
+            app(NotificationService::class)->send(
+                $submitter,
+                'payroll',
+                'Penggajian Ditolak',
+                "Periode penggajian {$rejectedPeriod->reference_number} ditolak Direktur. Alasan: {$reason}",
+                route('payrolls.show', $rejectedPeriod),
+                'fas fa-file-invoice-dollar',
+                'danger',
+            );
+        }
+
+        return $rejectedPeriod;
+    }
+
+    /**
+     * Notify every employee in a payroll period (used at approval & full payment).
+     */
+    private function notifyPeriodEmployees(PayrollPeriod $period, string $title, callable $bodyResolver, string $level): void
+    {
+        $service = app(NotificationService::class);
+        $periodName = Carbon::createFromDate($period->year, $period->month, 1)->translatedFormat('F Y');
+
+        $recipients = $period->items()
+            ->with('employee.user')
+            ->get()
+            ->pluck('employee.user')
+            ->filter()
+            ->unique('id');
+
+        foreach ($recipients as $recipient) {
+            $service->send(
+                $recipient,
+                'payroll',
+                $title,
+                $bodyResolver($periodName),
+                route('payrolls.show', $period),
+                'fas fa-file-invoice-dollar',
+                $level,
+            );
+        }
     }
 
     /**
@@ -2720,7 +2769,7 @@ class PayrollService
         $paymentDate = Carbon::parse($data['payment_date'] ?? Carbon::now());
         $paymentMethod = $data['payment_method'] ?? 'bank_transfer';
 
-        return DB::transaction(function () use ($period, $paymentDate, $paymentMethod, $data, $user) {
+        $paidPeriod = DB::transaction(function () use ($period, $paymentDate, $paymentMethod, $data, $user) {
             $lockedPeriod = PayrollPeriod::query()
                 ->lockForUpdate()
                 ->findOrFail($period->id);
@@ -2867,6 +2916,12 @@ class PayrollService
 
             return $lockedPeriod;
         });
+
+        $this->notifyPeriodEmployees($paidPeriod, 'Gaji Dibayar', function (string $periodName): string {
+            return "Gaji Anda periode {$periodName} telah dibayar. Slip gaji dapat dibuka atau dicetak kapan saja.";
+        }, 'success');
+
+        return $paidPeriod;
     }
 
     /**

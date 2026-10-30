@@ -139,6 +139,10 @@ Route::get('attendances', App\Livewire\Attendances\Index::class)
     ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
     ->name('attendances.index');
 
+Route::get('notifications', App\Livewire\Notifications\Index::class)
+    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
+    ->name('notifications.index');
+
 Route::get('payrolls/weekly', App\Livewire\Payrolls\WeeklyPayrollIndex::class)
     ->middleware(['auth', 'active', 'role:admin|direktur'])
     ->name('payrolls.weekly');

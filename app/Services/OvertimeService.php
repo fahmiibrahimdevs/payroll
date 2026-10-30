@@ -7,6 +7,7 @@ use App\Enums\OvertimePeriodStatus;
 use App\Enums\OvertimeStatus;
 use App\Enums\OvertimeSubmissionSource;
 use App\Enums\OvertimeType;
+use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\OvertimePeriod;
@@ -31,20 +32,20 @@ class OvertimeService
     private function reserveSequenceNumber(string $type, Carbon $date): string
     {
         $prefix = $type === 'submission'
-            ? 'LMB-' . $date->format('Ym') . '-'
-            : 'PER-LMB-' . $date->format('Y-W') . '-';
+            ? 'LMB-'.$date->format('Ym').'-'
+            : 'PER-LMB-'.$date->format('Y-W').'-';
         $padLength = $type === 'submission' ? 4 : 3;
         $sequenceKey = rtrim($prefix, '-');
         $sourceTable = $type === 'submission' ? 'overtime_submissions' : 'overtime_periods';
         $sourceColumn = 'reference_number';
 
         $latest = DB::table($sourceTable)
-            ->where($sourceColumn, 'like', $prefix . '%')
+            ->where($sourceColumn, 'like', $prefix.'%')
             ->orderByDesc($sourceColumn)
             ->value($sourceColumn);
 
         $initialNumber = 0;
-        if ($latest && preg_match('/(\d{' . $padLength . ',})$/', (string) $latest, $matches)) {
+        if ($latest && preg_match('/(\d{'.$padLength.',})$/', (string) $latest, $matches)) {
             $initialNumber = (int) $matches[1];
         }
 
@@ -70,7 +71,7 @@ class OvertimeService
                 'updated_at' => now(),
             ]);
 
-        return $prefix . str_pad((string) $nextNumber, $padLength, '0', STR_PAD_LEFT);
+        return $prefix.str_pad((string) $nextNumber, $padLength, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -484,7 +485,7 @@ class OvertimeService
      */
     public function approveByDirector(OvertimeSubmission $submission, User $director): OvertimeSubmission
     {
-        return DB::transaction(function () use ($submission, $director) {
+        $lockedSubmission = DB::transaction(function () use ($submission, $director) {
             $lockedSubmission = OvertimeSubmission::query()
                 ->lockForUpdate()
                 ->findOrFail($submission->id);
@@ -512,6 +513,21 @@ class OvertimeService
 
             return $lockedSubmission;
         });
+
+        $recipient = $lockedSubmission->employee?->user;
+        if ($recipient) {
+            app(NotificationService::class)->send(
+                $recipient,
+                'overtime',
+                'Lembur Disetujui',
+                "Pengajuan lembur {$lockedSubmission->reference_number} Anda telah disetujui Direktur.",
+                route('overtimes.index'),
+                'fas fa-clock',
+                'success',
+            );
+        }
+
+        return $lockedSubmission;
     }
 
     /**
@@ -519,7 +535,7 @@ class OvertimeService
      */
     public function rejectSubmission(OvertimeSubmission $submission, string $reason, User $actor): OvertimeSubmission
     {
-        return DB::transaction(function () use ($submission, $reason, $actor) {
+        $lockedSubmission = DB::transaction(function () use ($submission, $reason, $actor) {
             if (empty(trim($reason))) {
                 throw new InvalidArgumentException('Alasan penolakan lembur wajib diisi.');
             }
@@ -550,6 +566,22 @@ class OvertimeService
 
             return $lockedSubmission;
         });
+
+        $recipient = $lockedSubmission->employee?->user;
+        if ($recipient && $recipient->id !== $actor->id) {
+            $rejectedBy = $actor->hasRole('admin') ? 'Admin' : 'Direktur';
+            app(NotificationService::class)->send(
+                $recipient,
+                'overtime',
+                'Lembur Ditolak',
+                "Pengajuan lembur {$lockedSubmission->reference_number} Anda ditolak {$rejectedBy}. Alasan: {$reason}",
+                route('overtimes.index'),
+                'fas fa-clock',
+                'danger',
+            );
+        }
+
+        return $lockedSubmission;
     }
 
     /**
@@ -611,7 +643,7 @@ class OvertimeService
             $linkedEmpIds = $approvedSubmissions->pluck('employee_id')->unique()->all();
 
             // Cek apakah data absensi log mesin sudah tersedia di rentang tanggal ini
-            $attendances = \App\Models\Attendance::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            $attendances = Attendance::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
                 ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
                 ->get()
                 ->groupBy('employee_id');
@@ -627,7 +659,7 @@ class OvertimeService
                 ->where('status', 'active')
                 ->where(function ($q) use ($linkedEmpIds, $attendedEmpIds, $hasAttendanceLog) {
                     $q->where('employment_status', EmploymentStatus::HARIAN)
-                      ->orWhereIn('id', $linkedEmpIds);
+                        ->orWhereIn('id', $linkedEmpIds);
                     if ($hasAttendanceLog) {
                         $q->orWhereIn('id', $attendedEmpIds);
                     }
@@ -694,7 +726,7 @@ class OvertimeService
                     $totalMeal = round($attendedCount * $rate, 2);
                     $totalDailyWage = round($attendedCount * $dailyRate, 2);
 
-                    \App\Models\OvertimePeriodAttendance::create([
+                    OvertimePeriodAttendance::create([
                         'overtime_period_id' => $period->id,
                         'employee_id' => $emp->id,
                         'meal_allowance_type' => $emp->meal_allowance_type ?: 'standar',
@@ -708,7 +740,7 @@ class OvertimeService
                 } else {
                     // Jika log absensi belum diimpor, default hanya untuk karyawan harian aktif & lembur
                     $totalDailyWage = $defaultDaysCount * $dailyRate;
-                    \App\Models\OvertimePeriodAttendance::create([
+                    OvertimePeriodAttendance::create([
                         'overtime_period_id' => $period->id,
                         'employee_id' => $emp->id,
                         'meal_allowance_type' => $emp->meal_allowance_type ?: 'standar',
@@ -785,10 +817,10 @@ class OvertimeService
     /**
      * Update attendance and meal allowance for an employee in a weekly period.
      */
-    public function updatePeriodAttendance(OvertimePeriod $period, int $employeeId, array $data, User $actor, bool $recalculateTotals = true): \App\Models\OvertimePeriodAttendance
+    public function updatePeriodAttendance(OvertimePeriod $period, int $employeeId, array $data, User $actor, bool $recalculateTotals = true): OvertimePeriodAttendance
     {
-        return DB::transaction(function () use ($period, $employeeId, $data, $actor, $recalculateTotals) {
-            $attendance = \App\Models\OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+        return DB::transaction(function () use ($period, $employeeId, $data, $recalculateTotals) {
+            $attendance = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
                 ->where('employee_id', $employeeId)
                 ->firstOrFail();
 
@@ -869,7 +901,7 @@ class OvertimeService
             // Sync all unpaid attendances in this period to paid
             $lockedPeriod->attendances()->where(function ($q) {
                 $q->whereNull('payment_status')
-                  ->orWhere('payment_status', '!=', 'paid');
+                    ->orWhere('payment_status', '!=', 'paid');
             })->update([
                 'payment_status' => 'paid',
                 'paid_at' => now(),
@@ -993,10 +1025,10 @@ class OvertimeService
 
         // Jika tidak ada pengajuan manual tapi ada log jam lembur mesin di absensi
         if ($totalOvertimePay <= 0) {
-            $emp = \App\Models\Employee::find($employeeId);
+            $emp = Employee::find($employeeId);
             $otRate = (float) ($emp?->overtime_rate_per_hour ?? 0);
             if ($otRate > 0) {
-                $attMins = (int) \App\Models\Attendance::where('employee_id', $employeeId)
+                $attMins = (int) Attendance::where('employee_id', $employeeId)
                     ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
                     ->sum('overtime_minutes');
                 if ($attMins > 0) {
@@ -1008,7 +1040,7 @@ class OvertimeService
 
         // Meal allowances from period attendances overlapping this month
         // (periode mingguan boleh dimulai bulan sebelumnya namun mencakup hari bulan ini)
-        $attendances = \App\Models\OvertimePeriodAttendance::query()
+        $attendances = OvertimePeriodAttendance::query()
             ->where('employee_id', $employeeId)
             ->whereHas('overtimePeriod', function ($q) use ($startDate, $endDate) {
                 $q->whereDate('start_date', '<=', $endDate->format('Y-m-d'))
@@ -1029,9 +1061,9 @@ class OvertimeService
             'total_overtime_pay' => $totalOvertimePay,
             'total_meal_allowance' => $totalMealAllowance,
             'grand_total' => $grandTotal,
-            'formatted_total_overtime_pay' => 'Rp ' . number_format($totalOvertimePay, 0, ',', '.'),
-            'formatted_total_meal_allowance' => 'Rp ' . number_format($totalMealAllowance, 0, ',', '.'),
-            'formatted_grand_total' => 'Rp ' . number_format($grandTotal, 0, ',', '.'),
+            'formatted_total_overtime_pay' => 'Rp '.number_format($totalOvertimePay, 0, ',', '.'),
+            'formatted_total_meal_allowance' => 'Rp '.number_format($totalMealAllowance, 0, ',', '.'),
+            'formatted_grand_total' => 'Rp '.number_format($grandTotal, 0, ',', '.'),
         ];
     }
 
@@ -1100,10 +1132,10 @@ class OvertimeService
                 'name' => $dName,
                 'hours' => round($deptHours[$dName] ?? 0, 1),
                 'cost' => $pAmount,
-                'compact_cost' => 'Rp ' . (
-                    $pAmount >= 1000000 
-                        ? number_format($pAmount / 1000000, 1, ',', '.') . ' jt' 
-                        : number_format($pAmount / 1000, 0, ',', '.') . ' rb'
+                'compact_cost' => 'Rp '.(
+                    $pAmount >= 1000000
+                        ? number_format($pAmount / 1000000, 1, ',', '.').' jt'
+                        : number_format($pAmount / 1000, 0, ',', '.').' rb'
                 ),
                 'bar_pct' => $maxDeptPay > 0 ? round(($pAmount / $maxDeptPay) * 100) : 0,
             ];
@@ -1121,20 +1153,20 @@ class OvertimeService
             ],
             'department_chart' => [
                 'has_data' => count($deptData) > 0 && array_sum($deptData) > 0,
-                'labels' => !empty($deptLabels) ? $deptLabels : ['Belum ada lembur'],
-                'data' => !empty($deptData) && array_sum($deptData) > 0 ? $deptData : [1],
-                'colors' => !empty($deptData) && array_sum($deptData) > 0 ? array_slice($deptColors, 0, count($deptData)) : ['#e2e8f0'],
+                'labels' => ! empty($deptLabels) ? $deptLabels : ['Belum ada lembur'],
+                'data' => ! empty($deptData) && array_sum($deptData) > 0 ? $deptData : [1],
+                'colors' => ! empty($deptData) && array_sum($deptData) > 0 ? array_slice($deptColors, 0, count($deptData)) : ['#e2e8f0'],
                 'total_pay' => $totalDeptPay,
                 'total_hours' => $totalDeptHours,
-                'compact_total' => $totalDeptPay >= 1000000 
-                    ? 'Rp ' . number_format($totalDeptPay / 1000000, 1, ',', '.') . ' jt' 
-                    : 'Rp ' . number_format($totalDeptPay / 1000, 0, ',', '.') . ' rb',
+                'compact_total' => $totalDeptPay >= 1000000
+                    ? 'Rp '.number_format($totalDeptPay / 1000000, 1, ',', '.').' jt'
+                    : 'Rp '.number_format($totalDeptPay / 1000, 0, ',', '.').' rb',
             ],
             'metrics' => [
                 'total_hours' => round($totalDeptHours, 1),
                 'total_pay' => $totalDeptPay,
                 'avg_hours_per_person' => $avgHoursPerPerson,
-                'formatted_avg_cost' => 'Rp ' . number_format($avgCostPerPerson, 0, ',', '.'),
+                'formatted_avg_cost' => 'Rp '.number_format($avgCostPerPerson, 0, ',', '.'),
                 'total_employees' => $totalEmployeesParticipated,
             ],
             'department_breakdown' => $departmentBreakdown,
