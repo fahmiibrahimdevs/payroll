@@ -13,6 +13,7 @@ use App\Models\CashAdvanceInstallment;
 use App\Models\CashAdvancePayment;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmployeeDetail;
 use App\Models\Position;
 use App\Models\User;
 use Carbon\Carbon;
@@ -68,6 +69,51 @@ class CashAdvanceSeeder extends Seeder
                 'employment_status' => EmploymentStatus::KONTRAK,
                 'status' => EmployeeStatus::ACTIVE,
                 'basic_salary' => 5000000,
+            ]
+        );
+
+        // Link Karyawan Demo to emp1 (Budi Santoso) if present
+        $karyawanUser = User::where('email', 'karyawan@payroll.com')->first();
+        if ($karyawanUser && ! $emp1->user_id) {
+            $emp1->update(['user_id' => $karyawanUser->id]);
+        }
+
+        EmployeeDetail::firstOrCreate(
+            ['employee_id' => $emp1->id],
+            [
+                'employee_code' => 'EMP-065',
+                'gender' => 'male',
+                'phone' => '081234567890',
+                'email' => 'karyawan@payroll.com',
+                'bank_name' => 'Bank Mandiri',
+                'bank_account_number' => '1230000065',
+                'bank_account_name' => 'Budi Santoso',
+            ]
+        );
+
+        EmployeeDetail::firstOrCreate(
+            ['employee_id' => $emp2->id],
+            [
+                'employee_code' => 'EMP-066',
+                'gender' => 'female',
+                'phone' => '081234567891',
+                'email' => 'siti.nurhaliza@payroll.com',
+                'bank_name' => 'Bank BCA',
+                'bank_account_number' => '1230000066',
+                'bank_account_name' => 'Siti Nurhaliza',
+            ]
+        );
+
+        EmployeeDetail::firstOrCreate(
+            ['employee_id' => $emp3->id],
+            [
+                'employee_code' => 'EMP-067',
+                'gender' => 'male',
+                'phone' => '081234567892',
+                'email' => 'rian.pratama@payroll.com',
+                'bank_name' => 'Bank BNI',
+                'bank_account_number' => '1230000067',
+                'bank_account_name' => 'Rian Pratama',
             ]
         );
 

@@ -56,10 +56,17 @@ class DatabaseSeeder extends Seeder
             $user->syncRoles([$account['role']]);
         }
 
-        $this->call([
-            // EmployeeSeeder::class,
-            // AttendanceSeeder::class,
-            DeveloperUserSeeder::class,
-        ]);
+        if (! app()->environment('testing')) {
+            $this->call([
+                EmployeeSeeder::class,
+                AttendanceSeeder::class,
+                CashAdvanceSeeder::class,
+                DeveloperUserSeeder::class,
+            ]);
+        } else {
+            $this->call([
+                DeveloperUserSeeder::class,
+            ]);
+        }
     }
 }
