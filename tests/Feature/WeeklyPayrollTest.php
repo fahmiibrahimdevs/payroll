@@ -234,4 +234,27 @@ class WeeklyPayrollTest extends TestCase
             $period->fresh()->status
         );
     }
+
+    public function test_cannot_create_weekly_payroll_period_when_no_eligible_employees_exist(): void
+    {
+        // Change employee to non-harian and ensure no attendance/overtime exists
+        $this->employee->update(['employment_status' => EmploymentStatus::TETAP]);
+
+        $startDate = '2026-10-23';
+        $endDate = '2026-10-29';
+
+        Livewire::actingAs($this->adminUser)
+            ->test(\App\Livewire\Payrolls\WeeklyPayrollIndex::class)
+            ->set('period_start_date', $startDate)
+            ->set('period_end_date', $endDate)
+            ->set('period_name', 'Gaji Mingguan W43 Empty Test')
+            ->call('storePeriod')
+            ->assertDispatched('swal:alert', function ($event, $params) {
+                return ($params[0]['type'] ?? '') === 'error';
+            });
+
+        $this->assertDatabaseMissing('overtime_periods', [
+            'name' => 'Gaji Mingguan W43 Empty Test',
+        ]);
+    }
 }

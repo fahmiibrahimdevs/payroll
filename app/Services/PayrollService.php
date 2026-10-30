@@ -808,6 +808,19 @@ class PayrollService
         $name = $data['name'] ?? "Penggajian Periode {$monthName} {$year}";
 
         return DB::transaction(function () use ($month, $year, $startDate, $endDate, $paymentDate, $name, $data, $date, $company, $user) {
+            // Pull active monthly employees with details (Pegawai harian dibayar mingguan dan tidak masuk gaji bulanan)
+            $activeEmployees = Employee::query()
+                ->where('status', EmployeeStatus::ACTIVE)
+                ->where('employment_status', '!=', EmploymentStatus::HARIAN)
+                ->employedDuring($startDate->toDateString(), $endDate->toDateString())
+                ->with('detail')
+                ->orderBy('full_name')
+                ->get();
+
+            if ($activeEmployees->isEmpty()) {
+                throw new InvalidArgumentException('Tidak dapat membuat periode penggajian: Tidak ada karyawan bulanan aktif yang terdaftar untuk periode ini (minimal 1 karyawan).');
+            }
+
             $refNumber = $this->generatePeriodReferenceNumber($date);
 
             $period = PayrollPeriod::create([
@@ -822,15 +835,6 @@ class PayrollService
                 'created_by' => $user->id,
                 'notes' => ! empty($data['notes']) ? trim((string) $data['notes']) : null,
             ]);
-
-            // Pull active monthly employees with details (Pegawai harian dibayar mingguan dan tidak masuk gaji bulanan)
-            $activeEmployees = Employee::query()
-                ->where('status', EmployeeStatus::ACTIVE)
-                ->where('employment_status', '!=', EmploymentStatus::HARIAN)
-                ->employedDuring($startDate->toDateString(), $endDate->toDateString())
-                ->with('detail')
-                ->orderBy('full_name')
-                ->get();
 
             $payslipNumbers = $this->reserveSequenceNumbers(
                 'SLP-'.$date->format('Ym'),

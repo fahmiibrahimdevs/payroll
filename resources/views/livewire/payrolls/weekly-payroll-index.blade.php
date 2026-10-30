@@ -544,6 +544,25 @@
                                     <div class="bd-callout-desc">
                                         Rentang tanggal otomatis dihitung 7 hari tanpa overlap. Sistem otomatis menarik absensi, upah harian lepas, serta uang makan &amp; lembur mingguan staf.
                                     </div>
+                                    <div class="mt-2 pt-2 border-top d-flex align-items-center justify-content-between" style="border-color: rgba(0, 0, 0, 0.06) !important;">
+                                        <span style="font-size: 11.5px; color: #334155; font-weight: 500;">
+                                            Karyawan Mingguan Terdeteksi:
+                                        </span>
+                                        @if ($this->eligibleCandidatesCount > 0)
+                                            <span class="badge badge-success font-weight-600" style="font-size: 11px; padding: 4px 8px; border-radius: 6px;">
+                                                <i class="fas fa-users mr-1"></i> {{ $this->eligibleCandidatesCount }} Orang
+                                            </span>
+                                        @else
+                                            <span class="badge badge-danger font-weight-600" style="font-size: 11px; padding: 4px 8px; border-radius: 6px;">
+                                                <i class="fas fa-user-slash mr-1"></i> 0 Orang
+                                            </span>
+                                        @endif
+                                    </div>
+                                    @if ($this->eligibleCandidatesCount === 0)
+                                        <div class="mt-2 p-2 bg-white rounded border border-danger text-danger" style="font-size: 11px; line-height: 1.4;">
+                                            <i class="fas fa-exclamation-triangle mr-1"></i> Tidak ada karyawan harian lepas, catatan presensi hadir, atau pengajuan lembur yang disetujui pada siklus ini (minimal 1 orang). Silakan kelola di menu <a href="{{ route('employees.index') }}" class="font-weight-600 text-danger" style="text-decoration: underline;">Kelola Karyawan</a>.
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         </div>
@@ -597,7 +616,7 @@
 
                     <div class="modal-footer bg-white border-top px-4 py-3">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="storePeriod">
+                        <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="storePeriod" {{ $this->eligibleCandidatesCount === 0 ? 'disabled' : '' }}>
                             <span wire:loading.remove wire:target="storePeriod">
                                 <i class="fas fa-check mr-1"></i> Simpan &amp; Buat Periode
                             </span>

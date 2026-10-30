@@ -2,8 +2,11 @@
 
 namespace App\Livewire\Payrolls;
 
+use App\Enums\EmployeeStatus;
+use App\Enums\EmploymentStatus;
 use App\Enums\PayrollPeriodStatus;
 use App\Models\CompanyProfile;
+use App\Models\Employee;
 use App\Models\PayrollPeriod;
 use App\Services\PayrollService;
 use Carbon\Carbon;
@@ -93,6 +96,19 @@ class Index extends Component
         return $company->resolvePayrollCycleDates((int) ($this->newYear ?: now()->year), (int) ($this->newMonth ?: now()->month));
     }
 
+    public function getEligibleEmployeesCountProperty(): int
+    {
+        $cycle = $this->estimatedCycle;
+        $startDate = $cycle['start_date']->toDateString();
+        $endDate = $cycle['end_date']->toDateString();
+
+        return Employee::query()
+            ->where('status', EmployeeStatus::ACTIVE)
+            ->where('employment_status', '!=', EmploymentStatus::HARIAN)
+            ->employedDuring($startDate, $endDate)
+            ->count();
+    }
+
     public function openCreateModal(): void
     {
         $this->resetValidation();
@@ -155,6 +171,12 @@ class Index extends Component
 
         if ($exists) {
             $this->addError('newMonth', "Periode penggajian untuk bulan {$monthName} {$this->newYear} sudah ada.");
+
+            return;
+        }
+
+        if ($this->eligibleEmployeesCount === 0) {
+            $this->addError('newMonth', 'Tidak dapat membuat periode: Tidak ada karyawan bulanan aktif yang terdaftar untuk periode ini (minimal 1 karyawan).');
 
             return;
         }

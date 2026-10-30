@@ -2,8 +2,14 @@
 
 namespace App\Livewire\Payrolls;
 
+use App\Enums\EmployeeStatus;
+use App\Enums\EmploymentStatus;
 use App\Enums\OvertimePeriodStatus;
+use App\Enums\OvertimeStatus;
+use App\Models\Attendance;
+use App\Models\Employee;
 use App\Models\OvertimePeriod;
+use App\Models\OvertimeSubmission;
 use App\Services\AttendanceService;
 use App\Services\OvertimeService;
 use Carbon\Carbon;
@@ -111,6 +117,44 @@ class WeeklyPayrollIndex extends Component
         $this->openCreatePeriodModal();
     }
 
+    public function getEligibleCandidatesCountProperty(): int
+    {
+        if (empty($this->period_start_date) || empty($this->period_end_date)) {
+            return 0;
+        }
+
+        $startDate = Carbon::parse($this->period_start_date)->startOfDay();
+        $endDate = Carbon::parse($this->period_end_date)->endOfDay();
+
+        $approvedSubmissions = OvertimeSubmission::query()
+            ->where('status', OvertimeStatus::APPROVED)
+            ->whereNull('overtime_period_id')
+            ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->pluck('employee_id')
+            ->unique()
+            ->all();
+
+        $attendances = Attendance::query()
+            ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+            ->pluck('employee_id')
+            ->unique()
+            ->all();
+
+        $hasAttendanceLog = ! empty($attendances);
+
+        return Employee::query()
+            ->where('status', EmployeeStatus::ACTIVE)
+            ->where(function ($q) use ($approvedSubmissions, $attendances, $hasAttendanceLog) {
+                $q->where('employment_status', EmploymentStatus::HARIAN)
+                  ->orWhereIn('id', $approvedSubmissions);
+                if ($hasAttendanceLog) {
+                    $q->orWhereIn('id', $attendances);
+                }
+            })
+            ->count();
+    }
+
     public function storePeriod(OvertimeService $service, AttendanceService $attendanceService): void
     {
         abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
@@ -137,6 +181,16 @@ class WeeklyPayrollIndex extends Component
 
         if (! $endDate->isThursday() || $startDate->copy()->addDays(6)->format('Y-m-d') !== $endDate->format('Y-m-d')) {
             $this->addError('period_end_date', 'Tanggal akhir harus jatuh pada hari Kamis (persis 7 hari siklus Jum\'at s/d Kamis).');
+            return;
+        }
+
+        if ($this->eligibleCandidatesCount === 0) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Karyawan Tidak Ditemukan',
+                'text' => 'Tidak dapat membuat periode mingguan: Tidak ada data karyawan harian lepas, catatan presensi hadir, atau pengajuan lembur yang disetujui pada siklus ini (minimal 1 orang).',
+            ]);
+
             return;
         }
 

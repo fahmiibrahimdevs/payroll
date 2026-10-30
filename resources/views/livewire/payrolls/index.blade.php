@@ -612,14 +612,33 @@
                                 <span>Siklus Cut-Off: {{ $this->estimatedCycle['start_date']->translatedFormat('d M Y') }} &ndash; {{ $this->estimatedCycle['end_date']->translatedFormat('d M Y') }}</span>
                                 <span class="badge badge-light border text-primary ml-2 font-weight-600" style="font-size: 10.5px;">Gajian: {{ $this->estimatedCycle['payment_date']->translatedFormat('d M Y') }}</span>
                             </div>
-                            <div style="font-size: 11px; line-height: 1.45; color: #64748b;">
-                                Sistem otomatis menarik seluruh karyawan aktif dalam rentang siklus di atas serta potongan cicilan kasbon yang jatuh tempo.
+                            <div style="font-size: 11px; line-height: 1.45; color: #475569;">
+                                Sistem otomatis menarik seluruh karyawan bulanan aktif dalam rentang siklus di atas serta potongan cicilan kasbon yang jatuh tempo.
                             </div>
+                            <div class="mt-2 pt-2 border-top d-flex align-items-center justify-content-between" style="border-color: #f1f5f9 !important;">
+                                <span style="font-size: 11.5px; color: #334155; font-weight: 500;">
+                                    Karyawan Bulanan Terdeteksi:
+                                </span>
+                                @if ($this->eligibleEmployeesCount > 0)
+                                    <span class="badge badge-success font-weight-600" style="font-size: 11px; padding: 4px 8px; border-radius: 6px;">
+                                        <i class="fas fa-users mr-1"></i> {{ $this->eligibleEmployeesCount }} Orang
+                                    </span>
+                                @else
+                                    <span class="badge badge-danger font-weight-600" style="font-size: 11px; padding: 4px 8px; border-radius: 6px;">
+                                        <i class="fas fa-user-slash mr-1"></i> 0 Orang
+                                    </span>
+                                @endif
+                            </div>
+                            @if ($this->eligibleEmployeesCount === 0)
+                                <div class="mt-2 p-2 bg-white rounded border border-danger text-danger" style="font-size: 11px; line-height: 1.4;">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i> Tidak ada karyawan bulanan aktif yang dapat digaji pada periode ini. Silakan tambahkan atau aktifkan data karyawan di menu <a href="{{ route('employees.index') }}" class="font-weight-600 text-danger" style="text-decoration: underline;">Kelola Karyawan</a> terlebih dahulu.
+                                </div>
+                            @endif
                         </div>
                     </div>
                     <div class="modal-footer bg-white border-top px-4 py-3">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" {{ in_array($newMonth, $existingMonthsForNewYear ?? [], true) ? 'disabled' : '' }}>
+                        <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" {{ in_array($newMonth, $existingMonthsForNewYear ?? [], true) || $this->eligibleEmployeesCount === 0 ? 'disabled' : '' }}>
                             <span wire:loading.remove wire:target="storePeriod">
                                 <i class="fas fa-check mr-1"></i> Proses & Buat Draf
                             </span>

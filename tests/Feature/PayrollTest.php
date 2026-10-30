@@ -3469,6 +3469,18 @@ class PayrollTest extends TestCase
         $admin = $this->createAdminUser();
         $this->actingAs($admin);
 
+        $dept = Department::firstOrCreate(['name' => 'Operasional']);
+        $pos = Position::firstOrCreate(['name' => 'Staff']);
+        Employee::create([
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'full_name' => 'Karyawan Cycle Test',
+            'join_date' => '2025-01-01',
+            'employment_status' => EmploymentStatus::TETAP,
+            'status' => EmployeeStatus::ACTIVE,
+            'basic_salary' => 5000000,
+        ]);
+
         $company = CompanyProfile::getProfile();
         $company->update([
             'payroll_cutoff_day' => 20,
@@ -3762,5 +3774,32 @@ class PayrollTest extends TestCase
         // Trying to manually add daily worker to monthly period should throw exception
         $this->expectException(\InvalidArgumentException::class);
         $service->addEmployeeToPeriod($period, $empHarian, $admin);
+    }
+
+    public function test_cannot_create_payroll_period_when_no_active_monthly_employees_exist(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        // Delete all employees or set them to inactive
+        Employee::query()->forceDelete();
+
+        // 1. Livewire component should reject with validation error on newMonth
+        Livewire::test(PayrollIndex::class)
+            ->set('newYear', 2026)
+            ->set('newMonth', 12)
+            ->set('newName', 'Penggajian Periode Desember 2026')
+            ->call('storePeriod')
+            ->assertHasErrors(['newMonth']);
+
+        // 2. Service directly should throw InvalidArgumentException
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Tidak dapat membuat periode penggajian: Tidak ada karyawan bulanan aktif yang terdaftar untuk periode ini (minimal 1 karyawan).');
+
+        app(PayrollService::class)->createPeriod([
+            'month' => 12,
+            'year' => 2026,
+            'name' => 'Penggajian Periode Desember 2026',
+        ], $admin);
     }
 }
