@@ -330,6 +330,7 @@ select.form-control:not([size]):not([multiple]) {
     border-radius: 50px !important; }
 
 .custom-switch {
+  position: relative;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;

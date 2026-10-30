@@ -2935,7 +2935,7 @@ body:not(.sidebar-mini)
 
 /* 3.2 Custom Switch */
 .custom-switch {
-    @apply select-none cursor-default inline-flex items-center m-0;
+    @apply relative select-none cursor-default inline-flex items-center m-0;
 }
 .custom-switch-input {
     @apply absolute -z-[1] opacity-0;
