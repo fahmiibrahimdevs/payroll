@@ -1894,7 +1894,7 @@ class CashAdvanceCrudTest extends TestCase
         CashAdvanceInstallment::create([
             'cash_advance_id' => $advance->id,
             'installment_number' => 1,
-            'due_date' => Carbon::today()->subMonth()->toDateString(),
+            'due_date' => Carbon::today()->startOfMonth()->subMonth()->toDateString(),
             'amount' => 250000,
             'paid_amount' => 250000,
             'status' => InstallmentStatus::PAID->value,
@@ -1949,7 +1949,7 @@ class CashAdvanceCrudTest extends TestCase
         CashAdvanceInstallment::create([
             'cash_advance_id' => $advance->id,
             'installment_number' => 1,
-            'due_date' => Carbon::now()->subMonths(1)->startOfMonth()->toDateString(),
+            'due_date' => Carbon::now()->startOfMonth()->subMonths(1)->toDateString(),
             'amount' => 500000,
             'paid_amount' => 0,
             'status' => InstallmentStatus::PENDING->value,
