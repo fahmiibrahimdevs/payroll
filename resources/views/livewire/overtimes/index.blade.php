@@ -470,13 +470,13 @@
                                 <td class="text-center align-middle text-nowrap !px-2.5 !py-2">
                                     <!-- ATUR KEHADIRAN & UANG MAKAN (HALAMAN DEDIKASI) -->
                                     @if (auth()->user()->hasRole('admin'))
-                                        <a href="{{ route('overtimes.periods.attendances', $per->id) }}" class="btn btn-warning btn-action mr-1" title="Atur Hari Kehadiran & Uang Makan Seluruh Karyawan">
+                                        <a href="{{ route('overtimes.periods.attendances', $per) }}" class="btn btn-warning btn-action mr-1" title="Atur Hari Kehadiran & Uang Makan Seluruh Karyawan">
                                             <i class="fas fa-calendar-check"></i>
                                         </a>
                                     @endif
 
                                     <!-- CETAK SLIP MINGGUAN -->
-                                    <a href="{{ route('overtimes.periods.print', $per->id) }}" target="_blank" class="btn btn-info btn-action mr-1" title="Cetak Semua Slip Periode Ini">
+                                    <a href="{{ route('overtimes.periods.print', $per) }}" target="_blank" class="btn btn-info btn-action mr-1" title="Cetak Semua Slip Periode Ini">
                                         <i class="fas fa-print"></i>
                                     </a>
 

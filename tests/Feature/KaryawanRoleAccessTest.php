@@ -100,7 +100,7 @@ class KaryawanRoleAccessTest extends TestCase
     {
         $response = $this->actingAs($this->karyawanUser)->get(route('employees.index'));
 
-        $response->assertRedirect(route('employees.show', $this->ownEmployee->id));
+        $response->assertRedirect(route('employees.show', $this->ownEmployee));
     }
 
     public function test_karyawan_can_view_own_employee_profile(): void

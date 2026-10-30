@@ -69,7 +69,7 @@ class Index extends Component
         if ($user?->hasRole('karyawan')) {
             $emp = $user->getEmployeeRecord();
             if ($emp) {
-                $this->redirect(route('employees.show', $emp->id), navigate: true);
+                $this->redirect(route('employees.show', $emp), navigate: true);
 
                 return;
             }

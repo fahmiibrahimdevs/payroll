@@ -3,13 +3,16 @@
 namespace App\Livewire\Overtimes;
 
 use App\Enums\EmploymentStatus;
+use App\Models\Attendance;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
+use App\Services\AttendanceService;
 use App\Services\OvertimeService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -31,15 +34,25 @@ class PeriodAttendance extends Component
 
     // Properties for Employee Payment
     public ?int $selectedEmployeeId = null;
+
     public ?OvertimePeriodAttendance $selectedAttendance = null;
+
     public ?array $selectedEmployeeData = null;
+
     public bool $isEditingPayment = false;
+
     public string $itemPaymentDate = '';
+
     public string $itemPaymentMethod = 'bank_transfer';
+
     public string $itemBankName = '';
+
     public string $itemBankAccountNumber = '';
+
     public string $itemBankAccountName = '';
+
     public mixed $itemPaymentProof = null;
+
     public string $itemPaymentNotes = '';
 
     public function mount(OvertimePeriod $period): void
@@ -58,9 +71,9 @@ class PeriodAttendance extends Component
     {
         $linkedEmpIds = $this->period->submissions()->pluck('employee_id')->unique()->all();
 
-        $startDate = \Carbon\Carbon::parse($this->period->start_date)->toDateString();
-        $endDate = \Carbon\Carbon::parse($this->period->end_date)->toDateString();
-        $attendances = \App\Models\Attendance::whereBetween('date', [$startDate, $endDate])
+        $startDate = Carbon::parse($this->period->start_date)->toDateString();
+        $endDate = Carbon::parse($this->period->end_date)->toDateString();
+        $attendances = Attendance::whereBetween('date', [$startDate, $endDate])
             ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
             ->get()
             ->groupBy('employee_id');
@@ -72,7 +85,7 @@ class PeriodAttendance extends Component
         $targetEmployees = Employee::where('status', 'active')
             ->where(function ($q) use ($linkedEmpIds, $attendedEmpIds, $hasAttendanceLog) {
                 $q->where('employment_status', EmploymentStatus::HARIAN)
-                  ->orWhereIn('id', $linkedEmpIds);
+                    ->orWhereIn('id', $linkedEmpIds);
                 if ($hasAttendanceLog) {
                     $q->orWhereIn('id', $attendedEmpIds);
                 }
@@ -107,7 +120,7 @@ class PeriodAttendance extends Component
                     $attendedDaysKeys = [];
                     if ($empAtts && $empAtts->isNotEmpty()) {
                         foreach ($empAtts as $att) {
-                            $dow = \Carbon\Carbon::parse($att->date)->dayOfWeek;
+                            $dow = Carbon::parse($att->date)->dayOfWeek;
                             $k = $dayKeyMap[$dow] ?? null;
                             if ($k && ! in_array($k, $attendedDaysKeys, true)) {
                                 $attendedDaysKeys[] = $k;
@@ -182,6 +195,7 @@ class PeriodAttendance extends Component
             $this->periodAttendances[$att->employee_id] = [
                 'attendance_id' => (int) $att->id,
                 'employee_id' => (int) $att->employee_id,
+                'employee_hashid' => $att->employee?->hashid ?? '',
                 'employee_name' => $att->employee?->full_name ?? 'Karyawan',
                 'employment_status' => $att->employee?->employment_status?->value ?? 'tetap',
                 'is_harian' => $isHarian,
@@ -218,7 +232,9 @@ class PeriodAttendance extends Component
      */
     public function toggleAttendanceDay(int $employeeId, string $day): void
     {
-        if (! isset($this->periodAttendances[$employeeId])) return;
+        if (! isset($this->periodAttendances[$employeeId])) {
+            return;
+        }
 
         $days = $this->periodAttendances[$employeeId]['attendance_days'];
         $day = strtolower($day);
@@ -239,7 +255,9 @@ class PeriodAttendance extends Component
      */
     public function updateAttendedDaysCount(int $employeeId, mixed $count): void
     {
-        if (! isset($this->periodAttendances[$employeeId])) return;
+        if (! isset($this->periodAttendances[$employeeId])) {
+            return;
+        }
 
         $count = max(0, min(6, (int) $count));
         $allDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -280,7 +298,7 @@ class PeriodAttendance extends Component
     /**
      * Pull attendance logs recorded from fingerprint machine for this period's date range.
      */
-    public function syncFromAttendance(\App\Services\AttendanceService $attendanceService): void
+    public function syncFromAttendance(AttendanceService $attendanceService): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
 
@@ -299,7 +317,9 @@ class PeriodAttendance extends Component
      */
     public function updateMealAllowanceRate(int $employeeId, mixed $rate): void
     {
-        if (! isset($this->periodAttendances[$employeeId])) return;
+        if (! isset($this->periodAttendances[$employeeId])) {
+            return;
+        }
 
         $this->periodAttendances[$employeeId]['meal_allowance_per_day'] = max(0, (float) $rate);
         $this->recalcEmployeeMealTotal($employeeId);
@@ -327,7 +347,7 @@ class PeriodAttendance extends Component
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($service) {
+        DB::transaction(function () use ($service) {
             foreach ($this->periodAttendances as $employeeId => $data) {
                 $service->updatePeriodAttendance($this->period, (int) $employeeId, [
                     'attended_days' => $data['attended_days'],
@@ -549,6 +569,7 @@ class PeriodAttendance extends Component
                 $nameMatch = str_contains(strtolower($data['employee_name']), $term);
                 $deptMatch = str_contains(strtolower($data['department_name']), $term);
                 $posMatch = str_contains(strtolower($data['position_name']), $term);
+
                 return $nameMatch || $deptMatch || $posMatch;
             }
 

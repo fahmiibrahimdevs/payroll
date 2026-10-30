@@ -378,7 +378,7 @@
                                                     <i class="far fa-calendar-alt" style="color: #0b52aa; font-size: 13px;"></i>
                                                 </span>
                                                 <div>
-                                                    <a href="{{ route('overtimes.periods.attendances', $per->id) }}" class="font-weight-700 text-decoration-none" style="font-size: 13.5px; color: #0f172a !important;" title="{{ $per->reference_number }}">
+                                                    <a href="{{ route('overtimes.periods.attendances', $per) }}" class="font-weight-700 text-decoration-none" style="font-size: 13.5px; color: #0f172a !important;" title="{{ $per->reference_number }}">
                                                         {{ $per->name }}
                                                     </a>
                                                     <div class="mt-0.5" style="font-size: 11.5px; color: #64748b; font-weight: 400; line-height: 1.25;">
@@ -459,12 +459,12 @@
                                         <td class="text-center align-middle text-nowrap !py-3 !px-3.5">
                                             @if (auth()->user()?->hasRole(['admin', 'direktur']))
                                                 <!-- ATUR PRESENSI & SYNC ABSENSI -->
-                                                <a href="{{ route('overtimes.periods.attendances', $per->id) }}" class="btn btn-warning btn-action mr-1" title="Atur Presensi, Uang Makan & Tarik Data Absensi">
+                                                <a href="{{ route('overtimes.periods.attendances', $per) }}" class="btn btn-warning btn-action mr-1" title="Atur Presensi, Uang Makan & Tarik Data Absensi">
                                                     <i class="fas fa-calendar-check"></i>
                                                 </a>
 
                                                 <!-- CETAK SLIP GAJI MINGGUAN -->
-                                                <a href="{{ route('overtimes.periods.print', $per->id) }}" target="_blank" class="btn btn-info btn-action mr-1" title="Cetak Seluruh Slip Mingguan">
+                                                <a href="{{ route('overtimes.periods.print', $per) }}" target="_blank" class="btn btn-info btn-action mr-1" title="Cetak Seluruh Slip Mingguan">
                                                     <i class="fas fa-print"></i>
                                                 </a>
 
@@ -480,7 +480,7 @@
                                                     </button>
                                                 @endif
                                             @else
-                                                <a href="{{ route('overtimes.periods.print', $per->id) }}" target="_blank" class="btn btn-info btn-action" title="Lihat Slip Mingguan Saya">
+                                                <a href="{{ route('overtimes.periods.print', $per) }}" target="_blank" class="btn btn-info btn-action" title="Lihat Slip Mingguan Saya">
                                                     <i class="fas fa-print"></i>
                                                 </a>
                                             @endif

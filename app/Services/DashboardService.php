@@ -529,7 +529,7 @@ class DashboardService
                 'text' => "Terdapat {$pendingCashAdvancesCount} pengajuan kasbon menunggu persetujuan Direktur.".($agingRequestsCount > 0 ? " {$agingRequestsCount} pengajuan sudah lebih dari 3 hari." : ''),
                 'action_label' => $isDirector ? 'Tinjau Pengajuan' : 'Lihat Kasbon',
                 'url' => ($isDirector && $oldestPendingAdvance)
-                    ? route('cash-advances.review', ['advance' => $oldestPendingAdvance->id, 'action' => 'approval'])
+                    ? route('cash-advances.review', ['advance' => $oldestPendingAdvance->hashid, 'action' => 'approval'])
                     : route('cash-advances.index'),
             ];
         }
@@ -552,11 +552,12 @@ class DashboardService
                 'text' => "Terdapat {$pendingCashAdvancePaymentsCount} pembayaran kasbon menunggu persetujuan Direktur.".($agingPaymentsCount > 0 ? " {$agingPaymentsCount} pembayaran sudah lebih dari 3 hari." : ''),
                 'action_label' => 'Tinjau Pembayaran',
                 'url' => $oldestPendingPayment
-                    ? route('cash-advances.review', ['advance' => $oldestPendingPayment->cash_advance_id, 'action' => 'payment', 'payment' => $oldestPendingPayment->id])
+                    ? route('cash-advances.review', ['advance' => $oldestPendingPayment->cashAdvance->hashid, 'action' => 'payment', 'payment' => $oldestPendingPayment->id])
                     : route('cash-advances.index'),
             ];
         } elseif ($pendingCashAdvancePaymentsCount > 0 && $isAdmin) {
             $oldestPendingPayment = CashAdvancePayment::query()
+                ->with('cashAdvance:id')
                 ->where('status', CashAdvancePaymentStatus::PENDING)
                 ->oldest('created_at')
                 ->first(['id', 'cash_advance_id']);
@@ -568,7 +569,7 @@ class DashboardService
                 'text' => "{$pendingCashAdvancePaymentsCount} pembayaran kasbon menunggu persetujuan Direktur.",
                 'action_label' => 'Lihat Status',
                 'url' => $oldestPendingPayment
-                    ? route('cash-advances.review', ['advance' => $oldestPendingPayment->cash_advance_id, 'action' => 'payment', 'payment' => $oldestPendingPayment->id])
+                    ? route('cash-advances.review', ['advance' => $oldestPendingPayment->cashAdvance->hashid, 'action' => 'payment', 'payment' => $oldestPendingPayment->id])
                     : route('cash-advances.index'),
             ];
         }
@@ -601,7 +602,7 @@ class DashboardService
                 'text' => "Terdapat {$overdueCashAdvancesCount} karyawan memiliki cicilan kasbon terlewat jatuh tempo.",
                 'action_label' => 'Tinjau Kasbon',
                 'url' => $overdueAdvance
-                    ? route('cash-advances.review', ['advance' => $overdueAdvance->id, 'action' => 'detail'])
+                    ? route('cash-advances.review', ['advance' => $overdueAdvance->hashid, 'action' => 'detail'])
                     : route('cash-advances.index'),
             ];
         }
@@ -632,7 +633,7 @@ class DashboardService
                 'title' => 'Kasbon Karyawan Nonaktif',
                 'text' => ($advance->employee?->full_name ?? 'Seorang karyawan').' memiliki sisa kasbon yang perlu ditinjau.',
                 'action_label' => 'Buka Rincian Kasbon',
-                'url' => route('cash-advances.review', ['advance' => $advance->id, 'action' => 'detail']),
+                'url' => route('cash-advances.review', ['advance' => $advance->hashid, 'action' => 'detail']),
             ];
         }
 
@@ -669,7 +670,7 @@ class DashboardService
                 'title' => 'Sisa Kasbon Kontrak Berakhir',
                 'text' => ($advance->employee?->full_name ?? 'Karyawan').' berakhir kontrak pada '.($advance->employee?->contract_end_date?->format('d M Y') ?? '-').' dengan sisa kasbon Rp '.number_format((float) $advance->remaining_amount, 0, ',', '.').'. Pastikan pelunasan pada slip gaji terakhir.',
                 'action_label' => 'Tinjau Kasbon',
-                'url' => route('cash-advances.review', ['advance' => $advance->id, 'action' => 'detail']),
+                'url' => route('cash-advances.review', ['advance' => $advance->hashid, 'action' => 'detail']),
             ];
         }
 
@@ -695,8 +696,8 @@ class DashboardService
                 'action_label' => 'Tinjau Karyawan',
                 'url' => $nextExpiringContract
                     ? ($isAdmin
-                        ? route('employees.edit', ['employee' => $nextExpiringContract->id, 'section' => 'kepegawaian'])
-                        : route('employees.show', ['employee' => $nextExpiringContract->id, 'tab' => 'kepegawaian']))
+                        ? route('employees.edit', ['employee' => $nextExpiringContract->hashid, 'section' => 'kepegawaian'])
+                        : route('employees.show', ['employee' => $nextExpiringContract->hashid, 'tab' => 'kepegawaian']))
                     : route('employees.index'),
             ];
         }
@@ -729,8 +730,8 @@ class DashboardService
                 'text' => 'Tanggal akhir kontrak sudah lewat pada '.$employee->contract_end_date?->format('d M Y').'.',
                 'action_label' => 'Tinjau Data Kepegawaian',
                 'url' => $isAdmin
-                    ? route('employees.edit', ['employee' => $employee->id, 'section' => 'kepegawaian'])
-                    : route('employees.show', ['employee' => $employee->id, 'tab' => 'kepegawaian']),
+                    ? route('employees.edit', ['employee' => $employee->hashid, 'section' => 'kepegawaian'])
+                    : route('employees.show', ['employee' => $employee->hashid, 'tab' => 'kepegawaian']),
             ];
         }
 
@@ -819,11 +820,11 @@ class DashboardService
                         : 'Buka Data Pajak & BPJS',
                     'url' => $isAdmin
                         ? route('employees.edit', [
-                            'employee' => $employee->id,
+                            'employee' => $employee->hashid,
                             'section' => $opensEmploymentTab ? 'kepegawaian' : 'pajak',
                         ])
                         : route('employees.show', [
-                            'employee' => $employee->id,
+                            'employee' => $employee->hashid,
                             'tab' => $opensEmploymentTab ? 'kepegawaian' : 'pajak-bpjs',
                         ]),
                 ];

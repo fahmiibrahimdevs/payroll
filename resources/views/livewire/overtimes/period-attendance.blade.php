@@ -150,7 +150,7 @@
                 </button>
 
                 <!-- Cetak Seluruh Slip Mingguan (Solid Info) -->
-                <a href="{{ route('overtimes.periods.print', $period->id) }}"
+                <a href="{{ route('overtimes.periods.print', $period) }}"
                    target="_blank"
                    class="btn btn-info btn-sm d-inline-flex align-items-center font-weight-bold shadow-sm"
                    style="border-radius: 8px; padding: 7px 15px; font-size: 13px;"
@@ -386,7 +386,7 @@
                                         <div class="d-inline-flex align-items-center" style="gap: 6px;">
                                             @if (($attData['payment_status'] ?? 'unpaid') === 'paid')
                                                 <!-- Cetak Slip Gaji Karyawan (Hanya Aktif Jika Sudah Dibayar) -->
-                                                <a href="{{ route('overtimes.periods.print', ['period' => $period->id, 'employee' => $empId]) }}"
+                                                <a href="{{ route('overtimes.periods.print', ['period' => $period, 'employee' => $attData['employee_hashid'] ?? '']) }}"
                                                    target="_blank"
                                                    class="btn btn-warning btn-action"
                                                    data-toggle="tooltip"
@@ -623,7 +623,7 @@
                             </button>
 
                             <!-- KANAN: CETAK SLIP (SUCCESS GREEN) -->
-                            <a href="{{ route('overtimes.periods.print', ['period' => $period->id, 'employee' => $selectedAttendance->employee_id]) }}"
+                            <a href="{{ route('overtimes.periods.print', ['period' => $period, 'employee' => $selectedAttendance->employee?->hashid]) }}"
                                target="_blank"
                                class="btn btn-success flex-fill font-weight-600 shadow-sm text-center d-inline-flex align-items-center justify-content-center"
                                style="border-radius: 8px; font-size: 13.5px; padding: 10px 14px;">
