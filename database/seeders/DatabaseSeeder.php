@@ -61,6 +61,7 @@ class DatabaseSeeder extends Seeder
                 EmployeeSeeder::class,
                 AttendanceSeeder::class,
                 CashAdvanceSeeder::class,
+                HolidaySeeder::class,
                 DeveloperUserSeeder::class,
             ]);
         } else {

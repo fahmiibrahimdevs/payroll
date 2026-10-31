@@ -605,7 +605,7 @@ class CashAdvanceService
                     : 1;
 
                 $monthlyInstallment = ($installmentCount > 0)
-                    ? round($amount / $installmentCount, 2)
+                    ? (float) floor($amount / $installmentCount)
                     : $amount;
 
                 $cashAdvance = CashAdvance::create([
@@ -682,7 +682,7 @@ class CashAdvanceService
                     : 1;
 
                 $monthlyInstallment = ($installmentCount > 0)
-                    ? round($amount / $installmentCount, 2)
+                    ? (float) floor($amount / $installmentCount)
                     : $amount;
 
                 $disbursementDate = Carbon::parse($data['disbursement_date'])->toDateString();

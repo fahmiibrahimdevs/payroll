@@ -65,6 +65,9 @@
                             <li class="{{ request()->routeIs('positions.*') ? 'active' : '' }}">
                                 <a class="nav-link" href="{{ route('positions.index') }}">Jabatan</a>
                             </li>
+                            <li class="{{ request()->routeIs('holidays.*') ? 'active' : '' }}">
+                                <a class="nav-link" href="{{ route('holidays.index') }}">Hari Libur</a>
+                            </li>
                         @endif
                         <li class="{{ request()->routeIs('employees.*') ? 'active' : '' }}">
                             <a class="nav-link" href="{{ route('employees.index') }}">Karyawan</a>

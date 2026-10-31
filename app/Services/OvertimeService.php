@@ -10,6 +10,7 @@ use App\Enums\OvertimeType;
 use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
+use App\Models\Holiday;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Models\OvertimeSubmission;
@@ -715,8 +716,19 @@ class OvertimeService
             $dayKeyMap = [
                 1 => 'mon', 2 => 'tue', 3 => 'wed', 4 => 'thu', 5 => 'fri', 6 => 'sat', 0 => 'sun',
             ];
-            $defaultDaysCount = 6;
-            $defaultDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+            // Fallback tanpa log absensi: hari kerja aktual dalam rentang
+            // (kecualikan Minggu dan hari libur nasional dari kalender admin).
+            $holidayDates = Holiday::datesBetween($startDate->toDateString(), $endDate->toDateString());
+            $defaultDaysCount = 0;
+            $defaultDays = [];
+            for ($cur = $startDate->copy(); $cur->lte($endDate); $cur->addDay()) {
+                if ($cur->isSunday() || $holidayDates->has($cur->toDateString())) {
+                    continue;
+                }
+                $defaultDaysCount++;
+                $defaultDays[] = $dayKeyMap[$cur->dayOfWeek];
+            }
+            $defaultDaysCount = max(1, $defaultDaysCount);
 
             foreach ($candidateEmployees as $emp) {
                 $rate = $emp->getEffectiveMealAllowancePerDay();

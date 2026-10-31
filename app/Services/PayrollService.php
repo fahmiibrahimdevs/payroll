@@ -19,6 +19,7 @@ use App\Models\CashAdvanceInstallment;
 use App\Models\CashAdvancePayment;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
+use App\Models\Holiday;
 use App\Models\PayrollItem;
 use App\Models\PayrollItemLine;
 use App\Models\PayrollPeriod;
@@ -997,12 +998,15 @@ class PayrollService
         $startDate = Carbon::parse($period->start_date)->startOfDay();
         $endDate = Carbon::parse($period->end_date)->endOfDay();
 
+        // Hari libur nasional (kalender admin) dikecualikan dari hari kerja.
+        $holidayDates = Holiday::datesBetween($startDate->toDateString(), $endDate->toDateString());
+
         // Total working days in period (5 days: exclude Sat & Sun; 6 days: exclude Sun)
         $totalWorkingDays = 0;
         $curr = $startDate->copy();
         while ($curr->lte($endDate)) {
-            $isWorkDay = $workDaysPerWeek === 5 ? ! $curr->isWeekend() : ! $curr->isSunday();
-            if ($isWorkDay) {
+            $isWeekend = $workDaysPerWeek === 5 ? $curr->isWeekend() : $curr->isSunday();
+            if (! $isWeekend && ! $holidayDates->has($curr->toDateString())) {
                 $totalWorkingDays++;
             }
             $curr->addDay();
@@ -1018,8 +1022,8 @@ class PayrollService
             // Hari libur dihitung di PHP (portabel antar driver DB, bukan DAYOFWEEK() yang MySQL-only)
             $weekendDates = [];
             for ($curr = $startDate->copy(); $curr->lte($endDate); $curr->addDay()) {
-                $isOffDay = $workDaysPerWeek === 5 ? $curr->isWeekend() : $curr->isSunday();
-                if ($isOffDay) {
+                $isWeekend = $workDaysPerWeek === 5 ? $curr->isWeekend() : $curr->isSunday();
+                if ($isWeekend || $holidayDates->has($curr->toDateString())) {
                     $weekendDates[] = $curr->toDateString();
                 }
             }

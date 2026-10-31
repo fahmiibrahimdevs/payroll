@@ -60,6 +60,10 @@ Route::get('positions', PositionIndex::class)
     ->middleware(['auth', 'active', 'role:admin|direktur'])
     ->name('positions.index');
 
+Route::get('holidays', App\Livewire\Holidays\Index::class)
+    ->middleware(['auth', 'active', 'role:admin|direktur'])
+    ->name('holidays.index');
+
 Route::get('employees', EmployeeIndex::class)
     ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
     ->name('employees.index');

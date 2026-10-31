@@ -1,0 +1,71 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: MariaDB
+            connection: mariadb
+            port: 3306
+          - name: PostgreSQL
+            connection: pgsql
+            port: 5432
+
+    name: PHPUnit — ${{ matrix.name }}
+
+    services:
+      database:
+        image: ${{ matrix.connection == 'mariadb' && 'mariadb:11' || 'postgres:16' }}
+        env:
+          MARIADB_ROOT_PASSWORD: password
+          MARIADB_DATABASE: laravel_test
+          MARIADB_USER: hrm
+          MARIADB_PASSWORD: password
+          POSTGRES_DB: laravel_test
+          POSTGRES_USER: hrm
+          POSTGRES_PASSWORD: password
+        ports:
+          - ${{ matrix.port }}:${{ matrix.port }}
+        options: >-
+          --health-cmd="${{ matrix.connection == 'mariadb' && 'healthcheck.sh --connect --innodb_initialized' || 'pg_isready -U hrm' }}"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DB_CONNECTION: ${{ matrix.connection }}
+      DB_HOST: 127.0.0.1
+      DB_PORT: ${{ matrix.port }}
+      DB_DATABASE: laravel_test
+      DB_USERNAME: hrm
+      DB_PASSWORD: password
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, pdo_pgsql, gd, zip, intl
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare application
+        run: |
+          php -r "file_exists('.env') || copy('.env.example', '.env');"
+          php artisan key:generate --force
+          php artisan migrate:fresh --seed --force
+
+      - name: Run test suite
+        run: vendor/bin/phpunit
