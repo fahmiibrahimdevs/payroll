@@ -1305,6 +1305,40 @@ class OvertimeTest extends TestCase
         $this->assertSame(Carbon::now()->locale('id')->isoFormat('MMM'), end($labels));
     }
 
+    public function test_overtime_submission_rejects_future_and_stale_dates(): void
+    {
+        $this->actingAs($this->karyawanUser);
+
+        // Tanggal masa depan tidak boleh.
+        Livewire::test(OvertimeIndex::class)
+            ->set('form.date', Carbon::tomorrow()->format('Y-m-d'))
+            ->set('form.start_time', '18:00')
+            ->set('form.end_time', '20:00')
+            ->set('form.reason', 'Lembur tanggal masa depan')
+            ->call('storeSubmission')
+            ->assertHasErrors(['form.date']);
+
+        // Lebih dari 90 hari ke belakang tidak boleh.
+        Livewire::test(OvertimeIndex::class)
+            ->set('form.date', Carbon::today()->subDays(91)->format('Y-m-d'))
+            ->set('form.start_time', '18:00')
+            ->set('form.end_time', '20:00')
+            ->set('form.reason', 'Lembur terlalu lama ke belakang')
+            ->call('storeSubmission')
+            ->assertHasErrors(['form.date']);
+
+        $this->assertDatabaseMissing('overtime_submissions', ['reason' => 'Lembur tanggal masa depan']);
+    }
+
+    public function test_approved_submission_cannot_be_deleted(): void
+    {
+        $submission = $this->createSubmissionWithStatus(OvertimeStatus::APPROVED);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        app(OvertimeService::class)->deleteSubmission($submission, $this->adminUser);
+    }
+
     public function test_update_attended_days_count_preserves_recorded_sunday(): void
     {
         $service = app(OvertimeService::class);

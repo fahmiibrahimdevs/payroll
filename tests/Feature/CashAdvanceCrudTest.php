@@ -2189,4 +2189,19 @@ class CashAdvanceCrudTest extends TestCase
 
         $this->assertSame(['2026-02-28', '2026-03-31', '2026-04-30'], $dueDates);
     }
+
+    public function test_disbursement_date_cannot_be_backdated_more_than_30_days(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        Livewire::test(Index::class)
+            ->set('form.employee_id', $this->employee->id)
+            ->set('form.amount', 1000000)
+            ->set('form.repayment_scheme', RepaymentScheme::SALARY_SINGLE->value)
+            ->set('form.installment_count', 1)
+            ->set('form.disbursement_date', Carbon::today()->subDays(31)->format('Y-m-d'))
+            ->set('form.reason', 'Tanggal cair terlalu lama')
+            ->call('store')
+            ->assertHasErrors(['form.disbursement_date']);
+    }
 }

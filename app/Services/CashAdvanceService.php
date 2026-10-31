@@ -201,8 +201,10 @@ class CashAdvanceService
                 [$startOfMonth, $endOfMonth]
             )
             ->selectRaw(
+                // Definisi overdue tunggal: due_date < hari ini (konsisten dengan
+                // is_overdue di halaman tagihan bulanan).
                 'COUNT(DISTINCT CASE WHEN cash_advance_installments.due_date < ? THEN cash_advances.employee_id END) as overdue_employees_count',
-                [$startOfMonth]
+                [Carbon::today()->toDateString()]
             )
             ->first();
 
@@ -217,13 +219,13 @@ class CashAdvanceService
             }
         }
 
-        // 4. Perlu perhatian (cicilan terlewat jatuh tempo sebelum bulan ini atau karyawan non-aktif dengan sisa saldo)
+        // 4. Perlu perhatian (cicilan lewat tanggal tempo atau karyawan non-aktif dengan sisa saldo)
         $overdueEmployeesCount = (int) $installmentStats->overdue_employees_count;
         $inactiveWithDebtCount = (int) $advanceStats->inactive_with_debt_count;
 
         $attentionEmployeesCount = max($overdueEmployeesCount, $inactiveWithDebtCount);
         $attentionSubtitle = $overdueEmployeesCount > 0
-            ? 'Cicilan terlewat bulan lalu'
+            ? 'Ada cicilan lewat tanggal tempo'
             : ($inactiveWithDebtCount > 0 ? 'Karyawan non-aktif bersaldo' : 'Semua cicilan lancar');
 
         $currentMonthShort = $now->translatedFormat('M');
@@ -343,9 +345,8 @@ class CashAdvanceService
      */
     public function getOverdueAdvancesForReview(): \Illuminate\Support\Collection
     {
-        $now = Carbon::now();
-        $startOfMonth = $now->copy()->startOfMonth()->toDateString();
-
+        // Definisi overdue tunggal: due_date < hari ini (konsisten dengan
+        // is_overdue di halaman tagihan bulanan).
         $overdueInstallments = CashAdvanceInstallment::query()
             ->with([
                 'cashAdvance.employee' => fn ($q) => $q->withTrashed()->with(['department', 'position']),
@@ -353,7 +354,7 @@ class CashAdvanceService
             ->whereHas('cashAdvance', function ($q) {
                 $q->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value]);
             })
-            ->whereDate('due_date', '<', $startOfMonth)
+            ->whereDate('due_date', '<', Carbon::today()->toDateString())
             ->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
             ->orderBy('due_date', 'asc')
             ->get();

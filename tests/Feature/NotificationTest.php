@@ -260,4 +260,15 @@ class NotificationTest extends TestCase
 
         $this->assertSame(0, $this->karyawanUser->unreadNotifications()->count());
     }
+
+    public function test_developer_can_access_notification_page(): void
+    {
+        $developerRole = Role::firstOrCreate(['name' => 'developer'], ['display_name' => 'Developer']);
+        $developer = User::factory()->create(['is_active' => true]);
+        $developer->addRole($developerRole);
+
+        $this->actingAs($developer)
+            ->get(route('notifications.index'))
+            ->assertOk();
+    }
 }

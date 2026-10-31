@@ -1625,13 +1625,13 @@ HTML;
         if ($isKaryawan && $karyawanRecord) {
             $advRow = CashAdvance::query()
                 ->where('employee_id', $karyawanRecord->id)
-                ->selectRaw("
+                ->selectRaw('
                     COALESCE(SUM(CASE WHEN status IN (?, ?, ?) THEN amount ELSE 0 END), 0) as total_approved,
                     COALESCE(SUM(CASE WHEN status IN (?, ?, ?) THEN remaining_amount ELSE 0 END), 0) as total_remaining,
                     COUNT(CASE WHEN status IN (?, ?, ?) THEN 1 END) as approved_count,
                     COUNT(CASE WHEN status = ? THEN 1 END) as pending_count,
                     COALESCE(SUM(CASE WHEN status = ? THEN amount ELSE 0 END), 0) as pending_amount
-                ", [
+                ', [
                     CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::PAID->value,
                     CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::PAID->value,
                     CashAdvanceStatus::APPROVED->value, CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::PAID->value,
@@ -1658,10 +1658,10 @@ HTML;
 
             $instRow = CashAdvanceInstallment::whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $karyawanRecord->id)->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value]))
                 ->whereIn('status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
-                ->selectRaw("
+                ->selectRaw('
                     COALESCE(SUM(CASE WHEN due_date >= ? AND due_date <= ? THEN (amount - paid_amount) ELSE 0 END), 0) as monthly_remaining,
                     COUNT(CASE WHEN due_date < ? THEN 1 END) as overdue_count
-                ", [$startOfMonth, $endOfMonth, $startOfMonth])
+                ', [$startOfMonth, $endOfMonth, Carbon::today()->toDateString()])
                 ->first();
 
             $myMonthlyInstallment = (float) ($instRow?->monthly_remaining ?? 0);
@@ -1688,7 +1688,7 @@ HTML;
                 'payroll_deduction_employees_count' => $myMonthlyInstallment > 0 ? 1 : 0,
                 'current_month_short' => $now->translatedFormat('M'),
                 'attention_employees_count' => $myOverdueCount > 0 ? 1 : 0,
-                'attention_subtitle' => $myOverdueCount > 0 ? 'Cicilan terlewat bulan lalu' : 'Semua cicilan lancar',
+                'attention_subtitle' => $myOverdueCount > 0 ? 'Ada cicilan lewat tanggal tempo' : 'Semua cicilan lancar',
             ];
         } else {
             $companyStats = $service->getSummaryStats();

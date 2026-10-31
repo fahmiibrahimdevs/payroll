@@ -613,6 +613,12 @@ class OvertimeService
                 throw new InvalidArgumentException('Pengajuan lembur ini sudah masuk ke dalam periode lembur mingguan dan tidak dapat dihapus.');
             }
 
+            // Pengajuan yang sudah disetujui tidak boleh dihapus - jejak audit
+            // harus utuh; pembatalan lewat penolakan tidak tersedia untuk status ini.
+            if ($sub->status === OvertimeStatus::APPROVED) {
+                throw new InvalidArgumentException('Pengajuan lembur yang sudah disetujui tidak dapat dihapus.');
+            }
+
             $ref = $sub->reference_number;
             $empName = $sub->employee?->full_name ?? 'Karyawan';
             $id = $sub->id;

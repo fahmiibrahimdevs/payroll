@@ -5,8 +5,10 @@
                 <a href="#" data-toggle="dropdown" class="nav-link has-dropdown"><i class="fas fa-fire"></i><span>Dashboard</span></a>
                 <ul class="dropdown-menu">
                     <li class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}"><a href="{{ route('dashboard') }}" class="nav-link">Main Dashboard</a></li>
-                    <li class="nav-item {{ request()->is('shizuefi/index-0') ? 'active' : '' }}"><a href="/shizuefi/index-0" class="nav-link">General Dashboard</a></li>
-                    <li class="nav-item {{ request()->is('shizuefi/index') ? 'active' : '' }}"><a href="/shizuefi/index" class="nav-link">Ecommerce Dashboard</a></li>
+                    @if (auth()->user()?->hasRole('admin'))
+                        <li class="nav-item {{ request()->is('shizuefi/index-0') ? 'active' : '' }}"><a href="/shizuefi/index-0" class="nav-link">General Dashboard</a></li>
+                        <li class="nav-item {{ request()->is('shizuefi/index') ? 'active' : '' }}"><a href="/shizuefi/index" class="nav-link">Ecommerce Dashboard</a></li>
+                    @endif
                 </ul>
             </li>
 
@@ -18,6 +20,8 @@
                 @endif
             @endauth
 
+            {{-- Grup link demo template shizuefi: route-nya admin-only, jadi sembunyikan untuk role lain --}}
+            @if (auth()->user()?->hasRole('admin'))
             <li class="nav-item dropdown">
                 <a href="#" data-toggle="dropdown" class="nav-link has-dropdown"><i class="fas fa-columns"></i><span>Layouts</span></a>
                 <ul class="dropdown-menu">
@@ -83,6 +87,7 @@
                     <li class="nav-item"><a href="/shizuefi/features-settings" class="nav-link">Settings</a></li>
                 </ul>
             </li>
+            @endif
         </ul>
     </div>
 </nav>

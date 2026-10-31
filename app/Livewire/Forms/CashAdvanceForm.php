@@ -61,6 +61,9 @@ class CashAdvanceForm extends Form
                 'required',
                 'date',
                 'before_or_equal:today',
+                // Cegah backdate jauh: jadwal cicilan & nomor referensi mengikuti
+                // tanggal cair, jadi batasi maksimal 30 hari ke belakang.
+                'after_or_equal:'.now()->subDays(30)->toDateString(),
             ],
             'reason' => [
                 'required',

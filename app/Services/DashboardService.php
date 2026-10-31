@@ -608,11 +608,13 @@ class DashboardService
         }
 
         // 3. Kasbon: Cicilan Jatuh Tempo Terlewat (Overdue)
-        $startOfMonth = now()->startOfMonth()->toDateString();
+        // Definisi overdue tunggal: due_date < hari ini (konsisten dengan
+        // is_overdue di halaman tagihan bulanan).
+        $today = now()->toDateString();
         $overdueCashAdvancesCount = (int) CashAdvanceInstallment::query()
             ->join('cash_advances', 'cash_advances.id', '=', 'cash_advance_installments.cash_advance_id')
             ->whereIn('cash_advances.status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
-            ->whereDate('cash_advance_installments.due_date', '<', $startOfMonth)
+            ->whereDate('cash_advance_installments.due_date', '<', $today)
             ->whereIn('cash_advance_installments.status', [InstallmentStatus::PENDING->value, InstallmentStatus::PARTIALLY_PAID->value])
             ->distinct('cash_advances.employee_id')
             ->count('cash_advances.employee_id');
@@ -620,8 +622,8 @@ class DashboardService
         if ($overdueCashAdvancesCount > 0) {
             $overdueAdvance = CashAdvance::query()
                 ->whereIn('status', [CashAdvanceStatus::ACTIVE, CashAdvanceStatus::APPROVED])
-                ->whereHas('installments', function ($query) use ($startOfMonth): void {
-                    $query->whereDate('due_date', '<', $startOfMonth)
+                ->whereHas('installments', function ($query) use ($today): void {
+                    $query->whereDate('due_date', '<', $today)
                         ->whereIn('status', [InstallmentStatus::PENDING, InstallmentStatus::PARTIALLY_PAID]);
                 })
                 ->orderBy('id')

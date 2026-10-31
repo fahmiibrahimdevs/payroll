@@ -2,9 +2,7 @@
 
 namespace App\Livewire\Forms;
 
-use App\Models\Employee;
 use App\Models\OvertimeSubmission;
-use App\Models\User;
 use App\Services\OvertimeService;
 use Carbon\Carbon;
 use Livewire\Form;
@@ -36,7 +34,8 @@ class OvertimeSubmissionForm extends Form
         $rules = [
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
             'overtime_type' => ['required', 'string', 'in:hourly,daily'],
-            'date' => ['required', 'date'],
+            // Tidak boleh masa depan, maksimal 90 hari ke belakang.
+            'date' => ['required', 'date', 'before_or_equal:today', 'after_or_equal:'.now()->subDays(90)->toDateString()],
             'meal_allowance' => ['nullable', 'numeric', 'min:0'],
             'reason' => ['required', 'string', 'min:5', 'max:1000'],
             'admin_notes' => ['nullable', 'string', 'max:1000'],

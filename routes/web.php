@@ -8,8 +8,10 @@ use App\Livewire\Departments\Index as DepartmentIndex;
 use App\Livewire\Employees\Index as EmployeeIndex;
 use App\Livewire\Logs\Index as LogIndex;
 use App\Livewire\Overtimes\Index as OvertimeIndex;
+use App\Livewire\Overtimes\PeriodAttendance;
 use App\Livewire\Payrolls\ManageItem;
 use App\Livewire\Payrolls\Show;
+use App\Livewire\Payrolls\WeeklyPayrollIndex;
 use App\Livewire\Positions\Index as PositionIndex;
 use App\Livewire\Posts\Index;
 use App\Livewire\SalaryComponents\Index as SalaryComponentIndex;
@@ -127,7 +129,7 @@ Route::get('overtimes', OvertimeIndex::class)
     ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
     ->name('overtimes.index');
 
-Route::get('overtimes/periods/{period}/attendances', App\Livewire\Overtimes\PeriodAttendance::class)
+Route::get('overtimes/periods/{period}/attendances', PeriodAttendance::class)
     ->middleware(['auth', 'active', 'role:admin'])
     ->name('overtimes.periods.attendances');
 
@@ -140,10 +142,10 @@ Route::get('attendances', App\Livewire\Attendances\Index::class)
     ->name('attendances.index');
 
 Route::get('notifications', App\Livewire\Notifications\Index::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
+    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan|developer'])
     ->name('notifications.index');
 
-Route::get('payrolls/weekly', App\Livewire\Payrolls\WeeklyPayrollIndex::class)
+Route::get('payrolls/weekly', WeeklyPayrollIndex::class)
     ->middleware(['auth', 'active', 'role:admin|direktur'])
     ->name('payrolls.weekly');
 
