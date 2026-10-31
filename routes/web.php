@@ -24,182 +24,178 @@ use Livewire\Volt\Volt;
 
 Route::redirect('/', '/login');
 
-$dashboardMiddleware = ['auth', 'active'];
+Route::middleware(['auth', 'active'])->group(function () {
+    $extraDashboardMiddleware = app()->environment(['local', 'development', 'testing'])
+        ? ['role:admin|direktur|karyawan|developer']
+        : ['verified', 'role:admin|direktur|karyawan|developer'];
 
-if (! app()->environment(['local', 'development', 'testing'])) {
-    $dashboardMiddleware[] = 'verified';
-}
+    Route::get('dashboard', function (DashboardService $dashboardService) {
+        $user = auth()->user();
 
-$dashboardMiddleware[] = 'role:admin|direktur|karyawan|developer';
+        if ($user->hasRole('developer')) {
+            return redirect()->route('logs.index');
+        }
 
-Route::get('dashboard', function (DashboardService $dashboardService) {
-    $user = auth()->user();
+        $employeeDashboard = $user->hasRole('karyawan')
+            ? $dashboardService->getEmployeeDashboardData($user)
+            : null;
 
-    if ($user->hasRole('developer')) {
-        return redirect()->route('logs.index');
-    }
+        return view('dashboard', ['employeeDashboard' => $employeeDashboard]);
+    })
+        ->middleware($extraDashboardMiddleware)
+        ->name('dashboard');
 
-    $employeeDashboard = $user->hasRole('karyawan')
-        ? $dashboardService->getEmployeeDashboardData($user)
-        : null;
+    Route::view('profile', 'profile')->name('profile');
 
-    return view('dashboard', ['employeeDashboard' => $employeeDashboard]);
-})
-    ->middleware($dashboardMiddleware)
-    ->name('dashboard');
+    Route::get('departments', DepartmentIndex::class)
+        ->middleware('role:admin|direktur')
+        ->name('departments.index');
 
-Route::view('profile', 'profile')
-    ->middleware(['auth', 'active'])
-    ->name('profile');
+    Route::get('positions', PositionIndex::class)
+        ->middleware('role:admin|direktur')
+        ->name('positions.index');
 
-Route::get('departments', DepartmentIndex::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('departments.index');
+    Route::get('holidays', App\Livewire\Holidays\Index::class)
+        ->middleware('role:admin|direktur')
+        ->name('holidays.index');
 
-Route::get('positions', PositionIndex::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('positions.index');
+    Route::get('employees', EmployeeIndex::class)
+        ->middleware('role:admin|direktur|karyawan')
+        ->name('employees.index');
 
-Route::get('holidays', App\Livewire\Holidays\Index::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('holidays.index');
+    Route::get('employees/{employee}', App\Livewire\Employees\Show::class)
+        ->middleware('role:admin|direktur|karyawan')
+        ->name('employees.show');
 
-Route::get('employees', EmployeeIndex::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
-    ->name('employees.index');
+    Route::get('employees/{employee}/edit/{section?}', function (Employee $employee, ?string $section = null) {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
 
-Route::get('employees/{employee}', App\Livewire\Employees\Show::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
-    ->name('employees.show');
+        session()->put('employee_edit_handoff', [
+            'id' => $employee->id,
+            'section' => in_array($section, ['kepegawaian', 'pribadi', 'pajak'], true) ? $section : 'kepegawaian',
+        ]);
 
-Route::get('employees/{employee}/edit/{section?}', function (Employee $employee, ?string $section = null) {
-    abort_unless(auth()->user()?->hasRole('admin'), 403);
+        return redirect()->route('employees.index');
+    })
+        ->middleware('role:admin')
+        ->name('employees.edit');
 
-    session()->put('employee_edit_handoff', [
-        'id' => $employee->id,
-        'section' => in_array($section, ['kepegawaian', 'pribadi', 'pajak'], true) ? $section : 'kepegawaian',
-    ]);
+    Route::get('employees/{employee}/documents/cv', [SecureDocumentController::class, 'employeeCv'])
+        ->middleware('role:admin|direktur|karyawan')
+        ->name('employees.documents.cv');
 
-    return redirect()->route('employees.index');
-})
-    ->middleware(['auth', 'active', 'role:admin'])
-    ->name('employees.edit');
+    Route::get('salary-components', SalaryComponentIndex::class)
+        ->middleware('role:admin|direktur')
+        ->name('salary-components.index');
 
-Route::get('employees/{employee}/documents/cv', [SecureDocumentController::class, 'employeeCv'])
-    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
-    ->name('employees.documents.cv');
+    Route::get('cash-advances', CashAdvanceIndex::class)
+        ->middleware('role:admin|direktur|karyawan')
+        ->name('cash-advances.index');
 
-Route::get('salary-components', SalaryComponentIndex::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('salary-components.index');
+    Route::get('cash-advances/review/{advance}/{action}/{payment?}', function (
+        CashAdvance $advance,
+        string $action,
+        ?CashAdvancePayment $payment = null,
+    ) {
+        abort_unless(in_array($action, ['approval', 'detail', 'payment'], true), 404);
+        abort_unless($action !== 'approval' || auth()->user()?->hasRole('direktur'), 403);
+        abort_unless($action === 'payment' ? $payment && $payment->cash_advance_id === $advance->id : $payment === null, 404);
 
-Route::get('cash-advances', CashAdvanceIndex::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
-    ->name('cash-advances.index');
+        session()->put('cash_advance_review_handoff', [
+            'advance_id' => $advance->id,
+            'action' => $action,
+            'payment_id' => $payment?->id,
+        ]);
 
-Route::get('cash-advances/review/{advance}/{action}/{payment?}', function (
-    CashAdvance $advance,
-    string $action,
-    ?CashAdvancePayment $payment = null,
-) {
-    abort_unless(in_array($action, ['approval', 'detail', 'payment'], true), 404);
-    abort_unless($action !== 'approval' || auth()->user()?->hasRole('direktur'), 403);
-    abort_unless($action === 'payment' ? $payment && $payment->cash_advance_id === $advance->id : $payment === null, 404);
+        return redirect()->route('cash-advances.index');
+    })
+        ->middleware('role:admin|direktur')
+        ->name('cash-advances.review');
 
-    session()->put('cash_advance_review_handoff', [
-        'advance_id' => $advance->id,
-        'action' => $action,
-        'payment_id' => $payment?->id,
-    ]);
+    Route::get('cash-advances/payments/{payment}/proof', [SecureDocumentController::class, 'paymentProof'])
+        ->middleware('role:admin|direktur|karyawan')
+        ->name('cash-advances.documents.proof');
 
-    return redirect()->route('cash-advances.index');
-})
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('cash-advances.review');
+    Route::get('payrolls/items/{item}/proof', [SecureDocumentController::class, 'payrollItemProof'])
+        ->middleware('role:admin|direktur')
+        ->name('payrolls.documents.item-proof');
 
-Route::get('cash-advances/payments/{payment}/proof', [SecureDocumentController::class, 'paymentProof'])
-    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
-    ->name('cash-advances.documents.proof');
+    Route::get('overtimes/attendances/{attendance}/proof', [SecureDocumentController::class, 'overtimeAttendanceProof'])
+        ->middleware('role:admin|direktur')
+        ->name('overtimes.documents.attendance-proof');
 
-Route::get('payrolls/items/{item}/proof', [SecureDocumentController::class, 'payrollItemProof'])
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('payrolls.documents.item-proof');
+    Route::get('overtimes', OvertimeIndex::class)
+        ->middleware('role:admin|direktur|karyawan')
+        ->name('overtimes.index');
 
-Route::get('overtimes/attendances/{attendance}/proof', [SecureDocumentController::class, 'overtimeAttendanceProof'])
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('overtimes.documents.attendance-proof');
+    Route::get('overtimes/periods/{period}/attendances', PeriodAttendance::class)
+        ->middleware('role:admin')
+        ->name('overtimes.periods.attendances');
 
-Route::get('overtimes', OvertimeIndex::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
-    ->name('overtimes.index');
+    Route::get('overtimes/periods/{period}/print/{employee?}', [OvertimePrintController::class, 'printWeekly'])
+        ->middleware('role:admin|direktur|karyawan')
+        ->name('overtimes.periods.print');
 
-Route::get('overtimes/periods/{period}/attendances', PeriodAttendance::class)
-    ->middleware(['auth', 'active', 'role:admin'])
-    ->name('overtimes.periods.attendances');
+    Route::get('attendances', App\Livewire\Attendances\Index::class)
+        ->middleware('role:admin|direktur|karyawan')
+        ->name('attendances.index');
 
-Route::get('overtimes/periods/{period}/print/{employee?}', [OvertimePrintController::class, 'printWeekly'])
-    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
-    ->name('overtimes.periods.print');
+    Route::get('notifications', App\Livewire\Notifications\Index::class)
+        ->middleware('role:admin|direktur|karyawan|developer')
+        ->name('notifications.index');
 
-Route::get('attendances', App\Livewire\Attendances\Index::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
-    ->name('attendances.index');
+    Route::get('payrolls/weekly', WeeklyPayrollIndex::class)
+        ->middleware('role:admin|direktur')
+        ->name('payrolls.weekly');
 
-Route::get('notifications', App\Livewire\Notifications\Index::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan|developer'])
-    ->name('notifications.index');
+    Route::get('payrolls', App\Livewire\Payrolls\Index::class)
+        ->middleware('role:admin|direktur')
+        ->name('payrolls.index');
 
-Route::get('payrolls/weekly', WeeklyPayrollIndex::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('payrolls.weekly');
+    Route::get('payrolls/{period}', Show::class)
+        ->middleware('role:admin|direktur')
+        ->name('payrolls.show');
 
-Route::get('payrolls', App\Livewire\Payrolls\Index::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('payrolls.index');
+    Route::get('payrolls/{period}/items/{item}/edit', ManageItem::class)
+        ->middleware('role:admin|direktur')
+        ->name('payrolls.items.edit');
 
-Route::get('payrolls/{period}', Show::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('payrolls.show');
+    Route::get('payrolls/{period}/items/{item}/print', [PayrollPrintController::class, 'printSlip'])
+        ->middleware('role:admin|direktur|karyawan')
+        ->name('payrolls.items.print');
 
-Route::get('payrolls/{period}/items/{item}/edit', ManageItem::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('payrolls.items.edit');
+    Route::get('payrolls/{period}/print-all', [PayrollPrintController::class, 'printAllSlips'])
+        ->middleware('role:admin|direktur')
+        ->name('payrolls.print-all');
 
-Route::get('payrolls/{period}/items/{item}/print', [PayrollPrintController::class, 'printSlip'])
-    ->middleware(['auth', 'active', 'role:admin|direktur|karyawan'])
-    ->name('payrolls.items.print');
+    Route::get('payrolls/yearly-summary/{year}/print', [PayrollPrintController::class, 'printYearlySummary'])
+        ->middleware('role:admin|direktur')
+        ->name('payrolls.yearly-summary.print');
 
-Route::get('payrolls/{period}/print-all', [PayrollPrintController::class, 'printAllSlips'])
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('payrolls.print-all');
+    Route::get('company-profile', App\Livewire\CompanyProfile\Index::class)
+        ->middleware('role:admin|direktur')
+        ->name('company-profile.index');
 
-Route::get('payrolls/yearly-summary/{year}/print', [PayrollPrintController::class, 'printYearlySummary'])
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('payrolls.yearly-summary.print');
+    Route::get('posts', Index::class)
+        ->middleware('role:admin')
+        ->name('posts.index');
 
-Route::get('company-profile', App\Livewire\CompanyProfile\Index::class)
-    ->middleware(['auth', 'active', 'role:admin|direktur'])
-    ->name('company-profile.index');
+    Route::get('logs', LogIndex::class)
+        ->middleware('role:developer')
+        ->name('logs.index');
 
-Route::get('posts', Index::class)
-    ->middleware(['auth', 'active', 'role:admin'])
-    ->name('posts.index');
+    Route::middleware('role:admin')->group(function () {
+        Volt::route('admin/users', 'pages.admin.user-index')
+            ->name('admin.users');
+    });
 
-Route::get('logs', LogIndex::class)
-    ->middleware(['auth', 'active', 'role:developer'])
-    ->name('logs.index');
+    Route::get('shizuefi/{page?}', function (string $page = 'index') {
+        if (! view()->exists("shizuefi.{$page}")) {
+            abort(404);
+        }
 
-Route::middleware(['auth', 'active', 'role:admin'])->group(function () {
-    Volt::route('admin/users', 'pages.admin.user-index')
-        ->name('admin.users');
+        return view("shizuefi.{$page}");
+    })->middleware('role:admin')->name('shizuefi.page');
 });
-
-Route::get('shizuefi/{page?}', function (string $page = 'index') {
-    if (! view()->exists("shizuefi.{$page}")) {
-        abort(404);
-    }
-
-    return view("shizuefi.{$page}");
-})->middleware(['auth', 'active', 'role:admin'])->name('shizuefi.page');
 
 require __DIR__.'/auth.php';
