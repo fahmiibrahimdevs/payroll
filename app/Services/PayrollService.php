@@ -122,12 +122,25 @@ class PayrollService
         $currentYear = $year ?? (int) Carbon::now()->year;
         $currentMonth = (int) Carbon::now()->month;
 
-        $totalPaidThisYear = (float) PayrollPeriod::where('status', PayrollPeriodStatus::PAID->value)
-            ->where('year', $currentYear)
-            ->sum('total_net_salary');
+        // Tiga angka ringkasan dihitung dalam satu query alih-alih tiga count/sum terpisah.
+        $summaryRow = PayrollPeriod::query()
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN status = ? AND year = ? THEN total_net_salary ELSE 0 END), 0) as total_paid_this_year',
+                [PayrollPeriodStatus::PAID->value, $currentYear]
+            )
+            ->selectRaw(
+                'COUNT(CASE WHEN status = ? THEN 1 END) as pending_approval_count',
+                [PayrollPeriodStatus::SUBMITTED->value]
+            )
+            ->selectRaw(
+                'COUNT(CASE WHEN status = ? THEN 1 END) as draft_count',
+                [PayrollPeriodStatus::DRAFT->value]
+            )
+            ->first();
 
-        $pendingApprovalCount = PayrollPeriod::where('status', PayrollPeriodStatus::SUBMITTED->value)->count();
-        $draftCount = PayrollPeriod::where('status', PayrollPeriodStatus::DRAFT->value)->count();
+        $totalPaidThisYear = (float) $summaryRow->total_paid_this_year;
+        $pendingApprovalCount = (int) $summaryRow->pending_approval_count;
+        $draftCount = (int) $summaryRow->draft_count;
         $totalActiveEmployees = Employee::where('status', EmployeeStatus::ACTIVE)
             ->where('employment_status', '!=', EmploymentStatus::HARIAN)
             ->count();

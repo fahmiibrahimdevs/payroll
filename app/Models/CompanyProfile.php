@@ -90,11 +90,23 @@ class CompanyProfile extends Model
 
     public const CACHE_KEY = 'company_profile_singleton';
 
+    protected const MEMO_KEY = 'company_profile_memo.attributes';
+
     /**
      * Get the singleton or first company profile record.
+     *
+     * Memo disimpan di container (bukan properti static) agar hidup hanya
+     * satu request — menghindari pembacaan tabel cache berulang oleh
+     * composer, mount, dan render dalam satu request yang sama.
      */
     public static function getProfile(): self
     {
+        $memoized = app()->bound(self::MEMO_KEY) ? app(self::MEMO_KEY) : null;
+
+        if (is_array($memoized)) {
+            return (new static)->newFromBuilder($memoized);
+        }
+
         $attributes = Cache::remember(self::CACHE_KEY, 86400, function () {
             $record = static::firstOrCreate([], [
                 'name' => 'PT LARASHIZ INDONESIA',
@@ -125,12 +137,15 @@ class CompanyProfile extends Model
             return $record->getAttributes();
         });
 
+        app()->instance(self::MEMO_KEY, $attributes);
+
         return (new static)->newFromBuilder($attributes);
     }
 
     public static function clearProfileCache(): void
     {
         Cache::forget(self::CACHE_KEY);
+        app()->forgetInstance(self::MEMO_KEY);
     }
 
     protected static function booted(): void
@@ -142,7 +157,7 @@ class CompanyProfile extends Model
     /**
      * Resolve the payroll period date range and payment date based on company cutoff & pay day settings.
      *
-     * @return array{start_date: \Carbon\Carbon, end_date: \Carbon\Carbon, payment_date: \Carbon\Carbon}
+     * @return array{start_date: Carbon, end_date: Carbon, payment_date: Carbon}
      */
     public function resolvePayrollCycleDates(int $year, int $month): array
     {

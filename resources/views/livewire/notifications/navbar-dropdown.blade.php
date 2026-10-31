@@ -93,8 +93,8 @@
         <div class="dropdown-list-content" style="max-height: 380px; overflow-y: auto;">
             @forelse ($history as $notification)
                 @php
-                    $data = $notification->data;
-                    $isUnread = $notification->read_at === null;
+                    $data = $notification['data'];
+                    $isUnread = $notification['is_unread'];
                     $levelIconStyle = match ($data['level'] ?? 'info') {
                         'success' => 'background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 5px 12px rgba(22, 163, 74, 0.28);',
                         'danger' => 'background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 5px 12px rgba(220, 38, 38, 0.28);',
@@ -102,8 +102,8 @@
                         default => 'background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 5px 12px rgba(37, 99, 235, 0.28);',
                     };
                 @endphp
-                <div wire:key="notif-{{ $notification->id }}" class="d-flex align-items-start" style="padding: 10px 12px 10px 16px; border-bottom: 1px solid #f8fafc; {{ $isUnread ? 'background-color: #f8fafc;' : '' }}">
-                    <a href="#" wire:click="open('{{ $notification->id }}')" wire:loading.attr="disabled" class="d-flex align-items-start text-decoration-none" style="flex-grow: 1; min-width: 0;">
+                <div wire:key="notif-{{ $notification['id'] }}" class="d-flex align-items-start" style="padding: 10px 12px 10px 16px; border-bottom: 1px solid #f8fafc; {{ $isUnread ? 'background-color: #f8fafc;' : '' }}">
+                    <a href="#" wire:click="open('{{ $notification['id'] }}')" wire:loading.attr="disabled" class="d-flex align-items-start text-decoration-none" style="flex-grow: 1; min-width: 0;">
                         <div class="text-white mr-3" style="width: 32px; height: 32px; line-height: 32px; border-radius: 9px; font-size: 12px; text-align: center; flex-shrink: 0; {{ $levelIconStyle }}">
                             <i class="{{ $data['icon'] ?? 'far fa-bell' }}"></i>
                         </div>
@@ -118,12 +118,12 @@
                                 {{ $data['body'] ?? '' }}
                             </div>
                             <div style="font-size: 10.5px; margin-top: 3px; color: #475569;">
-                                {{ $notification->created_at->locale('id')->diffForHumans() }}
+                                {{ $notification['time'] }}
                             </div>
                         </div>
                     </a>
                     @if ($isUnread)
-                        <button type="button" wire:click="markRead('{{ $notification->id }}')" wire:loading.attr="disabled" class="btn btn-sm text-primary p-1 ml-1" style="font-size: 11px; flex-shrink: 0;" title="Tandai sudah dibaca" wire:target="markRead('{{ $notification->id }}')">
+                        <button type="button" wire:click="markRead('{{ $notification['id'] }}')" wire:loading.attr="disabled" class="btn btn-sm text-primary p-1 ml-1" style="font-size: 11px; flex-shrink: 0;" title="Tandai sudah dibaca" wire:target="markRead('{{ $notification['id'] }}')">
                             <i class="fas fa-check-double"></i>
                         </button>
                     @endif

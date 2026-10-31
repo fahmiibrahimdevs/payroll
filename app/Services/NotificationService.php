@@ -80,6 +80,8 @@ class NotificationService
             $notification->markAsRead();
         }
 
+        Cache::forget('navbar_notifications_'.$user->id);
+
         return true;
     }
 
@@ -89,5 +91,7 @@ class NotificationService
     public function markAllRead(User $user): void
     {
         $user->unreadNotifications->each->markAsRead();
+
+        Cache::forget('navbar_notifications_'.$user->id);
     }
 }

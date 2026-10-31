@@ -13,15 +13,43 @@ class NavbarDropdown extends Component
     {
         $user = auth()->user();
 
-        $actionItems = [];
-        if ($user && ($user->hasRole('admin') || $user->hasRole('direktur') || $user->hasRole('karyawan'))) {
-            $actionItems = Cache::remember('navbar_notifications_'.$user->id, 60, fn () => $dashboardService->getActionItems());
+        if (! $user) {
+            return view('livewire.notifications.navbar-dropdown', [
+                'actionItems' => [],
+                'history' => collect(),
+                'unreadCount' => 0,
+            ]);
         }
 
+        // Satu cache untuk seluruh payload navbar (tindakan + riwayat + badge)
+        // agar navbar hanya menimbulkan 1 query cache per render halaman.
+        // Simpan sebagai array polos — model Eloquent tidak aman diserialisasi
+        // ke cache database.
+        $payload = Cache::remember(
+            'navbar_notifications_'.$user->id,
+            60,
+            function () use ($dashboardService, $notificationService, $user) {
+                $hasAccess = $user->hasRole('admin') || $user->hasRole('direktur') || $user->hasRole('karyawan');
+
+                return [
+                    'actionItems' => $hasAccess ? $dashboardService->getActionItems() : [],
+                    'history' => $notificationService->latest($user)
+                        ->map(fn ($notification) => [
+                            'id' => $notification->id,
+                            'data' => $notification->data,
+                            'is_unread' => $notification->read_at === null,
+                            'time' => $notification->created_at->locale('id')->diffForHumans(),
+                        ])
+                        ->all(),
+                    'unreadCount' => $notificationService->unreadCount($user),
+                ];
+            }
+        );
+
         return view('livewire.notifications.navbar-dropdown', [
-            'actionItems' => $actionItems,
-            'history' => $user ? $notificationService->latest($user) : collect(),
-            'unreadCount' => $user ? $notificationService->unreadCount($user) : 0,
+            'actionItems' => $payload['actionItems'],
+            'history' => $payload['history'],
+            'unreadCount' => $payload['unreadCount'],
         ]);
     }
 

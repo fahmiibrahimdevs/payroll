@@ -66,11 +66,28 @@ class UserService
     {
         $baseQuery = User::query()->whereNotIn('email', self::HIDDEN_DUMMY_EMAILS);
 
+        // Semua angka dihitung dalam satu query (CASE + EXISTS) alih-alih
+        // empat count() terpisah karena kartu statistik dirender tiap render.
+        $row = $baseQuery
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM(CASE WHEN is_active THEN 1 ELSE 0 END) as active')
+            ->selectRaw('SUM(CASE WHEN NOT is_active THEN 1 ELSE 0 END) as inactive')
+            ->selectRaw(<<<'SQL'
+SUM(EXISTS (
+    SELECT 1 FROM role_user
+    INNER JOIN roles ON roles.id = role_user.role_id
+    WHERE role_user.user_id = users.id
+        AND role_user.user_type = ?
+        AND roles.name = ?
+)) as admins
+SQL, [User::class, 'admin'])
+            ->first();
+
         return [
-            'total' => (clone $baseQuery)->count(),
-            'active' => (clone $baseQuery)->where('is_active', true)->count(),
-            'inactive' => (clone $baseQuery)->where('is_active', false)->count(),
-            'admins' => (clone $baseQuery)->whereHas('roles', fn ($q) => $q->where('name', 'admin'))->count(),
+            'total' => (int) ($row->total ?? 0),
+            'active' => (int) ($row->active ?? 0),
+            'inactive' => (int) ($row->inactive ?? 0),
+            'admins' => (int) ($row->admins ?? 0),
         ];
     }
 

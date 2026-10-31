@@ -119,6 +119,7 @@ class CashAdvanceService
 
         $advanceStats = CashAdvance::query()
             ->leftJoin('employees', 'cash_advances.employee_id', '=', 'employees.id')
+            ->selectRaw('(SELECT COUNT(*) FROM employees WHERE employees.deleted_at IS NULL) as total_employees_count')
             ->selectRaw(
                 'COALESCE(SUM(CASE WHEN cash_advances.status IN (?, ?) AND cash_advances.remaining_amount > 0 THEN cash_advances.remaining_amount ELSE 0 END), 0) as total_remaining',
                 $activeStatuses
@@ -258,7 +259,7 @@ class CashAdvanceService
         $totalPendingPaymentsCount = (int) $paymentStats->pending_count;
         $totalPendingPaymentsAmount = (float) $paymentStats->pending_amount;
 
-        $totalEmployeesCount = Employee::query()->count();
+        $totalEmployeesCount = (int) $advanceStats->total_employees_count;
 
         $compactRemaining = $totalRemaining >= 1000000000
             ? 'Rp '.number_format($totalRemaining / 1000000000, 1, ',', '.').' M'
