@@ -4,7 +4,6 @@ namespace App\Livewire\Attendances;
 
 use App\Enums\EmploymentStatus;
 use App\Models\Attendance;
-use App\Models\Department;
 use App\Models\Employee;
 use App\Services\ActivityLogService;
 use App\Services\AttendanceService;
@@ -415,10 +414,10 @@ class Index extends Component
                     'date' => $this->manualDate,
                 ],
                 [
-                    'clock_in' => $this->manualClockIn ? $this->manualClockIn . ':00' : null,
-                    'clock_out' => $this->manualClockOut ? $this->manualClockOut . ':00' : null,
-                    'overtime_in' => $this->manualOvertimeIn ? $this->manualOvertimeIn . ':00' : null,
-                    'overtime_out' => $this->manualOvertimeOut ? $this->manualOvertimeOut . ':00' : null,
+                    'clock_in' => $this->manualClockIn ? $this->manualClockIn.':00' : null,
+                    'clock_out' => $this->manualClockOut ? $this->manualClockOut.':00' : null,
+                    'overtime_in' => $this->manualOvertimeIn ? $this->manualOvertimeIn.':00' : null,
+                    'overtime_out' => $this->manualOvertimeOut ? $this->manualOvertimeOut.':00' : null,
                     'status' => $this->manualStatus,
                     'duration_minutes' => $durationMins,
                     'overtime_minutes' => $overtimeMins,
@@ -544,9 +543,9 @@ class Index extends Component
                     preg_match_all('/\d{1,2}:\d{2}/', $regContent, $regMatches);
                     $regTimes = $regMatches[0] ?? [];
                     if (! empty($regTimes)) {
-                        $clockIn = (strlen($regTimes[0]) === 4 ? '0' . $regTimes[0] : $regTimes[0]) . ':00';
+                        $clockIn = (strlen($regTimes[0]) === 4 ? '0'.$regTimes[0] : $regTimes[0]).':00';
                         if (count($regTimes) > 1) {
-                            $clockOut = (strlen($regTimes[1]) === 4 ? '0' . $regTimes[1] : $regTimes[1]) . ':00';
+                            $clockOut = (strlen($regTimes[1]) === 4 ? '0'.$regTimes[1] : $regTimes[1]).':00';
                         }
                     }
                 } elseif (str_starts_with($part, 'OT:')) {
@@ -554,9 +553,9 @@ class Index extends Component
                     preg_match_all('/\d{1,2}:\d{2}/', $otContent, $otMatches);
                     $otTimes = $otMatches[0] ?? [];
                     if (! empty($otTimes)) {
-                        $overtimeIn = (strlen($otTimes[0]) === 4 ? '0' . $otTimes[0] : $otTimes[0]) . ':00';
+                        $overtimeIn = (strlen($otTimes[0]) === 4 ? '0'.$otTimes[0] : $otTimes[0]).':00';
                         if (count($otTimes) > 1) {
-                            $overtimeOut = (strlen($otTimes[1]) === 4 ? '0' . $otTimes[1] : $otTimes[1]) . ':00';
+                            $overtimeOut = (strlen($otTimes[1]) === 4 ? '0'.$otTimes[1] : $otTimes[1]).':00';
                         }
                     }
                 }
@@ -569,18 +568,18 @@ class Index extends Component
                 $this->dispatch('swal:alert', [
                     'type' => 'warning',
                     'title' => 'Format Log Tidak Valid',
-                    'message' => 'Tidak ditemukan waktu jam pada log mesin asli: ' . $attendance->raw_log,
+                    'message' => 'Tidak ditemukan waktu jam pada log mesin asli: '.$attendance->raw_log,
                 ]);
 
                 return;
             }
 
-            $clockIn = (strlen($times[0]) === 4 ? '0' . $times[0] : $times[0]) . ':00';
+            $clockIn = (strlen($times[0]) === 4 ? '0'.$times[0] : $times[0]).':00';
             $latestTime = end($times);
             if (strlen($latestTime) === 4) {
-                $latestTime = '0' . $latestTime;
+                $latestTime = '0'.$latestTime;
             }
-            $clockOut = ($latestTime !== substr($clockIn, 0, 5)) ? $latestTime . ':00' : null;
+            $clockOut = ($latestTime !== substr($clockIn, 0, 5)) ? $latestTime.':00' : null;
         }
 
         if ($clockIn && $clockOut) {
@@ -683,10 +682,10 @@ class Index extends Component
             $term = $this->search;
             $empQuery->where(function ($q) use ($term) {
                 $q->where('full_name', 'like', "%{$term}%")
-                  ->orWhere('fingerprint_id', 'like', "%{$term}%")
-                  ->orWhereHas('detail', fn ($sub) => $sub->where('employee_code', 'like', "%{$term}%"))
-                  ->orWhereHas('position', fn ($sub) => $sub->where('name', 'like', "%{$term}%"))
-                  ->orWhereHas('department', fn ($sub) => $sub->where('name', 'like', "%{$term}%"));
+                    ->orWhere('fingerprint_id', 'like', "%{$term}%")
+                    ->orWhereHas('detail', fn ($sub) => $sub->where('employee_code', 'like', "%{$term}%"))
+                    ->orWhereHas('position', fn ($sub) => $sub->where('name', 'like', "%{$term}%"))
+                    ->orWhereHas('department', fn ($sub) => $sub->where('name', 'like', "%{$term}%"));
             });
         }
 
@@ -699,15 +698,23 @@ class Index extends Component
             $empQuery->where('id', $karyawanEmployee?->id ?? -1);
         }
 
+        // CAST ke tipe numerik: UNSIGNED hanya ada di MySQL/MariaDB,
+        // PostgreSQL memakai INTEGER (dengan NULLIF untuk string kosong).
+        $fingerprintOrder = match (DB::connection()->getDriverName()) {
+            'pgsql' => "CAST(NULLIF(fingerprint_id, '') AS INTEGER) ASC NULLS LAST",
+            'sqlite' => "CAST(CASE WHEN fingerprint_id = '' THEN NULL ELSE fingerprint_id END AS INTEGER) ASC",
+            default => 'CAST(fingerprint_id AS UNSIGNED) ASC',
+        };
+
         $matrixEmployees = $empQuery
-            ->orderByRaw("CASE 
-                WHEN employment_status = 'tetap' THEN 1 
-                WHEN employment_status = 'kontrak' THEN 2 
-                WHEN employment_status = 'harian' THEN 3 
-                WHEN employment_status = 'magang' THEN 4 
-                ELSE 5 
+            ->orderByRaw("CASE
+                WHEN employment_status = 'tetap' THEN 1
+                WHEN employment_status = 'kontrak' THEN 2
+                WHEN employment_status = 'harian' THEN 3
+                WHEN employment_status = 'magang' THEN 4
+                ELSE 5
             END")
-            ->orderByRaw('CAST(fingerprint_id AS UNSIGNED) ASC')
+            ->orderByRaw($fingerprintOrder)
             ->orderBy('full_name')
             ->paginate($this->perPage);
 
@@ -787,7 +794,7 @@ class Index extends Component
             'allEmployees' => $allEmployees,
             'employmentStatuses' => EmploymentStatus::cases(),
             'periodMonthLabel' => $start->locale('id')->isoFormat('MMMM Y'),
-            'periodFullRangeLabel' => $start->locale('id')->isoFormat('D MMMM') . ' – ' . $end->locale('id')->isoFormat('D MMMM Y'),
+            'periodFullRangeLabel' => $start->locale('id')->isoFormat('D MMMM').' – '.$end->locale('id')->isoFormat('D MMMM Y'),
             'isCurrentMonth' => $start->isSameMonth(Carbon::now()),
         ])->layout('layouts.app');
     }

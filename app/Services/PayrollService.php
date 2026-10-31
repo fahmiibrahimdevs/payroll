@@ -1027,8 +1027,9 @@ class PayrollService
             $attendedDaysQuery = Attendance::where('employee_id', $employee->id)
                 ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
                 ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
-                ->whereNotNull('clock_in')
-                ->where('clock_in', '!=', '');
+                // clock_in bertipe TIME - cukup cek NOT NULL (perbandingan != ''
+                // tidak valid di PostgreSQL).
+                ->whereNotNull('clock_in');
 
             if ($weekendDates !== []) {
                 $attendedDaysQuery->whereNotIn('date', $weekendDates);

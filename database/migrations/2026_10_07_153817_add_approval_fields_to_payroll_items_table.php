@@ -19,15 +19,31 @@ return new class extends Migration
             $table->text('rejection_reason')->nullable()->after('approved_at');
         });
 
-        // Backfill existing approved/paid period items
-        DB::table('payroll_items')
-            ->join('payroll_periods', 'payroll_items.payroll_period_id', '=', 'payroll_periods.id')
-            ->whereIn('payroll_periods.status', ['approved', 'paid'])
-            ->update([
-                'payroll_items.approval_status' => 'approved',
-                'payroll_items.approved_by' => DB::raw('payroll_periods.approved_by'),
-                'payroll_items.approved_at' => DB::raw('payroll_periods.approved_at'),
-            ]);
+        // Backfill existing approved/paid period items.
+        // UPDATE ... JOIN hanya valid di MySQL/MariaDB; PostgreSQL dan SQLite
+        // memakai UPDATE ... FROM.
+        $driver = DB::connection()->getDriverName();
+
+        if (in_array($driver, ['pgsql', 'sqlite'], true)) {
+            DB::statement(<<<'SQL'
+UPDATE payroll_items
+SET approval_status = ?,
+    approved_by = payroll_periods.approved_by,
+    approved_at = payroll_periods.approved_at
+FROM payroll_periods
+WHERE payroll_items.payroll_period_id = payroll_periods.id
+    AND payroll_periods.status IN (?, ?)
+SQL, ['approved', 'approved', 'paid']);
+        } else {
+            DB::table('payroll_items')
+                ->join('payroll_periods', 'payroll_items.payroll_period_id', '=', 'payroll_periods.id')
+                ->whereIn('payroll_periods.status', ['approved', 'paid'])
+                ->update([
+                    'payroll_items.approval_status' => 'approved',
+                    'payroll_items.approved_by' => DB::raw('payroll_periods.approved_by'),
+                    'payroll_items.approved_at' => DB::raw('payroll_periods.approved_at'),
+                ]);
+        }
     }
 
     /**

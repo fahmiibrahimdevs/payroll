@@ -20,6 +20,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Throwable;
 
@@ -204,7 +205,7 @@ class EmployeeService
                 $user = User::create([
                     'name' => $employee->full_name,
                     'email' => $detailData['email'],
-                    'password' => ! empty($data['password']) ? $data['password'] : \Illuminate\Support\Str::password(10, symbols: false),
+                    'password' => ! empty($data['password']) ? $data['password'] : Str::password(10, symbols: false),
                     'is_active' => $employee->status === EmployeeStatus::ACTIVE,
                     'email_verified_at' => now(),
                 ]);
@@ -412,7 +413,7 @@ class EmployeeService
                     $user = User::create([
                         'name' => $employee->full_name,
                         'email' => $detailData['email'],
-                        'password' => ! empty($data['password']) ? $data['password'] : \Illuminate\Support\Str::password(10, symbols: false),
+                        'password' => ! empty($data['password']) ? $data['password'] : Str::password(10, symbols: false),
                         'is_active' => $employee->status === EmployeeStatus::ACTIVE,
                         'email_verified_at' => now(),
                     ]);
@@ -787,11 +788,13 @@ class EmployeeService
         $expiringContractsCount = $expiringEmployees->total();
 
         // Sebaran Departemen (hanya karyawan aktif)
+        // Filter count > 0 di PHP: PostgreSQL tidak mengizinkan alias di HAVING.
         $departments = Department::query()
             ->withCount(['employees' => fn ($q) => $q->where('status', EmployeeStatus::ACTIVE)])
-            ->having('employees_count', '>', 0)
             ->orderByDesc('employees_count')
-            ->get();
+            ->get()
+            ->reject(fn ($department) => (int) $department->employees_count === 0)
+            ->values();
 
         $noDeptCount = (int) $activeEmployeeCounts->no_department_count;
 

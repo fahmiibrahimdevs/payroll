@@ -73,13 +73,13 @@ class UserService
             ->selectRaw('SUM(CASE WHEN is_active THEN 1 ELSE 0 END) as active')
             ->selectRaw('SUM(CASE WHEN NOT is_active THEN 1 ELSE 0 END) as inactive')
             ->selectRaw(<<<'SQL'
-SUM(EXISTS (
+SUM(CASE WHEN EXISTS (
     SELECT 1 FROM role_user
     INNER JOIN roles ON roles.id = role_user.role_id
     WHERE role_user.user_id = users.id
         AND role_user.user_type = ?
         AND roles.name = ?
-)) as admins
+) THEN 1 ELSE 0 END) as admins
 SQL, [User::class, 'admin'])
             ->first();
 

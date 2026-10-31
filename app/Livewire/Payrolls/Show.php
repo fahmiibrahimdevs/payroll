@@ -1292,13 +1292,13 @@ class Show extends Component
                 CASE WHEN departments.id IS NOT NULL THEN 0 ELSE 1 END ASC,
                 departments.name ASC,
                 CASE
-                    WHEN LOWER(positions.name) LIKE "%direktur%" OR LOWER(positions.name) LIKE "%director%" THEN 1
-                    WHEN LOWER(positions.name) LIKE "%manager%" THEN 2
-                    WHEN LOWER(positions.name) LIKE "%supervisor%" OR LOWER(positions.name) LIKE "%spv%" THEN 3
-                    WHEN LOWER(positions.name) LIKE "%lead%" THEN 4
-                    WHEN LOWER(positions.name) LIKE "%senior%" THEN 5
-                    WHEN LOWER(positions.name) LIKE "%staff%" THEN 6
-                    WHEN LOWER(positions.name) LIKE "%magang%" OR LOWER(positions.name) LIKE "%intern%" OR LOWER(positions.name) LIKE "%pkl%" THEN 7
+                    WHEN LOWER(positions.name) LIKE \'%direktur%\' OR LOWER(positions.name) LIKE \'%director%\' THEN 1
+                    WHEN LOWER(positions.name) LIKE \'%manager%\' THEN 2
+                    WHEN LOWER(positions.name) LIKE \'%supervisor%\' OR LOWER(positions.name) LIKE \'%spv%\' THEN 3
+                    WHEN LOWER(positions.name) LIKE \'%lead%\' THEN 4
+                    WHEN LOWER(positions.name) LIKE \'%senior%\' THEN 5
+                    WHEN LOWER(positions.name) LIKE \'%staff%\' THEN 6
+                    WHEN LOWER(positions.name) LIKE \'%magang%\' OR LOWER(positions.name) LIKE \'%intern%\' OR LOWER(positions.name) LIKE \'%pkl%\' THEN 7
                     WHEN positions.id IS NOT NULL THEN 8
                     ELSE 99
                 END ASC,

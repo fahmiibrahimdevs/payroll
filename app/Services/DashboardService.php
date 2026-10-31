@@ -100,8 +100,8 @@ class DashboardService
         $userCounts = User::query()
             ->whereNotIn('email', UserService::HIDDEN_DUMMY_EMAILS)
             ->selectRaw('COUNT(*) as total_users')
-            ->selectRaw('SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_users')
-            ->selectRaw('SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) as inactive_users')
+            ->selectRaw('SUM(CASE WHEN is_active THEN 1 ELSE 0 END) as active_users')
+            ->selectRaw('SUM(CASE WHEN NOT is_active THEN 1 ELSE 0 END) as inactive_users')
             ->first();
 
         return [

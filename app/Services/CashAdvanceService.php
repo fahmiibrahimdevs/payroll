@@ -475,7 +475,7 @@ class CashAdvanceService
                 ->where('cash_advances.remaining_amount', '>', 0)
                 ->join('employees', 'employees.id', '=', 'cash_advances.employee_id')
                 ->leftJoin('departments', 'departments.id', '=', 'employees.department_id')
-                ->selectRaw('COALESCE(departments.name, "Tanpa Departemen") as dept_name, SUM(cash_advances.remaining_amount) as total_dept_debt')
+                ->selectRaw("COALESCE(departments.name, 'Tanpa Departemen') as dept_name, SUM(cash_advances.remaining_amount) as total_dept_debt")
                 ->groupBy('dept_name')
                 ->orderByDesc('total_dept_debt')
                 ->get();
