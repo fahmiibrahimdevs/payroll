@@ -174,41 +174,6 @@
             </div>
         </div>
 
-        @php
-            $cycleDays = [];
-            $currDate = $period->start_date->copy();
-            $endDate = $period->end_date->copy();
-            $dayKeyMap = [
-                5 => 'fri',
-                6 => 'sat',
-                0 => 'sun',
-                1 => 'mon',
-                2 => 'tue',
-                3 => 'wed',
-                4 => 'thu',
-            ];
-            $dayNameMap = [
-                'fri' => 'Jum',
-                'sat' => 'Sab',
-                'sun' => 'Min',
-                'mon' => 'Sen',
-                'tue' => 'Sel',
-                'wed' => 'Rab',
-                'thu' => 'Kam',
-            ];
-
-            while ($currDate->lte($endDate)) {
-                $dow = $currDate->dayOfWeek;
-                $dKey = $dayKeyMap[$dow] ?? 'fri';
-                $cycleDays[] = [
-                    'key' => $dKey,
-                    'day_name' => $dayNameMap[$dKey] ?? 'Hari',
-                    'date_formatted' => $currDate->locale('id')->translatedFormat('d M'),
-                ];
-                $currDate->addDay();
-            }
-        @endphp
-
         <div class="card-body p-0">
             <!-- Table Responsive -->
             <div class="table-responsive">
@@ -231,20 +196,7 @@
                         @endphp
                         @forelse ($groupedAttendances as $statusKey => $groupItems)
                             @php
-                                $statusLabel = match ($statusKey) {
-                                    'tetap' => 'KARYAWAN TETAP',
-                                    'kontrak' => 'KONTRAK',
-                                    'harian' => 'HARIAN LEPAS',
-                                    'magang' => 'MAGANG',
-                                    default => strtoupper($statusKey),
-                                };
-                                $statusIcon = match ($statusKey) {
-                                    'tetap' => 'fas fa-id-badge',
-                                    'kontrak' => 'fas fa-file-contract',
-                                    'harian' => 'fas fa-user-clock',
-                                    'magang' => 'fas fa-user-graduate',
-                                    default => 'fas fa-users',
-                                };
+                                $statusMeta = $employmentStatusMeta[$statusKey] ?? ['label' => strtoupper($statusKey), 'icon' => 'fas fa-users'];
                             @endphp
 
                             <!-- Baris Sub-Header Group Status Kerja -->
@@ -253,10 +205,10 @@
                                     <div class="d-flex align-items-center justify-content-between">
                                         <div class="d-flex align-items-center">
                                             <span class="d-inline-flex align-items-center justify-content-center mr-2 flex-shrink-0" style="width: 22px; height: 22px; border-radius: 5px; background-color: #dbeafe; font-size: 11px;">
-                                                <i class="{{ $statusIcon }}" style="color: #0b52aa;"></i>
+                                                <i class="{{ $statusMeta['icon'] }}" style="color: #0b52aa;"></i>
                                             </span>
                                             <span class="font-weight-600" style="font-size: 12px; letter-spacing: 0.3px; color: #0f172a; text-transform: uppercase;">
-                                                STATUS: {{ $statusLabel }}
+                                                STATUS: {{ $statusMeta['label'] }}
                                             </span>
                                         </div>
                                         <span class="badge font-weight-500" style="font-size: 11px; padding: 2px 8px; border-radius: 9999px; background-color: #ffffff; color: #0b52aa; border: 1px solid #bfdbfe;">
@@ -267,10 +219,7 @@
                             </tr>
 
                             @foreach ($groupItems as $itemKey => $attData)
-                                @php
-                                    $empId = $attData['employee_id'] ?? $itemKey;
-                                @endphp
-                                <tr wire:key="att-row-{{ $empId }}" style="border-bottom: 1px solid #f1f5f9;">
+                                <tr wire:key="att-row-{{ $attData['employee_id'] ?? $itemKey }}" style="border-bottom: 1px solid #f1f5f9;">
                                     <!-- NO -->
                                     <td class="text-center align-middle !px-3.5 !py-2.5 text-nowrap" style="color: #475569; font-size: 12.5px; font-weight: 600;">
                                         {{ $globalIdx++ }}
@@ -302,13 +251,10 @@
                                     <td class="align-middle !px-3.5 !py-2.5 text-nowrap">
                                         <div class="d-flex align-items-center flex-wrap" style="gap: 5px;">
                                             @foreach ($cycleDays as $cDay)
-                                                @php
-                                                    $isAttended = in_array($cDay['key'], $attData['attendance_days'] ?? [], true);
-                                                @endphp
                                                 <div class="d-inline-flex flex-column align-items-center justify-content-center text-center px-2 py-1"
-                                                     style="min-width: 44px; border-radius: 7px; line-height: 1.15; {{ $isAttended ? 'background-color: #0b52aa; border: 1px solid #0b52aa; color: #ffffff;' : 'background-color: #ffffff; border: 1px solid #cbd5e1; color: #475569;' }}"
-                                                     title="{{ $cDay['day_name'] }}, {{ $cDay['date_formatted'] }}: {{ $isAttended ? 'Hadir' : 'Tidak Hadir' }}">
-                                                    <span style="font-size: 10px; font-weight: 500; {{ $isAttended ? 'color: rgba(255, 255, 255, 0.9);' : 'color: #64748b;' }}">
+                                                     style="min-width: 44px; border-radius: 7px; line-height: 1.15; {{ in_array($cDay['key'], $attData['attendance_days'] ?? [], true) ? 'background-color: #0b52aa; border: 1px solid #0b52aa; color: #ffffff;' : 'background-color: #ffffff; border: 1px solid #cbd5e1; color: #475569;' }}"
+                                                     title="{{ $cDay['day_name'] }}, {{ $cDay['date_formatted'] }}: {{ in_array($cDay['key'], $attData['attendance_days'] ?? [], true) ? 'Hadir' : 'Tidak Hadir' }}">
+                                                    <span style="font-size: 10px; font-weight: 500; {{ in_array($cDay['key'], $attData['attendance_days'] ?? [], true) ? 'color: rgba(255, 255, 255, 0.9);' : 'color: #64748b;' }}">
                                                         {{ $cDay['date_formatted'] }}
                                                     </span>
                                                     <span style="font-size: 11.5px; font-weight: 700; margin-top: 2px;">
@@ -396,7 +342,7 @@
 
                                                 <!-- Detail & Bukti Pembayaran -->
                                                 <button type="button"
-                                                        wire:click="openPaymentDetailModal({{ $empId }})"
+                                                        wire:click="openPaymentDetailModal({{ $attData['employee_id'] ?? $itemKey }})"
                                                         class="btn btn-info btn-action"
                                                         data-toggle="tooltip"
                                                         title="Lihat Bukti & Detail Pembayaran">
@@ -405,7 +351,7 @@
                                             @else
                                                 <!-- Tombol Bayar Gaji (Hijau) -->
                                                 <button type="button"
-                                                        wire:click="openPayEmployeeModal({{ $empId }})"
+                                                        wire:click="openPayEmployeeModal({{ $attData['employee_id'] ?? $itemKey }})"
                                                         class="btn btn-success btn-action"
                                                         data-toggle="tooltip"
                                                         title="Bayar Gaji Karyawan">
@@ -592,10 +538,7 @@
                                 </div>
                                 <div class="emp-tile-right text-dark">
                                     @if ($selectedAttendance->payment_proof_path)
-                                        @php
-                                            $isPdfProof = \Illuminate\Support\Str::endsWith(strtolower($selectedAttendance->payment_proof_path), '.pdf');
-                                        @endphp
-                                        @if ($isPdfProof)
+                                        @if (\Illuminate\Support\Str::endsWith(strtolower($selectedAttendance->payment_proof_path), '.pdf'))
                                             <a href="{{ route('overtimes.documents.attendance-proof', $selectedAttendance) }}" target="_blank" class="badge badge-light border text-danger font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #fca5a5 !important; background-color: #fef2f2 !important; text-decoration: none;" title="Buka lampiran bukti transfer (PDF)">
                                                 <i class="fas fa-file-pdf mr-1 text-danger"></i> Buka Dokumen Bukti (PDF) <i class="fas fa-external-link-alt ml-1" style="font-size: 9px;"></i>
                                             </a>
@@ -747,10 +690,7 @@
                                 <input type="file" id="weekly_payment_proof" wire:model="itemPaymentProof" class="custom-file-input @error('itemPaymentProof') is-invalid @enderror" accept=".jpg,.jpeg,.png,.pdf">
                                 <label class="custom-file-label text-truncate" for="weekly_payment_proof" style="border-radius: 8px;">
                                     @if ($itemPaymentProof && is_object($itemPaymentProof))
-                                        @php
-                                            $isNewPdf = \Illuminate\Support\Str::endsWith(strtolower($itemPaymentProof->getClientOriginalName()), '.pdf');
-                                        @endphp
-                                        @if ($isNewPdf)
+                                        @if (\Illuminate\Support\Str::endsWith(strtolower($itemPaymentProof->getClientOriginalName()), '.pdf'))
                                             <i class="fas fa-file-pdf text-danger mr-1"></i> {{ $itemPaymentProof->getClientOriginalName() }}
                                         @else
                                             <i class="fas fa-file-image text-success mr-1"></i> {{ $itemPaymentProof->getClientOriginalName() }}

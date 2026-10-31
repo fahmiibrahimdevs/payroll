@@ -906,21 +906,82 @@ class Index extends Component
         ]);
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Computed Properties (Daftar Pengajuan & Dropdown Karyawan)
+    |--------------------------------------------------------------------------
+    */
+
+    /** Daftar pengajuan lembur terpaginasi sesuai filter aktif. */
+    #[Computed]
+    public function submissions(): LengthAwarePaginator
+    {
+        $user = auth()->user();
+        $isKaryawan = $user && $user->hasRole('karyawan');
+
+        return app(OvertimeService::class)->getPaginatedSubmissions(
+            search: $this->search,
+            status: $this->statusFilter,
+            employeeId: $isKaryawan ? ($user->getEmployeeRecord()?->id ?? -1) : $this->employeeFilter,
+            startDate: $this->startDateFilter,
+            endDate: $this->endDateFilter,
+            perPage: $this->perPage
+        );
+    }
+
+    /**
+     * Pengajuan pada halaman aktif dikelompokkan per tanggal (Y-m-d),
+     * lengkap dengan label tanggal berbahasa Indonesia untuk sub-header.
+     */
+    #[Computed]
+    public function groupedSubmissions(): Collection
+    {
+        return collect($this->submissions->items())
+            ->groupBy(fn ($item) => $item->date ? $item->date->format('Y-m-d') : 'unknown')
+            ->map(fn ($groupItems) => [
+                'items' => $groupItems,
+                'label' => ($firstItem = $groupItems->first()) && $firstItem->date
+                    ? $firstItem->date->locale('id')->translatedFormat('l, d M Y')
+                    : 'Tanggal Lainnya',
+            ]);
+    }
+
+    /** Karyawan berhak lembur (punya tarif per jam atau per hari) untuk dropdown admin. */
+    #[Computed]
+    public function eligibleEmployees(): Collection
+    {
+        $user = auth()->user();
+        if (! $user || ! $user->hasRole('admin')) {
+            return collect();
+        }
+
+        return Employee::query()
+            ->with('department:id,name')
+            ->where(function ($q) {
+                $q->where('overtime_rate_per_hour', '>', 0)
+                    ->orWhere('overtime_rate_per_day', '>', 0);
+            })
+            ->where('status', 'active')
+            ->orderBy('full_name')
+            ->get(['id', 'full_name', 'department_id', 'overtime_rate_per_hour', 'overtime_rate_per_day']);
+    }
+
+    /** Karyawan berhak lembur dikelompokkan per departemen (urut abjad). */
+    #[Computed]
+    public function eligibleEmployeesGrouped(): Collection
+    {
+        return $this->eligibleEmployees
+            ->groupBy(fn ($emp) => $emp->department?->name ?? 'Tanpa Departemen')
+            ->sortKeys();
+    }
+
     public function render(OvertimeService $service): View
     {
         $user = auth()->user();
         $isKaryawan = $user && $user->hasRole('karyawan');
         $effectiveEmployeeId = $isKaryawan ? ($user->getEmployeeRecord()?->id ?? -1) : $this->employeeFilter;
 
-        // Submissions query
-        $submissions = $service->getPaginatedSubmissions(
-            search: $this->search,
-            status: $this->statusFilter,
-            employeeId: $effectiveEmployeeId,
-            startDate: $this->startDateFilter,
-            endDate: $this->endDateFilter,
-            perPage: $this->perPage
-        );
+        $submissions = $this->submissions;
 
         // Periods query (only executed when active tab is periods and user is not restricted karyawan)
         $periods = (! $isKaryawan && $this->activeTab === 'periods')
@@ -966,18 +1027,7 @@ class Index extends Component
             'formatted_approved_amount' => 'Rp '.number_format($totalAmountApproved, 0, ',', '.'),
         ];
 
-        // Eligible employees for admin selection (either has hourly rate or daily rate)
-        $eligibleEmployees = $user->hasRole('admin')
-            ? Employee::query()
-                ->with('department:id,name')
-                ->where(function ($q) {
-                    $q->where('overtime_rate_per_hour', '>', 0)
-                        ->orWhere('overtime_rate_per_day', '>', 0);
-                })
-                ->where('status', 'active')
-                ->orderBy('full_name')
-                ->get(['id', 'full_name', 'department_id', 'overtime_rate_per_hour', 'overtime_rate_per_day'])
-            : collect();
+        // Eligible employees for admin selection: see computed eligibleEmployees()
 
         // Count approved submissions ready for period
         $pendingPeriodCount = OvertimeSubmission::query()
@@ -1010,10 +1060,12 @@ class Index extends Component
 
         return view('livewire.overtimes.index', [
             'submissions' => $submissions,
+            'groupedSubmissions' => $this->groupedSubmissions,
             'periods' => $periods,
             'stats' => $stats,
             'chartData' => $chartData,
-            'eligibleEmployees' => $eligibleEmployees,
+            'eligibleEmployees' => $this->eligibleEmployees,
+            'eligibleEmployeesGrouped' => $this->eligibleEmployeesGrouped,
             'pendingPeriodCount' => $pendingPeriodCount,
             'isKaryawan' => $isKaryawan,
             'pendingAdminSubmissions' => $pendingAdminSubmissions,

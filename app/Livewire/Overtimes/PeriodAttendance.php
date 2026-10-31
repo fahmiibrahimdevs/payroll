@@ -15,6 +15,7 @@ use App\Support\WorkingDays;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -25,6 +26,17 @@ use Livewire\WithFileUploads;
 class PeriodAttendance extends Component
 {
     use WithFileUploads;
+
+    /** Nama hari pendek (Indonesia) per key hari kerja mon..sun. */
+    private const DAY_SHORT_NAMES = [
+        'mon' => 'Sen',
+        'tue' => 'Sel',
+        'wed' => 'Rab',
+        'thu' => 'Kam',
+        'fri' => 'Jum',
+        'sat' => 'Sab',
+        'sun' => 'Min',
+    ];
 
     public OvertimePeriod $period;
 
@@ -541,6 +553,55 @@ class PeriodAttendance extends Component
         }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Computed Properties (Siklus Hari & Grup Status)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Daftar hari siklus periode (Jum'at s/d Kamis) untuk kolom kehadiran:
+     * key hari, nama pendek, dan tanggal terformat.
+     *
+     * @return array<int, array{key: string, day_name: string, date_formatted: string}>
+     */
+    #[Computed]
+    public function cycleDays(): array
+    {
+        $cycleDays = [];
+        $currDate = $this->period->start_date->copy();
+        $endDate = $this->period->end_date->copy();
+
+        while ($currDate->lte($endDate)) {
+            $dKey = WorkingDays::DAY_KEY_MAP[$currDate->dayOfWeek] ?? 'fri';
+            $cycleDays[] = [
+                'key' => $dKey,
+                'day_name' => self::DAY_SHORT_NAMES[$dKey] ?? 'Hari',
+                'date_formatted' => $currDate->locale('id')->translatedFormat('d M'),
+            ];
+            $currDate->addDay();
+        }
+
+        return $cycleDays;
+    }
+
+    /**
+     * Peta label & ikon status kepegawaian untuk baris sub-header grup.
+     */
+    #[Computed]
+    public function employmentStatusMeta(): array
+    {
+        $meta = [];
+        foreach (EmploymentStatus::cases() as $status) {
+            $meta[$status->value] = [
+                'label' => $status->label(),
+                'icon' => $status->icon(),
+            ];
+        }
+
+        return $meta;
+    }
+
     public function render(): View
     {
         $departments = Department::orderBy('name')->get(['id', 'name']);
@@ -596,6 +657,8 @@ class PeriodAttendance extends Component
         return view('livewire.overtimes.period-attendance', [
             'filteredAttendances' => $filteredAttendances,
             'groupedAttendances' => $groupedAttendances,
+            'cycleDays' => $this->cycleDays,
+            'employmentStatusMeta' => $this->employmentStatusMeta,
             'departments' => $departments,
             'totalEmployees' => $activeEmployeesCount,
             'totalDailyWage' => $totalDailyWage,

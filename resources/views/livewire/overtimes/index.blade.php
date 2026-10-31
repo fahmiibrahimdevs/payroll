@@ -203,18 +203,9 @@
                         @if ($submissions->total() > 0)
                             @php
                                 $rowNumber = 0;
-                                $groupedSubmissions = collect($submissions->items())->groupBy(function ($item) {
-                                    return $item->date ? $item->date->format('Y-m-d') : 'unknown';
-                                });
                             @endphp
 
-                            @foreach ($groupedSubmissions as $dateKey => $groupItems)
-                                @php
-                                    $firstItem = $groupItems->first();
-                                    $formattedDateGroup = $firstItem && $firstItem->date
-                                        ? $firstItem->date->locale('id')->translatedFormat('l, d M Y')
-                                        : 'Tanggal Lainnya';
-                                @endphp
+                            @foreach ($groupedSubmissions as $dateKey => $group)
                                 <!-- Baris Sub-Header Group Tanggal (Format: Senin, 27 Okt 2026) -->
                                 <tr class="table-group-header" style="background-color: #f0f6ff; border-top: 1px solid #bfdbfe; border-bottom: 1px solid #dbeafe;">
                                     <td colspan="{{ $isKaryawan ? 7 : 8 }}" class="!py-2 !px-3" style="border-left: 4px solid #0b52aa !important;">
@@ -224,35 +215,19 @@
                                                     <i class="far fa-calendar-alt" style="color: #0b52aa;"></i>
                                                 </span>
                                                 <span class="font-weight-bold" style="font-size: 13px; letter-spacing: 0.2px; color: #0f172a;">
-                                                    {{ $formattedDateGroup }}
+                                                    {{ $group['label'] }}
                                                 </span>
                                                 <span class="badge ml-2 font-weight-600" style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe;">
-                                                    {{ $groupItems->count() }} Pengajuan
+                                                    {{ $group['items']->count() }} Pengajuan
                                                 </span>
                                             </div>
                                         </div>
                                     </td>
                                 </tr>
 
-                                @foreach ($groupItems as $sub)
+                                @foreach ($group['items'] as $sub)
                                     @php
                                         $rowNumber++;
-                                        $emp = $sub->employee;
-                                        $empName = $emp?->full_name ?: 'Karyawan';
-                                        $cleanedWords = array_values(array_filter(
-                                            preg_split('/\s+/', trim($empName)),
-                                            fn($w) => preg_match('/[a-zA-Z0-9]/', $w)
-                                        ));
-                                        $initials = '';
-                                        if (!empty($cleanedWords)) {
-                                            $initials .= strtoupper(substr($cleanedWords[0], 0, 1));
-                                            if (isset($cleanedWords[1])) {
-                                                $initials .= strtoupper(substr($cleanedWords[1], 0, 1));
-                                            }
-                                        }
-                                        $initials = $initials ?: 'K';
-                                        $dur = (float) $sub->duration_hours;
-                                        $durDisplay = ($dur == (int) $dur) ? (int) $dur : number_format($dur, 1, ',', '.');
                                     @endphp
                                     <tr id="submission-row-{{ $sub->id }}" wire:key="submission-row-{{ $sub->id }}" class="payroll-table-row" style="border-bottom: 1px solid #f1f5f9;">
                                         <td class="text-center align-middle !px-2.5 !py-2 text-nowrap" style="color: #475569; font-size: 12.5px; font-weight: 600;">
@@ -263,20 +238,20 @@
                                         @if (! $isKaryawan)
                                             <td class="align-middle text-nowrap !px-2.5 !py-2">
                                                 <div class="d-flex align-items-center text-nowrap">
-                                                    @if ($emp && $emp->photo_url)
-                                                        <img src="{{ $emp->photo_url }}" alt="{{ $empName }}" class="rounded-circle mr-2 flex-shrink-0" style="width: 32px; height: 32px; object-fit: cover; border: 1.5px solid #cbd5e1;">
+                                                    @if ($sub->employee && $sub->employee->photo_url)
+                                                        <img src="{{ $sub->employee->photo_url }}" alt="{{ $sub->employee?->full_name ?: 'Karyawan' }}" class="rounded-circle mr-2 flex-shrink-0" style="width: 32px; height: 32px; object-fit: cover; border: 1.5px solid #cbd5e1;">
                                                     @else
                                                         <div class="rounded-circle d-inline-flex align-items-center justify-content-center mr-2 flex-shrink-0 font-weight-600"
                                                              style="width: 32px; height: 32px; background-color: #eff6ff; color: #0284c7; border: 1.5px solid #bae6fd; font-size: 11.5px;">
-                                                            {{ $initials }}
+                                                            {{ \App\Support\Initials::fromName($sub->employee?->full_name) }}
                                                         </div>
                                                     @endif
                                                     <div>
                                                         <div style="color: #0f172a; font-size: 13px; font-weight: 600; line-height: 1.3;">
-                                                            {{ $empName }}
+                                                            {{ $sub->employee?->full_name ?: 'Karyawan' }}
                                                         </div>
                                                         <div class="mt-0.5" style="font-size: 11.5px; color: #64748b; font-weight: 500; line-height: 1.25;">
-                                                            {{ $emp?->department?->name ?? 'Tanpa Dept' }} &bull; {{ $emp?->position?->name ?? 'Staff' }}
+                                                            {{ $sub->employee?->department?->name ?? 'Tanpa Dept' }} &bull; {{ $sub->employee?->position?->name ?? 'Staff' }}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -406,9 +381,6 @@
                     </thead>
                     <tbody>
                         @forelse ($periods as $idx => $per)
-                            @php
-                                $cleanName = preg_replace('/\s*\([^)]*\)\s*$/', '', $per->name);
-                            @endphp
                             <tr wire:key="period-row-{{ $per->id }}" class="payroll-table-row" style="border-bottom: 1px solid #f1f5f9;">
                                 <!-- NO -->
                                 <td class="text-center align-middle !px-2.5 !py-2 text-nowrap" style="color: #475569; font-size: 12.5px; font-weight: 600;">
@@ -423,7 +395,7 @@
                                         </span>
                                         <div>
                                             <div style="color: #0f172a; font-size: 13px; font-weight: 600; line-height: 1.3;">
-                                                {{ $cleanName ?: $per->name }}
+                                                {{ preg_replace('/\s*\([^)]*\)\s*$/', '', $per->name) ?: $per->name }}
                                             </div>
                                             <div class="mt-0.5" style="font-size: 11.5px; color: #64748b; font-weight: 400; line-height: 1.25;">
                                                 {{ $per->start_date->locale('id')->translatedFormat('d M') }} - {{ $per->end_date->locale('id')->translatedFormat('d M Y') }}
@@ -540,22 +512,13 @@
                             <div class="form-group mb-3">
                                 <label for="form_employee_id">Karyawan <span class="text-danger">*</span></label>
                                 <div wire:ignore>
-                                    @php
-                                        $groupedEligible = $eligibleEmployees->groupBy(fn ($emp) => $emp->department?->name ?? 'Tanpa Departemen')->sortKeys();
-                                    @endphp
                                     <select id="form_employee_id" class="form-control select2 @error('form.employee_id') is-invalid @enderror">
                                         <option value="">-- Pilih Karyawan Berhak Lembur --</option>
-                                        @foreach ($groupedEligible as $deptName => $deptEmployees)
+                                        @foreach ($eligibleEmployeesGrouped as $deptName => $deptEmployees)
                                             <optgroup label="{{ $deptName }}">
                                                 @foreach ($deptEmployees as $emp)
-                                                    @php
-                                                        $hourlyRate = (float) $emp->overtime_rate_per_hour;
-                                                        $dailyRate = (float) $emp->overtime_rate_per_day;
-                                                        $hourlyStr = $hourlyRate >= 1000 ? rtrim(rtrim(number_format($hourlyRate / 1000, 1, ',', '.'), '0'), ',') . 'rb/jam' : 'Rp ' . number_format($hourlyRate, 0, ',', '.') . '/jam';
-                                                        $dailyStr = $dailyRate >= 1000 ? rtrim(rtrim(number_format($dailyRate / 1000, 1, ',', '.'), '0'), ',') . 'rb/hari' : 'Rp ' . number_format($dailyRate, 0, ',', '.') . '/hari';
-                                                    @endphp
                                                     <option value="{{ $emp->id }}">
-                                                        {{ $emp->full_name }} · {{ $hourlyStr }} · {{ $dailyStr }}
+                                                        {{ $emp->full_name }} · {{ \App\Support\Rupiah::hourly((float) $emp->overtime_rate_per_hour) }} · {{ \App\Support\Rupiah::daily((float) $emp->overtime_rate_per_day) }}
                                                     </option>
                                                 @endforeach
                                             </optgroup>
@@ -706,17 +669,13 @@
                 <form wire:submit.prevent="submitAdjustment">
                     <div class="modal-body py-3 px-4 bg-white">
                         @if ($adjustingSubmission)
-                            @php
-                                $adjEmp = $adjustingSubmission->employee;
-                                $adjEmpName = $adjEmp?->full_name ?: 'Karyawan';
-                            @endphp
                             <!-- Identitas & Data Asli Pengajuan (Clean White Card dengan Rounded 12px & Shadow) -->
                             <div class="alert alert-light border small text-muted mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
-                                        <div class="text-dark font-weight-600" style="font-size: 14px;">{{ $adjEmpName }}</div>
+                                        <div class="text-dark font-weight-600" style="font-size: 14px;">{{ $adjustingSubmission->employee?->full_name ?: 'Karyawan' }}</div>
                                         <div style="font-size: 11.5px; color: #64748b;">
-                                            {{ $adjEmp?->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $adjEmp?->position?->name ?? 'Staff' }}
+                                            {{ $adjustingSubmission->employee?->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $adjustingSubmission->employee?->position?->name ?? 'Staff' }}
                                         </div>
                                     </div>
                                     <div class="text-right">
@@ -860,34 +819,18 @@
 
                 <div class="modal-body px-4 py-3 bg-white">
                     @if ($detailSubmission)
-                        @php
-                            $dEmp = $detailSubmission->employee;
-                            $dEmpName = $dEmp?->full_name ?: 'Karyawan';
-                            $cleanedWords = array_values(array_filter(
-                                preg_split('/\s+/', trim($dEmpName)),
-                                fn($w) => preg_match('/[a-zA-Z0-9]/', $w)
-                            ));
-                            $dInitials = '';
-                            if (!empty($cleanedWords)) {
-                                $dInitials .= strtoupper(substr($cleanedWords[0], 0, 1));
-                                if (isset($cleanedWords[1])) {
-                                    $dInitials .= strtoupper(substr($cleanedWords[1], 0, 1));
-                                }
-                            }
-                            $dInitials = $dInitials ?: 'K';
-                        @endphp
 
                         <!-- 1. Identitas Karyawan -->
                         <div class="text-center pt-1">
                             <div class="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2 font-weight-bold"
                                  style="width: 60px; height: 60px; background-color: #eff6ff; color: #0284c7; border: 2px solid #bae6fd; font-size: 19px;">
-                                {{ $dInitials }}
+                                {{ \App\Support\Initials::fromName($detailSubmission->employee?->full_name) }}
                             </div>
                             <div class="font-weight-bold" style="font-size: 17px; color: #0f172a; margin-bottom: 2px;">
-                                {{ $dEmpName }}
+                                {{ $detailSubmission->employee?->full_name ?: 'Karyawan' }}
                             </div>
                             <div style="font-size: 12.5px; color: #64748b; font-weight: 500;">
-                                {{ $dEmp?->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $dEmp?->position?->name ?? 'Staff' }}
+                                {{ $detailSubmission->employee?->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $detailSubmission->employee?->position?->name ?? 'Staff' }}
                             </div>
                         </div>
 
