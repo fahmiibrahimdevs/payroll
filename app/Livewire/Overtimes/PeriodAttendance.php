@@ -4,12 +4,14 @@ namespace App\Livewire\Overtimes;
 
 use App\Enums\EmploymentStatus;
 use App\Models\Attendance;
+use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Services\AttendanceService;
 use App\Services\OvertimeService;
+use App\Support\WorkingDays;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
@@ -94,19 +96,12 @@ class PeriodAttendance extends Component
             ->get();
 
         $existingEmpIds = $this->period->attendances()->pluck('employee_id')->all();
-        $defaultDaysCount = 6;
-        $defaultDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        // Fallback tanpa log absensi: hari kerja aktual dalam rentang
+        // (kecualikan akhir pekan sesuai jadwal kerja dan hari libur nasional).
+        $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6);
+        $defaultDays = array_values(WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek));
+        $defaultDaysCount = max(1, count($defaultDays));
         $hasNew = false;
-
-        $dayKeyMap = [
-            1 => 'mon',
-            2 => 'tue',
-            3 => 'wed',
-            4 => 'thu',
-            5 => 'fri',
-            6 => 'sat',
-            0 => 'sun',
-        ];
 
         foreach ($targetEmployees as $emp) {
             if (! in_array($emp->id, $existingEmpIds, true)) {
@@ -116,17 +111,7 @@ class PeriodAttendance extends Component
                 $hasOvertime = in_array($emp->id, $linkedEmpIds, true);
 
                 if ($hasAttendanceLog) {
-                    $empAtts = $attendances->get($emp->id);
-                    $attendedDaysKeys = [];
-                    if ($empAtts && $empAtts->isNotEmpty()) {
-                        foreach ($empAtts as $att) {
-                            $dow = Carbon::parse($att->date)->dayOfWeek;
-                            $k = $dayKeyMap[$dow] ?? null;
-                            if ($k && ! in_array($k, $attendedDaysKeys, true)) {
-                                $attendedDaysKeys[] = $k;
-                            }
-                        }
-                    }
+                    $attendedDaysKeys = WorkingDays::attendedDayKeys($attendances->get($emp->id, collect()));
                     $daysCount = count($attendedDaysKeys);
                     $daysList = $attendedDaysKeys;
 

@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Models\User;
+use App\Support\WorkingDays;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
@@ -21,6 +22,7 @@ class AttendanceService
     public function __construct(
         protected ActivityLogService $logger
     ) {}
+
     /**
      * Import attendance records from a standard fingerprint Excel report (.xls / .xlsx).
      *
@@ -62,10 +64,10 @@ class AttendanceService
             }
             $t = $m[0];
             if (strlen($t) === 4) {
-                $t = '0' . $t;
+                $t = '0'.$t;
             }
 
-            return $t . ':00';
+            return $t.':00';
         };
 
         // =========================================================================
@@ -83,7 +85,7 @@ class AttendanceService
                 // Pindai beberapa sel baris 2-4 untuk mencari rentang tanggal YYYY-MM-DD ~ YYYY-MM-DD
                 for ($r = 2; $r <= 4; $r++) {
                     for ($c = 1; $c <= 20; $c++) {
-                        $chkVal = (string) $firstSheet->getCell(Coordinate::stringFromColumnIndex($c) . $r)->getValue();
+                        $chkVal = (string) $firstSheet->getCell(Coordinate::stringFromColumnIndex($c).$r)->getValue();
                         if (preg_match('/(\d{4}[-\/]\d{2}[-\/]\d{2})\s*~\s*(\d{4}[-\/]\d{2}[-\/]\d{2})/', $chkVal, $rangeMatch)) {
                             break 2;
                         }
@@ -104,16 +106,16 @@ class AttendanceService
                 $highestColIndex = Coordinate::columnIndexFromString($sheet->getHighestColumn());
                 for ($c = 1; $c <= $highestColIndex; $c++) {
                     $colStr = Coordinate::stringFromColumnIndex($c);
-                    $val4 = trim((string) $sheet->getCell($colStr . '4')->getValue());
+                    $val4 = trim((string) $sheet->getCell($colStr.'4')->getValue());
                     if ($val4 === 'ID') {
                         $nextColStr = Coordinate::stringFromColumnIndex($c + 1);
-                        $fId = trim((string) $sheet->getCell($nextColStr . '4')->getValue());
-                        $rawName = trim((string) $sheet->getCell($nextColStr . '3')->getValue());
+                        $fId = trim((string) $sheet->getCell($nextColStr.'4')->getValue());
+                        $rawName = trim((string) $sheet->getCell($nextColStr.'3')->getValue());
 
                         if ($fId !== '' && $rawName !== '') {
                             $baseColIdx = max(1, $c - 8);
                             $deptColStr = Coordinate::stringFromColumnIndex($baseColIdx + 1);
-                            $dept = trim((string) $sheet->getCell($deptColStr . '3')->getValue());
+                            $dept = trim((string) $sheet->getCell($deptColStr.'3')->getValue());
 
                             $detectedBlocks[] = [
                                 'sheet' => $sheet,
@@ -202,7 +204,7 @@ class AttendanceService
                 $existingAttendances = Attendance::whereIn('employee_id', $matchedEmployeeIds)
                     ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
                     ->get()
-                    ->keyBy(fn ($a) => $a->employee_id . '_' . $a->date->toDateString());
+                    ->keyBy(fn ($a) => $a->employee_id.'_'.$a->date->toDateString());
 
                 $upsertRows = [];
                 $now = now()->toDateTimeString();
@@ -218,7 +220,7 @@ class AttendanceService
 
                     for ($r = 12; $r <= 45; $r++) {
                         $dateColStr = Coordinate::stringFromColumnIndex($baseCol);
-                        $tglStr = trim((string) $sheet->getCell($dateColStr . $r)->getValue());
+                        $tglStr = trim((string) $sheet->getCell($dateColStr.$r)->getValue());
                         if (empty($tglStr) || ! preg_match('/^(\d{1,2})/', $tglStr, $m)) {
                             continue;
                         }
@@ -249,10 +251,10 @@ class AttendanceService
                             continue;
                         }
 
-                        $regInRaw = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($baseCol + 1) . $r)->getValue());
-                        $regOutRaw = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($baseCol + 3) . $r)->getValue());
-                        $lemburInRaw = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($baseCol + 10) . $r)->getValue());
-                        $lemburOutRaw = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($baseCol + 12) . $r)->getValue());
+                        $regInRaw = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($baseCol + 1).$r)->getValue());
+                        $regOutRaw = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($baseCol + 3).$r)->getValue());
+                        $lemburInRaw = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($baseCol + 10).$r)->getValue());
+                        $lemburOutRaw = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($baseCol + 12).$r)->getValue());
 
                         $clockIn = $timeFormatter($regInRaw);
                         $clockOut = $timeFormatter($regOutRaw);
@@ -304,10 +306,10 @@ class AttendanceService
                             }
                         }
 
-                        $rawLog = trim("Reg: {$regInRaw}" . ($regOutRaw ? " {$regOutRaw}" : '') . ($lemburInRaw ? " | OT: {$lemburInRaw}" : '') . ($lemburOutRaw ? " {$lemburOutRaw}" : ''));
+                        $rawLog = trim("Reg: {$regInRaw}".($regOutRaw ? " {$regOutRaw}" : '').($lemburInRaw ? " | OT: {$lemburInRaw}" : '').($lemburOutRaw ? " {$lemburOutRaw}" : ''));
 
                         // Cek perlindungan koreksi manual HR/Admin via in-memory keyBy (O(1))
-                        $key = $employee->id . '_' . $dateString;
+                        $key = $employee->id.'_'.$dateString;
                         $existing = $existingAttendances->get($key);
 
                         if ($existing && $existing->source === 'manual') {
@@ -416,7 +418,7 @@ class AttendanceService
         if (! $rangeText || ! str_contains((string) $rangeText, '~')) {
             for ($c = 1; $c <= 10; $c++) {
                 $checkCol = Coordinate::stringFromColumnIndex($c);
-                $val = (string) $sheetLog->getCell($checkCol . '3')->getValue();
+                $val = (string) $sheetLog->getCell($checkCol.'3')->getValue();
                 if (str_contains($val, '~')) {
                     $rangeText = $val;
                     break;
@@ -441,7 +443,7 @@ class AttendanceService
                 break;
             }
             $col = Coordinate::stringFromColumnIndex($colIdx);
-            $dayNum = (int) $sheetLog->getCell($col . '4')->getValue();
+            $dayNum = (int) $sheetLog->getCell($col.'4')->getValue();
             if ($dayNum === $cur->day) {
                 $dateCols[$col] = $cur->toDateString();
                 $cur->addDay();
@@ -455,15 +457,15 @@ class AttendanceService
 
         // 1. Pre-validation Pass: Pindai seluruh baris karyawan terlebih dahulu
         for ($r = 5; $r <= $highestRow; $r += 2) {
-            $idLabel = trim((string) $sheetLog->getCell('A' . $r)->getValue());
+            $idLabel = trim((string) $sheetLog->getCell('A'.$r)->getValue());
             if ($idLabel !== 'ID:') {
                 continue;
             }
 
             $totalParsed++;
-            $fId = trim((string) $sheetLog->getCell('C' . $r)->getValue());
-            $rawName = trim((string) $sheetLog->getCell('K' . $r)->getValue());
-            $dept = trim((string) $sheetLog->getCell('U' . $r)->getValue());
+            $fId = trim((string) $sheetLog->getCell('C'.$r)->getValue());
+            $rawName = trim((string) $sheetLog->getCell('K'.$r)->getValue());
+            $dept = trim((string) $sheetLog->getCell('U'.$r)->getValue());
 
             // Bersihkan prefix nama bawaan mesin fingerprint jika ada (misal: DESTROY~, ADMIN~)
             $cleanName = trim(preg_replace('/^(DESTROY|ADMIN|USER|DEV)~+/i', '', $rawName));
@@ -538,7 +540,7 @@ class AttendanceService
             $existingAttendances = Attendance::whereIn('employee_id', $matchedEmployeeIds)
                 ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
                 ->get()
-                ->keyBy(fn ($a) => $a->employee_id . '_' . $a->date->toDateString());
+                ->keyBy(fn ($a) => $a->employee_id.'_'.$a->date->toDateString());
 
             $upsertRows = [];
             $now = now()->toDateTimeString();
@@ -558,7 +560,7 @@ class AttendanceService
                         continue;
                     }
 
-                    $val = trim((string) $sheetLog->getCell($col . $dataRow)->getValue());
+                    $val = trim((string) $sheetLog->getCell($col.$dataRow)->getValue());
 
                     if (empty($val) || strtolower($val) === 'absen') {
                         continue;
@@ -571,10 +573,10 @@ class AttendanceService
                         continue;
                     }
 
-                    $clockIn = strlen($times[0]) === 4 ? '0' . $times[0] : $times[0];
+                    $clockIn = strlen($times[0]) === 4 ? '0'.$times[0] : $times[0];
                     $latestTime = end($times);
                     if (strlen($latestTime) === 4) {
-                        $latestTime = '0' . $latestTime;
+                        $latestTime = '0'.$latestTime;
                     }
 
                     $clockOut = ($latestTime !== $clockIn) ? $latestTime : null;
@@ -596,7 +598,7 @@ class AttendanceService
                         }
                     }
 
-                    $key = $employee->id . '_' . $dateString;
+                    $key = $employee->id.'_'.$dateString;
                     $existing = $existingAttendances->get($key);
 
                     if ($existing && $existing->source === 'manual') {
@@ -746,38 +748,17 @@ class AttendanceService
         $candidateEmployees = Employee::where('status', 'active')
             ->where(function ($q) use ($linkedOvertimeEmpIds, $attendedEmpIds) {
                 $q->where('employment_status', EmploymentStatus::HARIAN)
-                  ->orWhereIn('id', $linkedOvertimeEmpIds)
-                  ->orWhereIn('id', $attendedEmpIds);
+                    ->orWhereIn('id', $linkedOvertimeEmpIds)
+                    ->orWhereIn('id', $attendedEmpIds);
             })
             ->get();
 
         $syncedCount = 0;
 
         DB::transaction(function () use ($period, $candidateEmployees, $linkedOvertimeEmpIds, $attendances, &$syncedCount) {
-            $dayKeyMap = [
-                1 => 'mon',
-                2 => 'tue',
-                3 => 'wed',
-                4 => 'thu',
-                5 => 'fri',
-                6 => 'sat',
-                0 => 'sun',
-            ];
-
             foreach ($candidateEmployees as $emp) {
                 $empAttendances = $attendances->get($emp->id);
-                $attendedDaysKeys = [];
-
-                if ($empAttendances && $empAttendances->isNotEmpty()) {
-                    foreach ($empAttendances as $att) {
-                        $dow = Carbon::parse($att->date)->dayOfWeek;
-                        $key = $dayKeyMap[$dow] ?? null;
-                        if ($key && ! in_array($key, $attendedDaysKeys, true)) {
-                            $attendedDaysKeys[] = $key;
-                        }
-                    }
-                }
-
+                $attendedDaysKeys = WorkingDays::attendedDayKeys($empAttendances ?? collect());
                 $attendedCount = count($attendedDaysKeys);
                 $hasOvertime = in_array($emp->id, $linkedOvertimeEmpIds, true);
                 $isHarian = $emp->employment_status === EmploymentStatus::HARIAN;
@@ -787,10 +768,11 @@ class AttendanceService
                     OvertimePeriodAttendance::where('overtime_period_id', $period->id)
                         ->where('employee_id', $emp->id)
                         ->delete();
+
                     continue;
                 }
 
-                $rate = (float) ($emp->meal_allowance_per_day ?? 25000);
+                $rate = $emp->getEffectiveMealAllowancePerDay();
                 $totalMeal = round($attendedCount * $rate, 2);
 
                 $dailyRate = $isHarian ? (float) ($emp->daily_rate ?? 0) : 0.0;

@@ -10,11 +10,11 @@ use App\Enums\OvertimeType;
 use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
-use App\Models\Holiday;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Models\OvertimeSubmission;
 use App\Models\User;
+use App\Support\WorkingDays;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -713,22 +713,12 @@ class OvertimeService
                     ->update(['overtime_period_id' => $period->id]);
             }
 
-            $dayKeyMap = [
-                1 => 'mon', 2 => 'tue', 3 => 'wed', 4 => 'thu', 5 => 'fri', 6 => 'sat', 0 => 'sun',
-            ];
             // Fallback tanpa log absensi: hari kerja aktual dalam rentang
-            // (kecualikan Minggu dan hari libur nasional dari kalender admin).
-            $holidayDates = Holiday::datesBetween($startDate->toDateString(), $endDate->toDateString());
-            $defaultDaysCount = 0;
-            $defaultDays = [];
-            for ($cur = $startDate->copy(); $cur->lte($endDate); $cur->addDay()) {
-                if ($cur->isSunday() || $holidayDates->has($cur->toDateString())) {
-                    continue;
-                }
-                $defaultDaysCount++;
-                $defaultDays[] = $dayKeyMap[$cur->dayOfWeek];
-            }
-            $defaultDaysCount = max(1, $defaultDaysCount);
+            // (kecualikan akhir pekan sesuai jadwal kerja dan hari libur
+            // nasional dari kalender admin).
+            $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6);
+            $defaultDays = array_values(WorkingDays::workDays($startDate->toDateString(), $endDate->toDateString(), $workDaysPerWeek));
+            $defaultDaysCount = max(1, count($defaultDays));
 
             foreach ($candidateEmployees as $emp) {
                 $rate = $emp->getEffectiveMealAllowancePerDay();
@@ -737,17 +727,7 @@ class OvertimeService
                 $hasOvertime = in_array($emp->id, $linkedEmpIds, true);
 
                 if ($hasAttendanceLog) {
-                    $empAtts = $attendances->get($emp->id);
-                    $attendedDaysKeys = [];
-                    if ($empAtts && $empAtts->isNotEmpty()) {
-                        foreach ($empAtts as $att) {
-                            $dow = Carbon::parse($att->date)->dayOfWeek;
-                            $k = $dayKeyMap[$dow] ?? null;
-                            if ($k && ! in_array($k, $attendedDaysKeys, true)) {
-                                $attendedDaysKeys[] = $k;
-                            }
-                        }
-                    }
+                    $attendedDaysKeys = WorkingDays::attendedDayKeys($attendances->get($emp->id, collect()));
                     $attendedCount = count($attendedDaysKeys);
 
                     // Hanya buat record presensi bagi yang memiliki kehadiran (> 0 hari) atau lembur

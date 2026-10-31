@@ -26,6 +26,7 @@ use App\Models\PayrollPeriod;
 use App\Models\PayrollSequence;
 use App\Models\SalaryComponent;
 use App\Models\User;
+use App\Support\WorkingDays;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -1005,7 +1006,7 @@ class PayrollService
         $totalWorkingDays = 0;
         $curr = $startDate->copy();
         while ($curr->lte($endDate)) {
-            $isWeekend = $workDaysPerWeek === 5 ? $curr->isWeekend() : $curr->isSunday();
+            $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
             if (! $isWeekend && ! $holidayDates->has($curr->toDateString())) {
                 $totalWorkingDays++;
             }
@@ -1022,7 +1023,7 @@ class PayrollService
             // Hari libur dihitung di PHP (portabel antar driver DB, bukan DAYOFWEEK() yang MySQL-only)
             $weekendDates = [];
             for ($curr = $startDate->copy(); $curr->lte($endDate); $curr->addDay()) {
-                $isWeekend = $workDaysPerWeek === 5 ? $curr->isWeekend() : $curr->isSunday();
+                $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
                 if ($isWeekend || $holidayDates->has($curr->toDateString())) {
                     $weekendDates[] = $curr->toDateString();
                 }
@@ -1091,7 +1092,7 @@ class PayrollService
         $workedDays = 0;
         $curr = $workedStart->copy();
         while ($curr->lte($workedEnd)) {
-            $isWorkDay = $workDaysPerWeek === 5 ? ! $curr->isWeekend() : ! $curr->isSunday();
+            $isWorkDay = ! WorkingDays::isWeekend($curr, $workDaysPerWeek);
             if ($isWorkDay) {
                 $workedDays++;
             }
