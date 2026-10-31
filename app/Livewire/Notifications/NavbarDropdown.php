@@ -4,6 +4,7 @@ namespace App\Livewire\Notifications;
 
 use App\Services\DashboardService;
 use App\Services\NotificationService;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 
 class NavbarDropdown extends Component
@@ -12,10 +13,13 @@ class NavbarDropdown extends Component
     {
         $user = auth()->user();
 
+        $actionItems = [];
+        if ($user && ($user->hasRole('admin') || $user->hasRole('direktur') || $user->hasRole('karyawan'))) {
+            $actionItems = Cache::remember('navbar_notifications_'.$user->id, 60, fn () => $dashboardService->getActionItems());
+        }
+
         return view('livewire.notifications.navbar-dropdown', [
-            'actionItems' => ($user && ($user->hasRole('admin') || $user->hasRole('direktur') || $user->hasRole('karyawan')))
-                ? $dashboardService->getActionItems()
-                : [],
+            'actionItems' => $actionItems,
             'history' => $user ? $notificationService->latest($user) : collect(),
             'unreadCount' => $user ? $notificationService->unreadCount($user) : 0,
         ]);

@@ -3,9 +3,7 @@
 namespace App\Providers;
 
 use App\Models\CompanyProfile;
-use App\Services\DashboardService;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -31,23 +29,6 @@ class AppServiceProvider extends ServiceProvider
             $companyProfile = auth()->check() ? CompanyProfile::getProfile() : null;
 
             $view->with('sidebarCompanyProfile', $companyProfile);
-        });
-
-        View::composer('layouts.shizuefi.navbar', function ($view): void {
-            $user = auth()->user();
-
-            $notifications = ($user && ($user->hasRole('admin') || $user->hasRole('direktur') || $user->hasRole('karyawan')))
-                ? $this->cachedActionItems($user)
-                : [];
-
-            $view->with('navbarNotifications', $notifications);
-        });
-    }
-
-    private function cachedActionItems($user): array
-    {
-        return Cache::remember('navbar_notifications_'.$user->id, 30, function () {
-            return app(DashboardService::class)->getActionItems();
         });
     }
 }
