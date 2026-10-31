@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
@@ -18,7 +17,7 @@ class Holiday extends Model
     ];
 
     /**
-     * Tanggal libur dalam rentang (inklusif) sebagai set string Y-m-d.
+     * Nama libur dalam rentang (inklusif), diindeks tanggal Y-m-d.
      *
      * @return Collection<string, string>
      */
@@ -26,8 +25,9 @@ class Holiday extends Model
     {
         return self::query()
             ->whereBetween('date', [$startDate, $endDate])
-            ->pluck('date')
-            ->map(fn ($d) => $d instanceof Carbon ? $d->toDateString() : (string) $d)
-            ->flip();
+            ->get(['date', 'name'])
+            ->mapWithKeys(fn ($holiday) => [
+                $holiday->date->toDateString() => $holiday->name,
+            ]);
     }
 }

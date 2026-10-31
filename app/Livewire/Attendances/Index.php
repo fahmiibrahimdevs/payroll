@@ -5,6 +5,7 @@ namespace App\Livewire\Attendances;
 use App\Enums\EmploymentStatus;
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\Holiday;
 use App\Services\ActivityLogService;
 use App\Services\AttendanceService;
 use Carbon\Carbon;
@@ -654,15 +655,19 @@ class Index extends Component
         }
 
         // Generate matrix dates list
+        $holidayDates = Holiday::datesBetween($start->toDateString(), $end->toDateString());
         $matrixDates = [];
         $cur = $start->copy();
         while ($cur->lte($end)) {
+            $dateString = $cur->toDateString();
             $matrixDates[] = [
-                'date' => $cur->toDateString(),
+                'date' => $dateString,
                 'day' => $cur->day,
                 'dow_name' => $cur->locale('id')->isoFormat('ddd'),
                 'is_sunday' => $cur->isSunday(),
                 'is_weekend' => $cur->isWeekend(),
+                'is_holiday' => $holidayDates->has($dateString),
+                'holiday_name' => $holidayDates->has($dateString) ? $holidayDates->get($dateString) : null,
             ];
             $cur->addDay();
         }

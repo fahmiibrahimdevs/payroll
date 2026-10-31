@@ -156,7 +156,11 @@
                 </span>
                 <span class="d-inline-flex align-items-center font-weight-500" style="padding: 3px 9px; border-radius: 6px; background-color: #fff1f2; border: 1px solid #fecdd3; color: #e11d48;">
                     <span style="display:inline-block; width:6px; height:6px; background-color:#f43f5e; border-radius:50%; margin-right: 6px;"></span>
-                    Hari Libur / Minggu
+                    Minggu
+                </span>
+                <span class="d-inline-flex align-items-center font-weight-500" style="padding: 3px 9px; border-radius: 6px; background-color: #fff7ed; border: 1px solid #fed7aa; color: #c2410c;">
+                    <span style="display:inline-block; width:6px; height:6px; background-color:#f97316; border-radius:50%; margin-right: 6px;"></span>
+                    Libur Nasional
                 </span>
                 <span class="d-inline-flex align-items-center font-weight-500" style="padding: 3px 9px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #475569;">
                     <span style="display:inline-block; width:6px; height:6px; background-color:#94a3b8; border-radius:50%; margin-right: 6px;"></span>
@@ -515,12 +519,12 @@
 
                         <!-- Kolom Tanggal (1 s/d 31) -->
                         @foreach ($matrixDates as $d)
-                            <th class="text-center !py-1.5 !px-1" style="min-width: 76px; background-color: {{ $d['is_sunday'] ? '#fff1f2' : '#ffffff' }}; border-bottom: 2px solid {{ $d['is_sunday'] ? '#fecdd3' : '#e2e8f0' }} !important;">
+                            <th class="text-center !py-1.5 !px-1" style="min-width: 76px; background-color: {{ $d['is_holiday'] ? '#fff7ed' : ($d['is_sunday'] ? '#fff1f2' : '#ffffff') }}; border-bottom: 2px solid {{ $d['is_holiday'] ? '#fed7aa' : ($d['is_sunday'] ? '#fecdd3' : '#e2e8f0') }} !important;" @if ($d['is_holiday']) title="Hari Libur: {{ $d['holiday_name'] }}" @endif>
                                 <div class="d-flex flex-column align-items-center">
-                                    <span class="font-weight-600" style="font-size: 13.5px; line-height: 1.1; color: {{ $d['is_sunday'] ? '#e11d48' : '#0f172a' }};">
+                                    <span class="font-weight-600" style="font-size: 13.5px; line-height: 1.1; color: {{ $d['is_holiday'] ? '#c2410c' : ($d['is_sunday'] ? '#e11d48' : '#0f172a') }};">
                                         {{ $d['day'] }}
                                     </span>
-                                    <span class="text-uppercase font-weight-500 mt-0.5" style="font-size: 10.5px; line-height: 1; color: {{ $d['is_sunday'] ? '#f43f5e' : '#64748b' }};">
+                                    <span class="text-uppercase font-weight-500 mt-0.5" style="font-size: 10.5px; line-height: 1; color: {{ $d['is_holiday'] ? '#ea580c' : ($d['is_sunday'] ? '#f43f5e' : '#64748b') }};">
                                         {{ $d['dow_name'] }}
                                     </span>
                                 </div>
@@ -629,11 +633,11 @@
                                         $sakitCount++;
                                     } elseif ($isIzin) {
                                         $izinCount++;
-                                    } elseif ($isAbsen || (! $d['is_sunday'] && ! $att)) {
+                                    } elseif ($isAbsen || (! $d['is_sunday'] && ! $d['is_holiday'] && ! $att)) {
                                         $absenCount++;
                                     }
                                 @endphp
-                                <td class="text-center p-1 align-middle" style="background-color: {{ $d['is_sunday'] ? '#fff1f220' : 'transparent' }};">
+                                <td class="text-center p-1 align-middle" style="background-color: {{ $d['is_holiday'] ? '#fff7ed80' : ($d['is_sunday'] ? '#fff1f220' : 'transparent') }};">
                                     @php
                                         $isManual = ($att?->source === 'manual');
                                     @endphp
@@ -670,6 +674,8 @@
                                         <span class="badge badge-warning font-weight-500" style="font-size: 11px; padding: 3px 6px; border-radius: 4px; cursor: pointer;" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')">Sakit</span>
                                     @elseif ($isIzin)
                                         <span class="badge badge-info font-weight-500" style="font-size: 11px; padding: 3px 6px; border-radius: 4px; cursor: pointer;" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')">Izin</span>
+                                    @elseif ($d['is_holiday'])
+                                        <span class="att-chip-holiday" style="background-color: #fff7ed; border-color: #fed7aa; color: #c2410c;" title="Hari Libur: {{ $d['holiday_name'] }}">Libur</span>
                                     @elseif ($d['is_sunday'])
                                         <span class="att-chip-holiday" title="Hari Libur / Minggu">Libur</span>
                                     @else
