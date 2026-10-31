@@ -4,8 +4,10 @@ namespace App\Livewire\Payrolls;
 
 use App\Enums\EmployeeStatus;
 use App\Enums\PayrollLineType;
+use App\Enums\PtkpStatus;
 use App\Enums\SalaryComponentCategory;
 use App\Enums\SalaryComponentType;
+use App\Enums\TaxMethod;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\PayrollItem;
@@ -596,6 +598,50 @@ class Show extends Component
         $total = $this->totalItemsCount;
 
         return $total > 0 ? (int) round(($this->verifiedCount / $total) * 100) : 0;
+    }
+
+    /** Flag stepper alur penggajian (tahap selesai & penolakan) berdasarkan status periode. */
+    public function getStepperFlagsProperty(): array
+    {
+        $statusVal = $this->period->status->value;
+
+        return [
+            'is_rejected' => ($statusVal === 'rejected'),
+            'step1_done' => in_array($statusVal, ['submitted', 'approved', 'paid'], true),
+            'step2_done' => in_array($statusVal, ['submitted', 'approved', 'paid'], true),
+            'step3_done' => in_array($statusVal, ['approved', 'paid'], true),
+            'step4_done' => ($statusVal === 'paid'),
+        ];
+    }
+
+    /** Apakah panel tombol aksi di sidebar perlu ditampilkan untuk pengguna saat ini. */
+    public function getHasActionsProperty(): bool
+    {
+        return ($this->period->status->isEditable() && auth()->user()?->hasRole('admin'))
+            || ($this->period->status->value === 'submitted' && auth()->user()?->hasRole('direktur'))
+            || ($this->period->status->value === 'paid');
+    }
+
+    /** Profil pajak slip pratinjau: PTKP, kategori TER, dan metode perpajakan. */
+    public function getPreviewTaxProfileProperty(): array
+    {
+        $detail = $this->previewItem->employee?->detail;
+        $isEditable = $this->period->status->isEditable();
+
+        $ptkp = ($isEditable ? $detail?->ptkp_status : null) ?? $this->previewItem->ptkp_status;
+        $ptkpVal = $ptkp instanceof PtkpStatus ? $ptkp->value : (string) ($ptkp ?? 'TK/0');
+
+        $terCat = ($isEditable ? ($detail?->ter_category ?? $this->previewItem->ter_category) : null)
+            ?? $this->previewItem->ter_category
+            ?? ($ptkp instanceof PtkpStatus ? $ptkp->terCategory() : 'A');
+
+        $taxMethod = ($isEditable ? $detail?->tax_method : null) ?? $this->previewItem->tax_method ?? TaxMethod::GROSS;
+
+        return [
+            'ptkp_value' => $ptkpVal,
+            'ter_category' => $terCat,
+            'tax_method' => $taxMethod,
+        ];
     }
 
     /**

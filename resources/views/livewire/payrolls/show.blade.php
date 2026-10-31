@@ -20,14 +20,6 @@
     </p>
 
     <!-- ================= 2. ALUR KERJA & RINGKASAN PENGGAJIAN ================= -->
-    @php
-        $statusVal = $period->status->value;
-        $isRejected = ($statusVal === 'rejected');
-        $step1Done = in_array($statusVal, ['submitted', 'approved', 'paid'], true);
-        $step2Done = in_array($statusVal, ['submitted', 'approved', 'paid'], true);
-        $step3Done = in_array($statusVal, ['approved', 'paid'], true);
-        $step4Done = ($statusVal === 'paid');
-    @endphp
 
     <!-- ================= 2. RINGKASAN STATISTIK FINANSIAL ================= -->
     <div class="payroll-stat-grid mb-4">
@@ -156,12 +148,12 @@
                 <div class="activities">
                     <!-- Tahap 1: Verifikasi Draf HRD -->
                     <div class="activity">
-                        <div class="activity-icon {{ $step1Done ? 'bg-success text-white shadow-success' : 'bg-primary text-white shadow-primary' }}">
-                            <i class="{{ $step1Done ? 'fas fa-check' : 'fas fa-pencil-alt' }}"></i>
+                        <div class="activity-icon {{ $this->stepperFlags['step1_done'] ? 'bg-success text-white shadow-success' : 'bg-primary text-white shadow-primary' }}">
+                            <i class="{{ $this->stepperFlags['step1_done'] ? 'fas fa-check' : 'fas fa-pencil-alt' }}"></i>
                         </div>
                         <div class="activity-detail">
                             <div class="mb-1">
-                                <span class="text-job {{ $step1Done ? 'text-success' : 'text-primary' }} font-weight-bold">Tahap 1</span>
+                                <span class="text-job {{ $this->stepperFlags['step1_done'] ? 'text-success' : 'text-primary' }} font-weight-bold">Tahap 1</span>
                                 <span class="bullet"></span>
                                 <span class="text-job text-muted">{{ $period->created_at ? $period->created_at->format('d M Y') : '-' }}</span>
                             </div>
@@ -191,7 +183,7 @@
 
                     <!-- Tahap 2: Pengajuan ke Direktur -->
                     <div class="activity">
-                        @if ($isRejected)
+                        @if ($this->stepperFlags['is_rejected'])
                             <div class="activity-icon bg-danger text-white shadow-danger">
                                 <i class="fas fa-times"></i>
                             </div>
@@ -205,7 +197,7 @@
                                     Pengajuan ditolak oleh <strong>{{ $period->approver?->name ?? 'Direktur' }}</strong> untuk revisi.
                                 </p>
                             </div>
-                        @elseif ($step2Done)
+                        @elseif ($this->stepperFlags['step2_done'])
                             <div class="activity-icon bg-success text-white shadow-success">
                                 <i class="fas fa-check"></i>
                             </div>
@@ -238,7 +230,7 @@
 
                     <!-- Tahap 3: Persetujuan (ACC) -->
                     <div class="activity">
-                        @if ($step3Done)
+                        @if ($this->stepperFlags['step3_done'])
                             <div class="activity-icon bg-success text-white shadow-success">
                                 <i class="fas fa-check-double"></i>
                             </div>
@@ -252,7 +244,7 @@
                                     Penggajian disetujui (ACC) oleh <strong>{{ $period->approver?->name ?? 'Direktur' }}</strong>.
                                 </p>
                             </div>
-                        @elseif ($statusVal === 'submitted')
+                        @elseif ($period->status->value === 'submitted')
                             <div class="activity-icon bg-primary text-white shadow-primary">
                                 <i class="fas fa-hourglass-half"></i>
                             </div>
@@ -285,7 +277,7 @@
 
                     <!-- Tahap 4: Pembayaran Gaji -->
                     <div class="activity">
-                        @if ($step4Done)
+                        @if ($this->stepperFlags['step4_done'])
                             <div class="activity-icon bg-success text-white shadow-success">
                                 <i class="fas fa-check-circle"></i>
                             </div>
@@ -299,7 +291,7 @@
                                     Gaji telah berhasil ditransfer ke seluruh karyawan. Dikonfirmasi oleh <strong>{{ $period->updater?->name ?? ($period->items()->whereNotNull('paid_by')->first()?->payer?->name ?? 'Admin') }}</strong>.
                                 </p>
                             </div>
-                        @elseif ($statusVal === 'approved')
+                        @elseif ($period->status->value === 'approved')
                             <div class="activity-icon bg-primary text-white shadow-primary">
                                 <i class="fas fa-hand-holding-usd"></i>
                             </div>
@@ -349,13 +341,7 @@
                     </div>
                 @endif
 
-                @php
-                    $hasActions = ($period->status->isEditable() && auth()->user()?->hasRole('admin')) 
-                        || ($period->status->value === 'submitted' && auth()->user()?->hasRole('direktur'))
-                        || ($period->status->value === 'paid');
-                @endphp
-
-                @if ($hasActions)
+                @if ($this->hasActions)
                     <!-- Action Buttons -->
                     <div class="mt-3">
                         <!-- Admin: Recalculate Taxes & Submit to Director -->
@@ -944,14 +930,8 @@
                                                 <span>Skema Pajak</span>
                                             </div>
                                             <div class="emp-tile-right text-right" style="font-size: 12px;">
-                                                @php
-                                                    $previewPtkp = ($period->status->isEditable() ? $previewItem->employee?->detail?->ptkp_status : null) ?? $previewItem->ptkp_status;
-                                                    $previewPtkpVal = $previewPtkp instanceof \App\Enums\PtkpStatus ? $previewPtkp->value : (string) ($previewPtkp ?? 'TK/0');
-                                                    $previewTerCat = ($period->status->isEditable() ? ($previewItem->employee?->detail?->ter_category ?? $previewItem->ter_category) : null) ?? $previewItem->ter_category ?? ($previewPtkp instanceof \App\Enums\PtkpStatus ? $previewPtkp->terCategory() : 'A');
-                                                    $previewTaxMethod = ($period->status->isEditable() ? $previewItem->employee?->detail?->tax_method : null) ?? $previewItem->tax_method ?? \App\Enums\TaxMethod::GROSS;
-                                                @endphp
                                                 <span class="badge badge-light border text-primary" style="font-size: 11px; font-weight: 600;">
-                                                    {{ $previewTaxMethod instanceof \App\Enums\TaxMethod ? $previewTaxMethod->label() : 'Gross' }} &bull; {{ $previewPtkpVal }} (TER {{ $previewTerCat }})
+                                                    {{ $this->previewTaxProfile['tax_method'] instanceof \App\Enums\TaxMethod ? $this->previewTaxProfile['tax_method']->label() : 'Gross' }} &bull; {{ $this->previewTaxProfile['ptkp_value'] }} (TER {{ $this->previewTaxProfile['ter_category'] }})
                                                 </span>
                                             </div>
                                         </div>
@@ -976,22 +956,8 @@
                                                     <tr style="border-bottom: 1px solid #f1f5f9;">
                                                         <td class="!px-3 !py-2.5 align-middle text-dark font-weight-500" style="font-size: 12.5px;">
                                                             <div>Gaji Pokok</div>
-                                                            @php
-                                                                $prevFullSalary = (float) ($previewItem->employee?->basic_salary ?? 0);
-                                                                $prevIsProrated = $prevFullSalary > 0 && (float) $previewItem->basic_salary < $prevFullSalary;
-                                                                $prevNoteText = $previewItem->human_notes;
-                                                                if ($prevIsProrated) {
-                                                                    $fmtPBasic = 'Rp ' . number_format((float) $previewItem->basic_salary, 0, ',', '.');
-                                                                    $fmtPFull = 'Rp ' . number_format($prevFullSalary, 0, ',', '.');
-                                                                    if (empty($prevNoteText)) {
-                                                                        $prevNoteText = "Gaji prorata {$fmtPBasic} dari {$fmtPFull}";
-                                                                    } elseif (! str_contains($prevNoteText, 'dari Rp')) {
-                                                                        $prevNoteText = preg_replace('/^Gaji prorata\s*/i', "Gaji prorata {$fmtPBasic} dari {$fmtPFull} - ", $prevNoteText);
-                                                                    }
-                                                                }
-                                                            @endphp
-                                                            @if ($prevNoteText)
-                                                                <div class="text-muted font-normal" style="font-size: 11px;">{{ $prevNoteText }}</div>
+                                                            @if ($previewItem->basic_salary_note)
+                                                                <div class="text-muted font-normal" style="font-size: 11px;">{{ $previewItem->basic_salary_note }}</div>
                                                             @endif
                                                         </td>
                                                         <td class="!px-3 !py-2.5 align-middle text-right font-weight-600 text-dark" style="font-size: 12.5px;">
@@ -1384,10 +1350,7 @@
                                 <input type="file" id="item_payment_proof" wire:model="itemPaymentProof" class="custom-file-input @error('itemPaymentProof') is-invalid @enderror" accept=".jpg,.jpeg,.png,.pdf">
                                 <label class="custom-file-label text-truncate" for="item_payment_proof">
                                     @if ($itemPaymentProof && is_object($itemPaymentProof))
-                                        @php
-                                            $isNewPdf = \Illuminate\Support\Str::endsWith(strtolower($itemPaymentProof->getClientOriginalName()), '.pdf');
-                                        @endphp
-                                        @if ($isNewPdf)
+                                        @if (\Illuminate\Support\Str::endsWith(strtolower($itemPaymentProof->getClientOriginalName()), '.pdf'))
                                             <i class="fas fa-file-pdf text-danger mr-1"></i> {{ $itemPaymentProof->getClientOriginalName() }}
                                         @else
                                             <i class="fas fa-file-image text-success mr-1"></i> {{ $itemPaymentProof->getClientOriginalName() }}
@@ -1546,13 +1509,10 @@
                                 </div>
                             </div>
                             @if ($paidDetailItem->payment_proof_path)
-                                @php
-                                    $isPdfProof = \Illuminate\Support\Str::endsWith(strtolower($paidDetailItem->payment_proof_path), '.pdf');
-                                @endphp
                                 <div class="emp-tile-row">
                                     <div class="emp-tile-left">
                                         <div class="emp-tile-icon">
-                                            @if ($isPdfProof)
+                                            @if (\Illuminate\Support\Str::endsWith(strtolower($paidDetailItem->payment_proof_path), '.pdf'))
                                                 <i class="fas fa-file-pdf text-danger"></i>
                                             @else
                                                 <i class="fas fa-paperclip text-primary"></i>
@@ -1561,7 +1521,7 @@
                                         <span>Bukti Pembayaran</span>
                                     </div>
                                     <div class="emp-tile-right">
-                                        @if ($isPdfProof)
+                                        @if (\Illuminate\Support\Str::endsWith(strtolower($paidDetailItem->payment_proof_path), '.pdf'))
                                             <a href="{{ route('payrolls.documents.item-proof', $paidDetailItem) }}" target="_blank" class="badge badge-light border text-danger font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 6px; border-color: #fca5a5 !important; background-color: #fef2f2 !important; text-decoration: none;" title="Buka lampiran bukti transfer (PDF)">
                                                 <i class="fas fa-file-pdf mr-1 text-danger"></i> Buka Dokumen Bukti (PDF) <i class="fas fa-external-link-alt ml-1" style="font-size: 9px;"></i>
                                             </a>

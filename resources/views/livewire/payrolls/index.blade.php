@@ -152,20 +152,6 @@
 
                 <div class="card-body p-0">
                     <!-- 2. Hero Metric: Total Biaya Perusahaan (Donut Chart) -->
-                    @php
-                        $activeMonthsInYear = collect($statistics['twelve_months_data'])
-                            ->filter(fn ($tm) => $tm['cost'] > 0)
-                            ->values();
-
-                        $hasChartData = $activeMonthsInYear->isNotEmpty();
-                        $chartLabels = $hasChartData ? $activeMonthsInYear->pluck('month_name')->all() : ['Belum ada data'];
-                        $chartValues = $hasChartData ? $activeMonthsInYear->pluck('cost')->all() : [1];
-
-                        $donutPalette = ['#0b52aa', '#2563eb', '#3b82f6', '#0284c7', '#0ea5e9', '#06b6d4', '#10b981', '#14b8a6', '#6366f1', '#8b5cf6', '#f59e0b', '#ec4899'];
-                        $chartColors = $hasChartData
-                            ? ($activeMonthsInYear->count() === 1 ? ['#2563eb'] : array_slice($donutPalette, 0, $activeMonthsInYear->count()))
-                            : ['#e2e8f0'];
-                    @endphp
 
                     <div style="padding: 16px 20px 14px;" class="text-center">
                         <div class="d-flex align-items-center justify-content-between mb-1">
@@ -178,15 +164,15 @@
                         </div>
 
                         <!-- Donut Chart Container -->
-                        <div wire:key="payroll-doughnut-{{ $selectedYear }}-{{ md5(json_encode([$statistics['yearly_total_company_cost'] ?? 0, $chartValues ?? []])) }}"
+                        <div wire:key="payroll-doughnut-{{ $selectedYear }}-{{ md5(json_encode([$statistics['yearly_total_company_cost'] ?? 0, $this->chartData['values'] ?? []])) }}"
                              x-data="{
                                  chartInstance: null,
                                  initChart() {
                                      const year = {{ (int) $selectedYear }};
-                                     const hasData = {{ $hasChartData ? 'true' : 'false' }};
-                                     const labels = {{ \Illuminate\Support\Js::from($chartLabels) }};
-                                     const dataVals = {{ \Illuminate\Support\Js::from($chartValues) }};
-                                     const bgColors = {{ \Illuminate\Support\Js::from($chartColors) }};
+                                     const hasData = {{ $this->chartData['has_data'] ? 'true' : 'false' }};
+                                     const labels = {{ \Illuminate\Support\Js::from($this->chartData['labels']) }};
+                                     const dataVals = {{ \Illuminate\Support\Js::from($this->chartData['values']) }};
+                                     const bgColors = {{ \Illuminate\Support\Js::from($this->chartData['colors']) }};
 
                                      const render = () => {
                                          const canvas = this.$refs.canvas;
@@ -553,15 +539,9 @@
                                 <div class="form-group">
                                     <label class="font-weight-600">Bulan Penggajian <span class="text-danger">*</span></label>
                                     <select wire:model.live="newMonth" class="form-control @error('newMonth') is-invalid @enderror">
-                                        @php
-                                            $monthNames = [1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'];
-                                        @endphp
                                         @for ($m = 1; $m <= 12; $m++)
-                                            @php
-                                                $isTaken = in_array($m, $existingMonthsForNewYear ?? [], true);
-                                            @endphp
-                                            <option value="{{ $m }}" {{ $isTaken ? 'disabled' : '' }}>
-                                                {{ $monthNames[$m] }} {{ $isTaken ? '(Sudah Ada)' : '' }}
+                                            <option value="{{ $m }}" {{ in_array($m, $existingMonthsForNewYear ?? [], true) ? 'disabled' : '' }}>
+                                                {{ $this->monthNames[$m] }} {{ in_array($m, $existingMonthsForNewYear ?? [], true) ? '(Sudah Ada)' : '' }}
                                             </option>
                                         @endfor
                                     </select>

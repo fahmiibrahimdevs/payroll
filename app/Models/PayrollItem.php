@@ -7,6 +7,7 @@ use App\Enums\PtkpStatus;
 use App\Enums\TaxMethod;
 use App\Enums\TaxRecipientType;
 use App\Services\DashboardService;
+use App\Support\Rupiah;
 use App\Support\Terbilang;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -522,6 +523,33 @@ class PayrollItem extends Model
                 }
 
                 return $this->notes;
+            }
+        );
+    }
+
+    /** Catatan gaji pokok (prorata) siap tampil untuk baris Gaji Pokok slip. */
+    protected function basicSalaryNote(): Attribute
+    {
+        return Attribute::make(
+            get: function (): string {
+                $note = (string) $this->human_notes;
+                $empFullSalary = (float) ($this->employee?->basic_salary ?? 0);
+                $isProrated = $empFullSalary > 0 && (float) $this->basic_salary < $empFullSalary;
+
+                if (! $isProrated) {
+                    return $note;
+                }
+
+                $fmtBasic = Rupiah::display($this->basic_salary);
+                $fmtFull = Rupiah::display($empFullSalary);
+                if ($note === '') {
+                    return "Gaji prorata {$fmtBasic} dari {$fmtFull}";
+                }
+                if (! str_contains($note, 'dari Rp')) {
+                    return preg_replace('/^Gaji prorata\s*/i', "Gaji prorata {$fmtBasic} dari {$fmtFull} - ", $note);
+                }
+
+                return $note;
             }
         );
     }

@@ -9,6 +9,7 @@ use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\PayrollPeriod;
 use App\Services\PayrollService;
+use App\Support\MonthNames;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\ValidationException;
@@ -75,13 +76,41 @@ class Index extends Component
 
     private function updateDefaultPeriodName(): void
     {
-        $months = [
-            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
-            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
-            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
-        ];
-        $monthName = $months[$this->newMonth] ?? (string) $this->newMonth;
+        $monthName = MonthNames::full()[$this->newMonth] ?? (string) $this->newMonth;
         $this->newName = "Penggajian Periode {$monthName} {$this->newYear}";
+    }
+
+    /** Nama bulan Indonesia (1 => 'Januari' ... 12 => 'Desember') untuk dropdown periode. */
+    public function getMonthNamesProperty(): array
+    {
+        return MonthNames::full();
+    }
+
+    /** Statistik agregat penggajian untuk tahun terpilih. */
+    public function getStatisticsProperty(): array
+    {
+        return app(PayrollService::class)->getStatistics($this->selectedYear);
+    }
+
+    /** Data donut chart biaya perusahaan per bulan aktif pada tahun terpilih. */
+    public function getChartDataProperty(): array
+    {
+        $activeMonthsInYear = collect($this->statistics['twelve_months_data'])
+            ->filter(fn ($tm) => $tm['cost'] > 0)
+            ->values();
+
+        $hasChartData = $activeMonthsInYear->isNotEmpty();
+
+        $donutPalette = ['#0b52aa', '#2563eb', '#3b82f6', '#0284c7', '#0ea5e9', '#06b6d4', '#10b981', '#14b8a6', '#6366f1', '#8b5cf6', '#f59e0b', '#ec4899'];
+
+        return [
+            'has_data' => $hasChartData,
+            'labels' => $hasChartData ? $activeMonthsInYear->pluck('month_name')->all() : ['Belum ada data'],
+            'values' => $hasChartData ? $activeMonthsInYear->pluck('cost')->all() : [1],
+            'colors' => $hasChartData
+                ? ($activeMonthsInYear->count() === 1 ? ['#2563eb'] : array_slice($donutPalette, 0, $activeMonthsInYear->count()))
+                : ['#e2e8f0'],
+        ];
     }
 
     public function updatedSearch(): void
@@ -157,12 +186,7 @@ class Index extends Component
             'newName.required' => 'Nama periode wajib diisi.',
         ]);
 
-        $months = [
-            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
-            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
-            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
-        ];
-        $monthName = $months[$this->newMonth] ?? (string) $this->newMonth;
+        $monthName = MonthNames::full()[$this->newMonth] ?? (string) $this->newMonth;
 
         $exists = PayrollPeriod::query()
             ->where('month', $this->newMonth)
@@ -272,7 +296,7 @@ class Index extends Component
             search: $this->search ?: null,
         );
 
-        $statistics = $service->getStatistics($this->selectedYear);
+        $statistics = $this->statistics;
         $existingMonthsForNewYear = PayrollPeriod::where('year', $this->newYear)->pluck('month')->all();
 
         return view('livewire.payrolls.index', [
