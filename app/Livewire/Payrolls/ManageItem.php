@@ -25,6 +25,8 @@ use App\Models\User;
 use App\Services\ActivityLogService;
 use App\Services\PayrollService;
 use App\Services\TaxCalculationService;
+use App\Support\Rupiah;
+use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -50,6 +52,147 @@ class ManageItem extends Component
         }
 
         return $this->period->status->isEditable() || $this->item->isRejected();
+    }
+
+    /** Status pajak karyawan siap-tampil: NPWP/NIK, PTKP, kategori & tarif TER. */
+    #[Computed]
+    public function taxProfile(): array
+    {
+        $detail = $this->item->employee?->detail;
+        $hasNpwp = ! empty($detail?->npwp_number);
+        $hasNik = ! empty($detail?->nik);
+        $isNonNpwpPenalized = ! $hasNpwp && ! $hasNik;
+
+        $ptkp = ($this->isEditable ? $detail?->ptkp_status : null) ?? $this->item->ptkp_status ?? $detail?->ptkp_status;
+        if (! ($ptkp instanceof PtkpStatus) && is_string($ptkp)) {
+            $ptkp = PtkpStatus::tryFrom($ptkp);
+        }
+
+        $terCat = ($this->isEditable ? ($detail?->ter_category ?? $this->item->ter_category) : null)
+            ?? $this->item->ter_category
+            ?? ($ptkp instanceof PtkpStatus ? $ptkp->terCategory() : ($detail?->ter_category ?? 'A'));
+        $terRate = (float) ($this->item->ter_rate ?? 0);
+        if ($terRate <= 0 && $this->grossSalary > 0) {
+            $baseTer = app(TaxCalculationService::class)->getTerRate($terCat, $this->grossSalary);
+            $terRate = $isNonNpwpPenalized ? round($baseTer * 1.2, 6) : $baseTer;
+        }
+
+        return [
+            'npwp_number' => $detail?->npwp_number,
+            'has_npwp' => $hasNpwp,
+            'has_nik' => $hasNik,
+            'non_npwp_penalized' => $isNonNpwpPenalized,
+            'ptkp_value' => $ptkp instanceof PtkpStatus ? $ptkp->value : (string) ($ptkp ?? 'TK/0'),
+            'ptkp_description' => $ptkp instanceof PtkpStatus ? $ptkp->description() : 'Tidak Kawin, 0 Tanggungan',
+            'ter_category' => $terCat,
+            'ter_rate' => $terRate,
+        ];
+    }
+
+    /** Info pembuat & pembaru terakhir payslip untuk tile Riwayat Data. */
+    #[Computed]
+    public function dataHistory(): array
+    {
+        $creator = $this->period->creator ?? $this->period->submitter;
+        $updater = $this->item->updater ?? $this->period->updater;
+
+        return [
+            'creator_name' => $creator?->name ?? 'Admin',
+            'updater_name' => $updater?->name,
+            'updater_differs' => $updater?->name && ($updater->id !== ($creator?->id ?? null)),
+        ];
+    }
+
+    /** Nama & waktu persetujuan untuk banner ACC Direktur. */
+    #[Computed]
+    public function approverBanner(): array
+    {
+        return [
+            'name' => $this->item->approver?->name ?? $this->period->approver?->name ?? 'Direktur',
+            'time' => ($this->item->approved_at ?? $this->period->approved_at)?->locale('id')->translatedFormat('d F Y H:i'),
+        ];
+    }
+
+    /** Karyawan lain dalam periode yang sama, dikelompokkan per departemen. */
+    #[Computed]
+    public function groupedOtherItems(): Collection
+    {
+        return $this->otherItems
+            ->groupBy(fn ($o) => $o->employee?->department?->name ?? 'Tanpa Departemen')
+            ->sortKeys();
+    }
+
+    /** Catatan gaji pokok (prorata) untuk baris Gaji Pokok di tabel. */
+    #[Computed]
+    public function basicSalaryNote(): string
+    {
+        $note = (string) $this->item->human_notes;
+        $empFullSalary = (float) ($this->item->employee?->basic_salary ?? 0);
+        $isProrated = $empFullSalary > 0 && (float) $this->item->basic_salary < $empFullSalary;
+
+        if (! $isProrated) {
+            return $note;
+        }
+
+        $fmtBasic = Rupiah::display($this->item->basic_salary);
+        $fmtFull = Rupiah::display($empFullSalary);
+        if ($note === '') {
+            return "Gaji prorata {$fmtBasic} dari {$fmtFull}";
+        }
+        if (! str_contains($note, 'dari Rp')) {
+            return preg_replace('/^Gaji prorata\s*/i', "Gaji prorata {$fmtBasic} dari {$fmtFull} - ", $note);
+        }
+
+        return $note;
+    }
+
+    /** Baris potongan dengan nilai tampilan siap-pakai (tanpa query/logika tambahan di view). */
+    #[Computed]
+    public function displayDeductionRows(): array
+    {
+        $isFinalPeriod = $this->item->employee?->contract_end_date
+            && Carbon::parse($this->item->employee->contract_end_date)->lte($this->period->end_date);
+        $isFinalTaxPeriod = ((int) ($this->item->payrollPeriod->month ?? 1)) === 12
+            || (bool) $this->item->is_final_tax_period;
+
+        return collect($this->deductionRows)->map(function ($row) use ($isFinalPeriod, $isFinalTaxPeriod) {
+            $row['amount_float'] = (float) ($row['amount'] ?? 0);
+            $row['enabled'] = $row['is_enabled'] ?? true;
+            $row['is_final_period'] = $isFinalPeriod;
+            $row['is_final_tax_period'] = $isFinalTaxPeriod;
+
+            $rowLower = strtolower(trim($row['name'] ?? ''));
+            $row['bpjs_calc_key'] = str_contains($rowLower, 'jht')
+                ? 'bpjs_jht_emp'
+                : ((str_contains($rowLower, 'pensiun') || str_contains($rowLower, 'jp')) ? 'bpjs_jp_emp' : 'bpjs_kes_emp');
+
+            if (! empty($row['cash_advance_installment_id'])) {
+                $row['paid_amount'] = (float) ($row['installment_paid_amount'] ?? 0);
+                $row['remaining_amount'] = (float) ($row['advance_remaining_amount'] ?? 0);
+                $row['total_amount'] = (float) ($row['advance_total_amount'] ?? 0);
+                $row['installment_number'] = $row['installment_number'] ?? null;
+                $row['installment_count'] = $row['advance_installment_count'] ?? null;
+                $row['normal_installment'] = max(0.0, round((float) ($row['installment_total_amount'] ?? 0) - $row['paid_amount'], 2));
+            }
+
+            return $row;
+        })->all();
+    }
+
+    /** Baris modal rincian perhitungan dengan nilai tampilan siap-pakai. */
+    #[Computed]
+    public function calculationDetailRows(): array
+    {
+        return collect($this->calculationDetail['rows'] ?? [])->map(function ($row) {
+            $hasAmount = ! empty($row['amount']) && $row['amount'] !== '—';
+
+            $row['is_highlight'] = ! empty($row['is_bold']);
+            $row['display_value'] = $hasAmount ? $row['amount'] : ($row['calc'] ?? '—');
+            $row['formula_text'] = ($hasAmount && ! empty($row['calc']) && $row['calc'] !== '—') ? $row['calc'] : null;
+            $row['icon'] = $row['icon'] ?? 'fas fa-receipt';
+
+            return $row;
+        })->all();
     }
 
     #[Computed]
@@ -1118,6 +1261,12 @@ class ManageItem extends Component
             $this->costToCompany,
             $this->estimatedNetSalary,
             $this->employeeTotalRemainingCashAdvance,
+            $this->taxProfile,
+            $this->dataHistory,
+            $this->approverBanner,
+            $this->groupedOtherItems,
+            $this->basicSalaryNote,
+            $this->displayDeductionRows,
         );
     }
 

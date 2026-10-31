@@ -14,10 +14,6 @@
         </div>
     </x-slot>
 
-    @php
-        $hasDirekturAction = auth()->user()?->hasRole('direktur');
-    @endphp
-
     <!-- Template Native Section Title & Lead + Persetujuan Direktur & Simpan -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-2 mb-md-3">
         <div class="mr-md-3">
@@ -31,7 +27,7 @@
             </p>
         </div>
 
-        <div class="{{ $hasDirekturAction ? 'd-flex' : 'd-none d-md-flex' }} align-items-center mt-2 mt-md-0 flex-shrink-0" style="gap: 10px;">
+        <div class="{{ auth()->user()?->hasRole('direktur') ? 'd-flex' : 'd-none d-md-flex' }} align-items-center" mt-2 mt-md-0 flex-shrink-0" style="gap: 10px;">
             @if (auth()->user()?->hasRole('direktur'))
                 @if ($item->isApproved())
                     <button type="button" 
@@ -137,10 +133,6 @@
             </div>
         </div>
     @elseif ($item->isApproved() || ($period->approved_by && $period->approver))
-        @php
-            $approverName = $item->approver?->name ?? $period->approver?->name ?? 'Direktur';
-            $approvedTime = ($item->approved_at ?? $period->approved_at)?->locale('id')->translatedFormat('d F Y H:i');
-        @endphp
         <div class="bd-callout bd-callout-success mb-4" role="alert">
             <div class="d-flex align-items-start">
                 <div class="bd-callout-icon mr-3 mt-0.5">
@@ -148,10 +140,10 @@
                 </div>
                 <div class="flex-grow-1">
                     <div class="bd-callout-title">
-                        Slip Gaji Telah Disetujui (ACC: {{ $approverName }})
+                        Slip Gaji Telah Disetujui (ACC: {{ $this->approverBanner['name'] }})
                     </div>
                     <div class="bd-callout-desc">
-                        Disetujui oleh <strong class="text-dark">{{ $approverName }}</strong> pada <strong class="text-dark">{{ $approvedTime }}</strong>. Komponen gaji berada dalam mode hanya baca (read-only) dan tidak dapat diubah kembali.
+                        Disetujui oleh <strong class="text-dark">{{ $this->approverBanner['name'] }}</strong> pada <strong class="text-dark">{{ $this->approverBanner['time'] }}</strong>. Komponen gaji berada dalam mode hanya baca (read-only) dan tidak dapat diubah kembali.
                     </div>
                 </div>
             </div>
@@ -231,11 +223,8 @@
                     <div class="form-group mb-3 text-left">
                         <label for="select_employee">Pilih Karyawan</label>
                         <div wire:ignore>
-                            @php
-                                $groupedItems = $this->otherItems->groupBy(fn ($o) => $o->employee?->department?->name ?? 'Tanpa Departemen')->sortKeys();
-                            @endphp
                             <select id="select_employee" class="form-control select2" style="width: 100%;" onchange="if (this.value && this.value != '{{ $item->id }}') { window.location.href = '/payrolls/{{ $period->id }}/items/' + this.value + '/edit'; }">
-                                @foreach ($groupedItems as $deptName => $deptItems)
+                                @foreach ($this->groupedOtherItems as $deptName => $deptItems)
                                     <optgroup label="{{ $deptName }}">
                                         @foreach ($deptItems as $other)
                                             <option value="{{ $other->id }}" @selected($other->id === $item->id)>
@@ -287,15 +276,9 @@
                                 <span>NPWP</span>
                             </div>
                             <div class="emp-tile-right font-weight-600 text-dark">
-                                @php
-                                    $detail = $item->employee?->detail;
-                                    $hasNpwp = ! empty($detail?->npwp_number);
-                                    $hasNik = ! empty($detail?->nik);
-                                    $isNonNpwpPenalized = ! $hasNpwp && ! $hasNik;
-                                @endphp
-                                @if ($hasNpwp)
-                                    {{ $detail->npwp_number }}
-                                @elseif ($hasNik)
+                                @if ($this->taxProfile['has_npwp'])
+                                    {{ $this->taxProfile['npwp_number'] }}
+                                @elseif ($this->taxProfile['has_nik'])
                                     <span class="badge badge-light border text-dark" style="font-weight: 500; font-size: 11px;" title="Bebas penalti 20% karena menggunakan NIK valid (PENG-6/PJ.09/2024)">Non-NPWP (NIK Valid)</span>
                                 @else
                                     <span class="badge badge-warning border text-warning" style="background-color: #fffbeb; font-weight: 600; font-size: 11px;" title="Dikenakan tarif +20% karena tidak memiliki NPWP dan NIK valid (UU PPh Pasal 21 ayat 5a)">Non-NPWP (+20%)</span>
@@ -309,17 +292,9 @@
                                 <div class="emp-tile-icon"><i class="fas fa-users text-primary" style="color: #0b52aa !important;"></i></div>
                                 <span>Status PTKP</span>
                             </div>
-                            @php
-                                $ptkp = ($this->isEditable ? $item->employee?->detail?->ptkp_status : null) ?? $item->ptkp_status ?? $item->employee?->detail?->ptkp_status;
-                                if (! ($ptkp instanceof \App\Enums\PtkpStatus) && is_string($ptkp)) {
-                                    $ptkp = \App\Enums\PtkpStatus::tryFrom($ptkp);
-                                }
-                                $ptkpVal = $ptkp instanceof \App\Enums\PtkpStatus ? $ptkp->value : (string) ($ptkp ?? 'TK/0');
-                                $ptkpDesc = $ptkp instanceof \App\Enums\PtkpStatus ? $ptkp->description() : 'Tidak Kawin, 0 Tanggungan';
-                            @endphp
                             <div class="emp-tile-right font-weight-600 text-dark">
-                                {{ $ptkpVal }}
-                                <span class="text-muted text-xs font-weight-normal">({{ $ptkpDesc }})</span>
+                                {{ $this->taxProfile['ptkp_value'] }}
+                                <span class="text-muted text-xs font-weight-normal">({{ $this->taxProfile['ptkp_description'] }})</span>
                             </div>
                         </div>
 
@@ -330,19 +305,9 @@
                                 <span>Skema Tarif</span>
                             </div>
                             <div class="emp-tile-right font-weight-600 text-dark text-right">
-                                @php
-                                    $taxMethod = ($this->isEditable ? $item->employee?->detail?->tax_method : null) ?? $item->tax_method ?? $item->employee?->detail?->tax_method ?? \App\Enums\TaxMethod::GROSS;
-                                    $terCat = ($this->isEditable ? ($item->employee?->detail?->ter_category ?? $item->ter_category) : null) ?? $item->ter_category ?? ($ptkp instanceof \App\Enums\PtkpStatus ? $ptkp->terCategory() : ($item->employee?->detail?->ter_category ?? 'A'));
-                                    $terRate = (float) ($item->ter_rate ?? 0);
-                                    if ($terRate <= 0 && $this->grossSalary > 0) {
-                                        $taxService = app(\App\Services\TaxCalculationService::class);
-                                        $baseTer = $taxService->getTerRate($terCat, $this->grossSalary);
-                                        $terRate = $isNonNpwpPenalized ? round($baseTer * 1.2, 6) : $baseTer;
-                                    }
-                                @endphp
                                 @if ($item->payrollPeriod->month == 12)
                                     <span class="text-info font-weight-bold">Pasal 17 UU HPP</span>
-                                    @if ($isNonNpwpPenalized)
+                                    @if ($this->taxProfile['non_npwp_penalized'])
                                         <span class="badge badge-warning ml-1 text-xs" style="font-size: 10px;" title="Termasuk penalti tarif 20% Non-NPWP">+20%</span>
                                     @endif
                                     <button type="button"
@@ -353,11 +318,11 @@
                                         <i class="fas fa-info-circle mr-1"></i>Rincian
                                     </button>
                                 @else
-                                    <span>TER {{ $terCat }}</span>
-                                    @if ($terRate > 0)
-                                        <span class="text-primary font-weight-bold ml-1" style="color: #0b52aa !important;">({{ number_format($terRate * 100, 2) }}%)</span>
+                                    <span>TER {{ $this->taxProfile['ter_category'] }}</span>
+                                    @if ($this->taxProfile['ter_rate'] > 0)
+                                        <span class="text-primary font-weight-bold ml-1" style="color: #0b52aa !important;">({{ number_format($this->taxProfile['ter_rate'] * 100, 2) }}%)</span>
                                     @endif
-                                    @if ($isNonNpwpPenalized)
+                                    @if ($this->taxProfile['non_npwp_penalized'])
                                         <span class="badge badge-warning ml-1 text-xs" style="font-size: 10px;" title="Termasuk penalti tarif 20% Non-NPWP">+20%</span>
                                     @endif
                                     <button type="button"
@@ -391,19 +356,12 @@
                                 <span>Riwayat Data</span>
                             </div>
                             <div class="emp-tile-right text-dark text-right font-weight-600" style="font-size: 12.5px;">
-                                @php
-                                    $creator = $period->creator ?? $period->submitter;
-                                    $creatorName = $creator?->name ?? 'Admin';
-                                    $updater = $item->updater ?? $period->updater;
-                                    $updaterName = $updater?->name;
-                                    $isDifferentUpdater = $updaterName && ($updater->id !== ($creator?->id ?? null));
-                                @endphp
-                                @if ($isDifferentUpdater)
-                                    <span>{{ $updaterName }}</span>
-                                    <span class="badge badge-light border text-info text-xs ml-1" style="font-size: 9.5px; font-weight: 500;" title="Dibuat oleh {{ $creatorName }}">Editor Terakhir</span>
-                                    <span class="text-muted text-xs font-weight-normal ml-1">({{ $creatorName }})</span>
+                                @if ($this->dataHistory['updater_differs'])
+                                    <span>{{ $this->dataHistory['updater_name'] }}</span>
+                                    <span class="badge badge-light border text-info text-xs ml-1" style="font-size: 9.5px; font-weight: 500;" title="Dibuat oleh {{ $this->dataHistory['creator_name'] }}">Editor Terakhir</span>
+                                    <span class="text-muted text-xs font-weight-normal ml-1">({{ $this->dataHistory['creator_name'] }})</span>
                                 @else
-                                    <span>{{ $creatorName }}</span>
+                                    <span>{{ $this->dataHistory['creator_name'] }}</span>
                                     <span class="badge badge-light border text-muted text-xs ml-1" style="font-size: 9.5px; font-weight: 500;">Pembuat</span>
                                 @endif
                             </div>
@@ -526,25 +484,11 @@
                                 </tr>
 
                                 <!-- Baris Gaji Pokok (Nomor 1) -->
-                                @php
-                                    $empFullSalary = (float) ($item->employee?->basic_salary ?? 0);
-                                    $isEmpProrated = $empFullSalary > 0 && (float) $item->basic_salary < $empFullSalary;
-                                    $prorateNoteText = $item->human_notes;
-                                    if ($isEmpProrated) {
-                                        $fmtBasic = 'Rp ' . number_format((float) $item->basic_salary, 0, ',', '.');
-                                        $fmtFull = 'Rp ' . number_format($empFullSalary, 0, ',', '.');
-                                        if (empty($prorateNoteText)) {
-                                            $prorateNoteText = "Gaji prorata {$fmtBasic} dari {$fmtFull}";
-                                        } elseif (! str_contains($prorateNoteText, 'dari Rp')) {
-                                            $prorateNoteText = preg_replace('/^Gaji prorata\s*/i', "Gaji prorata {$fmtBasic} dari {$fmtFull} - ", $prorateNoteText);
-                                        }
-                                    }
-                                @endphp
                                 <tr>
                                     <td class="text-center text-muted align-middle !px-3 !py-2.5" style="font-size: 12.5px;">1</td>
                                     <td class="align-middle !px-3 !py-2.5">
                                         <div class="text-dark" style="font-weight: 500; font-size: 13px;">Gaji Pokok Karyawan</div>
-                                        <div class="text-muted text-xs">{{ $prorateNoteText ?: 'Komponen dasar dari data master karyawan (otomatis tersinkron)' }}</div>
+                                        <div class="text-muted text-xs">{{ $this->basicSalaryNote ?: 'Komponen dasar dari data master karyawan (otomatis tersinkron)' }}</div>
                                     </td>
                                     <td class="text-right align-middle text-dark !px-3 !py-2.5" style="font-weight: 600; font-size: 13px;">
                                         {{ $item->formatted_basic_salary }}
@@ -831,48 +775,22 @@
                                 </tr>
 
                                 <!-- Potongan Kasbon Otomatis -->
-                                @foreach ($deductionRows as $index => $row)
+                                @foreach ($this->displayDeductionRows as $index => $row)
                                     @if (! empty($row['cash_advance_installment_id']))
-                                        @php
-                                            $deductionCounter++;
-                                            $rowAmt = (float) ($row['amount'] ?? 0);
-                                            $paidAmt = (float) ($row['installment_paid_amount'] ?? 0);
-                                            $remAmt = (float) ($row['advance_remaining_amount'] ?? 0);
-                                            $totalAdvance = (float) ($row['advance_total_amount'] ?? 0);
-                                            $instNum = $row['installment_number'] ?? null;
-                                            $instCount = $row['advance_installment_count'] ?? null;
-
-                                            if ($remAmt <= 0 && ! empty($row['cash_advance_installment_id'])) {
-                                                $instModel = \App\Models\CashAdvanceInstallment::with('cashAdvance')->find($row['cash_advance_installment_id']);
-                                                if ($instModel?->cashAdvance) {
-                                                    $remAmt = (float) $instModel->cashAdvance->remaining_amount;
-                                                    $totalAdvance = (float) $instModel->cashAdvance->amount;
-                                                    $instNum = $instNum ?? $instModel->installment_number;
-                                                    $instCount = $instCount ?? $instModel->cashAdvance->installment_count;
-                                                }
-                                            }
-                                            $instTotal = (float) ($row['installment_total_amount'] ?? 0);
-                                            if ($instTotal <= 0 && ! empty($row['cash_advance_installment_id'])) {
-                                                $instModel = $instModel ?? \App\Models\CashAdvanceInstallment::with('cashAdvance')->find($row['cash_advance_installment_id']);
-                                                if ($instModel) {
-                                                    $instTotal = (float) $instModel->amount;
-                                                }
-                                            }
-                                            $normalInstallment = max(0.0, round($instTotal - $paidAmt, 2));
-                                        @endphp
+                                        @php $deductionCounter++; @endphp
                                         <tr wire:key="deduction-row-kasbon-{{ $index }}">
                                             <td class="text-center text-muted align-middle !px-3 !py-2.5" style="font-size: 12.5px;">{{ $deductionCounter }}</td>
                                             <td class="align-middle !px-3 !py-2.5">
                                                 <div class="d-flex flex-column" style="gap: 2px;">
                                                     <div class="d-flex align-items-center flex-wrap" style="gap: 6px;">
                                                         <span class="text-dark font-weight-600" style="font-size: 13px;">{{ $row['name'] }}</span>
-                                                        @if ($rowAmt <= 0)
+                                                        @if ($row['amount_float'] <= 0)
                                                             <span class="badge badge-success text-xs" style="font-weight: 500;">
                                                                 <i class="fas fa-check-circle mr-1"></i>Sudah Lunas Lebih Awal
                                                             </span>
-                                                        @elseif ($paidAmt > 0)
+                                                        @elseif ($row['paid_amount'] > 0)
                                                             <span class="badge badge-info text-xs" style="font-weight: 500;">
-                                                                <i class="fas fa-info-circle mr-1"></i>Sudah Bayar Awal Rp {{ number_format($paidAmt, 0, ',', '.') }}
+                                                                <i class="fas fa-info-circle mr-1"></i>Sudah Bayar Awal Rp {{ number_format($row['paid_amount'], 0, ',', '.') }}
                                                             </span>
                                                         @endif
                                                     </div>
@@ -880,33 +798,30 @@
                                                     <div class="d-flex align-items-center flex-wrap text-muted" style="font-size: 11.5px; gap: 8px; margin-top: 2px;">
                                                         <span class="d-inline-flex align-items-center text-dark">
                                                             <i class="fas fa-hand-holding-usd text-warning mr-1.5" style="font-size: 12px;"></i>
-                                                            <span>Sisa Kasbon: <strong class="text-danger" style="font-weight: 700;">Rp {{ number_format($remAmt, 0, ',', '.') }}</strong></span>
-                                                            @if ($this->isEditable && $remAmt > $rowAmt)
+                                                            <span>Sisa Kasbon: <strong class="text-danger" style="font-weight: 700;">Rp {{ number_format($row['remaining_amount'], 0, ',', '.') }}</strong></span>
+                                                            @if ($this->isEditable && $row['remaining_amount'] > $row['amount_float'])
                                                                 <button type="button"
                                                                         wire:click="settleRemainingKasbon({{ $index }})"
                                                                         class="badge badge-warning text-dark border-0 ml-1.5 font-weight-600"
                                                                         style="cursor: pointer; font-size: 10.5px; padding: 2px 7px; border-radius: 6px;"
-                                                                        title="Klik untuk memasukkan pelunasan penuh sisa kasbon Rp {{ number_format($remAmt, 0, ',', '.') }}">
+                                                                        title="Klik untuk memasukkan pelunasan penuh sisa kasbon Rp {{ number_format($row['remaining_amount'], 0, ',', '.') }}">
                                                                     <i class="fas fa-coins mr-1"></i>Lunaskan Sisa
                                                                 </button>
                                                             @endif
                                                         </span>
-                                                        @if ($totalAdvance > 0)
+                                                        @if ($row['total_amount'] > 0)
                                                             <span style="color: #cbd5e1;">&bull;</span>
-                                                            <span>Total Pinjaman: <strong>Rp {{ number_format($totalAdvance, 0, ',', '.') }}</strong></span>
+                                                            <span>Total Pinjaman: <strong>Rp {{ number_format($row['total_amount'], 0, ',', '.') }}</strong></span>
                                                         @endif
-                                                        @if ($instNum && $instCount)
+                                                        @if ($row['installment_number'] && $row['installment_count'])
                                                             <span style="color: #cbd5e1;">&bull;</span>
                                                             <span class="badge badge-light border text-dark px-1.5 py-0" style="font-size: 11px; font-weight: 500; background-color: #f8fafc;">
-                                                                Cicilan {{ $instNum }} dari {{ $instCount }}
+                                                                Cicilan {{ $row['installment_number'] }} dari {{ $row['installment_count'] }}
                                                             </span>
                                                         @endif
                                                     </div>
 
-                                                    @php
-                                                        $isFinalPeriod = $this->item->employee?->contract_end_date && \Carbon\Carbon::parse($this->item->employee->contract_end_date)->lte($this->period->end_date);
-                                                    @endphp
-                                                    @if ($isFinalPeriod && $remAmt > 0)
+                                                    @if ($row['is_final_period'] && $row['remaining_amount'] > 0)
                                                         <div class="mt-1">
                                                             <span class="badge badge-warning text-dark text-xs font-weight-600" style="padding: 2px 8px;">
                                                                 <i class="fas fa-exclamation-triangle mr-1"></i>Periode Akhir Kerja (Selesai {{ $this->item->employee->contract_end_date->translatedFormat('d M Y') }}) - Sisa Pinjaman Perlu Penyelesaian
@@ -920,7 +835,7 @@
                                                     <div class="d-inline-flex flex-column align-items-end" style="width: 185px; max-width: 100%;">
                                                         <div class="input-group payroll-input-group w-100"
                                                              x-data="{
-                                                                 formatted: '{{ !empty($rowAmt) ? number_format((float) $rowAmt, 0, ',', '.') : '' }}',
+                                                                 formatted: '{{ !empty($row['amount_float']) ? number_format((float) $row['amount_float'], 0, ',', '.') : '' }}',
                                                                  format(val) {
                                                                      if (val === '' || val === null || typeof val === 'undefined') return '';
                                                                      let num = Math.round(Number(String(val).replace(/\D/g, '')));
@@ -943,7 +858,7 @@
                                                                  }
                                                              }"
                                                              @deduction-reset-{{ $index }}.window="applyReset($event.detail?.amount ?? $event.detail)"
-                                                             wire:key="deduction-kasbon-input-group-{{ $index }}-{{ (float) $rowAmt }}">
+                                                             wire:key="deduction-kasbon-input-group-{{ $index }}-{{ (float) $row['amount_float'] }}">
                                                             <div class="input-group-prepend">
                                                                 <span class="input-group-text payroll-addon payroll-addon-deduction font-weight-bold">-Rp</span>
                                                             </div>
@@ -962,8 +877,8 @@
                                                         @enderror
                                                     </div>
                                                 @else
-                                                    <span class="{{ $rowAmt > 0 ? 'text-danger' : 'text-muted' }}" style="font-weight: 600; font-size: 13.5px;">
-                                                        -Rp {{ number_format($rowAmt, 0, ',', '.') }}
+                                                    <span class="{{ $row['amount_float'] > 0 ? 'text-danger' : 'text-muted' }}" style="font-weight: 600; font-size: 13.5px;">
+                                                        -Rp {{ number_format($row['amount_float'], 0, ',', '.') }}
                                                     </span>
                                                 @endif
                                             </td>
@@ -971,7 +886,7 @@
                                                 @if ($this->isEditable)
                                                     <button type="button"
                                                             wire:click="resetKasbonDeduction({{ $index }})"
-                                                            x-on:click="$dispatch('deduction-reset-{{ $index }}', { amount: {{ $normalInstallment }} })"
+                                                            x-on:click="$dispatch('deduction-reset-{{ $index }}', { amount: {{ $row['normal_installment'] }} })"
                                                             class="btn btn-info btn-action"
                                                             title="Reset ke tagihan cicilan normal">
                                                         <i class="fas fa-undo-alt"></i>
@@ -982,13 +897,12 @@
                                             </td>
                                             <td class="text-center align-middle text-muted !px-3 !py-2.5">
                                                 @if ($this->isEditable)
-                                                    @php $isKasbonEnabled = $row['is_enabled'] ?? true; @endphp
-                                                    <label class="custom-switch payroll-status-toggle m-0" wire:key="deduction-kasbon-toggle-{{ $index }}-{{ $isKasbonEnabled ? '1' : '0' }}" title="{{ $isKasbonEnabled ? 'Aktif' : 'Nonaktif' }}">
-                                                        <input type="checkbox" wire:click="toggleDeductionEnabled({{ $index }})" @checked($isKasbonEnabled) class="custom-switch-input">
+                                                    <label class="custom-switch payroll-status-toggle m-0" wire:key="deduction-kasbon-toggle-{{ $index }}-{{ $row['enabled'] ? '1' : '0' }}" title="{{ $row['enabled'] ? 'Aktif' : 'Nonaktif' }}">
+                                                        <input type="checkbox" wire:click="toggleDeductionEnabled({{ $index }})" @checked($row['enabled']) class="custom-switch-input">
                                                         <span class="custom-switch-indicator"></span>
                                                     </label>
                                                 @else
-                                                    @if (($row['is_enabled'] ?? true) && $rowAmt > 0)
+                                                    @if (($row['is_enabled'] ?? true) && $row['amount_float'] > 0)
                                                         <span class="badge badge-light border text-success text-xs font-weight-600">Aktif</span>
                                                     @else
                                                         <span class="badge badge-light border text-muted text-xs">Nonaktif</span>
@@ -1000,22 +914,17 @@
                                 @endforeach
 
                                 <!-- Potongan PPh 21 Otomatis -->
-                                @foreach ($deductionRows as $index => $row)
+                                @foreach ($this->displayDeductionRows as $index => $row)
                                     @if ((($row['category'] ?? '') === 'tax' || str_starts_with(strtolower(trim($row['name'] ?? '')), 'pph 21')) && empty($row['cash_advance_installment_id']))
-                                        @php
-                                            $deductionCounter++;
-                                            $isEnabled = $row['is_enabled'] ?? true;
-                                            $rowTaxAmt = (float) ($row['amount'] ?? 0);
-                                            $isFinalTaxPeriod = ((int) ($item->payrollPeriod->month ?? 1)) === 12 || (bool) $item->is_final_tax_period;
-                                        @endphp
-                                        <tr wire:key="deduction-row-tax-{{ $index }}" class="{{ ! $isEnabled ? 'payroll-row-disabled' : '' }}">
-                                            <td class="text-center {{ $isEnabled ? 'text-muted' : 'payroll-text-disabled' }} align-middle !px-3 !py-2.5" style="font-size: 12.5px;">{{ $deductionCounter }}</td>
+                                        @php $deductionCounter++; @endphp
+                                        <tr wire:key="deduction-row-tax-{{ $index }}" class="{{ ! $row['enabled'] ? 'payroll-row-disabled' : '' }}">
+                                            <td class="text-center {{ $row['enabled'] ? 'text-muted' : 'payroll-text-disabled' }} align-middle !px-3 !py-2.5" style="font-size: 12.5px;">{{ $deductionCounter }}</td>
                                             <td class="align-middle !px-3 !py-2.5">
-                                                <div class="{{ $isEnabled ? 'text-dark' : 'payroll-text-disabled' }} d-flex align-items-center" style="font-weight: 500; font-size: 13px;">
+                                                <div class="{{ $row['enabled'] ? 'text-dark' : 'payroll-text-disabled' }} d-flex align-items-center" style="font-weight: 500; font-size: 13px;">
                                                     {{ $row['name'] }}
-                                                    @if ($isEnabled)
-                                                        @if ($isFinalTaxPeriod)
-                                                            @if ($rowTaxAmt < 0)
+                                                    @if ($row['enabled'])
+                                                        @if ($row['is_final_tax_period'])
+                                                            @if ($row['amount_float'] < 0)
                                                                 <span class="badge badge-light border text-success ml-2 text-xs" style="font-weight: 500;">Lebih Bayar (Dikembalikan)</span>
                                                             @else
                                                                 <span class="badge badge-light border text-info ml-2 text-xs" style="font-weight: 500;">Pasal 17 Progresif</span>
@@ -1028,11 +937,11 @@
                                                     @endif
                                                 </div>
                                             </td>
-                                            <td class="text-right align-middle !px-3 !py-2.5 {{ $isEnabled ? ($rowTaxAmt < 0 ? 'text-success' : 'text-danger') : 'payroll-amount-disabled' }}" style="font-weight: 600; font-size: 13px;">
-                                                @if ($rowTaxAmt < 0)
-                                                    +Rp {{ number_format(abs($rowTaxAmt), 0, ',', '.') }}
-                                                @elseif ($rowTaxAmt > 0)
-                                                    -Rp {{ number_format($rowTaxAmt, 0, ',', '.') }}
+                                            <td class="text-right align-middle !px-3 !py-2.5 {{ $row['enabled'] ? ($row['amount_float'] < 0 ? 'text-success' : 'text-danger') : 'payroll-amount-disabled' }}" style="font-weight: 600; font-size: 13px;">
+                                                @if ($row['amount_float'] < 0)
+                                                    +Rp {{ number_format(abs($row['amount_float']), 0, ',', '.') }}
+                                                @elseif ($row['amount_float'] > 0)
+                                                    -Rp {{ number_format($row['amount_float'], 0, ',', '.') }}
                                                 @else
                                                     Rp 0
                                                 @endif
@@ -1048,16 +957,16 @@
                                             <td class="text-center align-middle !px-3 !py-2.5">
                                                 @if ($this->isEditable)
                                                     <label class="custom-switch payroll-status-toggle m-0"
-                                                           wire:key="deduction-tax-toggle-{{ $index }}-{{ $isEnabled ? '1' : '0' }}"
-                                                           title="{{ $isEnabled ? 'Aktif' : 'Nonaktif' }}">
+                                                           wire:key="deduction-tax-toggle-{{ $index }}-{{ $row['enabled'] ? '1' : '0' }}"
+                                                           title="{{ $row['enabled'] ? 'Aktif' : 'Nonaktif' }}">
                                                         <input type="checkbox"
                                                                wire:click="toggleDeductionEnabled({{ $index }})"
-                                                               @checked($isEnabled)
+                                                               @checked($row['enabled'])
                                                                class="custom-switch-input">
                                                         <span class="custom-switch-indicator"></span>
                                                     </label>
                                                 @else
-                                                    @if ($isEnabled)
+                                                    @if ($row['enabled'])
                                                         <span class="badge badge-light border text-success text-xs font-weight-600">Aktif</span>
                                                     @else
                                                         <span class="badge badge-light border text-muted text-xs">Nonaktif</span>
@@ -1069,40 +978,30 @@
                                 @endforeach
 
                                 <!-- Potongan BPJS Karyawan Otomatis -->
-                                @foreach ($deductionRows as $index => $row)
+                                @foreach ($this->displayDeductionRows as $index => $row)
                                     @if ((($row['category'] ?? '') === 'bpjs' || (!empty($row['is_system']) && str_starts_with(strtoupper($row['name'] ?? ''), 'BPJS'))) && empty($row['cash_advance_installment_id']) && ($row['category'] ?? '') !== 'tax' && strcasecmp(trim($row['name'] ?? ''), 'pph 21') !== 0)
-                                        @php
-                                            $deductionCounter++;
-                                            $isEnabled = $row['is_enabled'] ?? true;
-                                            $rowLower = strtolower(trim($row['name'] ?? ''));
-                                            $bpjsCalcKey = 'bpjs_kes_emp';
-                                            if (str_contains($rowLower, 'jht')) {
-                                                $bpjsCalcKey = 'bpjs_jht_emp';
-                                            } elseif (str_contains($rowLower, 'pensiun') || str_contains($rowLower, 'jp')) {
-                                                $bpjsCalcKey = 'bpjs_jp_emp';
-                                            }
-                                        @endphp
-                                        <tr wire:key="deduction-row-bpjs-{{ $index }}" class="{{ ! $isEnabled ? 'payroll-row-disabled' : '' }}">
-                                            <td class="text-center {{ $isEnabled ? 'text-muted' : 'payroll-text-disabled' }} align-middle !px-3 !py-2.5" style="font-size: 12.5px;">{{ $deductionCounter }}</td>
+                                        @php $deductionCounter++; @endphp
+                                        <tr wire:key="deduction-row-bpjs-{{ $index }}" class="{{ ! $row['enabled'] ? 'payroll-row-disabled' : '' }}">
+                                            <td class="text-center {{ $row['enabled'] ? 'text-muted' : 'payroll-text-disabled' }} align-middle !px-3 !py-2.5" style="font-size: 12.5px;">{{ $deductionCounter }}</td>
                                             <td class="align-middle !px-3 !py-2.5">
-                                                <div class="{{ $isEnabled ? 'text-dark' : 'payroll-text-disabled' }} d-flex align-items-center" style="font-weight: 500; font-size: 13px;">
+                                                <div class="{{ $row['enabled'] ? 'text-dark' : 'payroll-text-disabled' }} d-flex align-items-center" style="font-weight: 500; font-size: 13px;">
                                                     {{ $row['name'] }}
-                                                    @if ($isEnabled)
+                                                    @if ($row['enabled'])
                                                         <span class="badge badge-light border text-info ml-2 text-xs" style="font-weight: 500;">BPJS Otomatis</span>
                                                     @else
                                                         <span class="badge badge-light border text-muted ml-2 text-xs" style="font-weight: 500;">Nonaktif</span>
                                                     @endif
                                                 </div>
                                                 @if (! empty($row['notes']))
-                                                    <div class="{{ $isEnabled ? 'text-muted' : 'payroll-text-disabled' }} text-xs">{{ $row['notes'] }}</div>
+                                                    <div class="{{ $row['enabled'] ? 'text-muted' : 'payroll-text-disabled' }} text-xs">{{ $row['notes'] }}</div>
                                                 @endif
                                             </td>
-                                            <td class="text-right align-middle !px-3 !py-2.5 {{ $isEnabled ? 'text-danger' : 'payroll-amount-disabled' }}" style="font-weight: 600; font-size: 13px;">
+                                            <td class="text-right align-middle !px-3 !py-2.5 {{ $row['enabled'] ? 'text-danger' : 'payroll-amount-disabled' }}" style="font-weight: 600; font-size: 13px;">
                                                 -Rp {{ number_format((float) ($row['amount'] ?? 0), 0, ',', '.') }}
                                             </td>
                                             <td class="text-center align-middle !px-3 !py-2.5">
                                                 <button type="button"
-                                                        wire:click="showCalculationDetail('{{ $bpjsCalcKey }}')"
+                                                        wire:click="showCalculationDetail('{{ $row['bpjs_calc_key'] }}')"
                                                         class="btn btn-info btn-action"
                                                         title="Lihat Rincian Perhitungan {{ $row['name'] }}">
                                                     <i class="fas fa-calculator"></i>
@@ -1111,16 +1010,16 @@
                                             <td class="text-center align-middle !px-3 !py-2.5">
                                                 @if ($this->isEditable)
                                                     <label class="custom-switch payroll-status-toggle m-0"
-                                                           wire:key="deduction-bpjs-toggle-{{ $index }}-{{ $isEnabled ? '1' : '0' }}"
-                                                           title="{{ $isEnabled ? 'Aktif' : 'Nonaktif' }}">
+                                                           wire:key="deduction-bpjs-toggle-{{ $index }}-{{ $row['enabled'] ? '1' : '0' }}"
+                                                           title="{{ $row['enabled'] ? 'Aktif' : 'Nonaktif' }}">
                                                         <input type="checkbox"
                                                                wire:click="toggleDeductionEnabled({{ $index }})"
-                                                               @checked($isEnabled)
+                                                               @checked($row['enabled'])
                                                                class="custom-switch-input">
                                                         <span class="custom-switch-indicator"></span>
                                                     </label>
                                                 @else
-                                                    @if ($isEnabled)
+                                                    @if ($row['enabled'])
                                                         <span class="badge badge-light border text-success text-xs font-weight-600">Aktif</span>
                                                     @else
                                                         <span class="badge badge-light border text-muted text-xs">Nonaktif</span>
@@ -1141,7 +1040,7 @@
                                 </tr>
 
                                 <!-- Editable Deduction Rows -->
-                                @foreach ($deductionRows as $index => $row)
+                                @foreach ($this->displayDeductionRows as $index => $row)
                                     @if (empty($row['is_system']) && empty($row['cash_advance_installment_id']) && ($row['category'] ?? '') !== 'tax' && ($row['category'] ?? '') !== 'bpjs' && strcasecmp(trim($row['name'] ?? ''), 'pph 21') !== 0 && ! str_starts_with(strtoupper($row['name'] ?? ''), 'BPJS'))
                                         @if (! $this->isEditable && empty($row['name']) && empty($row['amount']))
                                             @continue
@@ -1661,33 +1560,26 @@
                     @if ($calculationDetail)
                         <!-- Calculation Detail Tile Group (Sesuai Desain Ringkasan Profil Karyawan) -->
                         <div class="emp-tile-group mb-3 text-left">
-                            @foreach ($calculationDetail['rows'] ?? [] as $row)
-                                @php
-                                    $isHighlight = ! empty($row['is_bold']);
-                                    $hasAmount = ! empty($row['amount']) && $row['amount'] !== '—';
-                                    $displayValue = $hasAmount ? $row['amount'] : ($row['calc'] ?? '—');
-                                    $formulaText = ($hasAmount && ! empty($row['calc']) && $row['calc'] !== '—') ? $row['calc'] : null;
-                                    $icon = $row['icon'] ?? 'fas fa-receipt';
-                                @endphp
+                            @foreach ($this->calculationDetailRows as $row)
                                 <div class="emp-tile-row bg-white" style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9;">
                                     <div class="emp-tile-left d-flex align-items-center min-w-0 pr-2">
                                         <div class="emp-tile-icon" style="background-color: #f0f7ff; color: #0b52aa !important; width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11.5px; margin-right: 10px; flex-shrink: 0;">
-                                            <i class="{{ $icon }}"></i>
+                                            <i class="{{ $row['icon'] }}"></i>
                                         </div>
                                         <div class="min-w-0 text-left">
                                             <div class="text-truncate" style="font-size: 13px; font-weight: 500; color: #0f172a; line-height: 1.35;" title="{{ $row['component'] }}">
                                                 {{ $row['component'] }}
                                             </div>
-                                            @if ($formulaText)
-                                                <div class="text-truncate" style="font-size: 11.5px; font-weight: 400; color: #475569; line-height: 1.3; margin-top: 4px;" title="{{ $formulaText }}">
-                                                    {{ $formulaText }}
+                                            @if ($row['formula_text'])
+                                                <div class="text-truncate" style="font-size: 11.5px; font-weight: 400; color: #475569; line-height: 1.3; margin-top: 4px;" title="{{ $row['formula_text'] }}">
+                                                    {{ $row['formula_text'] }}
                                                 </div>
                                             @endif
                                         </div>
                                     </div>
                                     <div class="emp-tile-right text-nowrap pl-2 d-flex align-items-center justify-content-end" style="flex-shrink: 0;">
-                                        <span style="font-size: 13px; {{ $isHighlight ? 'font-weight: 600; color: #0b52aa !important;' : 'font-weight: 500; color: #0f172a;' }}">
-                                            {{ $displayValue }}
+                                        <span style="font-size: 13px; {{ $row['is_highlight'] ? 'font-weight: 600; color: #0b52aa !important;' : 'font-weight: 500; color: #0f172a;' }}">
+                                            {{ $row['display_value'] }}
                                         </span>
                                     </div>
                                 </div>
