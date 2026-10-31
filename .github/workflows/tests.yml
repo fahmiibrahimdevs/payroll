@@ -65,7 +65,9 @@ jobs:
         run: |
           php -r "file_exists('.env') || copy('.env.example', '.env');"
           php artisan key:generate --force
-          php artisan migrate:fresh --seed --force
+          # APP_ENV=testing wajib: tanpa ini seeder memasukkan data demo
+          # (.env berisi APP_ENV=local) dan test yang butuh DB kosong gagal.
+          APP_ENV=testing php artisan migrate:fresh --seed --force
 
       - name: Run test suite
         run: vendor/bin/phpunit
