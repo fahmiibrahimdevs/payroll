@@ -378,9 +378,16 @@
                                                     <i class="far fa-calendar-alt" style="color: #0b52aa; font-size: 13px;"></i>
                                                 </span>
                                                 <div>
-                                                    <a href="{{ route('overtimes.periods.attendances', $per) }}" class="font-weight-700 text-decoration-none" style="font-size: 13.5px; color: #0f172a !important;" title="{{ $per->reference_number }}">
-                                                        {{ $per->name }}
-                                                    </a>
+                                                    {{-- Route attendances hanya untuk admin; role lain lihat teks biasa --}}
+                                                    @if (auth()->user()?->hasRole('admin'))
+                                                        <a href="{{ route('overtimes.periods.attendances', $per) }}" class="font-weight-700 text-decoration-none" style="font-size: 13.5px; color: #0f172a !important;" title="{{ $per->reference_number }}">
+                                                            {{ $per->name }}
+                                                        </a>
+                                                    @else
+                                                        <span class="font-weight-700" style="font-size: 13.5px; color: #0f172a !important;" title="{{ $per->reference_number }}">
+                                                            {{ $per->name }}
+                                                        </span>
+                                                    @endif
                                                     <div class="mt-0.5" style="font-size: 11.5px; color: #64748b; font-weight: 400; line-height: 1.25;">
                                                         <span class="badge badge-light border text-dark font-weight-normal mr-1" style="font-size: 9.5px; padding: 2px 5px;">Jum'at - Kamis</span>
                                                         {{ $per->start_date->locale('id')->translatedFormat('d M') }} &ndash; {{ $per->end_date->locale('id')->translatedFormat('d M Y') }}
@@ -458,10 +465,12 @@
                                         <!-- AKSI -->
                                         <td class="text-center align-middle text-nowrap !py-3 !px-3.5">
                                             @if (auth()->user()?->hasRole(['admin', 'direktur']))
-                                                <!-- ATUR PRESENSI & SYNC ABSENSI -->
-                                                <a href="{{ route('overtimes.periods.attendances', $per) }}" class="btn btn-warning btn-action mr-1" title="Atur Presensi, Uang Makan & Tarik Data Absensi">
-                                                    <i class="fas fa-calendar-check"></i>
-                                                </a>
+                                                <!-- ATUR PRESENSI & SYNC ABSENSI (route admin-only) -->
+                                                @if (auth()->user()?->hasRole('admin'))
+                                                    <a href="{{ route('overtimes.periods.attendances', $per) }}" class="btn btn-warning btn-action mr-1" title="Atur Presensi, Uang Makan & Tarik Data Absensi">
+                                                        <i class="fas fa-calendar-check"></i>
+                                                    </a>
+                                                @endif
 
                                                 <!-- CETAK SLIP GAJI MINGGUAN -->
                                                 <a href="{{ route('overtimes.periods.print', $per) }}" target="_blank" class="btn btn-info btn-action mr-1" title="Cetak Seluruh Slip Mingguan">

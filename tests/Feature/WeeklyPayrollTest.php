@@ -3,12 +3,15 @@
 namespace Tests\Feature;
 
 use App\Enums\EmploymentStatus;
+use App\Enums\OvertimePeriodStatus;
+use App\Livewire\Payrolls\WeeklyPayrollIndex;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\OvertimePeriod;
 use App\Models\Position;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\OvertimeService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Livewire\Livewire;
@@ -35,21 +38,21 @@ class WeeklyPayrollTest extends TestCase
         $karyawanRole = Role::firstOrCreate(['name' => 'karyawan'], ['display_name' => 'Karyawan']);
 
         $this->adminUser = User::factory()->create([
-            'email' => 'admin_test_' . uniqid() . '@example.com',
+            'email' => 'admin_test_'.uniqid().'@example.com',
             'email_verified_at' => now(),
             'is_active' => true,
         ]);
         $this->adminUser->addRole($adminRole);
 
         $this->direkturUser = User::factory()->create([
-            'email' => 'direktur_test_' . uniqid() . '@example.com',
+            'email' => 'direktur_test_'.uniqid().'@example.com',
             'email_verified_at' => now(),
             'is_active' => true,
         ]);
         $this->direkturUser->addRole($direkturRole);
 
         $this->karyawanUser = User::factory()->create([
-            'email' => 'karyawan_test_' . uniqid() . '@example.com',
+            'email' => 'karyawan_test_'.uniqid().'@example.com',
             'email_verified_at' => now(),
             'is_active' => true,
         ]);
@@ -94,7 +97,7 @@ class WeeklyPayrollTest extends TestCase
         $endDate = '2026-10-29';   // Kamis (7 hari)
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Payrolls\WeeklyPayrollIndex::class)
+            ->test(WeeklyPayrollIndex::class)
             ->set('period_start_date', $startDate)
             ->set('period_end_date', $endDate)
             ->set('period_name', 'Gaji Mingguan W43 Test')
@@ -113,7 +116,7 @@ class WeeklyPayrollTest extends TestCase
     public function test_default_period_name_is_without_parentheses_dates(): void
     {
         $comp = Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Payrolls\WeeklyPayrollIndex::class);
+            ->test(WeeklyPayrollIndex::class);
 
         $periodName = $comp->get('period_name');
         $this->assertMatchesRegularExpression('/^Gaji Mingguan W\d+$/', $periodName);
@@ -123,7 +126,7 @@ class WeeklyPayrollTest extends TestCase
     public function test_updating_start_date_snaps_to_friday_and_calculates_thursday_end_date(): void
     {
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Payrolls\WeeklyPayrollIndex::class)
+            ->test(WeeklyPayrollIndex::class)
             ->set('period_start_date', '2026-10-28')
             ->assertSet('period_start_date', '2026-10-23')
             ->assertSet('period_end_date', '2026-10-29')
@@ -133,7 +136,7 @@ class WeeklyPayrollTest extends TestCase
     public function test_validation_rejects_invalid_cycle_end_date(): void
     {
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Payrolls\WeeklyPayrollIndex::class)
+            ->test(WeeklyPayrollIndex::class)
             ->set('period_start_date', '2026-10-23') // Friday
             ->set('period_end_date', '2026-10-28')   // Wednesday (Invalid)
             ->set('period_name', 'Gaji Mingguan Test')
@@ -144,18 +147,18 @@ class WeeklyPayrollTest extends TestCase
     public function test_admin_and_direktur_can_delete_draft_period(): void
     {
         $period = OvertimePeriod::create([
-            'reference_number' => 'PER-TEST-' . uniqid(),
+            'reference_number' => 'PER-TEST-'.uniqid(),
             'name' => 'Gaji Mingguan W99 To Delete',
             'start_date' => '2026-10-23',
             'end_date' => '2026-10-29',
-            'status' => \App\Enums\OvertimePeriodStatus::DRAFT,
+            'status' => OvertimePeriodStatus::DRAFT,
             'created_by' => $this->adminUser->id,
             'employee_count' => 1,
             'grand_total' => 0,
         ]);
 
         Livewire::actingAs($this->direkturUser)
-            ->test(\App\Livewire\Payrolls\WeeklyPayrollIndex::class)
+            ->test(WeeklyPayrollIndex::class)
             ->call('confirmDelete', $period->id)
             ->assertDispatched('swal:confirm-delete')
             ->call('deletePeriod', $period->id)
@@ -167,18 +170,18 @@ class WeeklyPayrollTest extends TestCase
     public function test_cannot_delete_paid_period(): void
     {
         $paidPeriod = OvertimePeriod::create([
-            'reference_number' => 'PER-PAID-' . uniqid(),
+            'reference_number' => 'PER-PAID-'.uniqid(),
             'name' => 'Gaji Mingguan W98 Paid',
             'start_date' => '2026-10-23',
             'end_date' => '2026-10-29',
-            'status' => \App\Enums\OvertimePeriodStatus::PAID,
+            'status' => OvertimePeriodStatus::PAID,
             'created_by' => $this->adminUser->id,
             'employee_count' => 1,
             'grand_total' => 1000000,
         ]);
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Payrolls\WeeklyPayrollIndex::class)
+            ->test(WeeklyPayrollIndex::class)
             ->call('deletePeriod', $paidPeriod->id)
             ->assertDispatched('swal:alert', fn ($event, $params) => ($params[0]['type'] ?? '') === 'error');
 
@@ -191,18 +194,18 @@ class WeeklyPayrollTest extends TestCase
     public function test_karyawan_cannot_delete_period(): void
     {
         $period = OvertimePeriod::create([
-            'reference_number' => 'PER-DRAFT-' . uniqid(),
+            'reference_number' => 'PER-DRAFT-'.uniqid(),
             'name' => 'Gaji Mingguan W97 Draft',
             'start_date' => '2026-10-23',
             'end_date' => '2026-10-29',
-            'status' => \App\Enums\OvertimePeriodStatus::DRAFT,
+            'status' => OvertimePeriodStatus::DRAFT,
             'created_by' => $this->adminUser->id,
             'employee_count' => 1,
             'grand_total' => 0,
         ]);
 
         Livewire::actingAs($this->karyawanUser)
-            ->test(\App\Livewire\Payrolls\WeeklyPayrollIndex::class)
+            ->test(WeeklyPayrollIndex::class)
             ->call('deletePeriod', $period->id)
             ->assertForbidden();
 
@@ -212,25 +215,25 @@ class WeeklyPayrollTest extends TestCase
     public function test_admin_can_confirm_and_mark_period_paid(): void
     {
         $period = OvertimePeriod::create([
-            'reference_number' => 'PER-DRAFT-' . uniqid(),
+            'reference_number' => 'PER-DRAFT-'.uniqid(),
             'name' => 'Gaji Mingguan W96 Paid Test',
             'start_date' => '2026-10-23',
             'end_date' => '2026-10-29',
-            'status' => \App\Enums\OvertimePeriodStatus::DRAFT,
+            'status' => OvertimePeriodStatus::DRAFT,
             'created_by' => $this->adminUser->id,
             'employee_count' => 1,
             'grand_total' => 500000,
         ]);
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Payrolls\WeeklyPayrollIndex::class)
+            ->test(WeeklyPayrollIndex::class)
             ->call('confirmMarkPaid', $period->id)
             ->assertDispatched('swal:confirm')
             ->call('markPeriodPaid', $period->id)
             ->assertDispatched('swal:alert');
 
         $this->assertEquals(
-            \App\Enums\OvertimePeriodStatus::PAID,
+            OvertimePeriodStatus::PAID,
             $period->fresh()->status
         );
     }
@@ -244,7 +247,7 @@ class WeeklyPayrollTest extends TestCase
         $endDate = '2026-10-29';
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Payrolls\WeeklyPayrollIndex::class)
+            ->test(WeeklyPayrollIndex::class)
             ->set('period_start_date', $startDate)
             ->set('period_end_date', $endDate)
             ->set('period_name', 'Gaji Mingguan W43 Empty Test')
@@ -256,5 +259,25 @@ class WeeklyPayrollTest extends TestCase
         $this->assertDatabaseMissing('overtime_periods', [
             'name' => 'Gaji Mingguan W43 Empty Test',
         ]);
+    }
+
+    public function test_attendance_setup_button_and_period_link_are_admin_only(): void
+    {
+        // Route overtimes.periods.attendances hanya untuk admin; tombol dan link
+        // nama periode di Gaji Mingguan tidak boleh tampil untuk direktur.
+        app(OvertimeService::class)->createPeriod([
+            'name' => 'Periode Gating Test',
+            'start_date' => Carbon::now()->previous(Carbon::FRIDAY)->format('Y-m-d'),
+            'end_date' => Carbon::now()->previous(Carbon::FRIDAY)->addDays(6)->format('Y-m-d'),
+        ], $this->adminUser);
+
+        Livewire::actingAs($this->adminUser)
+            ->test(WeeklyPayrollIndex::class)
+            ->assertSee('Atur Presensi');
+
+        Livewire::actingAs($this->direkturUser)
+            ->test(WeeklyPayrollIndex::class)
+            ->assertDontSee('Atur Presensi')
+            ->assertSee('Periode Gating Test');
     }
 }

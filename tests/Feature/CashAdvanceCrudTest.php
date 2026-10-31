@@ -2160,4 +2160,33 @@ class CashAdvanceCrudTest extends TestCase
             ->call('edit', 'InvalidHashXYZ')
             ->assertNotFound();
     }
+
+    public function test_installment_schedule_clamps_short_months_when_disbursed_on_day_29_to_31(): void
+    {
+        // Tanggal cair 31 Januari: cicilan pertama harus 28 Feb (bukan 3 Mar),
+        // dan tanggal tempo tidak boleh melompat bulan karena overflow Carbon.
+        $cashAdvance = CashAdvance::create([
+            'reference_number' => 'KB-202601-CLAMP',
+            'employee_id' => $this->employee->id,
+            'amount' => 3000000,
+            'remaining_amount' => 3000000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 3,
+            'monthly_installment' => 1000000,
+            'disbursement_date' => '2026-01-31',
+            'reason' => 'Uji klem bulan pendek',
+            'status' => CashAdvanceStatus::PENDING->value,
+            'submitted_by' => $this->adminUser->id,
+        ]);
+
+        app(CashAdvanceService::class)->approveCashAdvance($cashAdvance, $this->direkturUser);
+
+        $dueDates = CashAdvanceInstallment::where('cash_advance_id', $cashAdvance->id)
+            ->orderBy('installment_number')
+            ->pluck('due_date')
+            ->map(fn ($d) => $d instanceof Carbon ? $d->toDateString() : (string) $d)
+            ->all();
+
+        $this->assertSame(['2026-02-28', '2026-03-31', '2026-04-30'], $dueDates);
+    }
 }

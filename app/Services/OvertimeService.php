@@ -544,6 +544,20 @@ class OvertimeService
                 ->lockForUpdate()
                 ->findOrFail($submission->id);
 
+            // Guard status: admin hanya boleh menolak di tahap verifikasi admin,
+            // direktur di tahap approval — pengajuan APPROVED/REJECTED tidak boleh
+            // di-flip (mencegah total periode mingguan & payroll tidak konsisten).
+            $expectedStatus = $actor->hasRole('admin')
+                ? OvertimeStatus::PENDING_ADMIN
+                : OvertimeStatus::PENDING_DIREKTUR;
+
+            if ($lockedSubmission->status !== $expectedStatus) {
+                throw new InvalidArgumentException(
+                    "Pengajuan lembur {$lockedSubmission->reference_number} berstatus "
+                    ."{$lockedSubmission->status->fullLabel()} dan tidak dapat ditolak."
+                );
+            }
+
             $newStatus = $actor->hasRole('admin') ? OvertimeStatus::REJECTED_ADMIN : OvertimeStatus::REJECTED_DIREKTUR;
 
             $lockedSubmission->update([
@@ -1072,9 +1086,11 @@ class OvertimeService
      */
     public function getOvertimeChartData(?int $employeeId = null): array
     {
+        // Kursor selalu tanggal 1: subMonths dari tanggal 29-31 bisa overflow
+        // (31 Jul - 5 bln = 31 Feb -> 2-3 Mar) sehingga jendela tren salah bulan.
         $now = Carbon::now();
-        $startDate = (clone $now)->subMonths(5)->startOfMonth()->toDateString();
-        $endDate = (clone $now)->endOfMonth()->toDateString();
+        $startDate = $now->copy()->startOfMonth()->subMonths(5)->toDateString();
+        $endDate = $now->copy()->endOfMonth()->toDateString();
 
         $baseQuery = OvertimeSubmission::query()
             ->where('status', OvertimeStatus::APPROVED)
@@ -1088,7 +1104,7 @@ class OvertimeService
         $allSubmissions = (clone $baseQuery)->with('employee.department')->get();
 
         // 1. Monthly trend (6 months)
-        $monthCursor = (clone $now)->subMonths(5)->startOfMonth();
+        $monthCursor = $now->copy()->startOfMonth()->subMonths(5);
         $monthlyLabels = [];
         $monthlyHours = [];
         $monthlyPay = [];

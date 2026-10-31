@@ -6,15 +6,16 @@ use App\Enums\EmploymentStatus;
 use App\Enums\OvertimePeriodStatus;
 use App\Enums\OvertimeStatus;
 use App\Enums\OvertimeSubmissionSource;
+use App\Enums\OvertimeType;
+use App\Livewire\Overtimes\Index;
 use App\Livewire\Overtimes\Index as OvertimeIndex;
 use App\Livewire\Overtimes\PeriodAttendance;
 use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\OvertimePeriod;
+use App\Models\OvertimePeriodAttendance;
 use App\Models\OvertimeSubmission;
-use App\Models\PayrollItem;
-use App\Models\PayrollPeriod;
 use App\Models\Position;
 use App\Models\Role;
 use App\Models\User;
@@ -31,8 +32,11 @@ class OvertimeTest extends TestCase
     use DatabaseTransactions;
 
     protected User $adminUser;
+
     protected User $direkturUser;
+
     protected User $karyawanUser;
+
     protected Employee $employee;
 
     protected function setUp(): void
@@ -44,21 +48,21 @@ class OvertimeTest extends TestCase
         $karyawanRole = Role::firstOrCreate(['name' => 'karyawan'], ['display_name' => 'Karyawan']);
 
         $this->adminUser = User::factory()->create([
-            'email' => 'admin_' . uniqid() . '@example.com',
+            'email' => 'admin_'.uniqid().'@example.com',
             'email_verified_at' => now(),
             'is_active' => true,
         ]);
         $this->adminUser->addRole($adminRole);
 
         $this->direkturUser = User::factory()->create([
-            'email' => 'direktur_' . uniqid() . '@example.com',
+            'email' => 'direktur_'.uniqid().'@example.com',
             'email_verified_at' => now(),
             'is_active' => true,
         ]);
         $this->direkturUser->addRole($direkturRole);
 
         $this->karyawanUser = User::factory()->create([
-            'email' => 'karyawan_' . uniqid() . '@example.com',
+            'email' => 'karyawan_'.uniqid().'@example.com',
             'email_verified_at' => now(),
             'is_active' => true,
         ]);
@@ -504,13 +508,13 @@ class OvertimeTest extends TestCase
 
         // Test Livewire dedicated attendance page
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Overtimes\PeriodAttendance::class, ['period' => $period])
+            ->test(PeriodAttendance::class, ['period' => $period])
             // Toggle a day (e.g. remove 'sat' from 6 default days -> becomes 5 days)
             ->call('toggleAttendanceDay', $this->employee->id, 'sat')
             ->call('save')
             ->assertDispatched('swal:alert');
 
-        $att = \App\Models\OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+        $att = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
             ->where('employee_id', $this->employee->id)
             ->first();
 
@@ -520,7 +524,7 @@ class OvertimeTest extends TestCase
 
         // Also test direct numeric days count update (Opsi A) & rate update
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Overtimes\PeriodAttendance::class, ['period' => $period])
+            ->test(PeriodAttendance::class, ['period' => $period])
             ->call('updateAttendedDaysCount', $this->employee->id, 4)
             ->call('updateMealAllowanceRate', $this->employee->id, 30000)
             ->call('save');
@@ -649,7 +653,7 @@ class OvertimeTest extends TestCase
         $submission = OvertimeSubmission::create([
             'reference_number' => $service->generateSubmissionReference(),
             'employee_id' => $this->employee->id,
-            'overtime_type' => \App\Enums\OvertimeType::DAILY,
+            'overtime_type' => OvertimeType::DAILY,
             'date' => Carbon::today()->format('Y-m-d'),
             'start_time' => null,
             'end_time' => null,
@@ -686,7 +690,7 @@ class OvertimeTest extends TestCase
     public function test_daily_overtime_helpers_and_accessors(): void
     {
         $submission = new OvertimeSubmission([
-            'overtime_type' => \App\Enums\OvertimeType::DAILY,
+            'overtime_type' => OvertimeType::DAILY,
             'start_time' => null,
             'end_time' => null,
             'duration_hours' => 1.00,
@@ -707,7 +711,7 @@ class OvertimeTest extends TestCase
     public function test_user_can_switch_overtime_type_via_badge_tab(): void
     {
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Overtimes\Index::class)
+            ->test(Index::class)
             ->assertSet('form.overtime_type', 'hourly')
             ->call('setOvertimeType', 'daily')
             ->assertSet('form.overtime_type', 'daily')
@@ -727,11 +731,11 @@ class OvertimeTest extends TestCase
             'reason' => 'Pemasangan server malam hari oleh admin',
         ], $this->adminUser);
 
-        $this->assertEquals(\App\Enums\OvertimeSubmissionSource::ADMIN, $submission->submission_source);
+        $this->assertEquals(OvertimeSubmissionSource::ADMIN, $submission->submission_source);
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Overtimes\Index::class)
-            ->assertSeeHtml('wire:click="confirmDelete(\'' . $submission->hashid . '\')')
+            ->test(Index::class)
+            ->assertSeeHtml('wire:click="confirmDelete(\''.$submission->hashid.'\')')
             ->call('confirmDelete', $submission->hashid)
             ->assertDispatched('swal:confirm-delete')
             ->call('deleteSubmission', ['id' => $submission->id])
@@ -754,11 +758,11 @@ class OvertimeTest extends TestCase
 
         // Simulate submission being locked into a period
         $period = OvertimePeriod::create([
-            'reference_number' => 'PRD-' . uniqid(),
+            'reference_number' => 'PRD-'.uniqid(),
             'name' => 'Periode Uji',
             'start_date' => Carbon::now()->startOfWeek()->toDateString(),
             'end_date' => Carbon::now()->endOfWeek()->toDateString(),
-            'status' => \App\Enums\OvertimePeriodStatus::DRAFT,
+            'status' => OvertimePeriodStatus::DRAFT,
             'total_hours' => 1,
             'total_overtime_pay' => 150000,
             'grand_total' => 150000,
@@ -767,7 +771,7 @@ class OvertimeTest extends TestCase
         $submission->update(['overtime_period_id' => $period->id]);
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Overtimes\Index::class)
+            ->test(Index::class)
             ->call('confirmDelete', $submission->id)
             ->assertDispatched('swal:alert');
 
@@ -788,7 +792,7 @@ class OvertimeTest extends TestCase
         ], $this->adminUser);
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Overtimes\Index::class)
+            ->test(Index::class)
             ->set('activeTab', 'periods')
             ->set('statusFilter', 'approved')
             ->call('directToSubmission', $submission->id)
@@ -830,7 +834,7 @@ class OvertimeTest extends TestCase
         ], $this->adminUser);
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Overtimes\Index::class)
+            ->test(Index::class)
             ->assertSeeHtml('id="pendingAdminReviewModal"')
             ->assertSeeHtml('id="pendingDirectorReviewModal"')
             ->assertSee('Admin pending review test')
@@ -888,12 +892,12 @@ class OvertimeTest extends TestCase
 
         // Bulk action test
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Overtimes\PeriodAttendance::class, ['period' => $period])
+            ->test(PeriodAttendance::class, ['period' => $period])
             ->call('updateAttendedDaysCount', $this->employee->id, 3)
             ->call('setAllEmployeesFullWeek')
             ->call('save');
 
-        $att = \App\Models\OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+        $att = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
             ->where('employee_id', $this->employee->id)
             ->first();
 
@@ -921,7 +925,7 @@ class OvertimeTest extends TestCase
         $endDate = Carbon::now()->endOfWeek();
         $service = app(OvertimeService::class);
         $period = $service->createPeriod([
-            'name' => 'Periode Filter Nol Hari Test ' . uniqid(),
+            'name' => 'Periode Filter Nol Hari Test '.uniqid(),
             'start_date' => $startDate->format('Y-m-d'),
             'end_date' => $endDate->format('Y-m-d'),
         ], $this->adminUser);
@@ -947,7 +951,7 @@ class OvertimeTest extends TestCase
         ]);
 
         $component = Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Overtimes\PeriodAttendance::class, ['period' => $period]);
+            ->test(PeriodAttendance::class, ['period' => $period]);
 
         $filtered = $component->viewData('filteredAttendances');
         $this->assertArrayHasKey($attActive->employee_id, $filtered);
@@ -979,7 +983,7 @@ class OvertimeTest extends TestCase
         $endDate = Carbon::now()->endOfWeek();
         $service = app(OvertimeService::class);
         $period = $service->createPeriod([
-            'name' => 'Periode Cetak Filter Nol Hari Test ' . uniqid(),
+            'name' => 'Periode Cetak Filter Nol Hari Test '.uniqid(),
             'start_date' => $startDate->format('Y-m-d'),
             'end_date' => $endDate->format('Y-m-d'),
         ], $this->adminUser);
@@ -996,7 +1000,7 @@ class OvertimeTest extends TestCase
             'total_meal_allowance' => 0,
             'total_daily_wage' => 0,
         ]);
-        \App\Models\OvertimeSubmission::where('overtime_period_id', $period->id)
+        OvertimeSubmission::where('overtime_period_id', $period->id)
             ->where('employee_id', $attZero->employee_id)
             ->delete();
 
@@ -1026,7 +1030,7 @@ class OvertimeTest extends TestCase
         $endDate = Carbon::now()->endOfWeek();
         $service = app(OvertimeService::class);
         $period = $service->createPeriod([
-            'name' => 'Periode Bayar Mingguan Test ' . uniqid(),
+            'name' => 'Periode Bayar Mingguan Test '.uniqid(),
             'start_date' => $startDate->format('Y-m-d'),
             'end_date' => $endDate->format('Y-m-d'),
         ], $this->adminUser);
@@ -1092,7 +1096,7 @@ class OvertimeTest extends TestCase
     public function test_karyawan_can_submit_overnight_overtime_crossing_midnight(): void
     {
         Livewire::actingAs($this->karyawanUser)
-            ->test(\App\Livewire\Overtimes\Index::class)
+            ->test(Index::class)
             ->call('openCreateModal')
             ->set('form.overtime_type', 'hourly')
             ->set('form.date', '2026-10-28')
@@ -1198,7 +1202,7 @@ class OvertimeTest extends TestCase
             'sequence_key' => 'LMB-202611',
         ]);
         $this->assertDatabaseHas('overtime_sequences', [
-            'sequence_key' => 'PER-LMB-' . $now->format('Y-W'),
+            'sequence_key' => 'PER-LMB-'.$now->format('Y-W'),
         ]);
     }
 
@@ -1222,5 +1226,136 @@ class OvertimeTest extends TestCase
         $this->assertEquals(1.0, (float) $submission->duration_hours);
         $this->assertEquals(0, (float) $submission->meal_allowance);
         $this->assertEquals(25000, (float) $submission->total_amount); // 1 hr * 25,000 rate
+    }
+
+    private function createSubmissionWithStatus(OvertimeStatus $status): OvertimeSubmission
+    {
+        return OvertimeSubmission::create([
+            'reference_number' => app(OvertimeService::class)->generateSubmissionReference(),
+            'employee_id' => $this->employee->id,
+            'date' => Carbon::today()->format('Y-m-d'),
+            'start_time' => '17:00',
+            'end_time' => '19:00',
+            'duration_hours' => 2.00,
+            'hourly_rate' => 25000.00,
+            'meal_allowance' => 0,
+            'total_amount' => 50000.00,
+            'reason' => 'Pengujian guard penolakan',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => $status,
+            'submitted_by' => $this->karyawanUser->id,
+        ]);
+    }
+
+    public function test_admin_cannot_reject_approved_submission(): void
+    {
+        $submission = $this->createSubmissionWithStatus(OvertimeStatus::APPROVED);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        app(OvertimeService::class)->rejectSubmission($submission, 'Alasan uji guard', $this->adminUser);
+    }
+
+    public function test_admin_cannot_reject_submission_pending_direktur(): void
+    {
+        $submission = $this->createSubmissionWithStatus(OvertimeStatus::PENDING_DIREKTUR);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        app(OvertimeService::class)->rejectSubmission($submission, 'Alasan uji guard', $this->adminUser);
+    }
+
+    public function test_direktur_cannot_reject_submission_pending_admin(): void
+    {
+        $submission = $this->createSubmissionWithStatus(OvertimeStatus::PENDING_ADMIN);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        app(OvertimeService::class)->rejectSubmission($submission, 'Alasan uji guard', $this->direkturUser);
+    }
+
+    public function test_direktur_can_reject_pending_direktur_submission(): void
+    {
+        $submission = $this->createSubmissionWithStatus(OvertimeStatus::PENDING_DIREKTUR);
+
+        app(OvertimeService::class)->rejectSubmission($submission, 'Tidak sesuai kebutuhan operasional', $this->direkturUser);
+
+        $submission->refresh();
+        $this->assertSame(OvertimeStatus::REJECTED_DIREKTUR->value, $submission->status->value);
+    }
+
+    public function test_admin_can_reject_pending_admin_submission(): void
+    {
+        $submission = $this->createSubmissionWithStatus(OvertimeStatus::PENDING_ADMIN);
+
+        app(OvertimeService::class)->rejectSubmission($submission, 'Dokumen pendukung kurang', $this->adminUser);
+
+        $submission->refresh();
+        $this->assertSame(OvertimeStatus::REJECTED_ADMIN->value, $submission->status->value);
+    }
+
+    public function test_overtime_chart_covers_six_distinct_months(): void
+    {
+        $chart = app(OvertimeService::class)->getOvertimeChartData();
+
+        $labels = $chart['monthly']['labels'];
+        $this->assertCount(6, $labels);
+        // Bulan duplikat = tanda overflow subMonths saat dijalankan tanggal 29-31.
+        $this->assertCount(6, array_unique($labels));
+        $this->assertSame(Carbon::now()->locale('id')->isoFormat('MMM'), end($labels));
+    }
+
+    public function test_update_attended_days_count_preserves_recorded_sunday(): void
+    {
+        $service = app(OvertimeService::class);
+        $startDate = Carbon::now()->startOfWeek();
+        $endDate = Carbon::now()->endOfWeek();
+
+        $sub = OvertimeSubmission::create([
+            'reference_number' => $service->generateSubmissionReference(),
+            'employee_id' => $this->employee->id,
+            'date' => $startDate->copy()->addDays(1)->format('Y-m-d'),
+            'start_time' => '17:00',
+            'end_time' => '19:00',
+            'duration_hours' => 2.00,
+            'hourly_rate' => 25000.00,
+            'meal_allowance' => 0,
+            'total_amount' => 50000.00,
+            'reason' => 'Kerja tambahan Minggu',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->karyawanUser->id,
+            'approved_at' => now(),
+        ]);
+
+        $period = $service->createPeriod([
+            'name' => 'Periode Minggu Test',
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $endDate->format('Y-m-d'),
+        ], $this->adminUser);
+
+        // Simulasikan karyawan dengan kehadiran Minggu tercatat.
+        $att = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+            ->where('employee_id', $this->employee->id)
+            ->first();
+        $att->update([
+            'attended_days' => 7,
+            'attendance_days' => ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+            'meal_allowance_per_day' => 10000,
+            'daily_rate' => 100000,
+        ]);
+
+        $this->actingAs($this->adminUser);
+
+        Livewire::test(PeriodAttendance::class, ['period' => $period])
+            ->call('updateAttendedDaysCount', $this->employee->id, 5)
+            ->call('save')
+            ->assertDispatched('swal:alert');
+
+        $att->refresh();
+        $this->assertEquals(5, $att->attended_days);
+        // 'sun' harus tetap dalam daftar 5 hari (4 hari kerja + Minggu).
+        $this->assertContains('sun', $att->attendance_days);
+        $this->assertCount(5, $att->attendance_days);
     }
 }

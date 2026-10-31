@@ -259,9 +259,20 @@ class PeriodAttendance extends Component
             return;
         }
 
-        $count = max(0, min(6, (int) $count));
         $allDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-        $selectedDays = array_slice($allDays, 0, $count);
+        $existingDays = $this->periodAttendances[$employeeId]['attendance_days'] ?? [];
+        $hasSunday = is_array($existingDays) && in_array('sun', $existingDays, true);
+
+        // Hari Minggu yang tercatat harus ikut dalam daftar (upah/uang makan hari
+        // Minggu), kuota hari naik menjadi 7 saat Minggu tercatat.
+        $count = max(0, min($hasSunday ? 7 : 6, (int) $count));
+
+        if ($hasSunday && $count > 0) {
+            $selectedDays = array_slice($allDays, 0, $count - 1);
+            $selectedDays[] = 'sun';
+        } else {
+            $selectedDays = array_slice($allDays, 0, $count);
+        }
 
         $this->periodAttendances[$employeeId]['attended_days'] = $count;
         $this->periodAttendances[$employeeId]['attendance_days'] = $selectedDays;

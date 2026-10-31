@@ -403,9 +403,11 @@ class CashAdvanceService
     public function getRecapChartData(): array
     {
         return Cache::remember(self::RECAP_CHART_CACHE_KEY, 1800, function () {
+            // Kursor selalu tanggal 1: subMonths dari tanggal 29-31 bisa overflow
+            // (31 Jul - 5 bln = 31 Feb -> 2-3 Mar) sehingga jendela tren salah bulan.
             $now = Carbon::now();
-            $startDate = (clone $now)->subMonths(5)->startOfMonth()->toDateString();
-            $endDate = (clone $now)->endOfMonth()->toDateString();
+            $startDate = $now->copy()->startOfMonth()->subMonths(5)->toDateString();
+            $endDate = $now->copy()->endOfMonth()->toDateString();
 
             $disbursedByMonth = CashAdvance::query()
                 ->whereIn('status', [
@@ -433,7 +435,7 @@ class CashAdvanceService
             $monthlyPaid = [];
 
             for ($i = 5; $i >= 0; $i--) {
-                $mDate = (clone $now)->subMonths($i);
+                $mDate = $now->copy()->startOfMonth()->subMonths($i);
                 $key = $mDate->format('Y-m');
 
                 $monthlyLabels[] = $mDate->translatedFormat('M Y');
@@ -767,7 +769,9 @@ class CashAdvanceService
                         : $baseMonthly;
 
                     $allocatedTotal += $installmentAmount;
-                    $dueDate = $startDate->copy()->addMonths($i);
+                    // addMonthsNoOverflow: tanggal cair 29-31 tidak melompat bulan
+                    // (31 Jan + 1 = 28 Feb, bukan 3 Mar) - klem ke hari terakhir bulan.
+                    $dueDate = $startDate->copy()->addMonthsNoOverflow($i);
 
                     CashAdvanceInstallment::create([
                         'cash_advance_id' => $lockedCashAdvance->id,

@@ -3,16 +3,18 @@
 namespace App\Livewire\Overtimes;
 
 use App\Enums\EmploymentStatus;
-use App\Enums\OvertimePeriodStatus;
 use App\Enums\OvertimeStatus;
 use App\Livewire\Forms\OvertimeSubmissionForm;
+use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\OvertimePeriod;
+use App\Models\OvertimePeriodAttendance;
 use App\Models\OvertimeSubmission;
 use App\Services\OvertimeService;
 use App\Support\IdObfuscator;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
@@ -156,6 +158,7 @@ class Index extends Component
                     'title' => 'Akses Ditolak',
                     'message' => 'Profil karyawan Anda tidak ditemukan di sistem.',
                 ]);
+
                 return;
             }
 
@@ -165,6 +168,7 @@ class Index extends Component
                     'title' => 'Tarif Lembur Belum Diset',
                     'message' => 'Anda belum memiliki tarif lembur (per jam atau harian). Silakan koordinasi dengan Admin HRD terlebih dahulu.',
                 ]);
+
                 return;
             }
 
@@ -240,6 +244,7 @@ class Index extends Component
                 'title' => 'Tidak Dapat Disesuaikan',
                 'message' => 'Pengajuan ini sudah tidak berstatus Menunggu Verifikasi Admin.',
             ]);
+
             return;
         }
 
@@ -392,6 +397,7 @@ class Index extends Component
                 'title' => 'Alasan Penolakan Tidak Valid',
                 'message' => 'Alasan penolakan minimal 5 karakter.',
             ]);
+
             return;
         }
 
@@ -473,6 +479,7 @@ class Index extends Component
                 'title' => 'Tidak Dapat Dihapus',
                 'message' => 'Pengajuan lembur ini sudah masuk ke dalam periode lembur mingguan.',
             ]);
+
             return;
         }
 
@@ -704,9 +711,9 @@ class Index extends Component
         // tunjangan makan tidak dibuatkan default 6 hari untuk karyawan yang tidak hadir.
         $linkedEmpIds = $period->submissions()->pluck('employee_id')->unique()->all();
 
-        $startDate = \Carbon\Carbon::parse($period->start_date)->toDateString();
-        $endDate = \Carbon\Carbon::parse($period->end_date)->toDateString();
-        $attendances = \App\Models\Attendance::whereBetween('date', [$startDate, $endDate])
+        $startDate = Carbon::parse($period->start_date)->toDateString();
+        $endDate = Carbon::parse($period->end_date)->toDateString();
+        $attendances = Attendance::whereBetween('date', [$startDate, $endDate])
             ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
             ->get()
             ->groupBy('employee_id');
@@ -739,7 +746,7 @@ class Index extends Component
                 if ($hasAttendanceLog) {
                     $attendedDaysKeys = [];
                     foreach ($attendances->get($emp->id, collect()) as $att) {
-                        $k = $dayKeyMap[\Carbon\Carbon::parse($att->date)->dayOfWeek] ?? null;
+                        $k = $dayKeyMap[Carbon::parse($att->date)->dayOfWeek] ?? null;
                         if ($k && ! in_array($k, $attendedDaysKeys, true)) {
                             $attendedDaysKeys[] = $k;
                         }
@@ -757,7 +764,7 @@ class Index extends Component
                     $daysList = $defaultDays;
                 }
 
-                $att = \App\Models\OvertimePeriodAttendance::create([
+                $att = OvertimePeriodAttendance::create([
                     'overtime_period_id' => $period->id,
                     'employee_id' => $emp->id,
                     'meal_allowance_type' => $emp->meal_allowance_type ?: 'standar',
@@ -799,7 +806,9 @@ class Index extends Component
      */
     public function toggleAttendanceDay(int $employeeId, string $day): void
     {
-        if (! isset($this->periodAttendances[$employeeId])) return;
+        if (! isset($this->periodAttendances[$employeeId])) {
+            return;
+        }
 
         $days = $this->periodAttendances[$employeeId]['attendance_days'];
         $day = strtolower($day);
@@ -820,11 +829,24 @@ class Index extends Component
      */
     public function updateAttendedDaysCount(int $employeeId, mixed $count): void
     {
-        if (! isset($this->periodAttendances[$employeeId])) return;
+        if (! isset($this->periodAttendances[$employeeId])) {
+            return;
+        }
 
-        $count = max(0, min(6, (int) $count));
         $allDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-        $selectedDays = array_slice($allDays, 0, $count);
+        $existingDays = $this->periodAttendances[$employeeId]['attendance_days'] ?? [];
+        $hasSunday = is_array($existingDays) && in_array('sun', $existingDays, true);
+
+        // Hari Minggu yang tercatat harus ikut dalam daftar (upah/uang makan hari
+        // Minggu), kuota hari naik menjadi 7 saat Minggu tercatat.
+        $count = max(0, min($hasSunday ? 7 : 6, (int) $count));
+
+        if ($hasSunday && $count > 0) {
+            $selectedDays = array_slice($allDays, 0, $count - 1);
+            $selectedDays[] = 'sun';
+        } else {
+            $selectedDays = array_slice($allDays, 0, $count);
+        }
 
         $this->periodAttendances[$employeeId]['attended_days'] = $count;
         $this->periodAttendances[$employeeId]['attendance_days'] = $selectedDays;
@@ -844,7 +866,9 @@ class Index extends Component
      */
     public function updateMealAllowanceRate(int $employeeId, mixed $rate): void
     {
-        if (! isset($this->periodAttendances[$employeeId])) return;
+        if (! isset($this->periodAttendances[$employeeId])) {
+            return;
+        }
 
         $this->periodAttendances[$employeeId]['meal_allowance_per_day'] = max(0, (float) $rate);
         $this->recalcEmployeeMealTotal($employeeId);
@@ -906,7 +930,7 @@ class Index extends Component
                 ->withCount('submissions')
                 ->latest('start_date')
                 ->paginate($this->perPage, ['*'], 'periodsPage')
-            : (new \Illuminate\Pagination\LengthAwarePaginator([], 0, $this->perPage, 1, ['pageName' => 'periodsPage']));
+            : (new LengthAwarePaginator([], 0, $this->perPage, 1, ['pageName' => 'periodsPage']));
 
         // Statistics: Consolidated single query with conditional aggregation (1 query instead of 6 separate queries)
         $currentMonthStart = Carbon::now()->startOfMonth()->format('Y-m-d');
@@ -914,14 +938,14 @@ class Index extends Component
 
         $statsRow = OvertimeSubmission::query()
             ->when($isKaryawan, fn ($q) => $q->where('employee_id', $effectiveEmployeeId))
-            ->selectRaw("
+            ->selectRaw('
                 COUNT(CASE WHEN date BETWEEN ? AND ? THEN 1 END) as total_this_month,
                 COALESCE(SUM(CASE WHEN date BETWEEN ? AND ? THEN duration_hours ELSE 0 END), 0) as total_hours_month,
                 COUNT(CASE WHEN status = ? THEN 1 END) as pending_admin,
                 COUNT(CASE WHEN status = ? THEN 1 END) as pending_direktur,
                 COUNT(CASE WHEN status = ? AND date BETWEEN ? AND ? THEN 1 END) as approved_this_month,
                 COALESCE(SUM(CASE WHEN status = ? AND date BETWEEN ? AND ? THEN total_amount ELSE 0 END), 0) as total_amount_approved
-            ", [
+            ', [
                 $currentMonthStart, $currentMonthEnd,
                 $currentMonthStart, $currentMonthEnd,
                 OvertimeStatus::PENDING_ADMIN->value,
@@ -940,7 +964,7 @@ class Index extends Component
             'pending_direktur' => (int) ($statsRow?->pending_direktur ?? 0),
             'approved_this_month' => (int) ($statsRow?->approved_this_month ?? 0),
             'total_amount_approved' => $totalAmountApproved,
-            'formatted_approved_amount' => 'Rp ' . number_format($totalAmountApproved, 0, ',', '.'),
+            'formatted_approved_amount' => 'Rp '.number_format($totalAmountApproved, 0, ',', '.'),
         ];
 
         // Eligible employees for admin selection (either has hourly rate or daily rate)
