@@ -35,41 +35,18 @@
 
     {{-- Banner Callout Penyesuaian Gaji (.bd-callout) - Khusus Admin & Direktur --}}
     @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur'))
-        @php
-            $calloutClass = match ($progressionStatus['status']) {
-                'stagnant' => 'bd-callout-warning',
-                'recently_raised' => 'bd-callout-success',
-                default => 'bd-callout-info',
-            };
-            $calloutIcon = match ($progressionStatus['status']) {
-                'stagnant' => 'fa-exclamation-triangle',
-                'recently_raised' => 'fa-check-circle',
-                default => 'fa-info-circle',
-            };
-            $calloutTitle = match ($progressionStatus['status']) {
-                'stagnant' => 'Perhatian: Karyawan Mengalami Stagnasi Gaji',
-                'recently_raised' => 'Status Gaji Terkini: Penyesuaian Baru Tercatat',
-                default => 'Status Riwayat & Evaluasi Gaji Karyawan',
-            };
-            $calloutDesc = match ($progressionStatus['status']) {
-                'stagnant' => $progressionStatus['note'] . '. Pertimbangkan evaluasi berkala kompensasi untuk karyawan ini.',
-                'recently_raised' => $progressionStatus['note'] . '. Gaji pokok karyawan telah diperbarui dalam sistem payroll.',
-                default => $progressionStatus['note'] . '. Pantau perkembangan kompensasi dan catat penyesuaian gaji berkala karyawan bila diperlukan.',
-            };
-        @endphp
-
-        <div class="bd-callout {{ $calloutClass }} mb-3" role="alert">
+        <div class="bd-callout {{ $this->progressionCallout['class'] }} mb-3" role="alert">
             <div class="callout-inner-flex">
                 <div class="callout-content-group">
                     <div class="bd-callout-icon mr-3">
-                        <i class="fas {{ $calloutIcon }}"></i>
+                        <i class="fas {{ $this->progressionCallout['icon'] }}"></i>
                     </div>
                     <div class="callout-text-body">
                         <div class="bd-callout-title">
-                            {{ $calloutTitle }}
+                            {{ $this->progressionCallout['title'] }}
                         </div>
                         <div class="bd-callout-desc">
-                            {{ $calloutDesc }}
+                            {{ $this->progressionCallout['desc'] }}
                         </div>
                     </div>
                 </div>

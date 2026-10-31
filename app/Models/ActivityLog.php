@@ -124,4 +124,50 @@ class ActivityLog extends Model
             }
         );
     }
+
+    /**
+     * Get the timeline icon background classes for this log,
+     * based on level first, then falling back to the action name.
+     */
+    public function levelIconBg(): string
+    {
+        $level = strtolower($this->level ?? 'info');
+        $action = strtolower($this->action ?? '');
+
+        return match ($level) {
+            'error', 'critical' => 'bg-danger text-white shadow-danger',
+            'warning', 'warn' => 'bg-warning text-white shadow-warning',
+            'debug' => 'bg-dark text-white',
+            default => match ($action) {
+                'create', 'store' => 'bg-success text-white shadow-success',
+                'delete', 'destroy' => 'bg-danger text-white shadow-danger',
+                'login', 'logout' => 'bg-info text-white shadow-info',
+                default => 'bg-primary text-white shadow-primary',
+            },
+        };
+    }
+
+    /**
+     * Get the FontAwesome icon class for this log,
+     * based on the action name first, then falling back to the level.
+     */
+    public function levelIcon(): string
+    {
+        $level = strtolower($this->level ?? 'info');
+        $action = strtolower($this->action ?? '');
+
+        return match ($action) {
+            'create', 'store' => 'fas fa-plus',
+            'update', 'edit' => 'fas fa-pencil-alt',
+            'delete', 'destroy' => 'fas fa-trash',
+            'login' => 'fas fa-sign-in-alt',
+            'logout' => 'fas fa-sign-out-alt',
+            'view', 'show' => 'fas fa-eye',
+            default => match ($level) {
+                'error', 'critical' => 'fas fa-times-circle',
+                'warning', 'warn' => 'fas fa-exclamation-triangle',
+                default => 'fas fa-clipboard-list',
+            },
+        };
+    }
 }

@@ -20,10 +20,6 @@
                 @if (isset($expiringEmployees) && $expiringEmployees->total() > 0)
                     <div class="d-flex flex-column" style="gap: 10px;">
                         @foreach ($expiringEmployees as $emp)
-                            @php
-                                $isOverdue = $emp->contract_end_date && now()->startOfDay()->gt($emp->contract_end_date->startOfDay());
-                                $isToday = $emp->contract_end_date && now()->startOfDay()->equalTo($emp->contract_end_date->startOfDay());
-                            @endphp
                             <div class="p-2.5 p-sm-3 bg-white" style="border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);" wire:key="expiring-emp-{{ $emp->id }}">
                                 <!-- Baris 1: Identitas Karyawan & Status Durasi Kontrak -->
                                 <div class="d-flex justify-content-between align-items-center mb-1.5" style="gap: 10px;">
@@ -42,7 +38,7 @@
                                         <span class="{{ $emp->employment_status_badge_class }} text-xs font-weight-500">
                                             {{ $emp->employment_status_label }}
                                         </span>
-                                        <div style="font-size: 11px; margin-top: 3px; color: {{ $isOverdue || $isToday ? '#dc2626' : '#d97706' }}; font-weight: 600;">
+                                        <div style="font-size: 11px; margin-top: 3px; color: {{ in_array($emp->contract_end_status, ['overdue', 'today']) ? '#dc2626' : '#d97706' }}; font-weight: 600;">
                                             {{ $emp->remaining_contract_label }}
                                         </div>
                                     </div>
@@ -53,7 +49,7 @@
                                     <div class="min-w-0" style="flex-grow: 1;">
                                         <div style="font-size: 12px; line-height: 1.35;">
                                             <span class="font-weight-500 text-dark">Berakhir:</span>
-                                            <span style="font-weight: 500; color: {{ $isOverdue || $isToday ? '#dc2626' : '#1e293b' }};">
+                                            <span style="font-weight: 500; color: {{ in_array($emp->contract_end_status, ['overdue', 'today']) ? '#dc2626' : '#1e293b' }};">
                                                 {{ $emp->contract_end_date ? $emp->contract_end_date->format('d M Y') : '-' }}
                                             </span>
                                         </div>

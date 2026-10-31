@@ -17,16 +17,11 @@
                         <!-- Top Row: Karyawan (Avatar + Nama + Dept/Jabatan) & Badges (Status + Skema) -->
                         <div class="cash-advance-card-top">
                             <div class="cash-advance-card-employee">
-                                @php
-                                    $empName = $selectedCashAdvance->employee?->full_name ?: 'Karyawan';
-                                    $words = preg_split('/\s+/', trim($empName));
-                                    $initials = strtoupper(substr($words[0] ?? 'K', 0, 1) . (isset($words[1]) ? substr($words[1], 0, 1) : ''));
-                                @endphp
                                 <div class="cash-advance-card-avatar !bg-slate-100 !text-slate-700 !border-slate-300" aria-hidden="true">
-                                    {{ $initials }}
+                                    {{ $selectedCashAdvance->employee?->initials ?? 'K' }}
                                 </div>
                                 <div class="cash-advance-card-employee-details">
-                                    <div class="cash-advance-card-employee-name">{{ $empName }}</div>
+                                    <div class="cash-advance-card-employee-name">{{ $selectedCashAdvance->employee?->full_name ?: 'Karyawan' }}</div>
                                     <div class="cash-advance-card-employee-dept">
                                         {{ $selectedCashAdvance->employee?->department?->name ?? 'Tanpa Departemen' }}
                                         <span class="cash-advance-card-dot">&bull;</span>
@@ -75,30 +70,14 @@
                             </div>
                         </div>
 
-                        @php
-                            $progress = (float) $selectedCashAdvance->progress_percentage;
-                            if ($progress >= 100) {
-                                $progressFillClass = 'bg-success';
-                                $progressTextClass = 'text-success';
-                            } elseif ($progress >= 75) {
-                                $progressFillClass = 'bg-info';
-                                $progressTextClass = 'text-info';
-                            } elseif ($progress >= 40) {
-                                $progressFillClass = 'bg-warning';
-                                $progressTextClass = 'text-warning';
-                            } else {
-                                $progressFillClass = 'bg-danger';
-                                $progressTextClass = 'text-danger';
-                            }
-                        @endphp
                         <!-- Mini Progress Bar Pelunasan -->
                         <div class="cash-advance-card-progress-wrap">
                             <div class="cash-advance-card-progress-label-row !text-[12px]">
                                 <span class="cash-advance-card-progress-title !text-[12px]">Progress Pelunasan</span>
-                                <span class="cash-advance-card-progress-percentage {{ $progressTextClass }} !text-[13px]">{{ $selectedCashAdvance->progress_percentage }}%</span>
+                                <span class="cash-advance-card-progress-percentage {{ $this->detailProgress['text_class'] }} !text-[13px]">{{ $selectedCashAdvance->progress_percentage }}%</span>
                             </div>
                             <div class="cash-advance-card-progress-track !h-[7px]">
-                                <div class="cash-advance-card-progress-fill {{ $progressFillClass }}" style="width: {{ min(100, max(0, $progress)) }}%;"></div>
+                                <div class="cash-advance-card-progress-fill {{ $this->detailProgress['fill_class'] }}" style="width: {{ min(100, max(0, $this->detailProgress['percentage'])) }}%;"></div>
                             </div>
                         </div>
 
@@ -186,10 +165,7 @@
                                 </div>
                                 <div class="space-y-2">
                                     @forelse ($selectedCashAdvance->payments as $pay)
-                                        @php
-                                            $isHighlighted = ((int) $highlightPaymentId === (int) $pay->id);
-                                        @endphp
-                                        <div id="pay-card-{{ $pay->id }}" class="border rounded-lg p-2.5 transition-all duration-200 {{ $isHighlighted ? 'bg-blue-50/70 border-blue-500 ring-2 ring-blue-200 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300' }}" wire:key="pay-card-{{ $pay->id }}">
+                                        <div id="pay-card-{{ $pay->id }}" class="border rounded-lg p-2.5 transition-all duration-200 {{ ((int) $highlightPaymentId === (int) $pay->id) ? 'bg-blue-50/70 border-blue-500 ring-2 ring-blue-200 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300' }}" wire:key="pay-card-{{ $pay->id }}">
                                             <!-- Line 1: NO REFERENCE, STATUS & JUMLAH -->
                                             <div class="flex items-center justify-between gap-2 flex-wrap">
                                                 <div class="d-flex align-items-center gap-1.5 flex-wrap">

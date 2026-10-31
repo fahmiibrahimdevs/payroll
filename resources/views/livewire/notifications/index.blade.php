@@ -42,39 +42,29 @@
                             <i class="fas fa-circle-notch fa-spin mr-1"></i> Memuat...
                         </div>
                         @forelse ($history as $notification)
-                            @php
-                                $data = $notification->data;
-                                $isUnread = $notification->read_at === null;
-                                $levelIconStyle = match ($data['level'] ?? 'info') {
-                                    'success' => 'background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 5px 12px rgba(22, 163, 74, 0.28);',
-                                    'danger' => 'background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 5px 12px rgba(220, 38, 38, 0.28);',
-                                    'warning' => 'background: linear-gradient(135deg, #f59e0b 0%, #ea8c00 100%); box-shadow: 0 5px 12px rgba(234, 140, 0, 0.28);',
-                                    default => 'background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 5px 12px rgba(37, 99, 235, 0.28);',
-                                };
-                            @endphp
                             <div wire:key="notif-page-{{ $notification->id }}" class="d-flex align-items-start" style="padding: 14px 18px; border-bottom: 1px solid #f1f5f9;">
-                                <div class="text-white mr-3" style="width: 38px; height: 38px; line-height: 38px; border-radius: 10px; font-size: 14px; text-align: center; flex-shrink: 0; {{ $levelIconStyle }}">
-                                    <i class="{{ $data['icon'] ?? 'far fa-bell' }}"></i>
+                                <div class="text-white mr-3" style="width: 38px; height: 38px; line-height: 38px; border-radius: 10px; font-size: 14px; text-align: center; flex-shrink: 0; {{ \App\Services\NotificationService::iconGradient($notification->data['level'] ?? 'info') }}">
+                                    <i class="{{ $notification->data['icon'] ?? 'far fa-bell' }}"></i>
                                 </div>
                                 <div style="flex-grow: 1; min-width: 0;">
                                     <div class="d-flex flex-wrap align-items-center" style="gap: 6px;">
-                                        <span class="text-dark font-weight-600" style="font-size: 13px;">{{ $data['title'] ?? 'Notifikasi' }}</span>
-                                        @if ($isUnread)
+                                        <span class="text-dark font-weight-600" style="font-size: 13px;">{{ $notification->data['title'] ?? 'Notifikasi' }}</span>
+                                        @if ($notification->read_at === null)
                                             <span class="badge badge-primary font-weight-600" style="font-size: 9px; border-radius: 9999px; padding: 2px 8px;">Baru</span>
                                         @endif
                                         <span style="font-size: 11px; color: #475569;">{{ $notification->created_at->locale('id')->translatedFormat('d M Y H:i') }}</span>
                                     </div>
                                     <div style="font-size: 12.5px; line-height: 1.5; font-weight: 400; color: #334155; margin-top: 2px;">
-                                        {{ $data['body'] ?? '' }}
+                                        {{ $notification->data['body'] ?? '' }}
                                     </div>
-                                    @if (!empty($data['url']))
-                                        <a href="{{ $data['url'] }}" style="font-size: 12px; text-decoration: none; margin-top: 4px; display: inline-block;">
+                                    @if (!empty($notification->data['url']))
+                                        <a href="{{ $notification->data['url'] }}" style="font-size: 12px; text-decoration: none; margin-top: 4px; display: inline-block;">
                                             Buka terkait <i class="fas fa-chevron-right ml-1" style="font-size: 9px;"></i>
                                         </a>
                                     @endif
                                 </div>
                                 <div class="flex-shrink-0 ml-2">
-                                    @if ($isUnread)
+                                    @if ($notification->read_at === null)
                                         <button type="button" wire:click="markRead('{{ $notification->id }}')" wire:loading.attr="disabled" class="btn btn-sm btn-outline-primary" style="border-radius: 9999px; font-size: 11.5px; padding: 4px 12px;" wire:target="markRead('{{ $notification->id }}')">
                                             <i class="fas fa-check-double mr-1"></i> Tandai Dibaca
                                         </button>

@@ -269,22 +269,14 @@
             <!-- Breakdown List: Top 5 Karyawan -->
             <div class="d-flex flex-column mt-2" style="gap: 4px;">
                 @if (!empty($chartData['top_debtors']['labels']) && ($chartData['top_debtors']['has_data'] ?? false))
-                    @php
-                        $topTotal = array_sum($chartData['top_debtors']['data']);
-                    @endphp
-                    @foreach ($chartData['top_debtors']['labels'] as $idx => $debtorLabel)
-                        @php
-                            $dVal = $chartData['top_debtors']['data'][$idx] ?? 0;
-                            $dPct = $topTotal > 0 ? round(($dVal / $topTotal) * 100, 1) : 0;
-                            $dColor = $chartData['top_debtors']['colors'][$idx] ?? '#0b52aa';
-                        @endphp
+                    @foreach ($this->chartSummary['top_debtors']['items'] as $item)
                         <div class="d-flex align-items-center justify-content-between py-1 px-1 rounded" style="font-size: 11.5px; line-height: 1.4; transition: background 0.15s ease;">
                             <div class="d-flex align-items-center text-truncate mr-2">
-                                <span style="width: 8px; height: 8px; border-radius: 2px; background-color: {{ $dColor }}; margin-right: 7px; flex-shrink: 0;"></span>
-                                <span class="text-truncate" style="color: #475569; font-weight: 500;" title="{{ $debtorLabel }}">{{ $debtorLabel }}</span>
+                                <span style="width: 8px; height: 8px; border-radius: 2px; background-color: {{ $item['color'] }}; margin-right: 7px; flex-shrink: 0;"></span>
+                                <span class="text-truncate" style="color: #475569; font-weight: 500;" title="{{ $item['label'] }}">{{ $item['label'] }}</span>
                             </div>
                             <span style="font-weight: 600; color: #0f172a; flex-shrink: 0; font-variant-numeric: tabular-nums;">
-                                Rp {{ number_format($dVal, 0, ',', '.') }} · {{ $dPct }}%
+                                Rp {{ number_format($item['value'], 0, ',', '.') }} · {{ $item['percentage'] }}%
                             </span>
                         </div>
                     @endforeach
@@ -411,22 +403,14 @@
             <!-- Breakdown List: Departemen -->
             <div class="d-flex flex-column mt-2" style="gap: 4px;">
                 @if (!empty($chartData['departments']['labels']) && ($chartData['departments']['has_data'] ?? false))
-                    @php
-                        $deptTotal = array_sum($chartData['departments']['data']);
-                    @endphp
-                    @foreach ($chartData['departments']['labels'] as $idx => $deptLabel)
-                        @php
-                            $deptVal = $chartData['departments']['data'][$idx] ?? 0;
-                            $deptPct = $deptTotal > 0 ? round(($deptVal / $deptTotal) * 100, 1) : 0;
-                            $deptColor = $chartData['departments']['colors'][$idx] ?? '#0b52aa';
-                        @endphp
+                    @foreach ($this->chartSummary['departments']['items'] as $item)
                         <div class="d-flex align-items-center justify-content-between py-1 px-1 rounded" style="font-size: 11.5px; line-height: 1.4; transition: background 0.15s ease;">
                             <div class="d-flex align-items-center text-truncate mr-2">
-                                <span style="width: 8px; height: 8px; border-radius: 2px; background-color: {{ $deptColor }}; margin-right: 7px; flex-shrink: 0;"></span>
-                                <span class="text-truncate" style="color: #475569; font-weight: 500;" title="{{ $deptLabel }}">{{ $deptLabel }}</span>
+                                <span style="width: 8px; height: 8px; border-radius: 2px; background-color: {{ $item['color'] }}; margin-right: 7px; flex-shrink: 0;"></span>
+                                <span class="text-truncate" style="color: #475569; font-weight: 500;" title="{{ $item['label'] }}">{{ $item['label'] }}</span>
                             </div>
                             <span style="font-weight: 600; color: #0f172a; flex-shrink: 0; font-variant-numeric: tabular-nums;">
-                                Rp {{ number_format($deptVal, 0, ',', '.') }} · {{ $deptPct }}%
+                                Rp {{ number_format($item['value'], 0, ',', '.') }} · {{ $item['percentage'] }}%
                             </span>
                         </div>
                     @endforeach

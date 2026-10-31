@@ -36,19 +36,13 @@
                             <div class="form-group">
                                 <label for="form_employee_id">Karyawan <span class="text-danger">*</span></label>
                                 @if (auth()->user()?->hasRole('karyawan'))
-                                    @php
-                                        $empAuth = auth()->user()->getEmployeeRecord();
-                                    @endphp
-                                    <input type="text" class="form-control" value="{{ $empAuth?->full_name }} ({{ $empAuth?->department?->name ?? 'Tanpa Departemen' }})" readonly disabled>
+                                    <input type="text" class="form-control" value="{{ $this->authEmployee?->full_name }} ({{ $this->authEmployee?->department?->name ?? 'Tanpa Departemen' }})" readonly disabled>
                                     <input type="hidden" wire:model="form.employee_id">
                                 @else
                                     <div wire:ignore>
-                                        @php
-                                            $groupedEmployees = $employees->groupBy(fn ($emp) => $emp->department?->name ?? 'Tanpa Departemen')->sortKeys();
-                                        @endphp
                                         <select id="form_employee_id" class="form-control select2 @error('form.employee_id') is-invalid @enderror">
                                             <option value="">-- Pilih Karyawan --</option>
-                                            @foreach ($groupedEmployees as $deptName => $deptEmployees)
+                                            @foreach ($this->employeesByDepartment as $deptName => $deptEmployees)
                                                 <optgroup label="{{ $deptName }}">
                                                     @foreach ($deptEmployees as $emp)
                                                         <option value="{{ $emp->id }}">{{ $emp->full_name }}</option>

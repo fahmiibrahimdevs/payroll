@@ -32,13 +32,20 @@ class NavbarDropdown extends Component
                 $hasAccess = $user->hasRole('admin') || $user->hasRole('direktur') || $user->hasRole('karyawan');
 
                 return [
-                    'actionItems' => $hasAccess ? $dashboardService->getActionItems() : [],
+                    'actionItems' => $hasAccess
+                        ? collect($dashboardService->getActionItems())
+                            ->map(fn ($item) => $item + [
+                                'icon_style' => NotificationService::iconGradient($item['type'] ?? null, $item['title'] ?? ''),
+                            ])
+                            ->all()
+                        : [],
                     'history' => $notificationService->latest($user)
                         ->map(fn ($notification) => [
                             'id' => $notification->id,
                             'data' => $notification->data,
                             'is_unread' => $notification->read_at === null,
                             'time' => $notification->created_at->locale('id')->diffForHumans(),
+                            'icon_style' => NotificationService::iconGradient($notification->data['level'] ?? 'info'),
                         ])
                         ->all(),
                     'unreadCount' => $notificationService->unreadCount($user),

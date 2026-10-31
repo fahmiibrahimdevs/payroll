@@ -20,6 +20,8 @@ use App\Support\Rupiah;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\View\View;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -1070,13 +1072,172 @@ class Index extends Component
     }
 
     /**
+     * Authenticated user's employee record (for read-only identity in form modal).
+     */
+    public function getAuthEmployeeProperty(): ?Employee
+    {
+        return auth()->user()?->getEmployeeRecord();
+    }
+
+    /**
+     * Active employee lookup list for the form modal select.
+     */
+    public function getEmployeesProperty(): Collection
+    {
+        $isKaryawan = auth()->user()?->hasRole('karyawan');
+        $karyawanRecord = $isKaryawan ? auth()->user()?->getEmployeeRecord() : null;
+
+        $query = Employee::query()
+            ->select(['id', 'full_name', 'department_id', 'position_id'])
+            ->where('status', 'active')
+            ->with([
+                'department:id,name',
+                'position:id,name',
+                'detail:employee_id,employee_code',
+            ])
+            ->orderBy('full_name', 'asc');
+
+        if ($isKaryawan && $karyawanRecord) {
+            $query->where('id', $karyawanRecord->id);
+        } elseif ($this->selectedDepartmentId) {
+            $query->where('department_id', $this->selectedDepartmentId);
+        }
+
+        return $query->get();
+    }
+
+    /**
+     * Employees grouped by department name for the form modal optgroups.
+     */
+    public function getEmployeesByDepartmentProperty(): Collection
+    {
+        return $this->employees
+            ->groupBy(fn ($emp) => $emp->department?->name ?? 'Tanpa Departemen')
+            ->sortKeys();
+    }
+
+    /**
+     * Recap paginator (per-employee cash advance summary), null when an employee is selected.
+     */
+    public function getRecapProperty(): ?LengthAwarePaginator
+    {
+        if ($this->selectedEmployeeId) {
+            return null;
+        }
+
+        return app(CashAdvanceService::class)->getEmployeesCashAdvanceSummary(
+            search: $this->search ?: null,
+            departmentId: $this->selectedDepartmentId,
+            filter: $this->recapFilter,
+            perPage: $this->perPage,
+            page: $this->getPage()
+        );
+    }
+
+    /**
+     * Recap rows grouped by department, "Tanpa Departemen" always last.
+     */
+    public function getRecapByDepartmentProperty(): ?Collection
+    {
+        $recap = $this->recap;
+
+        if (! $recap || $recap->total() === 0) {
+            return null;
+        }
+
+        $grouped = collect($recap->items())->groupBy(fn ($item) => $item['department'] ?: 'Tanpa Departemen');
+        if ($grouped->has('Tanpa Departemen')) {
+            $unassigned = $grouped->pull('Tanpa Departemen');
+            $grouped->put('Tanpa Departemen', $unassigned);
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * Chart source data for the recap analysis card.
+     */
+    public function getChartDataProperty(): array
+    {
+        return app(CashAdvanceService::class)->getRecapChartData();
+    }
+
+    /**
+     * Ready-to-display chart breakdown (total + percentage per item) for top debtors and departments.
+     */
+    public function getChartSummaryProperty(): array
+    {
+        $chartData = $this->chartData;
+
+        return [
+            'top_debtors' => $this->buildChartBreakdown($chartData['top_debtors'] ?? []),
+            'departments' => $this->buildChartBreakdown($chartData['departments'] ?? []),
+        ];
+    }
+
+    /**
+     * Progress bar style classes for the detail modal of the selected cash advance.
+     *
+     * @return array{percentage: float, fill_class: string, text_class: string}
+     */
+    public function getDetailProgressProperty(): array
+    {
+        $progress = (float) ($this->selectedCashAdvance?->progress_percentage ?? 0);
+
+        if ($progress >= 100) {
+            $fillClass = 'bg-success';
+            $textClass = 'text-success';
+        } elseif ($progress >= 75) {
+            $fillClass = 'bg-info';
+            $textClass = 'text-info';
+        } elseif ($progress >= 40) {
+            $fillClass = 'bg-warning';
+            $textClass = 'text-warning';
+        } else {
+            $fillClass = 'bg-danger';
+            $textClass = 'text-danger';
+        }
+
+        return [
+            'percentage' => $progress,
+            'fill_class' => $fillClass,
+            'text_class' => $textClass,
+        ];
+    }
+
+    /**
+     * Build a ready-to-display breakdown (label, value, percentage, color) from a chart section.
+     */
+    private function buildChartBreakdown(array $section): array
+    {
+        $total = array_sum($section['data'] ?? []);
+        $items = [];
+
+        foreach ($section['labels'] ?? [] as $idx => $label) {
+            $value = $section['data'][$idx] ?? 0;
+            $items[] = [
+                'label' => $label,
+                'value' => $value,
+                'percentage' => $total > 0 ? round(($value / $total) * 100, 1) : 0,
+                'color' => $section['colors'][$idx] ?? '#0b52aa',
+            ];
+        }
+
+        return ['total' => $total, 'items' => $items];
+    }
+
+    /**
      * Computed waterfall allocation for early payment modal.
      *
      * @return array{
-     *     allocations: array<string, array{allocated: float, remaining_after: float, is_full: bool, is_partial: bool, is_covered: bool}>,
+     *     allocations: array<string, array{allocated: float, remaining_after: float, is_selected: bool, is_full: bool, is_partial: bool, is_covered: bool, card_class: string}>,
      *     total_allocated: float,
      *     total_unpaid_all: float,
      *     total_unpaid_selected: float,
+     *     selected_sum: float,
+     *     input_amount: float,
+     *     is_exceeded: bool,
+     *     is_invalid: bool,
      *     covered_month_keys: array<int, string>
      * }
      */
@@ -1088,6 +1249,10 @@ class Index extends Component
                 'total_allocated' => 0.0,
                 'total_unpaid_all' => 0.0,
                 'total_unpaid_selected' => 0.0,
+                'selected_sum' => 0.0,
+                'input_amount' => 0.0,
+                'is_exceeded' => false,
+                'is_invalid' => false,
                 'covered_month_keys' => [],
             ];
         }
@@ -1120,9 +1285,11 @@ class Index extends Component
                 $allocations[$monthKey] = [
                     'allocated' => 0.0,
                     'remaining_after' => $stDue,
+                    'is_selected' => false,
                     'is_full' => false,
                     'is_partial' => false,
                     'is_covered' => false,
+                    'card_class' => '',
                 ];
 
                 continue;
@@ -1132,9 +1299,11 @@ class Index extends Component
                 $allocations[$monthKey] = [
                     'allocated' => 0.0,
                     'remaining_after' => $stDue,
+                    'is_selected' => true,
                     'is_full' => false,
                     'is_partial' => false,
                     'is_covered' => false,
+                    'card_class' => 'early-pay-month-card-selected',
                 ];
 
                 continue;
@@ -1148,9 +1317,13 @@ class Index extends Component
             $allocations[$monthKey] = [
                 'allocated' => $alloc,
                 'remaining_after' => $rem,
+                'is_selected' => true,
                 'is_full' => $isFull,
                 'is_partial' => $isPartial,
                 'is_covered' => true,
+                'card_class' => $isFull
+                    ? 'early-pay-month-card-full'
+                    : ($isPartial ? 'early-pay-month-card-partial' : 'early-pay-month-card-selected'),
             ];
 
             if ($alloc > 0) {
@@ -1164,6 +1337,14 @@ class Index extends Component
             'total_allocated' => $amount,
             'total_unpaid_all' => $totalUnpaidAll,
             'total_unpaid_selected' => $totalUnpaidSelected,
+            'selected_sum' => $totalUnpaidSelected,
+            'input_amount' => $amount,
+            'is_exceeded' => $amount > $totalUnpaidSelected,
+            'is_invalid' => $amount > $totalUnpaidSelected
+                || $amount < 1000
+                || $totalUnpaidSelected <= 0
+                || empty($this->selectedMonthKeysForPayment)
+                || $this->getErrorBag()->has('earlyPaymentAmount'),
             'covered_month_keys' => $coveredKeys,
         ];
     }
@@ -1601,23 +1782,7 @@ HTML;
 
         $departments = Department::getLookup();
 
-        $employeesQuery = Employee::query()
-            ->select(['id', 'full_name', 'department_id', 'position_id'])
-            ->where('status', 'active')
-            ->with([
-                'department:id,name',
-                'position:id,name',
-                'detail:employee_id,employee_code',
-            ])
-            ->orderBy('full_name', 'asc');
-
-        if ($isKaryawan && $karyawanRecord) {
-            $employeesQuery->where('id', $karyawanRecord->id);
-        } elseif ($this->selectedDepartmentId) {
-            $employeesQuery->where('department_id', $this->selectedDepartmentId);
-        }
-
-        $employees = $employeesQuery->get();
+        $employees = $this->employees;
 
         if ($this->selectedEmployeeId && $employees->isNotEmpty() && ! $employees->contains('id', $this->selectedEmployeeId)) {
             $this->selectedEmployeeId = null;
@@ -1695,15 +1860,7 @@ HTML;
             $companyStats = $service->getSummaryStats();
         }
 
-        $recap = ! $this->selectedEmployeeId
-            ? $service->getEmployeesCashAdvanceSummary(
-                search: $this->search ?: null,
-                departmentId: $this->selectedDepartmentId,
-                filter: $this->recapFilter,
-                perPage: $this->perPage,
-                page: $this->getPage()
-            )
-            : null;
+        $recap = $this->recap;
 
         $summary = $service->getEmployeeSummary($this->selectedEmployeeId);
 
@@ -1738,7 +1895,7 @@ HTML;
         $overdueReviewAdvances = (! $isKaryawan && ($companyStats['attention_employees_count'] ?? 0) > 0)
             ? $service->getOverdueAdvancesForReview()
             : collect();
-        $chartData = $service->getRecapChartData();
+        $chartData = $this->chartData;
 
         return view('livewire.cash-advances.index', [
             'departments' => $departments,
@@ -1749,8 +1906,10 @@ HTML;
             'overdueReviewAdvances' => $overdueReviewAdvances,
             'chartData' => $chartData,
             'recap' => $recap,
+            'recapByDepartment' => $this->recapByDepartment,
             'summary' => $summary,
             'statements' => $statements,
+            'paginatedStatements' => $statements['paginated_statements'] ?? null,
             'ledger' => $ledger,
             'activeAdvance' => $activeAdvance,
             'currentEmployee' => $summary['employee'],

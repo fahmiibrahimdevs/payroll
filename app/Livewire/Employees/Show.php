@@ -355,6 +355,39 @@ class Show extends Component
         ];
     }
 
+    /**
+     * Ready-to-display salary progression callout for admin & direktur.
+     *
+     * @return array{class: string, icon: string, title: string, desc: string}
+     */
+    public function getProgressionCalloutProperty(): array
+    {
+        $status = $this->employee->salary_progression_status;
+
+        return [
+            'class' => match ($status['status']) {
+                'stagnant' => 'bd-callout-warning',
+                'recently_raised' => 'bd-callout-success',
+                default => 'bd-callout-info',
+            },
+            'icon' => match ($status['status']) {
+                'stagnant' => 'fa-exclamation-triangle',
+                'recently_raised' => 'fa-check-circle',
+                default => 'fa-info-circle',
+            },
+            'title' => match ($status['status']) {
+                'stagnant' => 'Perhatian: Karyawan Mengalami Stagnasi Gaji',
+                'recently_raised' => 'Status Gaji Terkini: Penyesuaian Baru Tercatat',
+                default => 'Status Riwayat & Evaluasi Gaji Karyawan',
+            },
+            'desc' => match ($status['status']) {
+                'stagnant' => $status['note'].'. Pertimbangkan evaluasi berkala kompensasi untuk karyawan ini.',
+                'recently_raised' => $status['note'].'. Gaji pokok karyawan telah diperbarui dalam sistem payroll.',
+                default => $status['note'].'. Pantau perkembangan kompensasi dan catat penyesuaian gaji berkala karyawan bila diperlukan.',
+            },
+        ];
+    }
+
     public function render(): View
     {
         if ($this->activeTab === 'riwayat-gaji') {

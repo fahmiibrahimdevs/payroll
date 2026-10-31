@@ -14,6 +14,8 @@ use App\Services\EmployeeService;
 use App\Services\UserService;
 use App\Support\IdObfuscator;
 use Illuminate\Contracts\View\View;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
@@ -508,22 +510,13 @@ class Index extends Component
     /**
      * Render the Livewire component view.
      */
-    public function render(EmployeeService $employeeService): View
+    public function render(): View
     {
-        $employees = $employeeService->getPaginatedEmployees(
-            search: $this->search,
-            departmentId: $this->filterDepartment,
-            positionId: $this->filterPosition,
-            status: $this->filterStatus,
-            employmentStatus: $this->filterEmploymentStatus,
-            perPage: $this->perPage,
-            includeSensitive: auth()->user()?->hasRole('admin') ?? false,
-        );
-
-        $dashboardData = $employeeService->getEmployeeDashboardData();
+        $dashboardData = $this->dashboardData;
 
         return view('livewire.employees.index', [
-            'employees' => $employees,
+            'employees' => $this->employees,
+            'groupedEmployees' => $this->groupedEmployees,
             'departments' => Department::getLookup(),
             'positions' => Position::getLookup(),
             'statuses' => EmployeeStatus::cases(),
@@ -534,5 +527,75 @@ class Index extends Component
             'employeeCharts' => $dashboardData['charts'],
             'companyEmailDomain' => $this->companyEmailDomain ?: CompanyProfile::getProfile()->getEmailDomain(),
         ]);
+    }
+
+    /**
+     * Paginated employee list for the table.
+     */
+    public function getEmployeesProperty(): LengthAwarePaginator
+    {
+        return app(EmployeeService::class)->getPaginatedEmployees(
+            search: $this->search,
+            departmentId: $this->filterDepartment,
+            positionId: $this->filterPosition,
+            status: $this->filterStatus,
+            employmentStatus: $this->filterEmploymentStatus,
+            perPage: $this->perPage,
+            includeSensitive: auth()->user()?->hasRole('admin') ?? false,
+        );
+    }
+
+    /**
+     * Employee rows grouped by department, "Tanpa Department" always last.
+     */
+    public function getGroupedEmployeesProperty(): Collection
+    {
+        $grouped = $this->employees->groupBy(fn ($e) => $e->department?->name ?: 'Tanpa Department');
+        if ($grouped->has('Tanpa Department')) {
+            $unassigned = $grouped->pull('Tanpa Department');
+            $grouped->put('Tanpa Department', $unassigned);
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * Dashboard stats, expiring contracts and chart source data.
+     */
+    public function getDashboardDataProperty(): array
+    {
+        return app(EmployeeService::class)->getEmployeeDashboardData();
+    }
+
+    /**
+     * Ready-to-display department chart breakdown (count + percentage per department).
+     *
+     * @return array<int, array{label: string, count: int, percentage: float|int, color: string}>
+     */
+    public function getDepartmentBreakdownProperty(): array
+    {
+        $departments = $this->dashboardData['charts']['departments'] ?? [];
+        $total = $departments['total'] ?? array_sum($departments['counts'] ?? []);
+        $items = [];
+
+        foreach ($departments['labels'] ?? [] as $idx => $label) {
+            $count = $departments['counts'][$idx] ?? 0;
+            $items[] = [
+                'label' => $label,
+                'count' => $count,
+                'percentage' => $total > 0 ? round(($count / $total) * 100, 1) : 0,
+                'color' => $departments['colors'][$idx] ?? '#0b52aa',
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Memoized company profile for form modal policy flags.
+     */
+    public function getCompanyProfileProperty(): CompanyProfile
+    {
+        return CompanyProfile::getProfile();
     }
 }

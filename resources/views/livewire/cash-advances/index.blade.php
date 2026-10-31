@@ -181,17 +181,10 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @if ($recap && $recap->total() > 0)
-                                    @php
-                                        $rowNumber = 0;
-                                        $groupedRecap = collect($recap->items())->groupBy(fn ($item) => $item['department'] ?: 'Tanpa Departemen');
-                                        if ($groupedRecap->has('Tanpa Departemen')) {
-                                            $unassigned = $groupedRecap->pull('Tanpa Departemen');
-                                            $groupedRecap->put('Tanpa Departemen', $unassigned);
-                                        }
-                                    @endphp
+                                @if ($recapByDepartment)
+                                    @php $rowNumber = 0; @endphp
 
-                                    @foreach ($groupedRecap as $departmentName => $deptRows)
+                                    @foreach ($recapByDepartment as $departmentName => $deptRows)
                                         @php
                                             $isOfficialDept = $departmentName !== 'Tanpa Departemen';
                                         @endphp
@@ -588,9 +581,6 @@
                     <div class="card-body p-0 bg-white">
                         @if ($activeMainTab === 'statements')
                             <!-- ================= TAB 1: TAGIHAN BULANAN ================= -->
-                            @php
-                                $paginatedStatements = $statements['paginated_statements'] ?? null;
-                            @endphp
 
                             <!-- 1. DESKTOP VIEW: Data Table (Hidden on Mobile < 768px) -->
                             <div class="table-responsive d-none d-md-block">
@@ -611,19 +601,16 @@
                                     <tbody>
                                         @if ($paginatedStatements && $paginatedStatements->total() > 0)
                                             @foreach ($paginatedStatements as $index => $st)
-                                                @php
-                                                    $isOverdue = ($st['is_overdue'] ?? false) || (! $st['is_paid'] && \Carbon\Carbon::parse($st['due_date'])->startOfDay()->isBefore(today()));
-                                                @endphp
-                                                <tr wire:key="statement-row-{{ $st['month_key'] }}" class="{{ $isOverdue ? 'table-row-overdue' : '' }}" style="{{ $isOverdue ? 'background-color: #fef2f2;' : '' }}">
+                                                <tr wire:key="statement-row-{{ $st['month_key'] }}" class="{{ $st['is_overdue'] ? 'table-row-overdue' : '' }}" style="{{ $st['is_overdue'] ? 'background-color: #fef2f2;' : '' }}">
                                                     <td class="text-center font-weight-600 text-muted align-middle !px-3 !py-2.5">
                                                         {{ $paginatedStatements->firstItem() + $index }}
                                                     </td>
                                                     <td class="align-middle text-nowrap !px-3 !py-2.5">
-                                                        <div class="font-weight-600 {{ $isOverdue ? 'text-danger' : 'text-dark' }} leading-tight">
+                                                        <div class="font-weight-600 {{ $st['is_overdue'] ? 'text-danger' : 'text-dark' }} leading-tight">
                                                             Tagihan {{ $st['month_name_full'] }}
                                                         </div>
                                                     </td>
-                                                    <td class="align-middle text-nowrap !px-3 !py-2.5 font-weight-500 {{ $isOverdue ? 'text-danger' : 'text-dark' }}">
+                                                    <td class="align-middle text-nowrap !px-3 !py-2.5 font-weight-500 {{ $st['is_overdue'] ? 'text-danger' : 'text-dark' }}">
                                                         {{ $st['formatted_due_date'] }}
                                                     </td>
                                                     <td class="text-center align-middle text-nowrap !px-3 !py-2.5 text-muted font-weight-500">
@@ -635,7 +622,7 @@
                                                     <td class="text-right align-middle text-nowrap font-weight-500 text-dark !px-3 !py-2.5">
                                                         {{ $st['formatted_paid_amount'] }}
                                                     </td>
-                                                    <td class="text-right align-middle text-nowrap font-weight-bold {{ $isOverdue ? 'text-danger' : 'text-dark' }} !px-3 !py-2.5">
+                                                    <td class="text-right align-middle text-nowrap font-weight-bold {{ $st['is_overdue'] ? 'text-danger' : 'text-dark' }} !px-3 !py-2.5">
                                                         {{ $st['formatted_remaining_amount'] }}
                                                     </td>
                                                     <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
@@ -643,7 +630,7 @@
                                                             <span class="badge badge-success font-weight-bold" style="background-color: #d1fae5; color: #065f46; font-size: 11px; padding: 4px 8px;">
                                                                 Lunas
                                                             </span>
-                                                        @elseif ($isOverdue)
+                                                        @elseif ($st['is_overdue'])
                                                             <span class="badge font-weight-bold" style="background-color: #fee2e2; color: #991b1b; font-size: 11px; padding: 4px 8px;">
                                                                 Belum Lunas
                                                             </span>
@@ -695,18 +682,15 @@
                                 @if ($paginatedStatements && $paginatedStatements->total() > 0)
                                     <div class="statement-mobile-list">
                                         @foreach ($paginatedStatements as $index => $st)
-                                            @php
-                                                $isOverdue = ($st['is_overdue'] ?? false) || (! $st['is_paid'] && \Carbon\Carbon::parse($st['due_date'])->startOfDay()->isBefore(today()));
-                                            @endphp
-                                            <div class="card statement-mobile-card {{ $st['is_paid'] ? 'statement-card-paid !border-l-[#10b981]' : ($isOverdue ? '!border-l-[#ef4444] !bg-[#fef2f2]' : 'statement-card-unpaid !border-l-[#f59e0b]') }}" wire:key="statement-card-{{ $st['month_key'] }}">
+                                            <div class="card statement-mobile-card {{ $st['is_paid'] ? 'statement-card-paid !border-l-[#10b981]' : ($st['is_overdue'] ? '!border-l-[#ef4444] !bg-[#fef2f2]' : 'statement-card-unpaid !border-l-[#f59e0b]') }}" wire:key="statement-card-{{ $st['month_key'] }}">
                                                 <div class="card-body">
                                                     <!-- Top Row: Title (Left) & Detail Button (Right) -->
                                                     <div class="d-flex align-items-center justify-content-between mb-1.5">
                                                         <div class="d-flex align-items-center gap-1.5 min-w-0 pr-2">
-                                                            <span class="font-bold {{ $isOverdue ? 'text-red-700' : 'text-slate-800' }} text-[13.5px] leading-tight truncate">
+                                                            <span class="font-bold {{ $st['is_overdue'] ? 'text-red-700' : 'text-slate-800' }} text-[13.5px] leading-tight truncate">
                                                                 Tagihan {{ $st['month_name_full'] }}
                                                             </span>
-                                                            @if ($isOverdue)
+                                                            @if ($st['is_overdue'])
                                                                 <span class="badge font-weight-bold shrink-0" style="background-color: #fee2e2; color: #991b1b; font-size: 10px; padding: 2px 6px;">
                                                                     Terlewat
                                                                 </span>
@@ -806,11 +790,7 @@
                                     <tbody>
                                         @if ($ledger && $ledger->total() > 0)
                                             @foreach ($ledger as $index => $row)
-                                                @php
-                                                    $isRowActive = ($row['type'] === 'payment' && (int) $highlightPaymentId === (int) $row['id'])
-                                                        || ($row['type'] === 'advance' && ! $highlightPaymentId && (int) $selectedCashAdvanceId === (int) $row['id']);
-                                                @endphp
-                                                <tr wire:key="ledger-row-{{ $row['type'] }}-{{ $row['id'] }}" id="ledger-row-{{ $row['type'] }}-{{ $row['id'] }}" class="{{ $isRowActive ? 'table-row-active-highlight font-weight-500 !bg-blue-50/60 transition-colors' : '' }}">
+                                                <tr wire:key="ledger-row-{{ $row['type'] }}-{{ $row['id'] }}" id="ledger-row-{{ $row['type'] }}-{{ $row['id'] }}" class="{{ (($row['type'] === 'payment' && (int) $highlightPaymentId === (int) $row['id']) || ($row['type'] === 'advance' && ! $highlightPaymentId && (int) $selectedCashAdvanceId === (int) $row['id'])) ? 'table-row-active-highlight font-weight-500 !bg-blue-50/60 transition-colors' : '' }}">
                                                     <td class="text-center font-weight-600 text-muted align-middle !px-3 !py-2.5">
                                                         {{ $ledger->firstItem() + $index }}
                                                     </td>

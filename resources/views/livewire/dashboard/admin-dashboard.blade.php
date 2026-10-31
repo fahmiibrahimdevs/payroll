@@ -390,19 +390,14 @@
 
                     <!-- Custom Clean Department Legend List -->
                     <div class="dept-legend-list mt-1 px-1" style="max-height: 110px; overflow-y: auto;">
-                        @foreach ($stats['department_distribution']['labels'] as $idx => $deptName)
-                            @php
-                                $c = $stats['department_distribution']['counts'][$idx] ?? 0;
-                                $color = $stats['department_distribution']['colors'][$idx] ?? '#0b52aa';
-                                $pct = $stats['department_distribution']['total'] > 0 ? round(($c / $stats['department_distribution']['total']) * 100, 1) : 0;
-                            @endphp
+                        @foreach ($this->departmentDistribution as $item)
                             <div class="d-flex align-items-center justify-content-between py-1 border-bottom" style="font-size: 11.5px; border-color: #f8fafc !important;">
                                 <div class="d-flex align-items-center text-truncate mr-2">
-                                    <span style="width: 7px; height: 7px; border-radius: 50%; background-color: {{ $color }}; flex-shrink: 0; margin-right: 7px;"></span>
-                                    <span class="text-dark font-weight-600 text-truncate">{{ $deptName }}</span>
+                                    <span style="width: 7px; height: 7px; border-radius: 50%; background-color: {{ $item['color'] }}; flex-shrink: 0; margin-right: 7px;"></span>
+                                    <span class="text-dark font-weight-600 text-truncate">{{ $item['label'] }}</span>
                                 </div>
                                 <div class="text-nowrap text-muted font-weight-500">
-                                    <strong class="text-dark">{{ $c }}</strong> <span style="font-size: 10px;">({{ $pct }}%)</span>
+                                    <strong class="text-dark">{{ $item['count'] }}</strong> <span style="font-size: 10px;">({{ $item['percentage'] }}%)</span>
                                 </div>
                             </div>
                         @endforeach
@@ -438,10 +433,7 @@
                 <!-- Body Card -->
                 <div class="card-body p-4 d-flex flex-column justify-content-between flex-grow-1">
                     @if ($stats['current_payroll_period'])
-                        @php
-                            $p = $stats['current_payroll_period'];
-                            $pctVerified = $stats['payroll_total_items_count'] > 0 ? round(($stats['payroll_verified_count'] / $stats['payroll_total_items_count']) * 100) : 0;
-                        @endphp
+                        @php $p = $stats['current_payroll_period']; @endphp
                         <div>
                             <!-- Progress Verifikasi HRD (Airy & Modern) -->
                             <div class="mb-4">
@@ -463,12 +455,12 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <span class="badge font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 9999px; {{ $pctVerified == 100 ? 'background-color: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0;' : 'background-color: #eff6ff; color: #0b52aa; border: 1px solid #bfdbfe;' }}">
-                                        {{ $pctVerified }}% Selesai
+                                    <span class="badge font-weight-600 px-2.5 py-1" style="font-size: 11px; border-radius: 9999px; {{ $this->currentPeriodSummary['verified_percentage'] == 100 ? 'background-color: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0;' : 'background-color: #eff6ff; color: #0b52aa; border: 1px solid #bfdbfe;' }}">
+                                        {{ $this->currentPeriodSummary['verified_percentage'] }}% Selesai
                                     </span>
                                 </div>
                                 <div class="progress" style="height: 6px; border-radius: 9999px; background-color: #f1f5f9; overflow: hidden; margin-top: 10px;">
-                                    <div class="progress-bar {{ $pctVerified == 100 ? 'bg-success' : 'bg-primary' }}" role="progressbar" style="width: {{ $pctVerified }}%; border-radius: 9999px; transition: width 0.4s ease;" aria-valuenow="{{ $pctVerified }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                    <div class="progress-bar {{ $this->currentPeriodSummary['verified_percentage'] == 100 ? 'bg-success' : 'bg-primary' }}" role="progressbar" style="width: {{ $this->currentPeriodSummary['verified_percentage'] }}%; border-radius: 9999px; transition: width 0.4s ease;" aria-valuenow="{{ $this->currentPeriodSummary['verified_percentage'] }}" aria-valuemin="0" aria-valuemax="100"></div>
                                 </div>
                             </div>
 

@@ -267,22 +267,14 @@
                     <!-- Breakdown List Departemen -->
                     <div class="d-flex flex-column mt-2" style="gap: 4px;">
                         @if (!empty($employeeCharts['departments']['labels']) && ($employeeCharts['departments']['has_data'] ?? false))
-                            @php
-                                $deptTotal = $employeeCharts['departments']['total'] ?? array_sum($employeeCharts['departments']['counts']);
-                            @endphp
-                            @foreach ($employeeCharts['departments']['labels'] as $idx => $deptLabel)
-                                @php
-                                    $cCount = $employeeCharts['departments']['counts'][$idx] ?? 0;
-                                    $cPct = $deptTotal > 0 ? round(($cCount / $deptTotal) * 100, 1) : 0;
-                                    $cColor = $employeeCharts['departments']['colors'][$idx] ?? '#0b52aa';
-                                @endphp
+                            @foreach ($this->departmentBreakdown as $item)
                                 <div class="d-flex align-items-center justify-content-between py-1 px-1 rounded" style="font-size: 11.5px; line-height: 1.4; transition: background 0.15s ease;">
                                     <div class="d-flex align-items-center text-truncate mr-2">
-                                        <span style="width: 8px; height: 8px; border-radius: 2px; background-color: {{ $cColor }}; margin-right: 7px; flex-shrink: 0;"></span>
-                                        <span class="text-truncate" style="color: #475569; font-weight: 400;" title="{{ $deptLabel }}">{{ $deptLabel }}</span>
+                                        <span style="width: 8px; height: 8px; border-radius: 2px; background-color: {{ $item['color'] }}; margin-right: 7px; flex-shrink: 0;"></span>
+                                        <span class="text-truncate" style="color: #475569; font-weight: 400;" title="{{ $item['label'] }}">{{ $item['label'] }}</span>
                                     </div>
                                     <span style="font-weight: 500; color: #0f172a; flex-shrink: 0; font-variant-numeric: tabular-nums;">
-                                        {{ $cCount }} orang · {{ $cPct }}%
+                                        {{ $item['count'] }} orang · {{ $item['percentage'] }}%
                                     </span>
                                 </div>
                             @endforeach
@@ -354,14 +346,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @php
-                                $rowNumber = 0;
-                                $groupedEmployees = $employees->groupBy(fn ($e) => $e->department?->name ?: 'Tanpa Department');
-                                if ($groupedEmployees->has('Tanpa Department')) {
-                                    $unassigned = $groupedEmployees->pull('Tanpa Department');
-                                    $groupedEmployees->put('Tanpa Department', $unassigned);
-                                }
-                            @endphp
+                            @php $rowNumber = 0; @endphp
 
                             @forelse ($groupedEmployees as $departmentName => $deptEmployees)
                                 @php

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
+use App\Support\Initials;
 use App\Traits\HasObfuscatedId;
 use Database\Factories\EmployeeFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -531,6 +532,38 @@ class Employee extends Model
                 ? asset('storage/'.$this->photo_path)
                 : asset('assets/img/avatar/avatar-1.png'),
         );
+    }
+
+    /**
+     * Get two-letter initials of the employee name for text avatars.
+     */
+    public function getInitialsAttribute(): string
+    {
+        return Initials::fromName($this->full_name);
+    }
+
+    /**
+     * Get the contract end status: "overdue" (already passed), "today" (ends today),
+     * "upcoming" (future date), or "none" (no contract end date).
+     */
+    public function getContractEndStatusAttribute(): string
+    {
+        if (! $this->contract_end_date) {
+            return 'none';
+        }
+
+        $today = now()->startOfDay();
+        $endDate = $this->contract_end_date->copy()->startOfDay();
+
+        if ($today->gt($endDate)) {
+            return 'overdue';
+        }
+
+        if ($today->equalTo($endDate)) {
+            return 'today';
+        }
+
+        return 'upcoming';
     }
 
     /**

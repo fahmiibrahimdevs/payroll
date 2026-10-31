@@ -15,26 +15,8 @@
         </div>
         <div class="dropdown-list-content dropdown-list-icons" style="max-height: 360px; overflow-y: auto;">
             @forelse ($actionItems as $item)
-                @php
-                    $itemTitle = $item['title'] ?? '';
-                    $itemIconStyle = match (true) {
-                        str_contains($itemTitle, 'Karyawan Nonaktif'),
-                        str_contains($itemTitle, 'Data Payroll'),
-                        str_contains($itemTitle, 'Kontrak'),
-                        str_contains($itemTitle, 'Cicilan'),
-                        str_contains($itemTitle, 'Perlu Diperiksa') => 'background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); box-shadow: 0 5px 12px rgba(109, 40, 217, 0.28);',
-                        str_contains($itemTitle, 'Kasbon'),
-                        str_contains($itemTitle, 'Pembayaran Kasbon') => 'background: linear-gradient(135deg, #f59e0b 0%, #ea8c00 100%); box-shadow: 0 5px 12px rgba(234, 140, 0, 0.28);',
-                        $item['type'] === 'success' => 'background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 5px 12px rgba(22, 163, 74, 0.28);',
-                        str_contains($itemTitle, 'Lembur') => 'background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); box-shadow: 0 5px 12px rgba(13, 148, 136, 0.28);',
-                        str_contains($itemTitle, 'Penggajian'),
-                        str_contains($itemTitle, 'Periode'),
-                        str_contains($itemTitle, 'Slip') => 'background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 5px 12px rgba(37, 99, 235, 0.28);',
-                        default => 'background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 5px 12px rgba(37, 99, 235, 0.28);',
-                    };
-                @endphp
                 <a href="{{ $item['url'] }}" class="dropdown-item dropdown-item-unread" style="padding: 12px 16px; border-bottom: 1px solid #f8fafc; text-decoration: none; display: flex; align-items: flex-start;">
-                    <div class="dropdown-item-icon text-white mr-3" style="width: 36px; height: 36px; line-height: 36px; border-radius: 10px; font-size: 13px; text-align: center; flex-shrink: 0; {{ $itemIconStyle }}">
+                    <div class="dropdown-item-icon text-white mr-3" style="width: 36px; height: 36px; line-height: 36px; border-radius: 10px; font-size: 13px; text-align: center; flex-shrink: 0; {{ $item['icon_style'] }}">
                         <i class="{{ $item['icon'] }}"></i>
                     </div>
                     <div class="dropdown-item-desc" style="margin-left: 0; flex-grow: 1;">
@@ -92,37 +74,27 @@
         </div>
         <div class="dropdown-list-content" style="max-height: 380px; overflow-y: auto;">
             @forelse ($history as $notification)
-                @php
-                    $data = $notification['data'];
-                    $isUnread = $notification['is_unread'];
-                    $levelIconStyle = match ($data['level'] ?? 'info') {
-                        'success' => 'background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 5px 12px rgba(22, 163, 74, 0.28);',
-                        'danger' => 'background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 5px 12px rgba(220, 38, 38, 0.28);',
-                        'warning' => 'background: linear-gradient(135deg, #f59e0b 0%, #ea8c00 100%); box-shadow: 0 5px 12px rgba(234, 140, 0, 0.28);',
-                        default => 'background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 5px 12px rgba(37, 99, 235, 0.28);',
-                    };
-                @endphp
-                <div wire:key="notif-{{ $notification['id'] }}" class="d-flex align-items-start" style="padding: 10px 12px 10px 16px; border-bottom: 1px solid #f8fafc; {{ $isUnread ? 'background-color: #f8fafc;' : '' }}">
+                <div wire:key="notif-{{ $notification['id'] }}" class="d-flex align-items-start" style="padding: 10px 12px 10px 16px; border-bottom: 1px solid #f8fafc; {{ $notification['is_unread'] ? 'background-color: #f8fafc;' : '' }}">
                     <a href="#" wire:click="open('{{ $notification['id'] }}')" wire:loading.attr="disabled" class="d-flex align-items-start text-decoration-none" style="flex-grow: 1; min-width: 0;">
-                        <div class="text-white mr-3" style="width: 32px; height: 32px; line-height: 32px; border-radius: 9px; font-size: 12px; text-align: center; flex-shrink: 0; {{ $levelIconStyle }}">
-                            <i class="{{ $data['icon'] ?? 'far fa-bell' }}"></i>
+                        <div class="text-white mr-3" style="width: 32px; height: 32px; line-height: 32px; border-radius: 9px; font-size: 12px; text-align: center; flex-shrink: 0; {{ $notification['icon_style'] }}">
+                            <i class="{{ $notification['data']['icon'] ?? 'far fa-bell' }}"></i>
                         </div>
                         <div style="flex-grow: 1; min-width: 0;">
                             <div class="text-dark font-weight-600" style="font-size: 12px; line-height: 1.35;">
-                                {{ $data['title'] ?? 'Notifikasi' }}
-                                @if ($isUnread)
+                                {{ $notification['data']['title'] ?? 'Notifikasi' }}
+                                @if ($notification['is_unread'])
                                     <span class="badge badge-primary" style="font-size: 8.5px; border-radius: 9999px; padding: 1px 6px; vertical-align: middle;">Baru</span>
                                 @endif
                             </div>
                             <div style="font-size: 11.5px; line-height: 1.45; font-weight: 400; color: #475569;">
-                                {{ $data['body'] ?? '' }}
+                                {{ $notification['data']['body'] ?? '' }}
                             </div>
                             <div style="font-size: 10.5px; margin-top: 3px; color: #475569;">
                                 {{ $notification['time'] }}
                             </div>
                         </div>
                     </a>
-                    @if ($isUnread)
+                    @if ($notification['is_unread'])
                         <button type="button" wire:click="markRead('{{ $notification['id'] }}')" wire:loading.attr="disabled" class="btn btn-sm text-primary p-1 ml-1" style="font-size: 11px; flex-shrink: 0;" title="Tandai sudah dibaca" wire:target="markRead('{{ $notification['id'] }}')">
                             <i class="fas fa-check-double"></i>
                         </button>

@@ -298,17 +298,12 @@
                                 </div>
 
                                 <!-- Pengaturan Uang Makan Harian -->
-                                @php
-                                    $companyProfile = \App\Models\CompanyProfile::getProfile();
-                                    $isUniformMeal = (bool) ($companyProfile->is_uniform_meal_allowance ?? true);
-                                    $defaultMealRate = (float) ($companyProfile->default_meal_allowance_per_day ?? 25000);
-                                @endphp
                                 <div class="col-md-6">
                                     <div class="form-group mb-2">
                                         <label for="meal_allowance_per_day" class="d-flex align-items-center">
                                             <span>Uang Makan Harian (Rp)</span>
-                                            @if ($isUniformMeal)
-                                                <i class="fas fa-lock text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Terkunci: Mengikuti kebijakan standar profil perusahaan (Rp {{ number_format($defaultMealRate, 0, ',', '.') }}/hari). Ubah di menu Profil Perusahaan jika ingin mode nominal berbeda per karyawan."></i>
+                                            @if ((bool) ($this->companyProfile->is_uniform_meal_allowance ?? true))
+                                                <i class="fas fa-lock text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Terkunci: Mengikuti kebijakan standar profil perusahaan (Rp {{ number_format((float) ($this->companyProfile->default_meal_allowance_per_day ?? 25000), 0, ',', '.') }}/hari). Ubah di menu Profil Perusahaan jika ingin mode nominal berbeda per karyawan."></i>
                                             @else
                                                 <i class="fas fa-info-circle text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Mode Fleksibel Aktif: Nominal uang makan dapat disesuaikan secara khusus untuk karyawan ini."></i>
                                             @endif
@@ -318,23 +313,23 @@
                                              wire:key="emp-meal-rate-wrap-{{ $form->employee?->id ?? 'new' }}"
                                              x-data="{
                                                  rawVal: @entangle('form.meal_allowance_per_day'),
-                                                 defaultRate: {{ $defaultMealRate }},
+                                                 defaultRate: {{ (float) ($this->companyProfile->default_meal_allowance_per_day ?? 25000) }},
                                                  format(v) {
                                                      let num = (!v || isNaN(v) || v == 0) ? this.defaultRate : v;
                                                      return new Intl.NumberFormat('id-ID').format(num);
                                                  }
                                              }"
-                                             @unless($isUniformMeal)
+                                             @unless((bool) ($this->companyProfile->is_uniform_meal_allowance ?? true))
                                              x-init="$refs.input && ($refs.input.value = format(rawVal))"
                                              x-effect="if ($refs.input) { let f = format(rawVal); if ($refs.input.value !== f) { $refs.input.value = f; } }"
                                              @endunless>
                                             <div class="input-group-prepend">
                                                 <span class="input-group-text font-weight-500">Rp</span>
                                             </div>
-                                            @if ($isUniformMeal)
+                                            @if ((bool) ($this->companyProfile->is_uniform_meal_allowance ?? true))
                                                 <input type="text"
                                                        id="meal_allowance_per_day"
-                                                       value="{{ number_format($defaultMealRate, 0, ',', '.') }}"
+                                                       value="{{ number_format((float) ($this->companyProfile->default_meal_allowance_per_day ?? 25000), 0, ',', '.') }}"
                                                        class="form-control text-right font-weight-500"
                                                        style="background-color: #f1f5f9; color: #475569;"
                                                        readonly
@@ -351,7 +346,7 @@
                                                            rawVal = raw ? parseFloat(raw) : 0;
                                                        "
                                                        class="form-control text-right @error('form.meal_allowance_per_day') is-invalid @enderror"
-                                                       placeholder="{{ number_format($defaultMealRate, 0, ',', '.') }}"
+                                                       placeholder="{{ number_format((float) ($this->companyProfile->default_meal_allowance_per_day ?? 25000), 0, ',', '.') }}"
                                                        autocomplete="off">
                                             @endif
                                         </div>

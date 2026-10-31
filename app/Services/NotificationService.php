@@ -14,6 +14,41 @@ class NotificationService
     public const PER_PAGE = 15;
 
     /**
+     * Inline gradient style for a notification icon.
+     *
+     * Level-based: pass only $level ('success' | 'danger' | 'warning' | anything else = blue).
+     * Title-based (navbar action items): pass $title to keep the exact legacy
+     * str_contains matching — title keyword wins over the level fallback.
+     */
+    public static function iconGradient(?string $level, ?string $title = null): string
+    {
+        if ($title !== null) {
+            return match (true) {
+                str_contains($title, 'Karyawan Nonaktif'),
+                str_contains($title, 'Data Payroll'),
+                str_contains($title, 'Kontrak'),
+                str_contains($title, 'Cicilan'),
+                str_contains($title, 'Perlu Diperiksa') => 'background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); box-shadow: 0 5px 12px rgba(109, 40, 217, 0.28);',
+                str_contains($title, 'Kasbon'),
+                str_contains($title, 'Pembayaran Kasbon') => 'background: linear-gradient(135deg, #f59e0b 0%, #ea8c00 100%); box-shadow: 0 5px 12px rgba(234, 140, 0, 0.28);',
+                $level === 'success' => 'background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 5px 12px rgba(22, 163, 74, 0.28);',
+                str_contains($title, 'Lembur') => 'background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); box-shadow: 0 5px 12px rgba(13, 148, 136, 0.28);',
+                str_contains($title, 'Penggajian'),
+                str_contains($title, 'Periode'),
+                str_contains($title, 'Slip') => 'background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 5px 12px rgba(37, 99, 235, 0.28);',
+                default => 'background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 5px 12px rgba(37, 99, 235, 0.28);',
+            };
+        }
+
+        return match ($level ?? 'info') {
+            'success' => 'background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 5px 12px rgba(22, 163, 74, 0.28);',
+            'danger' => 'background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 5px 12px rgba(220, 38, 38, 0.28);',
+            'warning' => 'background: linear-gradient(135deg, #f59e0b 0%, #ea8c00 100%); box-shadow: 0 5px 12px rgba(234, 140, 0, 0.28);',
+            default => 'background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 5px 12px rgba(37, 99, 235, 0.28);',
+        };
+    }
+
+    /**
      * Send a database notification and invalidate the recipient's navbar cache.
      *
      * @param  User|iterable<User>  $recipients

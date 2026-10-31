@@ -10,39 +10,15 @@
             </div>
 
             @if ($selectedCashAdvance)
-                @php
-                    $empName = $selectedCashAdvance->employee?->full_name ?: 'Karyawan';
-                    $cleanedWords = array_values(array_filter(
-                        preg_split('/\s+/', trim($empName)),
-                        fn($w) => preg_match('/[a-zA-Z0-9]/', $w)
-                    ));
-                    $initials = '';
-                    if (!empty($cleanedWords)) {
-                        $initials .= strtoupper(substr($cleanedWords[0], 0, 1));
-                        if (isset($cleanedWords[1])) {
-                            $initials .= strtoupper(substr($cleanedWords[1], 0, 1));
-                        }
-                    }
-                    $initials = $initials ?: 'K';
-
-                    $statusStyles = match ($selectedCashAdvance->status) {
-                        \App\Enums\CashAdvanceStatus::PENDING => 'background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a;',
-                        \App\Enums\CashAdvanceStatus::APPROVED, \App\Enums\CashAdvanceStatus::ACTIVE => 'background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;',
-                        \App\Enums\CashAdvanceStatus::PAID => 'background-color: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0;',
-                        \App\Enums\CashAdvanceStatus::REJECTED, \App\Enums\CashAdvanceStatus::CANCELLED => 'background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;',
-                        default => 'background-color: #f8fafc; color: #475569; border: 1px solid #e2e8f0;',
-                    };
-                @endphp
-
                 <div class="modal-body px-4 py-2">
                     <!-- 1. Identitas Karyawan -->
                     <div class="text-center pt-1">
                         <div class="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2 font-weight-bold"
                              style="width: 64px; height: 64px; background-color: #eff6ff; color: #0284c7; border: 2px solid #bae6fd; font-size: 20px;">
-                            {{ $initials }}
+                            {{ $selectedCashAdvance->employee?->initials ?? 'K' }}
                         </div>
                         <div class="font-weight-bold" style="font-size: 17px; color: #0f172a; margin-bottom: 3px;">
-                            {{ $empName }}
+                            {{ $selectedCashAdvance->employee?->full_name ?: 'Karyawan' }}
                         </div>
                         <div style="font-size: 13px; color: #64748b; font-weight: 500;">
                             {{ $selectedCashAdvance->employee?->department?->name ?? 'Tanpa Departemen' }} &bull;
@@ -62,7 +38,13 @@
                             {{ $selectedCashAdvance->formatted_amount }}
                         </div>
                         <div>
-                            <span style="display: inline-block; padding: 4px 14px; font-size: 12.5px; font-weight: 600; border-radius: 6px; line-height: 1.4; {{ $statusStyles }}">
+                            <span style="display: inline-block; padding: 4px 14px; font-size: 12.5px; font-weight: 600; border-radius: 6px; line-height: 1.4; {{ match ($selectedCashAdvance->status) {
+                                \App\Enums\CashAdvanceStatus::PENDING => 'background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a;',
+                                \App\Enums\CashAdvanceStatus::APPROVED, \App\Enums\CashAdvanceStatus::ACTIVE => 'background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;',
+                                \App\Enums\CashAdvanceStatus::PAID => 'background-color: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0;',
+                                \App\Enums\CashAdvanceStatus::REJECTED, \App\Enums\CashAdvanceStatus::CANCELLED => 'background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;',
+                                default => 'background-color: #f8fafc; color: #475569; border: 1px solid #e2e8f0;',
+                            } }}">
                                 {{ $selectedCashAdvance->status_label }}
                             </span>
                         </div>

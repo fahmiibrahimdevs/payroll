@@ -36,44 +36,19 @@
                             <div class="text-danger small mb-2 font-weight-500">{{ $message }}</div>
                         @enderror
 
-                        @php
-                            $unpaidList = $statements['unpaid_statements'] ?? [];
-                            $waterfall = $this->earlyPaymentWaterfall;
-                            $allocations = $waterfall['allocations'] ?? [];
-                            $selectedSum = 0.0;
-                            foreach ($unpaidList as $st) {
-                                if (in_array($st['month_key'], $selectedMonthKeysForPayment, true)) {
-                                    $selectedSum += (float) ($st['remaining_amount'] ?? 0);
-                                }
-                            }
-                        @endphp
-
                         <div class="early-pay-month-list">
-                            @forelse ($unpaidList as $st)
+                            @forelse ($statements['unpaid_statements'] ?? [] as $st)
                                 @php
                                     $mKey = $st['month_key'];
-                                    $isSelected = in_array($mKey, $selectedMonthKeysForPayment, true);
-                                    $alloc = $allocations[$mKey] ?? null;
-                                    $isCovered = $alloc && $alloc['is_covered'];
-                                    $isPartial = $alloc && $alloc['is_partial'];
-                                    $isFull = $alloc && $alloc['is_full'];
-
-                                    $cardModifierClass = '';
-                                    if ($isFull) {
-                                        $cardModifierClass = 'early-pay-month-card-full';
-                                    } elseif ($isPartial) {
-                                        $cardModifierClass = 'early-pay-month-card-partial';
-                                    } elseif ($isSelected) {
-                                        $cardModifierClass = 'early-pay-month-card-selected';
-                                    }
+                                    $alloc = $this->earlyPaymentWaterfall['allocations'][$mKey] ?? null;
                                 @endphp
-                                <div class="early-pay-month-card {{ $cardModifierClass }}"
+                                <div class="early-pay-month-card {{ $alloc['card_class'] ?? (in_array($mKey, $selectedMonthKeysForPayment, true) ? 'early-pay-month-card-selected' : '') }}"
                                     wire:click="toggleMonthSelection('{{ $mKey }}')"
                                     wire:key="early-pay-month-{{ $mKey }}">
                                     <div class="early-pay-month-main">
                                         <input type="checkbox" class="early-pay-month-checkbox"
                                             wire:click.stop="toggleMonthSelection('{{ $mKey }}')"
-                                            {{ $isSelected ? 'checked' : '' }}>
+                                            {{ ($alloc['is_selected'] ?? in_array($mKey, $selectedMonthKeysForPayment, true)) ? 'checked' : '' }}>
                                         <div class="min-w-0">
                                             <div class="early-pay-month-title text-truncate">
                                                 <span class="d-none d-sm-inline">Tagihan {{ $st['month_name_full'] }}</span>
@@ -82,7 +57,7 @@
                                             <div class="early-pay-month-due text-truncate">
                                                 Tanggal jatuh tempo {{ $st['formatted_due_date'] }}
                                             </div>
-                                            @if ($isPartial)
+                                            @if ($alloc && $alloc['is_partial'])
                                                 <div class="early-pay-month-partial-note text-truncate">
                                                     Sisa Nanti: Rp {{ number_format($alloc['remaining_after'], 0, ',', '.') }}
                                                 </div>
@@ -90,7 +65,7 @@
                                         </div>
                                     </div>
                                     <div class="text-right text-nowrap pl-2">
-                                        <div class="early-pay-month-amount {{ $isSelected ? '' : 'early-pay-month-amount-unselected' }}">
+                                        <div class="early-pay-month-amount {{ ($alloc['is_selected'] ?? in_array($mKey, $selectedMonthKeysForPayment, true)) ? '' : 'early-pay-month-amount-unselected' }}">
                                             {{ $st['formatted_remaining_amount'] }}
                                         </div>
                                     </div>
@@ -103,7 +78,7 @@
                         </div>
 
                         <!-- Tombol Pilih Semua Bulan (Full Width di bawah card tagihan) -->
-                        @if (!empty($unpaidList))
+                        @if (!empty($statements['unpaid_statements']))
                             <button type="button" wire:click="selectAllUnpaidMonths" class="btn btn-outline-primary shadow-none early-pay-btn-select-all">
                                 <i class="fas fa-check-double mr-1"></i> Pilih Semua Bulan
                             </button>
@@ -114,7 +89,7 @@
                             <div>
                                 <div class="early-pay-summary-label">Total Tagihan Dipilih:</div>
                                 <div class="early-pay-summary-value">
-                                    Rp {{ number_format($selectedSum, 0, ',', '.') }}
+                                    Rp {{ number_format($this->earlyPaymentWaterfall['selected_sum'], 0, ',', '.') }}
                                 </div>
                             </div>
                             <div class="text-right text-nowrap">
@@ -236,18 +211,13 @@
 
                 <div class="modal-footer early-payment-modal-footer">
                     <button type="button" class="btn btn-secondary shadow-none early-pay-btn-cancel" data-dismiss="modal">Batal</button>
-                    @php
-                        $inputVal = (float) $earlyPaymentAmount;
-                        $isExceeded = $inputVal > $selectedSum;
-                        $isInvalid = $isExceeded || $inputVal < 1000 || $selectedSum <= 0 || empty($selectedMonthKeysForPayment) || $errors->has('earlyPaymentAmount');
-                    @endphp
-                    <button type="submit" wire:loading.attr="disabled" wire:target="storeEarlyPayment,earlyProofDocument,earlyPaymentAmount,toggleMonthSelection,selectAllUnpaidMonths" class="btn btn-primary shadow-none early-pay-btn-submit" @if ($isInvalid) disabled @endif>
+                    <button type="submit" wire:loading.attr="disabled" wire:target="storeEarlyPayment,earlyProofDocument,earlyPaymentAmount,toggleMonthSelection,selectAllUnpaidMonths" class="btn btn-primary shadow-none early-pay-btn-submit" @if ($this->earlyPaymentWaterfall['is_invalid']) disabled @endif>
                         <i wire:loading wire:target="storeEarlyPayment" class="fas fa-spinner fa-spin mr-1"></i>
                         <span wire:loading.remove wire:target="storeEarlyPayment">
-                            @if ($isExceeded)
+                            @if ($this->earlyPaymentWaterfall['is_exceeded'])
                                 Nominal Melebihi Total
-                            @elseif ($earlyPaymentAmount && $inputVal > 0)
-                                Bayar Rp {{ number_format($inputVal, 0, ',', '.') }}
+                            @elseif ($earlyPaymentAmount && $this->earlyPaymentWaterfall['input_amount'] > 0)
+                                Bayar Rp {{ number_format($this->earlyPaymentWaterfall['input_amount'], 0, ',', '.') }}
                             @else
                                 Bayar Lebih Awal
                             @endif

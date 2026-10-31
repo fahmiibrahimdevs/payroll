@@ -128,40 +128,9 @@
             <!-- Row 2: Activities Timeline (Stisla Template Style) -->
             <div class="activities mb-3">
                 @forelse ($logs as $log)
-                    @php
-                        $level = strtolower($log->level ?? 'info');
-                        $action = strtolower($log->action ?? '');
-
-                        $iconBg = match ($level) {
-                            'error', 'critical' => 'bg-danger text-white shadow-danger',
-                            'warning', 'warn' => 'bg-warning text-white shadow-warning',
-                            'debug' => 'bg-dark text-white',
-                            default => match ($action) {
-                                'create', 'store' => 'bg-success text-white shadow-success',
-                                'delete', 'destroy' => 'bg-danger text-white shadow-danger',
-                                'login', 'logout' => 'bg-info text-white shadow-info',
-                                default => 'bg-primary text-white shadow-primary',
-                            },
-                        };
-
-                        $iconClass = match ($action) {
-                            'create', 'store' => 'fas fa-plus',
-                            'update', 'edit' => 'fas fa-pencil-alt',
-                            'delete', 'destroy' => 'fas fa-trash',
-                            'login' => 'fas fa-sign-in-alt',
-                            'logout' => 'fas fa-sign-out-alt',
-                            'view', 'show' => 'fas fa-eye',
-                            default => match ($level) {
-                                'error', 'critical' => 'fas fa-times-circle',
-                                'warning', 'warn' => 'fas fa-exclamation-triangle',
-                                default => 'fas fa-clipboard-list',
-                            },
-                        };
-                    @endphp
-
                     <div class="activity mt-2" wire:key="activity-log-{{ $log->id }}">
-                        <div class="activity-icon {{ $iconBg }}">
-                            <i class="{{ $iconClass }}"></i>
+                        <div class="activity-icon {{ $log->levelIconBg() }}">
+                            <i class="{{ $log->levelIcon() }}"></i>
                         </div>
                         <div class="activity-detail flex-1 min-w-0">
                             <!-- Top: Time, Badges, & Action Button -->
