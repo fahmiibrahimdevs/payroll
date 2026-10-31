@@ -307,4 +307,36 @@ class CompanyProfile extends Model
             }
         );
     }
+
+    /** Alamat lengkap satu baris (alamat + kota + provinsi + kode pos) untuk kop dokumen cetak. */
+    protected function fullAddress(): Attribute
+    {
+        return Attribute::make(
+            get: function (): string {
+                $parts = [];
+                if (! empty($this->address)) {
+                    $parts[] = $this->address;
+                }
+                if (! empty($this->city) && (! empty($this->address) ? ! str_contains(strtolower((string) $this->address), strtolower((string) $this->city)) : true)) {
+                    $parts[] = $this->city;
+                }
+                if (! empty($this->province) && (! empty($this->address) ? ! str_contains(strtolower((string) $this->address), strtolower((string) $this->province)) : true)) {
+                    $parts[] = $this->province;
+                }
+                if (! empty($this->postal_code)) {
+                    $parts[] = 'Kode Pos '.$this->postal_code;
+                }
+
+                return implode(', ', $parts);
+            }
+        );
+    }
+
+    /** Kota untuk baris pengesahan dokumen ("Jakarta, 1 Januari 2026"). */
+    protected function approvalCity(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): ?string => ! empty($this->city) ? trim($this->city) : null
+        );
+    }
 }

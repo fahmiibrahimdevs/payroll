@@ -607,139 +607,6 @@
 </head>
 <body>
 
-    @php
-        // Helper fungsi terbilang angka Indonesia
-        if (!function_exists('terbilang_id')) {
-            function terbilang_id($angka): string {
-                $angka = abs((float) $angka);
-                if ($angka == 0) return 'Nol';
-                $bilangan = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas'];
-                $hasil = '';
-
-                if ($angka < 12) {
-                    $hasil = $bilangan[(int)$angka];
-                } elseif ($angka < 20) {
-                    $hasil = terbilang_id($angka - 10) . ' Belas';
-                } elseif ($angka < 100) {
-                    $hasil = terbilang_id(floor($angka / 10)) . ' Puluh ' . terbilang_id(fmod($angka, 10));
-                } elseif ($angka < 200) {
-                    $hasil = 'Seratus ' . terbilang_id($angka - 100);
-                } elseif ($angka < 1000) {
-                    $hasil = terbilang_id(floor($angka / 100)) . ' Ratus ' . terbilang_id(fmod($angka, 100));
-                } elseif ($angka < 2000) {
-                    $hasil = 'Seribu ' . terbilang_id($angka - 1000);
-                } elseif ($angka < 1000000) {
-                    $hasil = terbilang_id(floor($angka / 1000)) . ' Ribu ' . terbilang_id(fmod($angka, 1000));
-                } elseif ($angka < 1000000000) {
-                    $hasil = terbilang_id(floor($angka / 1000000)) . ' Juta ' . terbilang_id(fmod($angka, 1000000));
-                } elseif ($angka < 1000000000000) {
-                    $hasil = terbilang_id(floor($angka / 1000000000)) . ' Miliar ' . terbilang_id(fmod($angka, 1000000000));
-                } else {
-                    $hasil = terbilang_id(floor($angka / 1000000000000)) . ' Triliun ' . terbilang_id(fmod($angka, 1000000000000));
-                }
-
-                return trim(preg_replace('/\s+/', ' ', $hasil));
-            }
-        }
-
-        // WhatsApp direct link generator
-        $phone = $item->employee?->detail?->phone ?? '';
-        $cleanedPhone = preg_replace('/[^0-9]/', '', (string) $phone);
-        if (str_starts_with($cleanedPhone, '0')) {
-            $cleanedPhone = '62' . substr($cleanedPhone, 1);
-        }
-        $periodLabel = $period->period_label ?? 'Bulan Ini';
-        $waMsg = "Halo {$item->employee?->full_name},\n\n";
-        $waMsg .= "Berikut adalah ringkasan slip gaji Anda untuk {$periodLabel} dari {$company->name}:\n";
-        $waMsg .= "• No Slip: {$item->payslip_number}\n";
-        $waMsg .= "• Gaji Pokok" . ($item->human_notes ? " ({$item->human_notes})" : "") . ": {$item->formatted_basic_salary}\n";
-        $waMsg .= "• Total Pendapatan (+): Rp " . number_format((float) $item->basic_salary + (float) $item->total_allowances, 0, ',', '.') . "\n";
-        $waMsg .= "• Total Potongan (-): {$item->formatted_total_deductions}\n";
-        $waMsg .= "• Gaji Bersih Diterima: {$item->formatted_net_salary}\n\n";
-        $waMsg .= "Status Pembayaran: " . ($item->payment_status === 'paid' ? 'LUNAS / DIBAYAR' : 'PROSES') . "\n";
-        $waMsg .= "Terima kasih atas dedikasi dan kerja keras Anda!";
-        $waUrl = !empty($cleanedPhone) ? "https://wa.me/{$cleanedPhone}?text=" . rawurlencode($waMsg) : null;
-
-        // Persiapan data Pendapatan
-        $earningsList = [];
-        $earningsList[] = [
-            'name' => 'Gaji Pokok' . ($item->human_notes ? ' (' . $item->human_notes . ')' : ''),
-            'amount' => (float) $item->basic_salary,
-        ];
-        foreach ($item->allowanceLines as $line) {
-            $earningsList[] = [
-                'name' => $line->name . ($line->category?->value === 'tax' ? ' (Gross-Up)' : ''),
-                'amount' => (float) $line->amount,
-            ];
-        }
-
-        // Persiapan data Potongan (hanya yang bernilai != 0)
-        $deductionsList = [];
-        foreach ($item->deductionLines as $line) {
-            if ((float) $line->amount != 0.0) {
-                $deductionsList[] = [
-                    'name' => $line->name,
-                    'amount' => (float) $line->amount,
-                ];
-            }
-        }
-
-        // Menyeimbangkan jumlah baris agar footer tabel selalu sejajar rapi
-        $maxRows = max(count($earningsList), count($deductionsList), 4);
-
-        // Alamat & Lokasi Perusahaan (Dinamis dari Profil Perusahaan)
-        $locationParts = [];
-        if (!empty($company->address)) {
-            $locationParts[] = $company->address;
-        }
-        if (!empty($company->city) && (!empty($company->address) ? !str_contains(strtolower((string) $company->address), strtolower((string) $company->city)) : true)) {
-            $locationParts[] = $company->city;
-        }
-        if (!empty($company->province) && (!empty($company->address) ? !str_contains(strtolower((string) $company->address), strtolower((string) $company->province)) : true)) {
-            $locationParts[] = $company->province;
-        }
-        if (!empty($company->postal_code)) {
-            $locationParts[] = 'Kode Pos ' . $company->postal_code;
-        }
-        $companyFullAddress = implode(', ', $locationParts);
-
-        // Kota untuk Pengesahan (Dinamis dari Profil Perusahaan)
-        $city = !empty($company->city) ? trim($company->city) : null;
-
-        // Tanggal Dokumen
-        $docDate = $period->payment_date 
-            ? $period->payment_date->locale('id')->translatedFormat('d F Y') 
-            : ($period->end_date ? $period->end_date->locale('id')->translatedFormat('d F Y') : now()->locale('id')->translatedFormat('d F Y'));
-
-        // Approver / Admin Pengesah
-        $adminUser = null;
-        if ($period->submitter && $period->submitter->hasRole('admin')) {
-            $adminUser = $period->submitter;
-        } elseif ($period->creator && $period->creator->hasRole('admin')) {
-            $adminUser = $period->creator;
-        } elseif ($period->approver && $period->approver->hasRole('admin')) {
-            $adminUser = $period->approver;
-        } else {
-            $adminUser = \App\Models\User::whereNotIn('email', \App\Services\UserService::HIDDEN_DUMMY_EMAILS)
-                ->whereHas('roles', fn ($q) => $q->where('name', 'admin'))->first() ?? $period->approver;
-        }
-
-        $adminName = $adminUser?->name ?? 'Admin Demo';
-
-        // Jabatan Admin Pengesah (hanya nama jabatan saja)
-        $adminEmployee = $adminUser?->employee;
-        if (! $adminEmployee && $adminUser) {
-            $adminEmployee = \App\Models\Employee::where('user_id', $adminUser->id)->first()
-                ?? \App\Models\Employee::whereHas('detail', fn ($q) => $q->where('email', $adminUser->email))->first();
-        }
-
-        $adminPosition = $adminEmployee?->position?->name;
-        if ($adminPosition) {
-            $adminJobTitle = $adminPosition;
-        } else {
-            $adminJobTitle = $adminUser?->hasRole('admin') ? 'HR Manager' : 'Direktur';
-        }
-    @endphp
 
     <!-- Top Actions Header (On-screen) -->
     <div class="print-actions">
@@ -749,8 +616,8 @@
             </a>
         </div>
         <div class="print-actions-right">
-            @if ($waUrl)
-                <a href="{{ $waUrl }}" target="_blank" class="btn btn-whatsapp" title="Kirim ringkasan slip ke nomor WhatsApp karyawan">
+            @if ($item->whatsapp_share_link)
+                <a href="{{ $item->whatsapp_share_link }}" target="_blank" class="btn btn-whatsapp" title="Kirim ringkasan slip ke nomor WhatsApp karyawan">
                     <i class="fab fa-whatsapp"></i> Kirim ke WhatsApp
                 </a>
             @endif
@@ -793,8 +660,8 @@
                 <div class="kop-text">
                     <h1 class="slip-title">SLIP GAJI KARYAWAN</h1>
                     <h2 class="company-title">{{ strtoupper($company->name) }}</h2>
-                    @if (!empty($companyFullAddress))
-                        <div class="company-sub">{{ $companyFullAddress }}</div>
+                    @if (!empty($company->full_address))
+                        <div class="company-sub">{{ $company->full_address }}</div>
                     @endif
                     <div class="company-sub">
                         @if ($company->phone) Telp. {{ $company->phone }} @endif
@@ -873,19 +740,15 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @for ($i = 0; $i < $maxRows; $i++)
-                            @if (isset($earningsList[$i]))
-                                @php
-                                    $earnAmt = (float) $earningsList[$i]['amount'];
-                                    $earnStr = $earnAmt == 0 ? '-' : number_format($earnAmt, 0, ',', '.');
-                                @endphp
+                        @for ($i = 0; $i < $item->slip_line_rows; $i++)
+                            @if (isset($item->earnings_list[$i]))
                                 <tr>
                                     <td class="td-no">{{ $i + 1 }}</td>
-                                    <td class="td-desc">{{ $earningsList[$i]['name'] }}</td>
+                                    <td class="td-desc">{{ $item->earnings_list[$i]['name'] }}</td>
                                     <td class="td-amount">
                                         <div class="money-cell">
                                             <span class="curr-symbol">Rp.</span>
-                                            <span class="curr-val">{{ $earnStr }}</span>
+                                            <span class="curr-val">{{ \App\Support\Rupiah::cell($item->earnings_list[$i]['amount']) }}</span>
                                         </div>
                                     </td>
                                 </tr>
@@ -926,19 +789,15 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @for ($j = 0; $j < $maxRows; $j++)
-                            @if (isset($deductionsList[$j]))
-                                @php
-                                    $amt = (float) $deductionsList[$j]['amount'];
-                                    $amtStr = $amt == 0 ? '-' : ($amt < 0 ? '-' . number_format(abs($amt), 0, ',', '.') : number_format($amt, 0, ',', '.'));
-                                @endphp
+                        @for ($j = 0; $j < $item->slip_line_rows; $j++)
+                            @if (isset($item->deductions_list[$j]))
                                 <tr>
                                     <td class="td-no">{{ $j + 1 }}</td>
-                                    <td class="td-desc">{{ $deductionsList[$j]['name'] }}</td>
+                                    <td class="td-desc">{{ $item->deductions_list[$j]['name'] }}</td>
                                     <td class="td-amount">
                                         <div class="money-cell">
                                             <span class="curr-symbol">Rp.</span>
-                                            <span class="curr-val">{{ $amtStr }}</span>
+                                            <span class="curr-val">{{ \App\Support\Rupiah::cell($item->deductions_list[$j]['amount']) }}</span>
                                         </div>
                                     </td>
                                 </tr>
@@ -974,7 +833,7 @@
             </div>
             <div class="gaji-bersih-right">
                 <div class="gaji-bersih-amount">Rp {{ number_format((float) $item->net_salary, 0, ',', '.') }}</div>
-                <div class="gaji-bersih-terbilang">({{ terbilang_id($item->net_salary) }} Rupiah)</div>
+                <div class="gaji-bersih-terbilang">({{ $item->net_salary_in_words }} Rupiah)</div>
             </div>
         </div>
 
@@ -1023,11 +882,11 @@
 
             <!-- KANAN: DISETUJUI OLEH (ADMIN) -->
             <div class="signature-col">
-                <div class="signature-date">{{ $city ? $city . ', ' : '' }}{{ $docDate }}</div>
+                <div class="signature-date">{{ $company->approval_city ? $company->approval_city.', ' : '' }}{{ $period->document_date_label }}</div>
                 <div class="signature-title">Disetujui Oleh,</div>
                 <div class="signature-space"></div>
-                <div class="signature-name">{{ $adminName }}</div>
-                <div class="signature-nip">{{ $adminJobTitle }}</div>
+                <div class="signature-name">{{ $period->signer['name'] }}</div>
+                <div class="signature-nip">{{ $period->signer['job_title'] }}</div>
             </div>
         </div>
 

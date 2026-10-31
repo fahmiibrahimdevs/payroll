@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\PayrollPeriodStatus;
+use App\Services\DashboardService;
+use App\Services\UserService;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -124,6 +126,52 @@ class PayrollPeriod extends Model
         );
     }
 
+    /** Tanggal dokumen slip: tanggal pembayaran, atau akhir periode, atau hari ini. */
+    protected function documentDateLabel(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->payment_date
+                ? $this->payment_date->locale('id')->translatedFormat('d F Y')
+                : ($this->end_date
+                    ? $this->end_date->locale('id')->translatedFormat('d F Y')
+                    : now()->locale('id')->translatedFormat('d F Y'))
+        );
+    }
+
+    /** Admin pengesah slip: submitter/creator/approver dengan role admin, atau fallback admin mana pun. */
+    protected function signer(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                $adminUser = null;
+                if ($this->submitter && $this->submitter->hasRole('admin')) {
+                    $adminUser = $this->submitter;
+                } elseif ($this->creator && $this->creator->hasRole('admin')) {
+                    $adminUser = $this->creator;
+                } elseif ($this->approver && $this->approver->hasRole('admin')) {
+                    $adminUser = $this->approver;
+                } else {
+                    $adminUser = User::whereNotIn('email', UserService::HIDDEN_DUMMY_EMAILS)
+                        ->whereHas('roles', fn ($q) => $q->where('name', 'admin'))
+                        ->first()
+                        ?? $this->approver;
+                }
+
+                $adminEmployee = $adminUser?->employee;
+                if (! $adminEmployee && $adminUser) {
+                    $adminEmployee = Employee::where('user_id', $adminUser->id)->first()
+                        ?? Employee::whereHas('detail', fn ($q) => $q->where('email', $adminUser->email))->first();
+                }
+
+                return [
+                    'name' => $adminUser?->name ?? 'Admin Demo',
+                    'job_title' => $adminEmployee?->position?->name
+                        ?: ($adminUser?->hasRole('admin') ? 'HR Manager' : 'Direktur'),
+                ];
+            }
+        );
+    }
+
     protected function formattedTotalNetSalary(): Attribute
     {
         return Attribute::make(
@@ -190,10 +238,10 @@ class PayrollPeriod extends Model
     protected static function booted(): void
     {
         static::saved(function (PayrollPeriod $period) {
-            \App\Services\DashboardService::clearPayrollTrendCache($period->year);
+            DashboardService::clearPayrollTrendCache($period->year);
         });
         static::deleted(function (PayrollPeriod $period) {
-            \App\Services\DashboardService::clearPayrollTrendCache($period->year);
+            DashboardService::clearPayrollTrendCache($period->year);
         });
     }
 }

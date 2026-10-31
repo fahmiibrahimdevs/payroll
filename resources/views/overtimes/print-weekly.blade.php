@@ -586,40 +586,6 @@
 </head>
 <body>
 
-    @php
-        if (!function_exists('terbilang_id')) {
-            function terbilang_id($angka): string {
-                $angka = abs((float) $angka);
-                $baca = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas'];
-                $hasil = '';
-
-                if ($angka < 12) {
-                    $hasil = ' ' . $baca[(int) $angka];
-                } elseif ($angka < 20) {
-                    $hasil = terbilang_id($angka - 10) . ' Belas';
-                } elseif ($angka < 100) {
-                    $hasil = terbilang_id(floor($angka / 10)) . ' Puluh ' . terbilang_id(fmod($angka, 10));
-                } elseif ($angka < 200) {
-                    $hasil = 'Seratus ' . terbilang_id($angka - 100);
-                } elseif ($angka < 1000) {
-                    $hasil = terbilang_id(floor($angka / 100)) . ' Ratus ' . terbilang_id(fmod($angka, 100));
-                } elseif ($angka < 2000) {
-                    $hasil = 'Seribu ' . terbilang_id($angka - 1000);
-                } elseif ($angka < 1000000) {
-                    $hasil = terbilang_id(floor($angka / 1000)) . ' Ribu ' . terbilang_id(fmod($angka, 1000));
-                } elseif ($angka < 1000000000) {
-                    $hasil = terbilang_id(floor($angka / 1000000)) . ' Juta ' . terbilang_id(fmod($angka, 1000000));
-                } elseif ($angka < 1000000000000) {
-                    $hasil = terbilang_id(floor($angka / 1000000000)) . ' Miliar ' . terbilang_id(fmod($angka, 1000000000));
-                } else {
-                    $hasil = terbilang_id(floor($angka / 1000000000000)) . ' Triliun ' . terbilang_id(fmod($angka, 1000000000000));
-                }
-
-                return trim($hasil);
-            }
-        }
-    @endphp
-
     <!-- ACTION BUTTONS -->
     <div class="print-actions">
         <a href="{{ route('overtimes.index') }}" class="btn btn-secondary">
@@ -632,41 +598,7 @@
         </div>
     </div>
 
-    @forelse ($slips as $slip)
-        @php
-            $emp = $slip['employee'];
-            $submissions = $slip['submissions'];
-            $attendance = $slip['attendance'] ?? null;
-            $totalHours = $slip['total_hours'];
-            $totalOvertimePay = $slip['total_overtime_pay'];
-            $grandTotal = $slip['grand_total'];
-            $isHarian = $emp->employment_status === \App\Enums\EmploymentStatus::HARIAN;
-
-            $daysCount = $attendance ? (int) $attendance->attended_days : 0;
-            $mealRate = $attendance ? (float) $attendance->meal_allowance_per_day : (float) $emp->getEffectiveMealAllowancePerDay();
-            $dailyRate = $attendance && (float) $attendance->daily_rate > 0 ? (float) $attendance->daily_rate : (float) ($emp->daily_rate ?? 0);
-            $totalMeal = $attendance ? (float) $attendance->total_meal_allowance : (float) ($daysCount * $mealRate);
-            $totalDailyWage = $attendance ? (float) ($attendance->total_daily_wage ?? 0) : (float) ($daysCount * $dailyRate);
-
-            $dayLabels = [
-                'mon' => 'Sen',
-                'tue' => 'Sel',
-                'wed' => 'Rab',
-                'thu' => 'Kam',
-                'fri' => 'Jum',
-                'sat' => 'Sab',
-                'sun' => 'Min',
-            ];
-            $attendedDaysList = [];
-            if ($attendance && is_array($attendance->attendance_days)) {
-                foreach ($attendance->attendance_days as $d) {
-                    $attendedDaysList[] = $dayLabels[strtolower($d)] ?? ucfirst($d);
-                }
-            }
-
-            $isSlipPaid = ($period->status === \App\Enums\OvertimePeriodStatus::PAID) || ($attendance && $attendance->isPaid());
-        @endphp
-
+    @forelse ($slips as ['employee' => $emp, 'submissions' => $submissions, 'attendance' => $attendance, 'total_hours' => $totalHours, 'total_overtime_pay' => $totalOvertimePay, 'grand_total' => $grandTotal, 'grand_total_in_words' => $grandTotalInWords, 'is_harian' => $isHarian, 'days_count' => $daysCount, 'meal_rate' => $mealRate, 'daily_rate' => $dailyRate, 'total_meal' => $totalMeal, 'total_daily_wage' => $totalDailyWage, 'attended_days_labels' => $attendedDaysList, 'is_paid' => $isSlipPaid])
         <div class="slip-paper {{ $isHarian ? 'slip-theme-harian' : 'slip-theme-staff' }}">
             @if (! $isSlipPaid)
                 <!-- Watermark Status Belum Lunas (User Request: Batch print tetap cetak semua namun diberi watermark) -->
@@ -861,13 +793,9 @@
                 </div>
                 <div class="gaji-bersih-right">
                     <div class="gaji-bersih-amount">Rp {{ number_format($grandTotal, 0, ',', '.') }}</div>
-                    <div class="gaji-bersih-terbilang">({{ terbilang_id($grandTotal) }} Rupiah)</div>
+                    <div class="gaji-bersih-terbilang">({{ $grandTotalInWords }} Rupiah)</div>
                 </div>
             </div>
-
-            @php
-                $isSlipPaid = ($period->status === \App\Enums\OvertimePeriodStatus::PAID) || ($attendance && $attendance->isPaid());
-            @endphp
 
             @if ($isSlipPaid)
                 <!-- INFORMASI PEMBAYARAN RESMI (LUNAS DIBAYARKAN) -->

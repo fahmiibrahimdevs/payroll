@@ -2,15 +2,30 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\EmploymentStatus;
+use App\Enums\OvertimePeriodStatus;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\OvertimePeriod;
-use App\Models\OvertimeSubmission;
+use App\Models\OvertimePeriodAttendance;
 use App\Services\ActivityLogService;
+use App\Support\Terbilang;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 
 class OvertimePrintController extends Controller
 {
+    /** Label singkat hari untuk slip cetak mingguan. */
+    private const DAY_LABELS = [
+        'mon' => 'Sen',
+        'tue' => 'Sel',
+        'wed' => 'Rab',
+        'thu' => 'Kam',
+        'fri' => 'Jum',
+        'sat' => 'Sab',
+        'sun' => 'Min',
+    ];
+
     public function __construct(
         protected ActivityLogService $logger
     ) {}
@@ -33,7 +48,7 @@ class OvertimePrintController extends Controller
             $employee = $myEmployee;
 
             $attCheck = $period->attendances()->where('employee_id', $employee->id)->first();
-            $isPaid = ($period->status === \App\Enums\OvertimePeriodStatus::PAID) || ($attCheck && $attCheck->isPaid());
+            $isPaid = ($period->status === OvertimePeriodStatus::PAID) || ($attCheck && $attCheck->isPaid());
             abort_unless($isPaid, 403, 'Slip gaji mingguan belum dapat dicetak karena pembayaran belum dikonfirmasi oleh Admin.');
         } else {
             abort_unless($user && $user->hasRole(['admin', 'direktur']), 403);
@@ -56,23 +71,13 @@ class OvertimePrintController extends Controller
             $totalOvertimePay = (float) $submissions->sum(fn ($s) => (float) $s->subtotal_overtime);
             $totalMealAllowance = $attendance ? (float) $attendance->total_meal_allowance : (float) $submissions->sum('meal_allowance');
             $totalDailyWage = $attendance ? (float) ($attendance->total_daily_wage ?? 0) : 0;
-            $grandTotal = $totalOvertimePay + $totalMealAllowance + $totalDailyWage;
 
-            $attendedDays = (int) ($attendance?->attended_days ?? 0);
             $slips = [];
 
             // Hanya buat slip jika karyawan memiliki kehadiran kerja (> 0 hari) atau memiliki lembur/upah
-            if ($attendedDays > 0 || $submissions->isNotEmpty() || $grandTotal > 0) {
-                $slips[] = [
-                    'employee' => $employee,
-                    'submissions' => $submissions,
-                    'attendance' => $attendance,
-                    'total_hours' => $totalHours,
-                    'total_overtime_pay' => $totalOvertimePay,
-                    'total_meal_allowance' => $totalMealAllowance,
-                    'total_daily_wage' => $totalDailyWage,
-                    'grand_total' => $grandTotal,
-                ];
+            $attendedDays = (int) ($attendance?->attended_days ?? 0);
+            if ($attendedDays > 0 || $submissions->isNotEmpty() || $totalOvertimePay + $totalMealAllowance + $totalDailyWage > 0) {
+                $slips[] = $this->buildSlip($period, $employee, $submissions, $attendance, $totalHours, $totalOvertimePay, $totalMealAllowance, $totalDailyWage);
             }
 
             $this->logger->info(
@@ -88,18 +93,7 @@ class OvertimePrintController extends Controller
             return view('overtimes.print-weekly', [
                 'period' => $period,
                 'company' => $company,
-                'slips' => [
-                    [
-                        'employee' => $employee,
-                        'submissions' => $submissions,
-                        'attendance' => $attendance,
-                        'total_hours' => $totalHours,
-                        'total_overtime_pay' => $totalOvertimePay,
-                        'total_meal_allowance' => $totalMealAllowance,
-                        'total_daily_wage' => $totalDailyWage,
-                        'grand_total' => $grandTotal,
-                    ],
-                ],
+                'slips' => $slips,
                 'isBatch' => false,
             ]);
         }
@@ -124,30 +118,22 @@ class OvertimePrintController extends Controller
             $empSubmissions = $submissionsByEmployee->get($empId, collect());
             $attendance = $attendancesByEmployee->get($empId);
             $emp = $empSubmissions->first()?->employee ?? $attendance?->employee;
-            if (! $emp) continue;
+            if (! $emp) {
+                continue;
+            }
 
             $totalHours = (float) $empSubmissions->sum('duration_hours');
             $totalOvertimePay = (float) $empSubmissions->sum(fn ($s) => (float) $s->subtotal_overtime);
             $totalMealAllowance = $attendance ? (float) $attendance->total_meal_allowance : (float) $empSubmissions->sum('meal_allowance');
             $totalDailyWage = $attendance ? (float) ($attendance->total_daily_wage ?? 0) : 0;
-            $grandTotal = $totalOvertimePay + $totalMealAllowance + $totalDailyWage;
 
             // Hanya cetak karyawan yang memiliki kehadiran kerja (> 0 hari) atau memiliki lembur/upah
             $attendedDays = (int) ($attendance?->attended_days ?? 0);
-            if ($attendedDays <= 0 && $empSubmissions->isEmpty() && $grandTotal <= 0) {
+            if ($attendedDays <= 0 && $empSubmissions->isEmpty() && $totalOvertimePay + $totalMealAllowance + $totalDailyWage <= 0) {
                 continue;
             }
 
-            $slips[] = [
-                'employee' => $emp,
-                'submissions' => $empSubmissions,
-                'attendance' => $attendance,
-                'total_hours' => $totalHours,
-                'total_overtime_pay' => $totalOvertimePay,
-                'total_meal_allowance' => $totalMealAllowance,
-                'total_daily_wage' => $totalDailyWage,
-                'grand_total' => $grandTotal,
-            ];
+            $slips[] = $this->buildSlip($period, $emp, $empSubmissions, $attendance, $totalHours, $totalOvertimePay, $totalMealAllowance, $totalDailyWage);
         }
 
         // Urutkan slips berdasarkan nama karyawan
@@ -169,5 +155,51 @@ class OvertimePrintController extends Controller
             'slips' => $slips,
             'isBatch' => true,
         ]);
+    }
+
+    /**
+     * Bangun data satu slip mingguan lengkap (termasuk nilai tampilan untuk view cetak).
+     */
+    private function buildSlip(
+        OvertimePeriod $period,
+        Employee $emp,
+        Collection $submissions,
+        ?OvertimePeriodAttendance $attendance,
+        float $totalHours,
+        float $totalOvertimePay,
+        float $totalMealAllowance,
+        float $totalDailyWage
+    ): array {
+        $grandTotal = $totalOvertimePay + $totalMealAllowance + $totalDailyWage;
+        $daysCount = $attendance ? (int) $attendance->attended_days : 0;
+        $mealRate = $attendance ? (float) $attendance->meal_allowance_per_day : $emp->getEffectiveMealAllowancePerDay();
+        $dailyRate = $attendance && (float) $attendance->daily_rate > 0 ? (float) $attendance->daily_rate : (float) ($emp->daily_rate ?? 0);
+        $totalMeal = $attendance ? (float) $attendance->total_meal_allowance : $daysCount * $mealRate;
+
+        $attendedDaysLabels = [];
+        if ($attendance && is_array($attendance->attendance_days)) {
+            foreach ($attendance->attendance_days as $day) {
+                $attendedDaysLabels[] = self::DAY_LABELS[strtolower($day)] ?? ucfirst($day);
+            }
+        }
+
+        return [
+            'employee' => $emp,
+            'submissions' => $submissions,
+            'attendance' => $attendance,
+            'total_hours' => $totalHours,
+            'total_overtime_pay' => $totalOvertimePay,
+            'total_meal_allowance' => $totalMealAllowance,
+            'total_daily_wage' => $totalDailyWage,
+            'grand_total' => $grandTotal,
+            'grand_total_in_words' => Terbilang::format($grandTotal),
+            'is_harian' => $emp->employment_status === EmploymentStatus::HARIAN,
+            'days_count' => $daysCount,
+            'meal_rate' => $mealRate,
+            'daily_rate' => $dailyRate,
+            'total_meal' => $totalMeal,
+            'attended_days_labels' => $attendedDaysLabels,
+            'is_paid' => ($period->status === OvertimePeriodStatus::PAID) || ($attendance && $attendance->isPaid()),
+        ];
     }
 }

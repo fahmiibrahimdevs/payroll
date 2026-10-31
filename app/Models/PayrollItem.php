@@ -6,6 +6,8 @@ use App\Enums\PayrollPeriodStatus;
 use App\Enums\PtkpStatus;
 use App\Enums\TaxMethod;
 use App\Enums\TaxRecipientType;
+use App\Services\DashboardService;
+use App\Support\Terbilang;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -301,6 +303,81 @@ class PayrollItem extends Model
         );
     }
 
+    // ===== Data siap-cetak slip gaji (dipakai view payrolls/print & print-batch) =====
+
+    protected function earningsList(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => [
+                [
+                    'name' => 'Gaji Pokok'.($this->human_notes ? ' ('.$this->human_notes.')' : ''),
+                    'amount' => (float) $this->basic_salary,
+                ],
+                ...$this->allowanceLines
+                    ->map(fn ($line) => [
+                        'name' => $line->name.($line->category?->value === 'tax' ? ' (Gross-Up)' : ''),
+                        'amount' => (float) $line->amount,
+                    ])
+                    ->all(),
+            ]
+        );
+    }
+
+    protected function deductionsList(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->deductionLines
+                ->filter(fn ($line) => (float) $line->amount != 0.0)
+                ->map(fn ($line) => ['name' => $line->name, 'amount' => (float) $line->amount])
+                ->values()
+                ->all()
+        );
+    }
+
+    /** Jumlah baris tabel slip agar kolom pendapatan & potongan sejajar rapi. */
+    protected function slipLineRows(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => max(count($this->earnings_list), count($this->deductions_list), 4)
+        );
+    }
+
+    protected function netSalaryInWords(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => Terbilang::format($this->net_salary)
+        );
+    }
+
+    protected function whatsappShareLink(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                $phone = preg_replace('/[^0-9]/', '', (string) ($this->employee?->detail?->phone ?? ''));
+                if ($phone === '') {
+                    return null;
+                }
+                if (str_starts_with($phone, '0')) {
+                    $phone = '62'.substr($phone, 1);
+                }
+
+                $company = CompanyProfile::getProfile();
+                $periodLabel = $this->payrollPeriod?->period_label ?? 'Bulan Ini';
+                $message = "Halo {$this->employee?->full_name},\n\n"
+                    ."Berikut adalah ringkasan slip gaji Anda untuk {$periodLabel} dari {$company->name}:\n"
+                    ."• No Slip: {$this->payslip_number}\n"
+                    .'• Gaji Pokok'.($this->human_notes ? " ({$this->human_notes})" : '').": {$this->formatted_basic_salary}\n"
+                    .'• Total Pendapatan (+): Rp '.number_format((float) $this->basic_salary + (float) $this->total_allowances, 0, ',', '.')."\n"
+                    ."• Total Potongan (-): {$this->formatted_total_deductions}\n"
+                    ."• Gaji Bersih Diterima: {$this->formatted_net_salary}\n\n"
+                    .'Status Pembayaran: '.($this->payment_status === 'paid' ? 'LUNAS / DIBAYAR' : 'PROSES')."\n"
+                    .'Terima kasih atas dedikasi dan kerja keras Anda!';
+
+                return 'https://wa.me/'.$phone.'?text='.rawurlencode($message);
+            }
+        );
+    }
+
     protected function payrollStatusBadgeClass(): Attribute
     {
         return Attribute::make(
@@ -454,14 +531,14 @@ class PayrollItem extends Model
         static::saved(function (PayrollItem $item) {
             $year = $item->relationLoaded('payrollPeriod')
                 ? $item->payrollPeriod?->year
-                : ($item->payroll_period_id ? \App\Models\PayrollPeriod::where('id', $item->payroll_period_id)->value('year') : null);
-            \App\Services\DashboardService::clearPayrollTrendCache($year);
+                : ($item->payroll_period_id ? PayrollPeriod::where('id', $item->payroll_period_id)->value('year') : null);
+            DashboardService::clearPayrollTrendCache($year);
         });
         static::deleted(function (PayrollItem $item) {
             $year = $item->relationLoaded('payrollPeriod')
                 ? $item->payrollPeriod?->year
-                : ($item->payroll_period_id ? \App\Models\PayrollPeriod::where('id', $item->payroll_period_id)->value('year') : null);
-            \App\Services\DashboardService::clearPayrollTrendCache($year);
+                : ($item->payroll_period_id ? PayrollPeriod::where('id', $item->payroll_period_id)->value('year') : null);
+            DashboardService::clearPayrollTrendCache($year);
         });
     }
 }

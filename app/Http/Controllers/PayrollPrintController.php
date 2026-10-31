@@ -36,7 +36,8 @@ class PayrollPrintController extends Controller
             'employee.department',
             'employee.position',
             'employee.detail',
-            'lines.salaryComponent',
+            'allowanceLines.salaryComponent',
+            'deductionLines.salaryComponent',
             'lines.cashAdvanceInstallment',
             'payrollPeriod',
         ]);
