@@ -15,6 +15,7 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\PayrollItemLine;
 use App\Models\User;
+use App\Support\Rupiah;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
@@ -263,13 +264,7 @@ class CashAdvanceService
 
         $totalEmployeesCount = (int) $advanceStats->total_employees_count;
 
-        $compactRemaining = $totalRemaining >= 1000000000
-            ? 'Rp '.number_format($totalRemaining / 1000000000, 1, ',', '.').' M'
-            : ($totalRemaining >= 1000000
-                ? 'Rp '.number_format($totalRemaining / 1000000, 1, ',', '.').' jt'
-                : ($totalRemaining >= 1000
-                    ? 'Rp '.number_format($totalRemaining / 1000, 0, ',', '.').' rb'
-                    : 'Rp '.number_format($totalRemaining, 0, ',', '.')));
+        $compactRemaining = Rupiah::compact($totalRemaining);
 
         return [
             'total_active_count' => $activeCount,

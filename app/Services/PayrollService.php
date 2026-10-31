@@ -26,6 +26,7 @@ use App\Models\PayrollPeriod;
 use App\Models\PayrollSequence;
 use App\Models\SalaryComponent;
 use App\Models\User;
+use App\Support\Rupiah;
 use App\Support\WorkingDays;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -280,22 +281,14 @@ class PayrollService
         $basicPercentage = $totalYearlyGross > 0 ? round(($totalYearlyBasic / $totalYearlyGross) * 100, 1) : 0;
         $allowancesPercentage = $totalYearlyGross > 0 ? round(($totalYearlyAllowances / $totalYearlyGross) * 100, 1) : 0;
 
-        $compactYearlyTotal = $totalYearlyExpense >= 1000000000
-            ? 'Rp '.number_format($totalYearlyExpense / 1000000000, 1, ',', '.').' M'
-            : ($totalYearlyExpense >= 1000000
-                ? 'Rp '.number_format($totalYearlyExpense / 1000000, 1, ',', '.').' jt'
-                : 'Rp '.number_format($totalYearlyExpense, 0, ',', '.'));
+        $compactYearlyTotal = Rupiah::compact($totalYearlyExpense);
 
         // 1. Total Biaya Perusahaan Periode Aktif
         $activeCompanyCost = $activeNetSalary + $activeTotalBpjs + $activePph21;
         $activeEmpCount = $activePeriod?->employee_count ?? 0;
         $activeAvgCostPerPerson = $activeEmpCount > 0 ? round($activeCompanyCost / $activeEmpCount) : 0;
 
-        $compactCompanyCost = $activeCompanyCost >= 1000000000
-            ? 'Rp '.number_format($activeCompanyCost / 1000000000, 1, ',', '.').' M'
-            : ($activeCompanyCost >= 1000000
-                ? 'Rp '.number_format($activeCompanyCost / 1000000, 1, ',', '.').' jt'
-                : 'Rp '.number_format($activeCompanyCost, 0, ',', '.'));
+        $compactCompanyCost = Rupiah::compact($activeCompanyCost);
 
         // 2. Tren vs Bulan Lalu
         $trendText = 'Stabil vs periode lalu';
@@ -365,7 +358,7 @@ class PayrollService
                         'count' => (int) $department->employee_count,
                         'total_cost' => $dCost,
                         'formatted_cost' => 'Rp '.number_format($dCost, 0, ',', '.'),
-                        'compact_cost' => $dCost >= 1000000000 ? 'Rp '.number_format($dCost / 1000000000, 1, ',', '.').' M' : ($dCost >= 1000000 ? 'Rp '.number_format($dCost / 1000000, 1, ',', '.').' jt' : 'Rp '.number_format($dCost, 0, ',', '.')),
+                        'compact_cost' => Rupiah::compact($dCost),
                     ];
                 }
                 usort($departmentBreakdown, fn ($a, $b) => $b['total_cost'] <=> $a['total_cost']);
@@ -458,24 +451,10 @@ class PayrollService
             $totalYearlyCompanyCost += ($pNet + $pBpjs + $pPph);
         }
 
-        $formatCompact = function (float $amount, int $decimals = 1): string {
-            if ($amount >= 1000000000) {
-                return 'Rp '.number_format($amount / 1000000000, $decimals, ',', '.').' M';
-            }
-            if ($amount >= 1000000) {
-                return 'Rp '.number_format($amount / 1000000, $decimals, ',', '.').' jt';
-            }
-            if ($amount >= 1000) {
-                return 'Rp '.number_format($amount / 1000, 0, ',', '.').' rb';
-            }
-
-            return 'Rp '.number_format($amount, 0, ',', '.');
-        };
-
-        $compactYearlyCompanyCost = $formatCompact($totalYearlyCompanyCost, 1);
-        $compactYearlyThp = $formatCompact($totalYearlyThp, 2);
-        $compactYearlySetoran = $formatCompact($totalYearlySetoran, 1);
-        $compactRemainingKasbon = $formatCompact($remainingKasbon, 1);
+        $compactYearlyCompanyCost = Rupiah::compact($totalYearlyCompanyCost);
+        $compactYearlyThp = Rupiah::compact($totalYearlyThp, 2);
+        $compactYearlySetoran = Rupiah::compact($totalYearlySetoran);
+        $compactRemainingKasbon = Rupiah::compact($remainingKasbon);
 
         $latestMonthInYear = $yearlyDistinctPeriods->keys()->max() ?? $currentMonth;
         $latestMonthNameShort = $monthNamesShort[$latestMonthInYear] ?? 'Okt';
@@ -486,7 +465,7 @@ class PayrollService
         $periodsCountForThp = $paidCount > 0 ? $paidCount : max(1, $processedCount);
         $avgMonthlyThp = $periodsCountForThp > 0 ? ($totalYearlyThp / $periodsCountForThp) : 0;
         $periodLabelText = $paidCount > 0 ? "{$paidCount} periode dibayar" : "{$processedCount} periode dibayar";
-        $yearlyThpSubtitle = $periodLabelText.', rata-rata '.$formatCompact($avgMonthlyThp, 2).' per bulan';
+        $yearlyThpSubtitle = $periodLabelText.', rata-rata '.Rupiah::compact($avgMonthlyThp, 2).' per bulan';
 
         $yearlySetoranSubtitle = 'PPh 21 dan BPJS tahun ini';
         $remainingKasbonSubtitle = "Belum lunas, {$kasbonPeopleCount} orang";
@@ -1522,16 +1501,9 @@ class PayrollService
                 foreach ($deductionRows as $r) {
                     $name = strtolower(trim((string) ($r['name'] ?? '')));
                     $cat = $r['category'] ?? '';
-                    $code = null;
-                    if ($cat === 'tax' || strcasecmp(trim((string) ($r['name'] ?? '')), 'pph 21') === 0) {
-                        $code = 'PPH21';
-                    } elseif (str_starts_with($name, 'bpjs kesehatan')) {
-                        $code = 'BPJS_KES';
-                    } elseif (str_starts_with($name, 'bpjs jht')) {
-                        $code = 'BPJS_JHT';
-                    } elseif (str_starts_with($name, 'bpjs pensiun') || str_starts_with($name, 'bpjs jp')) {
-                        $code = 'BPJS_JP';
-                    }
+                    $code = $cat === 'tax' || strcasecmp(trim((string) ($r['name'] ?? '')), 'pph 21') === 0
+                        ? 'PPH21'
+                        : TaxCalculationService::systemComponentCodeFromName($name);
 
                     if ($code) {
                         if (isset($r['is_enabled']) && $r['is_enabled'] === false) {
@@ -2061,11 +2033,9 @@ class PayrollService
 
         foreach (['BPJS_JHT' => 'bpjs_jht', 'BPJS_JP' => 'bpjs_jp'] as $code => $key) {
             $line = $existingLines->first(function (PayrollItemLine $line) use ($key) {
-                $name = strtolower(trim($line->name));
-
                 return $key === 'bpjs_jht'
-                    ? str_starts_with($name, 'bpjs jht')
-                    : str_starts_with($name, 'bpjs pensiun') || str_starts_with($name, 'bpjs jp');
+                    ? str_starts_with(strtolower(trim($line->name)), 'bpjs jht')
+                    : TaxCalculationService::isPensionBpjsName($line->name);
             });
             $enabled = in_array($code, $enabledSystemCodes ?? [], true)
                 || (! in_array($code, $disabledSystemCodes ?? [], true)

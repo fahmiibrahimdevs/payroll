@@ -25,7 +25,6 @@ use App\Models\User;
 use App\Services\ActivityLogService;
 use App\Services\PayrollService;
 use App\Services\TaxCalculationService;
-use App\Support\Rupiah;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
@@ -126,24 +125,7 @@ class ManageItem extends Component
     #[Computed]
     public function basicSalaryNote(): string
     {
-        $note = (string) $this->item->human_notes;
-        $empFullSalary = (float) ($this->item->employee?->basic_salary ?? 0);
-        $isProrated = $empFullSalary > 0 && (float) $this->item->basic_salary < $empFullSalary;
-
-        if (! $isProrated) {
-            return $note;
-        }
-
-        $fmtBasic = Rupiah::display($this->item->basic_salary);
-        $fmtFull = Rupiah::display($empFullSalary);
-        if ($note === '') {
-            return "Gaji prorata {$fmtBasic} dari {$fmtFull}";
-        }
-        if (! str_contains($note, 'dari Rp')) {
-            return preg_replace('/^Gaji prorata\s*/i', "Gaji prorata {$fmtBasic} dari {$fmtFull} - ", $note);
-        }
-
-        return $note;
+        return $this->item->basic_salary_note;
     }
 
     /** Baris potongan dengan nilai tampilan siap-pakai (tanpa query/logika tambahan di view). */
@@ -1735,20 +1717,15 @@ class ManageItem extends Component
                     continue;
                 }
 
-                $name = strtolower(trim($row['name'] ?? ''));
                 $isEnabled = $row['is_enabled'] ?? true;
-                if (str_starts_with($name, 'bpjs kesehatan')) {
-                    $this->deductionRows[$idx]['amount'] = $isEnabled ? (float) $bpjs['employee']['bpjs_kes'] : 0.0;
-                    if (! $isEnabled) {
-                        $this->deductionRows[$idx]['notes'] = 'Nonaktif';
-                    }
-                } elseif (str_starts_with($name, 'bpjs jht')) {
-                    $this->deductionRows[$idx]['amount'] = $isEnabled ? (float) $bpjs['employee']['bpjs_jht'] : 0.0;
-                    if (! $isEnabled) {
-                        $this->deductionRows[$idx]['notes'] = 'Nonaktif';
-                    }
-                } elseif (str_starts_with($name, 'bpjs pensiun') || str_starts_with($name, 'bpjs jp')) {
-                    $this->deductionRows[$idx]['amount'] = $isEnabled ? (float) $bpjs['employee']['bpjs_jp'] : 0.0;
+                $bpjsKey = match (TaxCalculationService::systemComponentCodeFromName(strtolower(trim($row['name'] ?? '')))) {
+                    'BPJS_KES' => 'bpjs_kes',
+                    'BPJS_JHT' => 'bpjs_jht',
+                    'BPJS_JP' => 'bpjs_jp',
+                    default => null,
+                };
+                if ($bpjsKey) {
+                    $this->deductionRows[$idx]['amount'] = $isEnabled ? (float) $bpjs['employee'][$bpjsKey] : 0.0;
                     if (! $isEnabled) {
                         $this->deductionRows[$idx]['notes'] = 'Nonaktif';
                     }
@@ -1824,10 +1801,7 @@ class ManageItem extends Component
                 continue;
             }
 
-            $name = strtolower(trim((string) ($row['name'] ?? '')));
-            if (str_starts_with($name, 'bpjs jht')
-                || str_starts_with($name, 'bpjs pensiun')
-                || str_starts_with($name, 'bpjs jp')) {
+            if (TaxCalculationService::isPensionBpjsName((string) ($row['name'] ?? ''))) {
                 $total += (float) ($row['amount'] ?? 0);
             }
         }

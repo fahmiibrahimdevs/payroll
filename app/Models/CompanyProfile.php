@@ -14,13 +14,6 @@ class CompanyProfile extends Model
 {
     use HasFactory;
 
-    public const OVERTIME_ROUNDING_MODES = [
-        'round_30_min' => 'Kelipatan 30 Menit (0.5 Jam) — Rekomendasi',
-        'round_60_min' => 'Kelipatan 1 Jam Penuh',
-        'floor_hour' => 'Jam Penuh ke Bawah (Floor)',
-        'exact' => 'Menit Riil / Eksak (Tanpa Pembulatan)',
-    ];
-
     protected $fillable = [
         'name',
         'code',

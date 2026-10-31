@@ -20,6 +20,48 @@ use InvalidArgumentException;
 
 class TaxCalculationService
 {
+
+    /**
+     * Prefiks nama baris potongan BPJS yang masuk kategori pensiun (JHT/JP).
+     * Nama baris diketik admin sehingga dipakai sebagai kunci logika —
+     * seluruh pemetaan nama baris BPJS/PPh21 wajib lewat helper di class ini.
+     */
+    public const BPJS_PENSION_NAME_PREFIXES = ['bpjs jht', 'bpjs pensiun', 'bpjs jp'];
+
+    /** Apakah nama baris potongan termasuk BPJS kategori pensiun (JHT/JP). */
+    public static function isPensionBpjsName(string $name): bool
+    {
+        $name = strtolower(trim($name));
+
+        foreach (self::BPJS_PENSION_NAME_PREFIXES as $prefix) {
+            if (str_starts_with($name, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Kode komponen sistem (PPH21/BPJS_*) dari nama baris yang diketik admin. */
+    public static function systemComponentCodeFromName(string $name): ?string
+    {
+        $name = strtolower(trim($name));
+
+        if ($name === 'pph 21') {
+            return 'PPH21';
+        }
+        if (str_starts_with($name, 'bpjs kesehatan')) {
+            return 'BPJS_KES';
+        }
+        if (str_starts_with($name, 'bpjs jht')) {
+            return 'BPJS_JHT';
+        }
+        if (str_starts_with($name, 'bpjs pensiun') || str_starts_with($name, 'bpjs jp')) {
+            return 'BPJS_JP';
+        }
+
+        return null;
+    }
     /** @var array<string, array{previous_tax_paid: float, previous_gross: float, months_count: int, pension_deduction: float, has_unpaid_period: bool}> */
     private array $finalPeriodHistoryCache = [];
 
@@ -110,10 +152,10 @@ class TaxCalculationService
             ->where('payroll_item_lines.type', PayrollLineType::DEDUCTION->value)
             ->where('payroll_item_lines.category', PayrollLineCategory::BPJS->value)
             ->where(function ($query) {
-                $query->whereIn('salary_components.code', ['BPJS_JHT', 'BPJS_JP'])
-                    ->orWhereRaw("LOWER(TRIM(payroll_item_lines.name)) LIKE 'bpjs jht%'")
-                    ->orWhereRaw("LOWER(TRIM(payroll_item_lines.name)) LIKE 'bpjs pensiun%'")
-                    ->orWhereRaw("LOWER(TRIM(payroll_item_lines.name)) LIKE 'bpjs jp%'");
+                $query->whereIn('salary_components.code', ['BPJS_JHT', 'BPJS_JP']);
+                foreach (self::BPJS_PENSION_NAME_PREFIXES as $prefix) {
+                    $query->orWhereRaw('LOWER(TRIM(payroll_item_lines.name)) LIKE ?', [$prefix.'%']);
+                }
             })
             ->selectRaw('payroll_items.employee_id, COALESCE(SUM(payroll_item_lines.amount), 0) as pension_deduction')
             ->groupBy('payroll_items.employee_id')
@@ -1030,7 +1072,7 @@ class TaxCalculationService
     /**
      * Get all official TER tiers with bracket ranges and rates according to PP 58/2023 & PMK 168/2023.
      */
-    public function getTerTiers(string $category): array
+    protected function getTerTiers(string $category): array
     {
         return match ($category) {
             'A' => [

@@ -16,6 +16,7 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Services\CashAdvanceService;
 use App\Support\IdObfuscator;
+use App\Support\Rupiah;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\View\View;
@@ -1676,7 +1677,7 @@ HTML;
                 'total_paid_transactions_count' => $paidCount,
                 'total_remaining_balance' => $totalRemaining,
                 'formatted_total_remaining_balance' => 'Rp '.number_format($totalRemaining, 0, ',', '.'),
-                'compact_total_remaining_balance' => $totalRemaining >= 1000000 ? 'Rp '.number_format($totalRemaining / 1000000, 1, ',', '.').' jt' : 'Rp '.number_format($totalRemaining, 0, ',', '.'),
+                'compact_total_remaining_balance' => Rupiah::compact($totalRemaining),
                 'total_employees_with_active_advances' => $totalRemaining > 0 ? 1 : 0,
                 'total_employees_count' => 1,
                 'total_pending_count' => $pendingCount,

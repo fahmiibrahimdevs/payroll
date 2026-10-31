@@ -19,6 +19,17 @@ enum EmploymentStatus: string
         };
     }
 
+    /** Ikon FontAwesome yang merepresentasikan status kepegawaian. */
+    public function icon(): string
+    {
+        return match ($this) {
+            self::TETAP => 'fas fa-id-badge',
+            self::KONTRAK => 'fas fa-file-contract',
+            self::MAGANG => 'fas fa-user-graduate',
+            self::HARIAN => 'fas fa-user-clock',
+        };
+    }
+
     public function badgeClass(): string
     {
         return match ($this) {

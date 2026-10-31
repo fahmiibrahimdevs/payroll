@@ -146,14 +146,6 @@ class Employee extends Model
     }
 
     /**
-     * Get the most recent payroll item for the employee.
-     */
-    public function latestPayrollItem(): HasOne
-    {
-        return $this->hasOne(PayrollItem::class)->latestOfMany();
-    }
-
-    /**
      * Get the salary change history for the employee.
      */
     public function salaryHistories(): HasMany
@@ -161,15 +153,6 @@ class Employee extends Model
         return $this->hasMany(EmployeeSalaryHistory::class)
             ->orderBy('effective_date', 'desc')
             ->orderBy('id', 'desc');
-    }
-
-    /**
-     * Get the most recent salary history.
-     */
-    public function latestSalaryHistory(): HasOne
-    {
-        return $this->hasOne(EmployeeSalaryHistory::class)
-            ->ofMany(['effective_date' => 'max', 'id' => 'max']);
     }
 
     /**

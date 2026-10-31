@@ -14,6 +14,7 @@ use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Models\OvertimeSubmission;
 use App\Models\User;
+use App\Support\Rupiah;
 use App\Support\WorkingDays;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -1146,11 +1147,7 @@ class OvertimeService
                 'name' => $dName,
                 'hours' => round($deptHours[$dName] ?? 0, 1),
                 'cost' => $pAmount,
-                'compact_cost' => 'Rp '.(
-                    $pAmount >= 1000000
-                        ? number_format($pAmount / 1000000, 1, ',', '.').' jt'
-                        : number_format($pAmount / 1000, 0, ',', '.').' rb'
-                ),
+                'compact_cost' => Rupiah::compact($pAmount),
                 'bar_pct' => $maxDeptPay > 0 ? round(($pAmount / $maxDeptPay) * 100) : 0,
             ];
         }
@@ -1172,9 +1169,7 @@ class OvertimeService
                 'colors' => ! empty($deptData) && array_sum($deptData) > 0 ? array_slice($deptColors, 0, count($deptData)) : ['#e2e8f0'],
                 'total_pay' => $totalDeptPay,
                 'total_hours' => $totalDeptHours,
-                'compact_total' => $totalDeptPay >= 1000000
-                    ? 'Rp '.number_format($totalDeptPay / 1000000, 1, ',', '.').' jt'
-                    : 'Rp '.number_format($totalDeptPay / 1000, 0, ',', '.').' rb',
+                'compact_total' => Rupiah::compact($totalDeptPay),
             ],
             'metrics' => [
                 'total_hours' => round($totalDeptHours, 1),

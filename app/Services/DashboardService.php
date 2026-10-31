@@ -93,26 +93,6 @@ class DashboardService
     }
 
     /**
-     * @return array{total_users: int, active_users: int, inactive_users: int, total_roles: int}
-     */
-    public function getStatistics(): array
-    {
-        $userCounts = User::query()
-            ->whereNotIn('email', UserService::HIDDEN_DUMMY_EMAILS)
-            ->selectRaw('COUNT(*) as total_users')
-            ->selectRaw('SUM(CASE WHEN is_active THEN 1 ELSE 0 END) as active_users')
-            ->selectRaw('SUM(CASE WHEN NOT is_active THEN 1 ELSE 0 END) as inactive_users')
-            ->first();
-
-        return [
-            'total_users' => (int) ($userCounts?->total_users ?? 0),
-            'active_users' => (int) ($userCounts?->active_users ?? 0),
-            'inactive_users' => (int) ($userCounts?->inactive_users ?? 0),
-            'total_roles' => Role::query()->count(),
-        ];
-    }
-
-    /**
      * Get comprehensive statistics and metrics for the Admin / Direktur HR dashboard.
      *
      * @return array<string, mixed>

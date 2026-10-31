@@ -10,7 +10,10 @@ use App\Services\ActivityLogService;
 use App\Services\AttendanceService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -643,7 +646,20 @@ class Index extends Component
         ]);
     }
 
-    public function render(AttendanceService $service): View
+    /*
+    |--------------------------------------------------------------------------
+    | Computed Properties (Matriks Rekap Kehadiran)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Rentang tanggal matriks: hasil parse filter dengan pembatasan maksimum
+     * 31 hari (tanggal akhir otomatis dipangkas bila melebihi).
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    #[Computed]
+    public function matrixRange(): array
     {
         $start = ! empty($this->startDate) ? Carbon::parse($this->startDate) : Carbon::now()->startOfWeek();
         $end = ! empty($this->endDate) ? Carbon::parse($this->endDate) : Carbon::now()->endOfWeek();
@@ -654,7 +670,18 @@ class Index extends Component
             $this->endDate = $end->toDateString();
         }
 
-        // Generate matrix dates list
+        return [$start, $end];
+    }
+
+    /**
+     * Daftar tanggal matriks 1 s/d 31 hari lengkap dengan penanda Minggu
+     * dan hari libur nasional.
+     */
+    #[Computed]
+    public function matrixDates(): array
+    {
+        [$start, $end] = $this->matrixRange;
+
         $holidayDates = Holiday::datesBetween($start->toDateString(), $end->toDateString());
         $matrixDates = [];
         $cur = $start->copy();
@@ -672,7 +699,16 @@ class Index extends Component
             $cur->addDay();
         }
 
-        // Query active employees for matrix
+        return $matrixDates;
+    }
+
+    /**
+     * Karyawan aktif untuk matriks: filter pencarian/departemen/status,
+     * pembatasan role karyawan, dan urutan status kepegawaian.
+     */
+    #[Computed]
+    public function matrixEmployees(): LengthAwarePaginator
+    {
         $empQuery = Employee::where('status', 'active')->with(['department', 'position', 'detail']);
 
         if (! empty($this->departmentFilter)) {
@@ -711,7 +747,7 @@ class Index extends Component
             default => 'CAST(fingerprint_id AS UNSIGNED) ASC',
         };
 
-        $matrixEmployees = $empQuery
+        return $empQuery
             ->orderByRaw("CASE
                 WHEN employment_status = 'tetap' THEN 1
                 WHEN employment_status = 'kontrak' THEN 2
@@ -722,17 +758,133 @@ class Index extends Component
             ->orderByRaw($fingerprintOrder)
             ->orderBy('full_name')
             ->paginate($this->perPage);
+    }
 
-        // Fetch attendances in range with minimal columns using DB query (stdClass) to avoid hydrating 200+ Eloquent models
-        $attendancesInRange = DB::table('attendances')
+    /**
+     * Presensi dalam rentang matriks sebagai stdClass ringan, dikelompokkan
+     * per employee_id.
+     */
+    #[Computed]
+    public function attendancesInRange(): Collection
+    {
+        [$start, $end] = $this->matrixRange;
+
+        return DB::table('attendances')
             ->select([
                 'id', 'employee_id', 'date', 'clock_in', 'clock_out',
                 'overtime_in', 'overtime_out', 'status', 'source',
             ])
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
-            ->whereIn('employee_id', $matrixEmployees->pluck('id'))
+            ->whereIn('employee_id', $this->matrixEmployees->pluck('id'))
             ->get()
             ->groupBy('employee_id');
+    }
+
+    /**
+     * Karyawan matriks dikelompokkan per status kepegawaian untuk baris
+     * sub-header grup.
+     */
+    #[Computed]
+    public function groupedMatrixEmployees(): Collection
+    {
+        return $this->matrixEmployees->getCollection()->groupBy(function ($emp) {
+            return $emp->employment_status instanceof EmploymentStatus
+                ? $emp->employment_status->value
+                : (string) ($emp->employment_status ?: 'lainnya');
+        });
+    }
+
+    /**
+     * Peta label & ikon status kepegawaian untuk header grup matriks.
+     */
+    #[Computed]
+    public function employmentStatusMeta(): array
+    {
+        $meta = [];
+        foreach (EmploymentStatus::cases() as $status) {
+            $meta[$status->value] = [
+                'label' => $status->label(),
+                'icon' => $status->icon(),
+            ];
+        }
+
+        return $meta;
+    }
+
+    /**
+     * Data per baris karyawan matriks: presensi yang sudah di-keyBy tanggal
+     * (Y-m-d) dan label "departemen • posisi".
+     *
+     * @return array<int, array{att: Collection, label: string}>
+     */
+    #[Computed]
+    public function matrixRowData(): array
+    {
+        $rows = [];
+        foreach ($this->matrixEmployees->getCollection() as $emp) {
+            $empAttCollection = $this->attendancesInRange->get($emp->id, collect())->keyBy(
+                fn ($a) => is_string($a->date) ? substr($a->date, 0, 10) : ($a->date ? $a->date->toDateString() : '')
+            );
+            $deptPosParts = array_filter([$emp->department?->name, $emp->position?->name]);
+            $rows[$emp->id] = [
+                'att' => $empAttCollection,
+                'label' => ! empty($deptPosParts) ? implode(' • ', $deptPosParts) : '-',
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Rekapitulasi kehadiran per karyawan pada matriks: counter akhir
+     * hadir/manual/cuti/sakit/izin/absen (absen dihitung pada hari kerja
+     * tanpa catatan presensi).
+     *
+     * @return array<int, array{hadir: int, manual: int, cuti: int, sakit: int, izin: int, absen: int}>
+     */
+    #[Computed]
+    public function matrixSummary(): array
+    {
+        $summary = [];
+        foreach ($this->matrixEmployees->getCollection() as $emp) {
+            $counters = ['hadir' => 0, 'manual' => 0, 'cuti' => 0, 'sakit' => 0, 'izin' => 0, 'absen' => 0];
+            $empAttCollection = $this->matrixRowData[$emp->id]['att'];
+
+            foreach ($this->matrixDates as $d) {
+                $att = $empAttCollection->get($d['date']);
+                $status = $att ? strtolower($att->status) : null;
+                $hasAttendance = $att !== null && in_array($status, ['hadir', 'terlambat', 'pulang_cepat'], true);
+
+                if ($hasAttendance) {
+                    $counters['hadir']++;
+                    if (($att->source ?? '') === 'manual') {
+                        $counters['manual']++;
+                    }
+                } elseif ($status === 'cuti') {
+                    $counters['cuti']++;
+                } elseif ($status === 'sakit') {
+                    $counters['sakit']++;
+                } elseif ($status === 'izin') {
+                    $counters['izin']++;
+                } elseif ($status === 'absen' || (! $d['is_sunday'] && ! $d['is_holiday'] && ! $att)) {
+                    $counters['absen']++;
+                }
+            }
+
+            $summary[$emp->id] = $counters;
+        }
+
+        return $summary;
+    }
+
+    public function render(AttendanceService $service): View
+    {
+        [$start, $end] = $this->matrixRange;
+
+        // Restrict non-admin karyawan (untuk log detail & metrik)
+        $user = auth()->user();
+        $isKaryawan = $user?->hasRole('karyawan') && ! $user?->hasRole(['admin', 'direktur', 'developer']);
+        $karyawanEmployee = $isKaryawan ? $user->getEmployeeRecord() : null;
 
         // Detailed log listing query (only executed if activeTab is 'log' to eliminate unused query overhead)
         $attendancesLog = null;
@@ -790,9 +942,12 @@ class Index extends Component
             ->get(['id', 'full_name', 'fingerprint_id', 'employment_status']);
 
         return view('livewire.attendances.index', [
-            'matrixDates' => $matrixDates,
-            'matrixEmployees' => $matrixEmployees,
-            'attendancesInRange' => $attendancesInRange,
+            'matrixDates' => $this->matrixDates,
+            'matrixEmployees' => $this->matrixEmployees,
+            'groupedMatrixEmployees' => $this->groupedMatrixEmployees,
+            'employmentStatusMeta' => $this->employmentStatusMeta,
+            'matrixRowData' => $this->matrixRowData,
+            'matrixSummary' => $this->matrixSummary,
             'attendancesLog' => $attendancesLog,
             'metrics' => $metrics,
             'departments' => $departments,

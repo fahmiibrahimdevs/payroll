@@ -137,23 +137,6 @@ class ActivityLogService
     }
 
     /**
-     * Helper for DEBUG level logging.
-     *
-     * @param  array<string, mixed>|null  $context
-     */
-    public function debug(
-        string $action,
-        string $module,
-        string $message,
-        ?array $context = null,
-        ?int $userId = null,
-        ?Throwable $exception = null,
-        ?int $durationMs = null
-    ): ?ActivityLog {
-        return $this->log($action, $module, 'debug', $message, $context, $userId, $exception, $durationMs);
-    }
-
-    /**
      * Helper for INFO level logging.
      *
      * @param  array<string, mixed>|null  $context
@@ -187,23 +170,6 @@ class ActivityLogService
     }
 
     /**
-     * Alias for warning().
-     *
-     * @param  array<string, mixed>|null  $context
-     */
-    public function warn(
-        string $action,
-        string $module,
-        string $message,
-        ?array $context = null,
-        ?int $userId = null,
-        ?Throwable $exception = null,
-        ?int $durationMs = null
-    ): ?ActivityLog {
-        return $this->warning($action, $module, $message, $context, $userId, $exception, $durationMs);
-    }
-
-    /**
      * Helper for ERROR level logging.
      *
      * @param  array<string, mixed>|null  $context
@@ -218,23 +184,6 @@ class ActivityLogService
         ?int $durationMs = null
     ): ?ActivityLog {
         return $this->log($action, $module, 'error', $message, $context, $userId, $exception, $durationMs);
-    }
-
-    /**
-     * Helper for CRITICAL level logging.
-     *
-     * @param  array<string, mixed>|null  $context
-     */
-    public function critical(
-        string $action,
-        string $module,
-        string $message,
-        ?array $context = null,
-        ?int $userId = null,
-        ?Throwable $exception = null,
-        ?int $durationMs = null
-    ): ?ActivityLog {
-        return $this->log($action, $module, 'critical', $message, $context, $userId, $exception, $durationMs);
     }
 
     /**

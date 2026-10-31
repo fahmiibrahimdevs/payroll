@@ -540,30 +540,9 @@
                     </tr>
                 </thead>
                 <tbody style="font-size: 12.5px;">
-                    @php
-                        $groupedEmployees = $matrixEmployees->getCollection()->groupBy(function ($emp) {
-                            return $emp->employment_status instanceof \App\Enums\EmploymentStatus
-                                ? $emp->employment_status->value
-                                : (string) ($emp->employment_status ?: 'lainnya');
-                        });
-                    @endphp
-
-                    @forelse ($groupedEmployees as $statusKey => $groupEmployees)
+                    @forelse ($groupedMatrixEmployees as $statusKey => $groupEmployees)
                         @php
-                            $statusLabel = match ($statusKey) {
-                                'tetap' => 'Karyawan Tetap',
-                                'kontrak' => 'Kontrak',
-                                'harian' => 'Harian Lepas',
-                                'magang' => 'Magang',
-                                default => ucfirst($statusKey),
-                            };
-                            $statusIcon = match ($statusKey) {
-                                'tetap' => 'fas fa-id-badge',
-                                'kontrak' => 'fas fa-file-contract',
-                                'harian' => 'fas fa-user-clock',
-                                'magang' => 'fas fa-user-graduate',
-                                default => 'fas fa-users',
-                            };
+                            $statusMeta = $employmentStatusMeta[$statusKey] ?? ['label' => ucfirst($statusKey), 'icon' => 'fas fa-users'];
                         @endphp
                         <!-- Baris Sub-Header Group Status Kerja -->
                         <tr class="table-group-header" style="background-color: #f0f6ff; border-top: 1px solid #bfdbfe; border-bottom: 1px solid #dbeafe;">
@@ -571,10 +550,10 @@
                                 <div class="d-flex align-items-center justify-content-between text-nowrap" style="white-space: nowrap; gap: 10px;">
                                     <div class="d-flex align-items-center text-nowrap" style="white-space: nowrap;">
                                         <span class="d-inline-flex align-items-center justify-content-center mr-2 flex-shrink-0" style="width: 22px; height: 22px; border-radius: 5px; background-color: #dbeafe; font-size: 11px; flex-shrink: 0;">
-                                            <i class="{{ $statusIcon }}" style="color: #0b52aa;"></i>
+                                            <i class="{{ $statusMeta['icon'] }}" style="color: #0b52aa;"></i>
                                         </span>
                                         <span class="font-weight-600 text-nowrap" style="font-size: 12.5px; letter-spacing: 0.3px; color: #0f172a; text-transform: uppercase; white-space: nowrap;">
-                                            STATUS: {{ $statusLabel }}
+                                            STATUS: {{ $statusMeta['label'] }}
                                         </span>
                                     </div>
                                     <span class="badge font-weight-500 text-nowrap flex-shrink-0" style="font-size: 11px; padding: 2.5px 8px; border-radius: 9999px; background-color: #ffffff; color: #0b52aa; border: 1px solid #bfdbfe; white-space: nowrap;">
@@ -587,15 +566,8 @@
 
                         @foreach ($groupEmployees as $emp)
                             @php
-                                $empAttCollection = $attendancesInRange->get($emp->id, collect())->keyBy(fn ($a) => is_string($a->date) ? substr($a->date, 0, 10) : ($a->date ? $a->date->toDateString() : ''));
-                                $hadirCount = 0;
-                                $manualCount = 0;
-                                $cutiCount = 0;
-                                $sakitCount = 0;
-                                $izinCount = 0;
-                                $absenCount = 0;
-                                $deptPosParts = array_filter([$emp->department?->name, $emp->position?->name]);
-                                $deptPosLabel = !empty($deptPosParts) ? implode(' • ', $deptPosParts) : '-';
+                                $empRow = $matrixRowData[$emp->id];
+                                $empSummary = $matrixSummary[$emp->id];
                             @endphp
                         <tr wire:key="matrix-row-{{ $emp->id }}">
                             <!-- Karyawan: Avatar, Nama, Department & Jabatan (Sticky Left) -->
@@ -605,7 +577,7 @@
                                     <div class="text-nowrap" style="line-height: 1.25;">
                                         <div class="font-weight-600 text-dark" style="font-size: 13.5px; color: #0f172a;">{{ $emp->full_name }}</div>
                                         <div class="mt-0.5 text-nowrap" style="font-size: 11.5px; color: #64748b; font-weight: 400;">
-                                            {{ $deptPosLabel }}
+                                            {{ $empRow['label'] }}
                                         </div>
                                     </div>
                                 </div>
@@ -614,37 +586,14 @@
                             <!-- Sel Tanggal 1 s/d 31 -->
                             @foreach ($matrixDates as $d)
                                 @php
-                                    $att = $empAttCollection->get($d['date']);
+                                    $att = $empRow['att']->get($d['date']);
                                     $status = $att ? strtolower($att->status) : null;
-                                    $hasAttendance = $att !== null && in_array($status, ['hadir', 'terlambat', 'pulang_cepat'], true);
-                                    $isCuti = $status === 'cuti';
-                                    $isSakit = $status === 'sakit';
-                                    $isIzin = $status === 'izin';
-                                    $isAbsen = $status === 'absen';
-
-                                    if ($hasAttendance) {
-                                        $hadirCount++;
-                                        if (($att->source ?? '') === 'manual') {
-                                            $manualCount++;
-                                        }
-                                    } elseif ($isCuti) {
-                                        $cutiCount++;
-                                    } elseif ($isSakit) {
-                                        $sakitCount++;
-                                    } elseif ($isIzin) {
-                                        $izinCount++;
-                                    } elseif ($isAbsen || (! $d['is_sunday'] && ! $d['is_holiday'] && ! $att)) {
-                                        $absenCount++;
-                                    }
                                 @endphp
                                 <td class="text-center p-1 align-middle" style="background-color: {{ $d['is_holiday'] ? '#fff7ed80' : ($d['is_sunday'] ? '#fff1f220' : 'transparent') }};">
-                                    @php
-                                        $isManual = ($att?->source === 'manual');
-                                    @endphp
-                                    @if ($hasAttendance && $att->clock_in)
-                                        <div class="att-chip {{ $isManual ? 'att-chip-manual' : 'att-chip-present' }}"
+                                    @if ($att !== null && in_array($status, ['hadir', 'terlambat', 'pulang_cepat'], true) && $att->clock_in)
+                                        <div class="att-chip {{ $att?->source === 'manual' ? 'att-chip-manual' : 'att-chip-present' }}"
                                              wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
-                                             title="{{ $emp->full_name }} ({{ $d['date'] }}): Masuk {{ substr($att->clock_in, 0, 5) }} s/d Pulang {{ $att->clock_out ? substr($att->clock_out, 0, 5) : '--:--' }}{{ $att->overtime_in ? ' | Lembur Masuk ' . substr($att->overtime_in, 0, 5) . ' s/d Lembur Pulang ' . ($att->overtime_out ? substr($att->overtime_out, 0, 5) : '--:--') : '' }}{{ $isManual ? ' [Koreksi Manual Admin]' : ' [Mesin Fingerprint]' }} (Klik untuk ubah)">
+                                             title="{{ $emp->full_name }} ({{ $d['date'] }}): Masuk {{ substr($att->clock_in, 0, 5) }} s/d Pulang {{ $att->clock_out ? substr($att->clock_out, 0, 5) : '--:--' }}{{ $att->overtime_in ? ' | Lembur Masuk ' . substr($att->overtime_in, 0, 5) . ' s/d Lembur Pulang ' . ($att->overtime_out ? substr($att->overtime_out, 0, 5) : '--:--') : '' }}{{ $att?->source === 'manual' ? ' [Koreksi Manual Admin]' : ' [Mesin Fingerprint]' }} (Klik untuk ubah)">
                                             <div class="d-flex align-items-center justify-content-center text-nowrap" style="gap: 3px; font-variant-numeric: tabular-nums;">
                                                 <span class="att-time-in" style="font-size: 11px; font-weight: 600;">{{ substr($att->clock_in, 0, 5) }}</span>
                                                 <span style="color: #64748b; font-size: 9.5px; font-weight: 500;">s/d</span>
@@ -668,11 +617,11 @@
                                                 <span style="font-weight: 600; font-size: 11px; color: #b45309;">{{ $att->overtime_out ? substr($att->overtime_out, 0, 5) : '--:--' }}</span>
                                             </div>
                                         </div>
-                                    @elseif ($isCuti)
+                                    @elseif ($status === 'cuti')
                                         <span class="badge badge-primary font-weight-500" style="font-size: 11px; padding: 3px 6px; border-radius: 4px; cursor: pointer;" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')">Cuti</span>
-                                    @elseif ($isSakit)
+                                    @elseif ($status === 'sakit')
                                         <span class="badge badge-warning font-weight-500" style="font-size: 11px; padding: 3px 6px; border-radius: 4px; cursor: pointer;" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')">Sakit</span>
-                                    @elseif ($isIzin)
+                                    @elseif ($status === 'izin')
                                         <span class="badge badge-info font-weight-500" style="font-size: 11px; padding: 3px 6px; border-radius: 4px; cursor: pointer;" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')">Izin</span>
                                     @elseif ($d['is_holiday'])
                                         <span class="att-chip-holiday" style="background-color: #fff7ed; border-color: #fed7aa; color: #c2410c;" title="Hari Libur: {{ $d['holiday_name'] }}">Libur</span>
@@ -688,21 +637,21 @@
                             <td class="align-middle !px-3 !py-1.5" style="background-color: #f8fafc; border-left: 2px solid #e2e8f0;">
                                 <div class="d-flex align-items-center flex-wrap" style="gap: 5px;">
                                     <span class="summary-badge-hadir" title="Total Hari Masuk Kerja">
-                                        <i class="fas fa-check-circle mr-1" style="font-size: 11px;"></i>{{ $hadirCount }} Hari
+                                        <i class="fas fa-check-circle mr-1" style="font-size: 11px;"></i>{{ $empSummary['hadir'] }} Hari
                                     </span>
-                                    @if ($cutiCount > 0)
+                                    @if ($empSummary['cuti'] > 0)
                                         <span class="badge font-weight-500" style="background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11px; padding: 3px 7px;">
-                                            {{ $cutiCount }} Cuti
+                                            {{ $empSummary['cuti'] }} Cuti
                                         </span>
                                     @endif
-                                    @if ($sakitCount > 0)
+                                    @if ($empSummary['sakit'] > 0)
                                         <span class="badge font-weight-500" style="background-color: #fffbeb; color: #92400e; border: 1px solid #fde68a; border-radius: 6px; font-size: 11px; padding: 3px 7px;">
-                                            {{ $sakitCount }} Sakit
+                                            {{ $empSummary['sakit'] }} Sakit
                                         </span>
                                     @endif
-                                    @if ($izinCount > 0)
+                                    @if ($empSummary['izin'] > 0)
                                         <span class="badge font-weight-500" style="background-color: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 11px; padding: 3px 7px;">
-                                            {{ $izinCount }} Izin
+                                            {{ $empSummary['izin'] }} Izin
                                         </span>
                                     @endif
                                 </div>

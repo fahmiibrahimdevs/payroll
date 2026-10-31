@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CashAdvanceStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\RepaymentScheme;
+use App\Services\CashAdvanceService;
 use App\Traits\HasObfuscatedId;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -244,36 +245,9 @@ class CashAdvance extends Model
         });
     }
 
-    /**
-     * Scope query to active / in-progress cash advances.
-     */
-    public function scopeActive(Builder $query): Builder
-    {
-        return $query->whereIn('status', [
-            CashAdvanceStatus::ACTIVE->value,
-            CashAdvanceStatus::APPROVED->value,
-        ]);
-    }
-
-    /**
-     * Scope query to pending cash advances.
-     */
-    public function scopePending(Builder $query): Builder
-    {
-        return $query->where('status', CashAdvanceStatus::PENDING->value);
-    }
-
-    /**
-     * Scope query to specific employee.
-     */
-    public function scopeByEmployee(Builder $query, int $employeeId): Builder
-    {
-        return $query->where('employee_id', $employeeId);
-    }
-
     protected static function booted(): void
     {
-        static::saved(fn () => \App\Services\CashAdvanceService::clearRecapChartCache());
-        static::deleted(fn () => \App\Services\CashAdvanceService::clearRecapChartCache());
+        static::saved(fn () => CashAdvanceService::clearRecapChartCache());
+        static::deleted(fn () => CashAdvanceService::clearRecapChartCache());
     }
 }
