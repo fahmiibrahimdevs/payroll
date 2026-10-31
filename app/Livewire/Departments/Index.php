@@ -2,22 +2,22 @@
 
 namespace App\Livewire\Departments;
 
+use App\Livewire\Concerns\HasSimpleCrudModal;
 use App\Livewire\Forms\DepartmentForm;
 use App\Models\Department;
 use App\Services\DepartmentService;
 use Illuminate\Contracts\View\View;
-use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithPagination;
-use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Kelola Department')]
 class Index extends Component
 {
+    use HasSimpleCrudModal;
     use WithPagination;
 
     protected string $paginationTheme = 'bootstrap';
@@ -32,31 +32,29 @@ class Index extends Component
 
     public ?int $editingDepartmentId = null;
 
-    public function mount(): void
+    protected function simpleCrudModalId(): string
     {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+        return 'departmentModal';
     }
 
-    /**
-     * Reset pagination when search input changes.
-     */
-    public function updatingSearch(): void
+    protected function simpleCrudEntityLabel(): string
     {
-        $this->resetPage();
+        return 'department';
     }
 
-    /**
-     * Open modal for creating a new department.
-     */
-    public function create(): void
+    protected function simpleCrudDeleteAction(): string
     {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
-        $this->isEditMode = false;
-        $this->editingDepartmentId = null;
-        $this->form->resetForm();
-        $this->dispatch('open-modal', [
-            'id' => 'departmentModal',
-        ]);
+        return 'delete-department';
+    }
+
+    protected function simpleCrudModelClass(): string
+    {
+        return Department::class;
+    }
+
+    protected function simpleCrudEditingIdProperty(): string
+    {
+        return 'editingDepartmentId';
     }
 
     /**
@@ -64,47 +62,7 @@ class Index extends Component
      */
     public function store(DepartmentService $departmentService): void
     {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
-        try {
-            $this->form->store($departmentService);
-            $this->dispatch('close-modal', id: 'departmentModal');
-            $this->dispatch('swal:alert', [
-                'type' => 'success',
-                'title' => 'Berhasil!',
-                'message' => 'Department baru berhasil ditambahkan!',
-            ]);
-        } catch (ValidationException $e) {
-            throw $e;
-        } catch (Throwable) {
-            $this->dispatch('swal:alert', [
-                'type' => 'error',
-                'title' => 'Gagal Menyimpan!',
-                'message' => 'Terjadi kesalahan sistem saat membuat department.',
-            ]);
-        }
-    }
-
-    /**
-     * Open modal and populate form for editing an existing department.
-     */
-    public function edit(int $id): void
-    {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
-        try {
-            $department = Department::findOrFail($id);
-            $this->isEditMode = true;
-            $this->editingDepartmentId = $id;
-            $this->form->setDepartment($department);
-            $this->dispatch('open-modal', [
-                'id' => 'departmentModal',
-            ]);
-        } catch (Throwable) {
-            $this->dispatch('swal:alert', [
-                'type' => 'error',
-                'title' => 'Gagal!',
-                'message' => 'Data department tidak ditemukan.',
-            ]);
-        }
+        $this->storeRecord($departmentService);
     }
 
     /**
@@ -112,51 +70,7 @@ class Index extends Component
      */
     public function update(DepartmentService $departmentService): void
     {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
-        try {
-            $this->form->update($departmentService);
-            $this->isEditMode = false;
-            $this->editingDepartmentId = null;
-            $this->dispatch('close-modal', id: 'departmentModal');
-            $this->dispatch('swal:alert', [
-                'type' => 'success',
-                'title' => 'Berhasil!',
-                'message' => 'Department berhasil diperbarui!',
-            ]);
-        } catch (ValidationException $e) {
-            throw $e;
-        } catch (Throwable) {
-            $this->dispatch('swal:alert', [
-                'type' => 'error',
-                'title' => 'Gagal Memperbarui!',
-                'message' => 'Terjadi kesalahan sistem saat memperbarui department.',
-            ]);
-        }
-    }
-
-    /**
-     * Trigger SweetAlert2 delete confirmation dialog.
-     */
-    public function confirmDelete(int $id): void
-    {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
-        $department = Department::find($id);
-
-        if (! $department) {
-            $this->dispatch('swal:alert', [
-                'type' => 'error',
-                'title' => 'Gagal!',
-                'message' => 'Department tidak ditemukan.',
-            ]);
-
-            return;
-        }
-
-        $this->dispatch('swal:confirm-delete', [
-            'id' => $id,
-            'title' => $department->name,
-            'action' => 'delete-department',
-        ]);
+        $this->updateRecord($departmentService);
     }
 
     /**
@@ -165,23 +79,7 @@ class Index extends Component
     #[On('delete-department')]
     public function delete(int $id, DepartmentService $departmentService): void
     {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
-        try {
-            $department = Department::findOrFail($id);
-            $departmentService->deleteDepartment($department);
-
-            $this->dispatch('swal:alert', [
-                'type' => 'success',
-                'title' => 'Berhasil!',
-                'message' => 'Department berhasil dihapus!',
-            ]);
-        } catch (Throwable) {
-            $this->dispatch('swal:alert', [
-                'type' => 'error',
-                'title' => 'Gagal Menghapus!',
-                'message' => 'Terjadi kesalahan sistem saat menghapus department.',
-            ]);
-        }
+        $this->deleteRecord($id, $departmentService);
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Livewire\Forms;
 
 use App\Models\Department;
 use App\Services\DepartmentService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\Rule;
 use Livewire\Form;
 
@@ -56,6 +57,14 @@ class DepartmentForm extends Form
         $this->name = $department->name;
         $this->description = $department->description ?? '';
         $this->resetValidation();
+    }
+
+    /**
+     * Hook trait HasSimpleCrudModal: populate form fields from a model.
+     */
+    public function setEntity(Model $model): void
+    {
+        $this->setDepartment($model);
     }
 
     /**

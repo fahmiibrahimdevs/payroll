@@ -4,27 +4,53 @@ namespace App\Services;
 
 use App\Models\Department;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\DB;
 use Throwable;
 
-class DepartmentService
+/**
+ * Service CRUD untuk master Department.
+ *
+ * Logika transaksi dan ActivityLog ditangani oleh SimpleCrudService;
+ * class ini hanya mendefinisikan konfigurasi entitas dan mengekspos
+ * API ber-suffix Department.
+ */
+class DepartmentService extends SimpleCrudService
 {
-    public function __construct(
-        protected ActivityLogService $logger
-    ) {}
+    protected function modelClass(): string
+    {
+        return Department::class;
+    }
+
+    protected function module(): string
+    {
+        return 'departments';
+    }
+
+    protected function entityLabel(): string
+    {
+        return 'Department';
+    }
+
+    protected function logIdKey(): string
+    {
+        return 'department_id';
+    }
+
+    /**
+     * Kolom yang dilacak pada log update.
+     *
+     * @return array<int, string>
+     */
+    protected function trackedColumns(): array
+    {
+        return ['name', 'description'];
+    }
 
     /**
      * Retrieve paginated departments with optional search filtering.
      */
     public function getPaginatedDepartments(string $search = '', int $perPage = 10): LengthAwarePaginator
     {
-        $perPage = max(1, min($perPage, 100));
-
-        return Department::query()
-            ->when($search, fn ($q) => $q->search($search))
-            ->latest('created_at')
-            ->orderByDesc('id')
-            ->paginate($perPage);
+        return $this->getPaginated($search, $perPage);
     }
 
     /**
@@ -36,35 +62,10 @@ class DepartmentService
      */
     public function createDepartment(array $data): Department
     {
-        try {
-            return DB::transaction(function () use ($data) {
-                $department = Department::create($data);
+        /** @var Department $department */
+        $department = $this->create($data);
 
-                $this->logger->info(
-                    action: 'CREATE',
-                    module: 'departments',
-                    message: 'Department created',
-                    context: [
-                        'department_id' => $department->id,
-                        'name' => $department->name,
-                    ]
-                );
-
-                return $department;
-            });
-        } catch (Throwable $e) {
-            $this->logger->error(
-                action: 'CREATE_FAILED',
-                module: 'departments',
-                message: 'Department creation failed',
-                context: [
-                    'payload' => $data,
-                ],
-                exception: $e
-            );
-
-            throw $e;
-        }
+        return $department;
     }
 
     /**
@@ -76,39 +77,10 @@ class DepartmentService
      */
     public function updateDepartment(Department $department, array $data): Department
     {
-        try {
-            return DB::transaction(function () use ($department, $data) {
-                $oldValues = $department->only(['name', 'description']);
+        /** @var Department $updated */
+        $updated = $this->update($department, $data);
 
-                $department->update($data);
-
-                $this->logger->info(
-                    action: 'UPDATE',
-                    module: 'departments',
-                    message: 'Department updated',
-                    context: [
-                        'department_id' => $department->id,
-                        'old_values' => $oldValues,
-                        'new_values' => $department->only(['name', 'description']),
-                    ]
-                );
-
-                return $department;
-            });
-        } catch (Throwable $e) {
-            $this->logger->error(
-                action: 'UPDATE_FAILED',
-                module: 'departments',
-                message: 'Department update failed',
-                context: [
-                    'department_id' => $department->id,
-                    'payload' => $data,
-                ],
-                exception: $e
-            );
-
-            throw $e;
-        }
+        return $updated;
     }
 
     /**
@@ -118,36 +90,6 @@ class DepartmentService
      */
     public function deleteDepartment(Department $department): bool
     {
-        try {
-            return DB::transaction(function () use ($department) {
-                $deletedInfo = [
-                    'department_id' => $department->id,
-                    'name' => $department->name,
-                ];
-
-                $deleted = $department->delete();
-
-                $this->logger->info(
-                    action: 'DELETE',
-                    module: 'departments',
-                    message: 'Department deleted',
-                    context: $deletedInfo
-                );
-
-                return $deleted;
-            });
-        } catch (Throwable $e) {
-            $this->logger->error(
-                action: 'DELETE_FAILED',
-                module: 'departments',
-                message: 'Department deletion failed',
-                context: [
-                    'department_id' => $department->id,
-                ],
-                exception: $e
-            );
-
-            throw $e;
-        }
+        return $this->delete($department);
     }
 }

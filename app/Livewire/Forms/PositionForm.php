@@ -4,6 +4,7 @@ namespace App\Livewire\Forms;
 
 use App\Models\Position;
 use App\Services\PositionService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\Rule;
 use Livewire\Form;
 
@@ -56,6 +57,14 @@ class PositionForm extends Form
         $this->name = $position->name;
         $this->description = $position->description ?? '';
         $this->resetValidation();
+    }
+
+    /**
+     * Hook trait HasSimpleCrudModal: populate form fields from a model.
+     */
+    public function setEntity(Model $model): void
+    {
+        $this->setPosition($model);
     }
 
     /**

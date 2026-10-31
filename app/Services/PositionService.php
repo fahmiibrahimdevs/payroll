@@ -4,27 +4,53 @@ namespace App\Services;
 
 use App\Models\Position;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\DB;
 use Throwable;
 
-class PositionService
+/**
+ * Service CRUD untuk master Position.
+ *
+ * Logika transaksi dan ActivityLog ditangani oleh SimpleCrudService;
+ * class ini hanya mendefinisikan konfigurasi entitas dan mengekspos
+ * API ber-suffix Position.
+ */
+class PositionService extends SimpleCrudService
 {
-    public function __construct(
-        protected ActivityLogService $logger
-    ) {}
+    protected function modelClass(): string
+    {
+        return Position::class;
+    }
+
+    protected function module(): string
+    {
+        return 'positions';
+    }
+
+    protected function entityLabel(): string
+    {
+        return 'Position';
+    }
+
+    protected function logIdKey(): string
+    {
+        return 'position_id';
+    }
+
+    /**
+     * Kolom yang dilacak pada log update.
+     *
+     * @return array<int, string>
+     */
+    protected function trackedColumns(): array
+    {
+        return ['name', 'description'];
+    }
 
     /**
      * Retrieve paginated positions with optional search filtering.
      */
     public function getPaginatedPositions(string $search = '', int $perPage = 10): LengthAwarePaginator
     {
-        $perPage = max(1, min($perPage, 100));
-
-        return Position::query()
-            ->when($search, fn ($q) => $q->search($search))
-            ->latest('created_at')
-            ->orderByDesc('id')
-            ->paginate($perPage);
+        return $this->getPaginated($search, $perPage);
     }
 
     /**
@@ -36,35 +62,10 @@ class PositionService
      */
     public function createPosition(array $data): Position
     {
-        try {
-            return DB::transaction(function () use ($data) {
-                $position = Position::create($data);
+        /** @var Position $position */
+        $position = $this->create($data);
 
-                $this->logger->info(
-                    action: 'CREATE',
-                    module: 'positions',
-                    message: 'Position created',
-                    context: [
-                        'position_id' => $position->id,
-                        'name' => $position->name,
-                    ]
-                );
-
-                return $position;
-            });
-        } catch (Throwable $e) {
-            $this->logger->error(
-                action: 'CREATE_FAILED',
-                module: 'positions',
-                message: 'Position creation failed',
-                context: [
-                    'payload' => $data,
-                ],
-                exception: $e
-            );
-
-            throw $e;
-        }
+        return $position;
     }
 
     /**
@@ -76,39 +77,10 @@ class PositionService
      */
     public function updatePosition(Position $position, array $data): Position
     {
-        try {
-            return DB::transaction(function () use ($position, $data) {
-                $oldValues = $position->only(['name', 'description']);
+        /** @var Position $updated */
+        $updated = $this->update($position, $data);
 
-                $position->update($data);
-
-                $this->logger->info(
-                    action: 'UPDATE',
-                    module: 'positions',
-                    message: 'Position updated',
-                    context: [
-                        'position_id' => $position->id,
-                        'old_values' => $oldValues,
-                        'new_values' => $position->only(['name', 'description']),
-                    ]
-                );
-
-                return $position;
-            });
-        } catch (Throwable $e) {
-            $this->logger->error(
-                action: 'UPDATE_FAILED',
-                module: 'positions',
-                message: 'Position update failed',
-                context: [
-                    'position_id' => $position->id,
-                    'payload' => $data,
-                ],
-                exception: $e
-            );
-
-            throw $e;
-        }
+        return $updated;
     }
 
     /**
@@ -118,36 +90,6 @@ class PositionService
      */
     public function deletePosition(Position $position): bool
     {
-        try {
-            return DB::transaction(function () use ($position) {
-                $deletedInfo = [
-                    'position_id' => $position->id,
-                    'name' => $position->name,
-                ];
-
-                $deleted = $position->delete();
-
-                $this->logger->info(
-                    action: 'DELETE',
-                    module: 'positions',
-                    message: 'Position deleted',
-                    context: $deletedInfo
-                );
-
-                return $deleted;
-            });
-        } catch (Throwable $e) {
-            $this->logger->error(
-                action: 'DELETE_FAILED',
-                module: 'positions',
-                message: 'Position deletion failed',
-                context: [
-                    'position_id' => $position->id,
-                ],
-                exception: $e
-            );
-
-            throw $e;
-        }
+        return $this->delete($position);
     }
 }
