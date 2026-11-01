@@ -15,11 +15,21 @@
 
     <div class="card">
         <div class="card-header">
-            <h4>Kalender Hari Libur {{ $year }}</h4>
+            <h4>Hari Libur {{ $year }}</h4>
         </div>
 
         <div class="card-body p-3">
-            <!-- Controls: Tahun & Search -->
+            <!-- Nav-pills: Tampilan Kalender / Tabel -->
+            <ul class="nav nav-pills mb-2" role="tablist">
+                <li class="nav-item">
+                    <button type="button" class="nav-link {{ $viewTab === 'calendar' ? 'active' : '' }} font-weight-600 border-0 text-nowrap" wire:click="switchViewTab('calendar')">Kalender</button>
+                </li>
+                <li class="nav-item">
+                    <button type="button" class="nav-link {{ $viewTab === 'table' ? 'active' : '' }} font-weight-600 border-0 text-nowrap" wire:click="switchViewTab('table')">Tabel</button>
+                </li>
+            </ul>
+
+            <!-- Controls: Tahun & Search (+ Show Entries hanya di tab tabel) -->
             <div class="dt-control-wrapper">
                 <div class="dt-show-entries">
                     Tahun
@@ -28,6 +38,15 @@
                             <option value="{{ $y }}">{{ $y }}</option>
                         @endforeach
                     </select>
+                    @if ($viewTab === 'table')
+                        &nbsp;·&nbsp; Show
+                        <select wire:model.live="perPage" class="dt-select-entries">
+                            @foreach ([10, 25, 50, 100] as $n)
+                                <option value="{{ $n }}" {{ $perPage == $n ? 'selected' : '' }}>{{ $n }}</option>
+                            @endforeach
+                        </select>
+                        Entries
+                    @endif
                 </div>
 
                 <div class="dt-search-wrapper">
@@ -42,6 +61,8 @@
                 $searchActive = trim($search) !== '';
                 $weekdays = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
             @endphp
+
+            @if ($viewTab === 'calendar')
 
             @if ($searchActive)
                 <div class="px-1 pb-2" style="font-size: 12px; color: #334155;">
@@ -142,6 +163,80 @@
                     <i class="far fa-calendar-times mb-2" style="font-size: 32px; color: #94a3b8;"></i>
                     <div class="font-weight-600" style="color: #334155;">Tidak ada hari libur terdaftar pada {{ $year }}</div>
                     <div style="font-size: 12.5px; color: #475569;">Gunakan tombol <span class="font-weight-600">+</span> di kanan bawah untuk menambahkan hari libur.</div>
+                </div>
+            @endif
+            @else
+                <!-- ================= TAMPILAN TABEL (paginasi standar) ================= -->
+                <div class="table-responsive">
+                    <table class="table table-clean">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="text-center text-nowrap" style="width: 60px;">NO</th>
+                                <th class="text-nowrap" style="width: 200px;">TANGGAL</th>
+                                <th class="text-nowrap">NAMA HARI LIBUR</th>
+                                <th class="text-nowrap text-center" style="width: 140px;">HARI</th>
+                                <th class="text-center text-nowrap" style="width: 110px;"><i class="fas fa-cog text-muted" title="Aksi"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($holidays as $index => $holiday)
+                                <tr wire:key="holiday-{{ $holiday->id }}" style="border-bottom: 1px solid #f1f5f9;">
+                                    <td class="text-center font-weight-600 align-middle" style="color: #475569; font-size: 12.5px;">
+                                        {{ $holidays->firstItem() + $index }}
+                                    </td>
+                                    <td class="align-middle">
+                                        <div class="font-weight-600 text-nowrap" style="font-size: 13.5px; color: #0f172a;">
+                                            {{ $holiday->date->translatedFormat('d M Y') }}
+                                        </div>
+                                    </td>
+                                    <td class="align-middle">
+                                        <div style="font-size: 13.5px; color: #1e293b;">{{ $holiday->name }}</div>
+                                    </td>
+                                    <td class="align-middle text-center">
+                                        <span class="badge font-weight-600" style="font-size: 11px; padding: 2.5px 10px; border-radius: 9999px; background-color: #f1f5f9; color: #334155; border: 1px solid #e2e8f0;">
+                                            {{ $holiday->date->locale('id')->dayName }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center align-middle text-nowrap">
+                                        <button type="button" wire:click="edit({{ $holiday->id }})" wire:loading.attr="disabled" wire:target="edit({{ $holiday->id }})" class="btn btn-primary btn-action mr-1" title="Edit Data">
+                                            <i wire:loading wire:target="edit({{ $holiday->id }})" class="fas fa-spinner fa-spin"></i>
+                                            <i wire:loading.remove wire:target="edit({{ $holiday->id }})" class="fas fa-pencil-alt"></i>
+                                        </button>
+                                        <button type="button" wire:click="confirmDelete({{ $holiday->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $holiday->id }})" class="btn btn-danger btn-action" title="Hapus Data">
+                                            <i wire:loading wire:target="confirmDelete({{ $holiday->id }})" class="fas fa-spinner fa-spin"></i>
+                                            <i wire:loading.remove wire:target="confirmDelete({{ $holiday->id }})" class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5">
+                                        <div class="text-center py-5">
+                                            <i class="far fa-calendar-times mb-2" style="font-size: 32px; color: #94a3b8;"></i>
+                                            <div class="font-weight-600" style="color: #334155;">Tidak ada data hari libur</div>
+                                            <div style="font-size: 12.5px; color: #475569;">
+                                                @if($search)
+                                                    Tidak ada hari libur yang sesuai dengan kata kunci "{{ $search }}".
+                                                @else
+                                                    Belum ada hari libur yang terdaftar untuk tahun {{ $year }}.
+                                                @endif
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Footer: Info & Pagination -->
+                <div class="dt-footer-wrapper">
+                    <div class="dt-info">
+                        Showing {{ $holidays->total() > 0 ? $holidays->firstItem() : 0 }} to {{ $holidays->total() > 0 ? $holidays->lastItem() : 0 }} of {{ $holidays->total() }} entries
+                    </div>
+                    <div>
+                        {{ $holidays->links('livewire.custom-pagination') }}
+                    </div>
                 </div>
             @endif
         </div>

@@ -11,17 +11,24 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithPagination;
 use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Hari Libur Nasional')]
 class Index extends Component
 {
+    use WithPagination;
+
     protected string $paginationTheme = 'bootstrap';
 
     public HolidayForm $form;
 
     public string $search = '';
+
+    public string $viewTab = 'calendar';
+
+    public int $perPage = 10;
 
     public int $year = 0;
 
@@ -34,6 +41,24 @@ class Index extends Component
         abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
 
         $this->year = (int) now()->year;
+    }
+
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingPerPage(): void
+    {
+        $this->resetPage();
+    }
+
+    public function switchViewTab(string $tab): void
+    {
+        if (in_array($tab, ['calendar', 'table'], true)) {
+            $this->viewTab = $tab;
+            $this->resetPage();
+        }
     }
 
     /**
@@ -176,12 +201,14 @@ class Index extends Component
      */
     public function render(): View
     {
+        $search = trim($this->search);
+
+        // Info libur per tanggal untuk sel kalender (dipakai popup aksi juga)
         $allHolidays = Holiday::query()
             ->when($this->year > 0, fn ($q) => $q->whereYear('date', $this->year))
             ->orderBy('date')
             ->get();
 
-        // Info libur per tanggal untuk sel kalender (dipakai popup aksi juga)
         $holidayInfo = $allHolidays->mapWithKeys(fn (Holiday $h) => [
             $h->date->toDateString() => [
                 'id' => $h->id,
@@ -192,8 +219,8 @@ class Index extends Component
 
         // Saat mencari, hanya libur yang cocok yang di-highlight penuh
         $matchingDates = [];
-        if (trim($this->search) !== '') {
-            $term = mb_strtolower(trim($this->search));
+        if ($search !== '') {
+            $term = mb_strtolower($search);
             $matchingDates = $allHolidays
                 ->filter(fn (Holiday $h) => str_contains(mb_strtolower($h->name), $term))
                 ->map(fn (Holiday $h) => $h->date->toDateString())
@@ -201,9 +228,17 @@ class Index extends Component
                 ->all();
         }
 
+        // Tampilan tabel memakai paginasi standar
+        $holidays = Holiday::query()
+            ->when($this->year > 0, fn ($q) => $q->whereYear('date', $this->year))
+            ->when($search !== '', fn ($q) => $q->where('name', 'like', "%{$search}%"))
+            ->orderBy('date')
+            ->paginate($this->perPage);
+
         return view('livewire.holidays.index', [
             'holidayInfo' => $holidayInfo,
             'matchingDates' => $matchingDates,
+            'holidays' => $holidays,
             'yearOptions' => $this->yearOptions(),
         ]);
     }
