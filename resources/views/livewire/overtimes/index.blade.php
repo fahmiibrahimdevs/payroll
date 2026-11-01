@@ -746,6 +746,15 @@
                         </div>
                         @endif
 
+                        <!-- UANG MAKAN -->
+                        <div class="form-group">
+                            <label for="adjust_meal_allowance">Uang Makan <small class="text-muted">(Opsional — Rp, misal lembur di hari libur nasional)</small></label>
+                            <input type="number" step="500" min="0" id="adjust_meal_allowance" wire:model="adjust_meal_allowance" class="form-control @error('adjust_meal_allowance') is-invalid @enderror" placeholder="0">
+                            @error('adjust_meal_allowance')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+
                         <!-- CATATAN ADMIN -->
                         <div class="form-group mb-0">
                             <label for="adjust_admin_notes">Catatan Hasil Koordinasi <small class="text-muted">(Opsional)</small></label>
