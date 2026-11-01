@@ -63,6 +63,9 @@ class Index extends Component
 
     public ?Employee $selectedEmployee = null;
 
+    /** Data doughnut chart sebaran departemen untuk dibaca ulang via $wire setelah morph. */
+    public array $departmentChartData = [];
+
     public function mount(): void
     {
         $this->companyEmailDomain = CompanyProfile::getProfile()->getEmailDomain();
@@ -513,6 +516,7 @@ class Index extends Component
     public function render(): View
     {
         $dashboardData = $this->dashboardData;
+        $this->departmentChartData = $dashboardData['charts']['departments'] ?? [];
 
         return view('livewire.employees.index', [
             'employees' => $this->employees,

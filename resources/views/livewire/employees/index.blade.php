@@ -164,15 +164,20 @@
                         </span>
                     </div>
 
-                    <!-- Doughnut Chart Container -->
-                    <div wire:key="emp-dept-chart-{{ md5(json_encode($employeeCharts['departments']['counts'] ?? [])) }}"
+                    <!-- Doughnut Chart Container (wire:ignore — morph Livewire tidak menyentuh canvas; data diambil ulang via $wire) -->
+                    <div wire:ignore data-emp-dept-chart
                          x-data="{
                              chartInstance: null,
-                             initChart() {
-                                 const labels = @js($employeeCharts['departments']['labels'] ?? []);
-                                 const dataVals = @js($employeeCharts['departments']['counts'] ?? []);
-                                 const colors = @js($employeeCharts['departments']['colors'] ?? []);
-                                 const hasData = @js($employeeCharts['departments']['has_data'] ?? false);
+                             lastKey: null,
+                             async initChart() {
+                                 let d = {};
+                                 try { d = (await this.$wire.departmentChartData) || {}; } catch (e) {}
+
+                                 const labels = d.labels ?? [];
+                                 const dataVals = d.counts ?? [];
+                                 const colors = d.colors ?? [];
+                                 const hasData = d.has_data ?? false;
+                                 this.lastKey = JSON.stringify([labels, dataVals, colors, hasData]);
 
                                  const render = () => {
                                      const canvas = this.$refs.canvas;
@@ -232,6 +237,10 @@
                                              }
                                          }
                                      });
+
+                                     if (this.$refs.chartTotal) {
+                                         this.$refs.chartTotal.textContent = (d.total ?? 0) + ' Org';
+                                     }
                                  };
 
                                  this.$nextTick(() => { render(); });
@@ -245,9 +254,20 @@
                                          if (tip) tip.remove();
                                      });
                                  }
+                             },
+                             async refreshIfChanged() {
+                                 // Render ulang hanya bila data grafik benar-benar berubah (mis. filter diganti)
+                                 try {
+                                     const d = (await this.$wire.departmentChartData) || {};
+                                     const key = JSON.stringify([d.labels ?? [], d.counts ?? [], d.colors ?? [], d.has_data ?? false]);
+                                     if (key !== this.lastKey) {
+                                         await this.initChart();
+                                     }
+                                 } catch (e) {}
                              }
                          }"
                          x-init="initChart()"
+                         @emp-dept-chart-refresh.window="refreshIfChanged()"
                          class="position-relative d-flex justify-content-center align-items-center my-2"
                          style="height: 140px; width: 100%;">
 
@@ -258,7 +278,7 @@
                             <span style="font-size: 9.5px; font-weight: 600; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase;">
                                 TOTAL
                             </span>
-                            <span style="font-size: 16px; font-weight: 700; color: #0f172a; line-height: 1.25; margin-top: 2px;">
+                            <span x-ref="chartTotal" style="font-size: 16px; font-weight: 700; color: #0f172a; line-height: 1.25; margin-top: 2px;">
                                 {{ $employeeCharts['departments']['total'] ?? 0 }} Org
                             </span>
                         </div>
@@ -682,6 +702,39 @@
                     $('#employeeDetailModal').on('show.bs.modal', function () {
                         $('#detail-employment-tab').tab('show');
                     });
+
+                    // Tab modal karyawan: ingat tab aktif dan kembalikan setelah
+                    // Livewire me-render ulang, agar validasi gagal saat menyimpan
+                    // tidak memindahkan tab kembali ke Kepegawaian.
+                    let employeeModalActiveTab = 'employment-tab';
+                    $('#employeeModal a[data-toggle="pill"]').on('shown.bs.tab', function (e) {
+                        employeeModalActiveTab = e.target.id;
+                    });
+                    Livewire.hook('commit', ({ succeed }) => {
+                        succeed(() => queueMicrotask(() => {
+                            const modalEl = document.getElementById('employeeModal');
+                            if (!modalEl || !modalEl.classList.contains('show')) return;
+                            const tabEl = document.getElementById(employeeModalActiveTab);
+                            if (tabEl && !tabEl.classList.contains('active')) {
+                                $(tabEl).tab('show');
+                            }
+                        }));
+                    });
+
+                    // Grafik sebaran departemen: beri tahu Alpine setiap kali
+                    // Livewire selesai update — chart-nya hanya dirender ulang
+                    // bila datanya benar-benar berubah (lihat refreshIfChanged).
+                    if (!window.__empDeptChartHook) {
+                        window.__empDeptChartHook = true;
+                        const notifyDeptChart = () => window.dispatchEvent(new Event('emp-dept-chart-refresh'));
+                        if (typeof Livewire !== 'undefined') {
+                            Livewire.hook('commit', ({ succeed }) => { succeed(() => queueMicrotask(notifyDeptChart)); });
+                        } else {
+                            document.addEventListener('livewire:init', () => {
+                                Livewire.hook('commit', ({ succeed }) => { succeed(() => queueMicrotask(notifyDeptChart)); });
+                            });
+                        }
+                    }
 
                     // Listen open-modal event untuk sinkronisasi nilai Select2
                     Livewire.on('open-modal', (event) => {
