@@ -13,6 +13,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -258,6 +259,14 @@ class Index extends Component
                 'type' => 'success',
                 'title' => 'Import Absensi Berhasil',
                 'message' => "Periode {$result['start_date']} s/d {$result['end_date']}: Berhasil menyimpan {$result['records_saved']} data presensi dari {$result['matched_count']} karyawan{$manualNote}.",
+            ]);
+        } catch (InvalidArgumentException $e) {
+            // Penolakan validasi import (mis. rentang tanggal > 1 bulan):
+            // tampilkan pesan penolakan apa adanya tanpa menutup modal import.
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Import Ditolak',
+                'message' => $e->getMessage(),
             ]);
         } catch (\Throwable $e) {
             $this->dispatch('swal:alert', [

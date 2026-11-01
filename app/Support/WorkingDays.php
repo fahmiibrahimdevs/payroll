@@ -65,6 +65,36 @@ class WorkingDays
     }
 
     /**
+     * Key hari hadir dari log absensi yang hanya menghitung tanggal di dalam
+     * himpunan hari kerja valid (hasil workDays()): log di akhir pekan sesuai
+     * jadwal kerja maupun di hari libur nasional tidak dihitung sebagai hari
+     * presensi mingguan (data absensinya tetap tersimpan). Dedup per hari dan
+     * terurut mon..sun agar deterministik.
+     *
+     * @param  iterable  $attendances  kumpulan model/row Attendance (properti `date`)
+     * @param  array<string, string>  $validWorkDays  tanggal (Y-m-d) => key hari dari workDays()
+     * @return string[] daftar key hari
+     */
+    public static function attendedDayKeysWithin(iterable $attendances, array $validWorkDays): array
+    {
+        $keys = [];
+        foreach ($attendances as $attendance) {
+            $dateString = Carbon::parse($attendance->date)->toDateString();
+            if (! isset($validWorkDays[$dateString])) {
+                continue;
+            }
+            $key = $validWorkDays[$dateString];
+            if (! in_array($key, $keys, true)) {
+                $keys[] = $key;
+            }
+        }
+
+        usort($keys, fn (string $a, string $b) => array_search($a, self::DAY_KEYS, true) <=> array_search($b, self::DAY_KEYS, true));
+
+        return $keys;
+    }
+
+    /**
      * Key hari hadir dari log absensi: dedup per hari dan terurut mon..sun
      * agar deterministik.
      *

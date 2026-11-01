@@ -650,6 +650,23 @@ class Index extends Component
             'period_notes' => 'Catatan Periode',
         ]);
 
+        // Sama dengan aturan siklus gaji mingguan: periode harus persis
+        // Jum'at s/d Kamis (7 hari).
+        $startDate = Carbon::parse($this->period_start_date);
+        $endDate = Carbon::parse($this->period_end_date);
+
+        if (! $startDate->isFriday()) {
+            $this->addError('period_start_date', 'Tanggal mulai harus jatuh pada hari Jum\'at.');
+        }
+
+        if (! $endDate->isThursday() || $startDate->copy()->addDays(6)->format('Y-m-d') !== $endDate->format('Y-m-d')) {
+            $this->addError('period_end_date', 'Tanggal akhir harus jatuh pada hari Kamis (persis 7 hari siklus Jum\'at s/d Kamis).');
+        }
+
+        if ($this->getErrorBag()->isNotEmpty()) {
+            return;
+        }
+
         try {
             $period = $service->createPeriod([
                 'start_date' => $this->period_start_date,
@@ -740,7 +757,8 @@ class Index extends Component
         // Fallback tanpa log absensi: hari kerja aktual dalam rentang
         // (kecualikan akhir pekan sesuai jadwal kerja dan hari libur nasional).
         $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6);
-        $defaultDays = array_values(WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek));
+        $validWorkDays = WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
+        $defaultDays = array_values($validWorkDays);
         $defaultDaysCount = max(1, count($defaultDays));
         $hasNew = false;
 
@@ -750,7 +768,10 @@ class Index extends Component
                 $hasOvertime = in_array($emp->id, $linkedEmpIds, true);
 
                 if ($hasAttendanceLog) {
-                    $attendedDaysKeys = WorkingDays::attendedDayKeys($attendances->get($emp->id, collect()));
+                    // Presensi mingguan hanya menghitung hari kerja valid
+                    // (Minggu/Sabtu sesuai jadwal dan libur nasional tidak
+                    // dihitung); log absensinya tetap tersimpan.
+                    $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances->get($emp->id, collect()), $validWorkDays);
                     $daysCount = count($attendedDaysKeys);
                     $daysList = $attendedDaysKeys;
 

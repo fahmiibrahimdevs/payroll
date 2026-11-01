@@ -587,6 +587,15 @@ class CashAdvanceService
 
         try {
             return DB::transaction(function () use ($data, $user) {
+                // Validasi karyawan: harus ada dan berstatus aktif.
+                $employee = Employee::find($data['employee_id'] ?? null);
+                if (! $employee) {
+                    throw new InvalidArgumentException('Karyawan tidak ditemukan.');
+                }
+                if ($employee->status !== EmployeeStatus::ACTIVE) {
+                    throw new InvalidArgumentException('Kasbon hanya dapat diajukan untuk karyawan berstatus aktif.');
+                }
+
                 $disbursementDate = Carbon::parse($data['disbursement_date']);
                 $referenceNumber = $this->generateReferenceNumber($disbursementDate);
 
@@ -2513,6 +2522,14 @@ class CashAdvanceService
                         $allocation = $rem;
                     }
 
+                    // Sisa <= Rp 0,01 pada satu cicilan diangkut penuh ke
+                    // pembayaran agar cicilan tidak tertinggal 1 sen
+                    // (toleransi validasi nominal sudah +0,01).
+                    $residual = $rem - $allocation;
+                    if ($residual > 0 && $residual <= 0.01) {
+                        $allocation = $rem;
+                    }
+
                     $allocatedItems->push([...$item, 'allocation' => $allocation]);
                     $leftToAllocate -= $allocation;
                 }
@@ -2527,7 +2544,9 @@ class CashAdvanceService
 
                 foreach ($allocatedItems as $item) {
                     $allocation = (float) $item['allocation'];
-                    if ($allocation <= 0.01) {
+                    // Alokasi terkecil pun tetap dibuatkan payment agar
+                    // cicilan tidak tertinggal (mis. sisa Rp 0,01).
+                    if ($allocation <= 0) {
                         continue;
                     }
 

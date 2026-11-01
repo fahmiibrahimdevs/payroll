@@ -10,9 +10,11 @@ use App\Enums\OvertimeType;
 use App\Livewire\Overtimes\Index;
 use App\Livewire\Overtimes\Index as OvertimeIndex;
 use App\Livewire\Overtimes\PeriodAttendance;
+use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\Holiday;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Models\OvertimeSubmission;
@@ -350,8 +352,9 @@ class OvertimeTest extends TestCase
     public function test_admin_can_create_weekly_period_and_mark_as_paid(): void
     {
         $service = app(OvertimeService::class);
-        $startDate = Carbon::now()->startOfWeek();
-        $endDate = Carbon::now()->endOfWeek();
+        // Periode mingguan wajib siklus Jum'at s/d Kamis (7 hari).
+        $startDate = Carbon::now()->isFriday() ? Carbon::now() : Carbon::now()->previous(Carbon::FRIDAY);
+        $endDate = $startDate->copy()->addDays(6);
 
         $sub1 = OvertimeSubmission::create([
             'reference_number' => $service->generateSubmissionReference(),
@@ -1391,5 +1394,180 @@ class OvertimeTest extends TestCase
         // 'sun' harus tetap dalam daftar 5 hari (4 hari kerja + Minggu).
         $this->assertContains('sun', $att->attendance_days);
         $this->assertCount(5, $att->attendance_days);
+    }
+
+    public function test_create_period_attendance_keys_follow_working_days_definition(): void
+    {
+        $service = app(OvertimeService::class);
+
+        // Siklus Senin 2026-03-02 s/d Minggu 2026-03-08, jadwal 5 hari kerja
+        // (Sabtu + Minggu libur).
+        $startDate = Carbon::parse('2026-03-02'); // Senin
+        $endDate = Carbon::parse('2026-03-08'); // Minggu
+
+        $originalWorkDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6);
+        $company = CompanyProfile::getProfile();
+        $company->update(['work_days_per_week' => 5]);
+        CompanyProfile::clearProfileCache();
+
+        // Libur nasional pada Rabu: hari kerja kalender, tapi tidak dihitung.
+        Holiday::create(['date' => '2026-03-04', 'name' => 'Libur Nasional Test']);
+
+        // Log absensi: Senin, Selasa, Rabu (libur), Sabtu, dan Minggu.
+        foreach (['2026-03-02', '2026-03-03', '2026-03-04', '2026-03-07', '2026-03-08'] as $date) {
+            Attendance::create([
+                'employee_id' => $this->employee->id,
+                'date' => $date,
+                'status' => 'hadir',
+            ]);
+        }
+
+        $period = $service->createPeriod([
+            'name' => 'Periode Presensi Hari Kerja',
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $endDate->format('Y-m-d'),
+        ], $this->adminUser);
+
+        $att = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+            ->where('employee_id', $this->employee->id)
+            ->first();
+
+        $this->assertNotNull($att);
+        // Sabtu & Minggu (jadwal 5 hari) dan Rabu (libur nasional) tidak
+        // dihitung sebagai hari presensi mingguan.
+        $this->assertEquals(['mon', 'tue'], $att->attendance_days);
+        $this->assertEquals(2, $att->attended_days);
+        $this->assertEquals(
+            round(2 * (float) $att->meal_allowance_per_day, 2),
+            (float) $att->total_meal_allowance
+        );
+
+        // Kembalikan jadwal kerja agar tidak memengaruhi test lain via cache profil.
+        $company->update(['work_days_per_week' => $originalWorkDaysPerWeek]);
+        CompanyProfile::clearProfileCache();
+    }
+
+    public function test_recalculate_totals_includes_meal_allowance_from_linked_submissions_without_attendance_record(): void
+    {
+        $service = app(OvertimeService::class);
+
+        $startDate = Carbon::parse('2026-03-06'); // Jum'at
+        $endDate = Carbon::parse('2026-03-12'); // Kamis
+
+        OvertimeSubmission::create([
+            'reference_number' => $service->generateSubmissionReference(),
+            'employee_id' => $this->employee->id,
+            'date' => $startDate->copy()->addDays(1)->format('Y-m-d'),
+            'start_time' => '18:00',
+            'end_time' => '20:00',
+            'duration_hours' => 2.00,
+            'hourly_rate' => 25000.00,
+            'meal_allowance' => 15000.00,
+            'total_amount' => 65000.00,
+            'reason' => 'Lembur tanpa record presensi',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->karyawanUser->id,
+            'approved_at' => now(),
+        ]);
+
+        $period = $service->createPeriod([
+            'name' => 'Periode Uang Makan Submission',
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $endDate->format('Y-m-d'),
+        ], $this->adminUser);
+
+        // Kasus jarang: record presensi mingguan karyawan hilang, tapi
+        // pengajuan lemburnya tetap ter-link ke periode.
+        OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+            ->where('employee_id', $this->employee->id)
+            ->delete();
+
+        $period->refresh();
+        $period->recalculateTotals();
+        $period->refresh();
+
+        // Uang makan dari submission ter-link tetap terbayar (tidak hilang).
+        $this->assertEquals(15000.00, (float) $period->total_meal_allowance);
+        $this->assertEquals(65000.00, (float) $period->grand_total);
+
+        // Idempoten: hitung ulang kedua kali tidak menambah total.
+        $grandTotalFirst = (float) $period->grand_total;
+        $period->recalculateTotals();
+        $period->refresh();
+        $this->assertEquals($grandTotalFirst, (float) $period->grand_total);
+        $this->assertEquals(15000.00, (float) $period->total_meal_allowance);
+    }
+
+    public function test_store_period_rejects_non_friday_start_and_non_thursday_end(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        // Senin s/d Minggu bukan siklus Jum'at s/d Kamis.
+        Livewire::test(OvertimeIndex::class)
+            ->set('period_start_date', Carbon::parse('2026-03-02')->format('Y-m-d'))
+            ->set('period_end_date', Carbon::parse('2026-03-08')->format('Y-m-d'))
+            ->set('period_name', 'Periode Salah Siklus')
+            ->call('storePeriod')
+            ->assertHasErrors(['period_start_date', 'period_end_date']);
+
+        $this->assertEquals(0, OvertimePeriod::where('name', 'Periode Salah Siklus')->count());
+    }
+
+    public function test_archived_employee_still_resolves_in_overtime_relations(): void
+    {
+        $service = app(OvertimeService::class);
+        $employee = $this->employee;
+
+        $sub = OvertimeSubmission::create([
+            'reference_number' => $service->generateSubmissionReference(),
+            'employee_id' => $employee->id,
+            'date' => '2026-03-10',
+            'start_time' => '18:00',
+            'end_time' => '20:00',
+            'duration_hours' => 2.00,
+            'hourly_rate' => 25000.00,
+            'meal_allowance' => 0,
+            'total_amount' => 50000.00,
+            'reason' => 'Baris lama karyawan terarsip',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->karyawanUser->id,
+            'approved_at' => now(),
+        ]);
+
+        $period = OvertimePeriod::create([
+            'reference_number' => $service->generatePeriodReference(),
+            'name' => 'Periode Relasi Arsip',
+            'start_date' => '2026-03-06',
+            'end_date' => '2026-03-12',
+            'employee_count' => 1,
+            'status' => OvertimePeriodStatus::DRAFT,
+            'created_by' => $this->adminUser->id,
+        ]);
+
+        $att = OvertimePeriodAttendance::create([
+            'overtime_period_id' => $period->id,
+            'employee_id' => $employee->id,
+            'attended_days' => 5,
+            'attendance_days' => ['mon', 'tue', 'wed', 'thu', 'fri'],
+        ]);
+
+        $log = Attendance::create([
+            'employee_id' => $employee->id,
+            'date' => '2026-03-10',
+            'status' => 'hadir',
+        ]);
+
+        // Arsipkan karyawan (soft delete).
+        $employee->delete();
+        $this->assertTrue($employee->refresh()->trashed());
+        $this->assertNull(Employee::find($employee->id));
+
+        // Relasi employee() dengan withTrashed tetap mengembalikan karyawan
+        // terarsip agar baris lama tidak kehilangan nama/upah.
+        $this->assertEquals($employee->id, OvertimeSubmission::findOrFail($sub->id)->employee->id);
+        $this->assertEquals($employee->id, OvertimePeriodAttendance::findOrFail($att->id)->employee->id);
+        $this->assertEquals($employee->id, Attendance::findOrFail($log->id)->employee->id);
     }
 }

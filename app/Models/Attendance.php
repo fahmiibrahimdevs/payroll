@@ -54,7 +54,9 @@ class Attendance extends Model
      */
     public function employee(): BelongsTo
     {
-        return $this->belongsTo(Employee::class);
+        // withTrashed: karyawan terarsip tidak kehilangan nama saat log lama
+        // diedit atau dicetak (pola sama dengan PayrollItem).
+        return $this->belongsTo(Employee::class)->withTrashed();
     }
 
     /**
@@ -72,8 +74,8 @@ class Attendance extends Model
     {
         return $query->whereHas('employee', function (Builder $q) use ($term) {
             $q->where('full_name', 'like', "%{$term}%")
-              ->orWhere('fingerprint_id', 'like', "%{$term}%")
-              ->orWhereHas('detail', fn ($sub) => $sub->where('employee_code', 'like', "%{$term}%"));
+                ->orWhere('fingerprint_id', 'like', "%{$term}%")
+                ->orWhereHas('detail', fn ($sub) => $sub->where('employee_code', 'like', "%{$term}%"));
         });
     }
 

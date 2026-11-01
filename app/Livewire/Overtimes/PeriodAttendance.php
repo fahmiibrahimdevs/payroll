@@ -111,7 +111,8 @@ class PeriodAttendance extends Component
         // Fallback tanpa log absensi: hari kerja aktual dalam rentang
         // (kecualikan akhir pekan sesuai jadwal kerja dan hari libur nasional).
         $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6);
-        $defaultDays = array_values(WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek));
+        $validWorkDays = WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
+        $defaultDays = array_values($validWorkDays);
         $defaultDaysCount = max(1, count($defaultDays));
         $hasNew = false;
 
@@ -123,7 +124,10 @@ class PeriodAttendance extends Component
                 $hasOvertime = in_array($emp->id, $linkedEmpIds, true);
 
                 if ($hasAttendanceLog) {
-                    $attendedDaysKeys = WorkingDays::attendedDayKeys($attendances->get($emp->id, collect()));
+                    // Presensi mingguan hanya menghitung hari kerja valid
+                    // (Minggu/Sabtu sesuai jadwal dan libur nasional tidak
+                    // dihitung); log absensinya tetap tersimpan.
+                    $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances->get($emp->id, collect()), $validWorkDays);
                     $daysCount = count($attendedDaysKeys);
                     $daysList = $attendedDaysKeys;
 

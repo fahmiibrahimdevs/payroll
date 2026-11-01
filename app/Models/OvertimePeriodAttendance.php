@@ -53,7 +53,9 @@ class OvertimePeriodAttendance extends Model
 
     public function employee(): BelongsTo
     {
-        return $this->belongsTo(Employee::class);
+        // withTrashed: karyawan terarsip tidak kehilangan nama/upah saat
+        // baris lama diedit atau dicetak (pola sama dengan PayrollItem).
+        return $this->belongsTo(Employee::class)->withTrashed();
     }
 
     public function payer(): BelongsTo

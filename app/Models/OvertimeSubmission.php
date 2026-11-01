@@ -60,7 +60,9 @@ class OvertimeSubmission extends Model
 
     public function employee(): BelongsTo
     {
-        return $this->belongsTo(Employee::class);
+        // withTrashed: karyawan terarsip tidak kehilangan nama/upah saat
+        // pengajuan lama diedit atau dicetak (pola sama dengan PayrollItem).
+        return $this->belongsTo(Employee::class)->withTrashed();
     }
 
     public function overtimePeriod(): BelongsTo
@@ -150,6 +152,7 @@ class OvertimeSubmission extends Model
                 try {
                     $start = Carbon::parse($this->start_time)->format('H:i');
                     $end = Carbon::parse($this->end_time)->format('H:i');
+
                     return "{$start} - {$end}";
                 } catch (\Throwable) {
                     return "{$this->start_time} - {$this->end_time}";
@@ -167,6 +170,7 @@ class OvertimeSubmission extends Model
                 }
 
                 $hours = (float) $this->duration_hours;
+
                 return ($hours == (int) $hours ? (int) $hours : number_format($hours, 1)).' Jam';
             },
         );

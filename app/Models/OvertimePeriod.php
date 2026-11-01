@@ -106,8 +106,19 @@ class OvertimePeriod extends Model
 
         $totalHours = (float) $submissions->sum('duration_hours');
         $totalOvertimePay = (float) $submissions->sum(fn ($sub) => (float) $sub->subtotal_overtime);
-        $totalMealAllowance = (float) $attendances->sum('total_meal_allowance');
         $totalDailyWage = (float) $attendances->sum('total_daily_wage');
+
+        // Uang makan presensi mingguan + uang makan dari pengajuan lembur yang
+        // ter-link ke periode ini. Submission hanya dihitung bila karyawannya
+        // TIDAK punya record OvertimePeriodAttendance di periode ini (praktis
+        // jarang) agar uang makannya tidak terbayar dua kali. Total selalu
+        // dihitung dari sumber (idempoten), bukan ditambah berulang.
+        $attendanceEmpIds = $attendances->pluck('employee_id')->unique();
+        $mealAllowanceFromSubmissions = (float) $submissions
+            ->reject(fn ($sub) => $attendanceEmpIds->contains($sub->employee_id))
+            ->sum('meal_allowance');
+
+        $totalMealAllowance = round((float) $attendances->sum('total_meal_allowance') + $mealAllowanceFromSubmissions, 2);
 
         $this->total_hours = $totalHours;
         $this->total_overtime_pay = $totalOvertimePay;

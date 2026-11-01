@@ -3,23 +3,32 @@
 namespace Tests\Feature;
 
 use App\Enums\EmploymentStatus;
+use App\Livewire\Attendances\Index;
 use App\Models\Attendance;
+use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\Holiday;
 use App\Models\OvertimePeriod;
+use App\Models\OvertimePeriodAttendance;
 use App\Models\Position;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AttendanceService;
 use Carbon\Carbon;
+use Database\Seeders\EmployeeSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
+use InvalidArgumentException;
 use Livewire\Livewire;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Tests\TestCase;
 
 class AttendanceTest extends TestCase
 {
     use DatabaseTransactions;
+
     protected User $adminUser;
 
     protected User $karyawanUser;
@@ -34,14 +43,14 @@ class AttendanceTest extends TestCase
         $karyawanRole = Role::firstOrCreate(['name' => 'karyawan'], ['display_name' => 'Karyawan']);
 
         $this->adminUser = User::factory()->create([
-            'email' => 'admin_test_' . uniqid() . '@example.com',
+            'email' => 'admin_test_'.uniqid().'@example.com',
             'email_verified_at' => now(),
             'is_active' => true,
         ]);
         $this->adminUser->addRole($adminRole);
 
         $this->karyawanUser = User::factory()->create([
-            'email' => 'karyawan_test_' . uniqid() . '@example.com',
+            'email' => 'karyawan_test_'.uniqid().'@example.com',
             'email_verified_at' => now(),
             'is_active' => true,
         ]);
@@ -95,7 +104,7 @@ class AttendanceTest extends TestCase
     public function test_admin_can_create_manual_attendance(): void
     {
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Attendances\Index::class)
+            ->test(Index::class)
             ->set('manualEmployeeId', $this->employee->id)
             ->set('manualDate', Carbon::today()->toDateString())
             ->set('manualClockIn', '07:55')
@@ -124,7 +133,7 @@ class AttendanceTest extends TestCase
             $this->markTestSkipped('Sample file 1_StandardReport.xls does not exist.');
         }
 
-        $this->seed(\Database\Seeders\EmployeeSeeder::class);
+        $this->seed(EmployeeSeeder::class);
 
         $fakeFile = UploadedFile::fake()->createWithContent(
             '1_StandardReport.xls',
@@ -211,6 +220,10 @@ class AttendanceTest extends TestCase
 
     public function test_sync_attendances_to_weekly_period(): void
     {
+        // Paksa jadwal 6 hari kerja & bersihkan libur nasional agar deterministik
+        CompanyProfile::getProfile()->update(['work_days_per_week' => 6]);
+        Holiday::whereBetween('date', ['2026-10-16', '2026-10-23'])->delete();
+
         // 1. Create dummy attendance records in period date range
         $startDate = Carbon::parse('2026-10-16');
         $endDate = Carbon::parse('2026-10-23');
@@ -225,7 +238,7 @@ class AttendanceTest extends TestCase
         );
 
         $period = OvertimePeriod::create([
-            'reference_number' => 'PER-SYNC-' . uniqid(),
+            'reference_number' => 'PER-SYNC-'.uniqid(),
             'name' => 'Periode Sync Test',
             'start_date' => $startDate->toDateString(),
             'end_date' => $endDate->toDateString(),
@@ -247,7 +260,7 @@ class AttendanceTest extends TestCase
     public function test_admin_can_navigate_months(): void
     {
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Attendances\Index::class)
+            ->test(Index::class)
             ->call('previousMonth')
             ->assertSet('startDate', fn ($date) => str_ends_with($date, '-01'))
             ->call('nextMonth')
@@ -273,7 +286,7 @@ class AttendanceTest extends TestCase
         );
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Attendances\Index::class)
+            ->test(Index::class)
             ->set('startDate', '2026-10-01')
             ->set('endDate', '2026-10-31')
             ->assertSee('Petunjuk Presensi &amp; Keterangan Warna', false)
@@ -299,7 +312,7 @@ class AttendanceTest extends TestCase
         );
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Attendances\Index::class)
+            ->test(Index::class)
             ->call('confirmDeleteAttendance', $att->id)
             ->assertDispatched('swal:confirm-delete')
             ->dispatch('delete-attendance', id: $att->id)
@@ -326,7 +339,7 @@ class AttendanceTest extends TestCase
         );
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Attendances\Index::class)
+            ->test(Index::class)
             ->call('resetToFingerprint', $att->id)
             ->assertDispatched('close-modal', id: 'manualAttendanceModal')
             ->assertDispatched('swal:alert');
@@ -340,13 +353,17 @@ class AttendanceTest extends TestCase
 
     public function test_sync_to_weekly_overtime_period_calculates_daily_wage_for_harian_employee(): void
     {
+        // Paksa jadwal 6 hari kerja & bersihkan libur nasional agar deterministik
+        CompanyProfile::getProfile()->update(['work_days_per_week' => 6]);
+        Holiday::whereBetween('date', ['2026-10-19', '2026-10-25'])->delete();
+
         $this->employee->update([
             'daily_rate' => 125000,
             'meal_allowance_per_day' => 25000,
         ]);
 
         $period = OvertimePeriod::create([
-            'reference_number' => 'OTP-WEEKLY-' . uniqid(),
+            'reference_number' => 'OTP-WEEKLY-'.uniqid(),
             'name' => 'Lembur Mingguan W43',
             'start_date' => '2026-10-19',
             'end_date' => '2026-10-25',
@@ -434,7 +451,7 @@ class AttendanceTest extends TestCase
         );
 
         // Buat file spreadsheet excel dengan 2 sheet Kartu Laporan
-        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $spreadsheet = new Spreadsheet;
 
         // Sheet 1: 8.5.78 (memuat Jojo di base Col A, Andri di base Col P)
         $sheet1 = $spreadsheet->getActiveSheet();
@@ -505,8 +522,8 @@ class AttendanceTest extends TestCase
         $sheet2->setCellValue('A12', '16 JUM');
         $sheet2->setCellValue('B12', '06:30');
 
-        $tmpFile = tempnam(sys_get_temp_dir(), 'test_kl_') . '.xls';
-        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, 'Xls');
+        $tmpFile = tempnam(sys_get_temp_dir(), 'test_kl_').'.xls';
+        $writer = IOFactory::createWriter($spreadsheet, 'Xls');
         $writer->save($tmpFile);
 
         $service = app(AttendanceService::class);
@@ -563,7 +580,7 @@ class AttendanceTest extends TestCase
     public function test_admin_can_save_manual_attendance_with_overtime_and_reset_it(): void
     {
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Attendances\Index::class)
+            ->test(Index::class)
             ->set('manualEmployeeId', $this->employee->id)
             ->set('manualDate', '2026-10-16')
             ->set('manualClockIn', '06:40')
@@ -595,7 +612,7 @@ class AttendanceTest extends TestCase
         ]);
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Attendances\Index::class)
+            ->test(Index::class)
             ->call('resetToFingerprint', $att->id)
             ->assertDispatched('close-modal', id: 'manualAttendanceModal')
             ->assertDispatched('swal:alert');
@@ -624,7 +641,7 @@ class AttendanceTest extends TestCase
         ]);
 
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Attendances\Index::class)
+            ->test(Index::class)
             ->call('deleteAttendance', $att->id)
             ->assertDispatched('close-modal', id: 'manualAttendanceModal')
             ->assertDispatched('swal:alert');
@@ -640,7 +657,7 @@ class AttendanceTest extends TestCase
     public function test_manual_attendance_overnight_shift_and_overnight_overtime_calculation(): void
     {
         Livewire::actingAs($this->adminUser)
-            ->test(\App\Livewire\Attendances\Index::class)
+            ->test(Index::class)
             ->set('manualEmployeeId', $this->employee->id)
             ->set('manualDate', '2026-11-20')
             ->set('manualClockIn', '22:00')
@@ -660,5 +677,208 @@ class AttendanceTest extends TestCase
         $this->assertEquals(480, $att->duration_minutes, 'Durasi kerja shift malam 22:00-06:00 harus 480 menit');
         $this->assertEquals(240, $att->overtime_minutes, 'Durasi lembur lintas malam 22:00-02:00 harus 240 menit');
         $this->assertEquals(0, $att->late_minutes, 'Shift malam tepat waktu tidak boleh dianggap terlambat shift pagi');
+    }
+
+    public function test_import_rejects_date_range_longer_than_one_month(): void
+    {
+        $beforeCount = Attendance::count();
+
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('100');
+        $sheet->setCellValue('A1', 'Kartu Laporan');
+        $sheet->setCellValue('A2', 'Tgl Absen:');
+        $sheet->setCellValue('D2', '2026-10-01 ~ 2026-12-31');
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'test_range_').'.xls';
+        IOFactory::createWriter($spreadsheet, 'Xls')->save($tmpFile);
+
+        try {
+            $service = app(AttendanceService::class);
+            $service->importFingerprintReport($tmpFile, $this->adminUser);
+            $this->fail('Import dengan rentang lebih dari 1 bulan seharusnya ditolak.');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('Rentang tanggal import maksimal 1 bulan', $e->getMessage());
+            $this->assertStringContainsString('Silakan impor per bulan', $e->getMessage());
+            $this->assertStringContainsString('Oktober 2026', $e->getMessage(), 'Pesan penolakan harus memuat daftar bulan terdeteksi');
+        } finally {
+            @unlink($tmpFile);
+        }
+
+        // Tidak ada row absensi yang tertulis saat import ditolak
+        $this->assertSame($beforeCount, Attendance::count());
+    }
+
+    public function test_sync_weekly_excludes_sunday_and_holiday_from_attended_days(): void
+    {
+        // Jadwal 6 hari kerja: Sabtu tetap hari kerja, hanya Minggu + libur nasional yang dikecualikan
+        CompanyProfile::getProfile()->update(['work_days_per_week' => 6]);
+
+        $this->employee->update([
+            'daily_rate' => 100000,
+            'meal_allowance_per_day' => 20000,
+        ]);
+
+        // Hari Rabu 2026-10-21 ditandai libur nasional dari kalender Holiday
+        Holiday::firstOrCreate(['date' => '2026-10-21'], ['name' => 'Libur Uji Presensi']);
+
+        // Tap Senin s/d Minggu (7 hari): termasuk Rabu libur nasional & Minggu
+        $dates = ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25'];
+        foreach ($dates as $d) {
+            Attendance::updateOrCreate(
+                ['employee_id' => $this->employee->id, 'date' => $d],
+                [
+                    'clock_in' => '08:00:00',
+                    'clock_out' => '17:00:00',
+                    'status' => 'hadir',
+                    'source' => 'fingerprint',
+                ]
+            );
+        }
+
+        $period = OvertimePeriod::create([
+            'reference_number' => 'OTP-HOLIDAY-'.uniqid(),
+            'name' => 'Lembur Mingguan W43 Libur',
+            'start_date' => '2026-10-19',
+            'end_date' => '2026-10-25',
+            'created_by' => $this->adminUser->id,
+            'status' => 'draft',
+        ]);
+
+        $service = app(AttendanceService::class);
+        $synced = $service->syncToWeeklyOvertimePeriod($period, $this->adminUser);
+        $this->assertGreaterThan(0, $synced);
+
+        $periodAtt = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+            ->where('employee_id', $this->employee->id)
+            ->firstOrFail();
+
+        // Rabu (libur) dan Minggu tidak dihitung; Senin, Selasa, Kamis, Jumat, Sabtu = 5 hari
+        $this->assertEquals(5, $periodAtt->attended_days);
+        $this->assertEquals(['mon', 'tue', 'thu', 'fri', 'sat'], $periodAtt->attendance_days);
+        $this->assertEquals(500000, (float) $periodAtt->total_daily_wage);
+        // Tunjangan makan memakai rate seragam perusahaan (Rp 25.000/hari)
+        $this->assertEquals(125000, (float) $periodAtt->total_meal_allowance);
+
+        // Data jam hari libur/Minggu tetap tersimpan di absensi (tidak dihapus)
+        $this->assertDatabaseHas('attendances', [
+            'employee_id' => $this->employee->id,
+            'date' => '2026-10-21',
+            'status' => 'hadir',
+        ]);
+        $this->assertDatabaseHas('attendances', [
+            'employee_id' => $this->employee->id,
+            'date' => '2026-10-25',
+            'status' => 'hadir',
+        ]);
+    }
+
+    public function test_sync_keeps_weekly_attendance_row_for_soft_deleted_employee(): void
+    {
+        CompanyProfile::getProfile()->update(['work_days_per_week' => 6]);
+        Holiday::whereBetween('date', ['2026-10-19', '2026-10-25'])->delete();
+
+        Attendance::updateOrCreate(
+            ['employee_id' => $this->employee->id, 'date' => '2026-10-19'],
+            ['clock_in' => '08:00:00', 'clock_out' => '17:00:00', 'status' => 'hadir', 'source' => 'fingerprint']
+        );
+        Attendance::updateOrCreate(
+            ['employee_id' => $this->employee->id, 'date' => '2026-10-20'],
+            ['clock_in' => '08:00:00', 'clock_out' => '17:00:00', 'status' => 'hadir', 'source' => 'fingerprint']
+        );
+
+        $period = OvertimePeriod::create([
+            'reference_number' => 'OTP-RESIGN-'.uniqid(),
+            'name' => 'Lembur Mingguan Karyawan Resign',
+            'start_date' => '2026-10-19',
+            'end_date' => '2026-10-25',
+            'created_by' => $this->adminUser->id,
+            'status' => 'draft',
+        ]);
+
+        $service = app(AttendanceService::class);
+        $service->syncToWeeklyOvertimePeriod($period, $this->adminUser);
+
+        $this->assertDatabaseHas('overtime_period_attendances', [
+            'overtime_period_id' => $period->id,
+            'employee_id' => $this->employee->id,
+            'attended_days' => 2,
+        ]);
+
+        // Karyawan resign / diarsipkan (soft delete) SETELAH baris presensi mingguan terbentuk
+        $this->employee->delete();
+        $this->assertTrue($this->employee->fresh()->trashed());
+
+        // Sinkronisasi ulang TIDAK boleh menghapus baris presensi mingguannya
+        $service->syncToWeeklyOvertimePeriod($period, $this->adminUser);
+
+        $row = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+            ->where('employee_id', $this->employee->id)
+            ->first();
+
+        $this->assertNotNull($row, 'Baris presensi mingguan karyawan yang diarsipkan tidak boleh dihapus saat sync ulang');
+        $this->assertEquals(2, $row->attended_days);
+    }
+
+    public function test_import_reads_excel_serial_time_values(): void
+    {
+        $dept = Department::firstOrCreate(['name' => 'Produksi']);
+        $pos = Position::firstOrCreate(['name' => 'Operator']);
+
+        $emp = Employee::firstOrCreate(
+            ['fingerprint_id' => '777'],
+            [
+                'department_id' => $dept->id,
+                'position_id' => $pos->id,
+                'full_name' => 'Karyawan Serial Time',
+                'join_date' => '2025-01-01',
+                'employment_status' => EmploymentStatus::HARIAN,
+                'status' => 'active',
+                'daily_rate' => 100000,
+            ]
+        );
+
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('777');
+        $sheet->setCellValue('A1', 'Kartu Laporan');
+        $sheet->setCellValue('A2', 'Tgl Absen:');
+        $sheet->setCellValue('D2', '2026-10-16 ~ 2026-10-23');
+
+        $sheet->setCellValue('I3', 'Nama');
+        $sheet->setCellValue('J3', 'SERIAL TIME');
+        $sheet->setCellValue('I4', 'ID');
+        $sheet->setCellValue('J4', '777');
+
+        // Senin 2026-10-19: nilai waktu berformat serial Excel (numerik)
+        // 0.354166... = fraksi hari 08:30, 0.729166... = 17:30,
+        // 0.75 = 18:00, 45000.791666... = serial tanggal + 19:00.
+        $sheet->setCellValue('A12', '19 SEN');
+        $sheet->setCellValue('B12', 0.3541666666666667);
+        $sheet->setCellValue('D12', 0.7291666666666666);
+        $sheet->setCellValue('K12', 0.75);
+        $sheet->setCellValue('M12', 45000.791666666664);
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'test_serial_').'.xls';
+        IOFactory::createWriter($spreadsheet, 'Xls')->save($tmpFile);
+
+        try {
+            $service = app(AttendanceService::class);
+            $result = $service->importFingerprintReport($tmpFile, $this->adminUser);
+
+            $this->assertEquals('success', $result['status']);
+            $this->assertGreaterThanOrEqual(1, $result['records_saved']);
+
+            $att = Attendance::where('employee_id', $emp->id)->where('date', '2026-10-19')->firstOrFail();
+            $this->assertEquals('08:30:00', $att->clock_in, 'Serial Excel 0.354166... harus terbaca 08:30');
+            $this->assertEquals('17:30:00', $att->clock_out, 'Serial Excel 0.729166... harus terbaca 17:30');
+            $this->assertEquals('18:00:00', $att->overtime_in, 'Serial Excel 0.75 harus terbaca 18:00');
+            $this->assertEquals('19:00:00', $att->overtime_out, 'Serial Excel 45000.791666... harus terbaca 19:00');
+            $this->assertEquals(540, $att->duration_minutes);
+            $this->assertEquals(60, $att->overtime_minutes);
+            $this->assertEquals('hadir', $att->status);
+        } finally {
+            @unlink($tmpFile);
+        }
     }
 }

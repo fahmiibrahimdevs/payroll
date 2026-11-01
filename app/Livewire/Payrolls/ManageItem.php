@@ -433,9 +433,12 @@ class ManageItem extends Component
             $calcMode = 'nominal';
             $pct = '';
 
-            $salaryComp = $line->relationLoaded('salaryComponent')
-                ? $line->salaryComponent
-                : ($line->salary_component_id ? SalaryComponent::find($line->salary_component_id) : null);
+            // withTrashed: komponen gaji kustom yang sudah dihapus tidak boleh
+            // menghilangkan mode persen pada baris gaji lama.
+            $salaryComp = $line->relationLoaded('salaryComponent') ? $line->salaryComponent : null;
+            if (! $salaryComp && $line->salary_component_id) {
+                $salaryComp = SalaryComponent::withTrashed()->find($line->salary_component_id);
+            }
 
             if ($salaryComp && ($salaryComp->calculation_type === SalaryCalculationType::PERCENTAGE_OF_BASIC_SALARY || (is_string($salaryComp->calculation_type) && $salaryComp->calculation_type === 'persen_gaji_pokok'))) {
                 $calcMode = 'percentage';

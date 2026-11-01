@@ -5,12 +5,14 @@ namespace App\Services;
 use App\Enums\EmploymentStatus;
 use App\Enums\OvertimePeriodStatus;
 use App\Models\Attendance;
+use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Models\User;
 use App\Support\WorkingDays;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +26,39 @@ class AttendanceService
     public function __construct(
         protected ActivityLogService $logger
     ) {}
+
+    /**
+     * Validasi rentang tanggal import fingerprint: maksimal 1 bulan.
+     *
+     * Pemetaan nomor hari pada format Kartu Laporan hanya aman untuk rentang
+     * dalam 1 bulan; rentang yang lebih panjang berisiko menimpa data bulan
+     * lain / kehilangan bulan tengah, sehingga import ditolak.
+     *
+     * @throws InvalidArgumentException bila rentang melebihi 1 bulan
+     */
+    public function validateImportRange(Carbon $startDate, Carbon $endDate): void
+    {
+        // addMonthNoOverflow() aman dari overflow (mis. 31 Jan + 1 bulan = 28 Feb)
+        $maxEndDate = $startDate->copy()->startOfDay()->addMonthNoOverflow();
+
+        if ($endDate->copy()->startOfDay()->gt($maxEndDate)) {
+            $months = [];
+            $curr = $startDate->copy()->startOfMonth();
+            $lastMonth = $endDate->copy()->startOfMonth();
+            while ($curr->lte($lastMonth)) {
+                $months[] = $curr->locale('id')->isoFormat('MMMM Y');
+                $curr->addMonthNoOverflow();
+            }
+
+            $monthList = count($months) > 3
+                ? implode(', ', array_slice($months, 0, 3)).', ... ('.count($months).' bulan)'
+                : implode(', ', $months);
+
+            throw new InvalidArgumentException(
+                'Rentang tanggal import maksimal 1 bulan. Silakan impor per bulan. Bulan terdeteksi: '.$monthList.'.'
+            );
+        }
+    }
 
     /**
      * Import attendance records from a standard fingerprint Excel report (.xls / .xlsx).
@@ -56,11 +91,37 @@ class AttendanceService
             ->get()
             ->keyBy(fn ($e) => (string) $e->fingerprint_id);
 
-        $timeFormatter = function (?string $val): ?string {
-            if (empty($val) || strtolower($val) === 'absen') {
+        $timeFormatter = function (mixed $val): ?string {
+            if ($val === null || $val === '' || strtolower(trim((string) $val)) === 'absen') {
                 return null;
             }
-            preg_match('/\d{1,2}:\d{2}/', $val, $m);
+
+            $raw = trim((string) $val);
+
+            // Fallback waktu serial Excel (numerik): 0..1 adalah fraksi hari
+            // (0.354166 = 08:30), >1 adalah serial tanggal + fraksi jam
+            // (45000.5 = 12:00). Konversi fraksi hari menjadi jam. Perilaku
+            // string "HH:MM" existing tidak berubah.
+            if (preg_match('/^\d+(?:\.\d+)?$/', $raw)) {
+                $fraction = fmod((float) $raw, 1.0);
+                if ($fraction <= 0.0) {
+                    return null;
+                }
+
+                $totalSeconds = (int) round($fraction * 86400);
+                if ($totalSeconds >= 86400) {
+                    $totalSeconds = 86399;
+                }
+
+                return sprintf(
+                    '%02d:%02d:%02d',
+                    intdiv($totalSeconds, 3600),
+                    intdiv($totalSeconds % 3600, 60),
+                    $totalSeconds % 60
+                );
+            }
+
+            preg_match('/\d{1,2}:\d{2}/', $raw, $m);
             if (empty($m[0])) {
                 return null;
             }
@@ -101,6 +162,10 @@ class AttendanceService
 
             $startDate = Carbon::parse(trim($rangeMatch[1]));
             $endDate = Carbon::parse(trim($rangeMatch[2]));
+
+            // Guard: rentang import lebih dari 1 bulan akan merusak pemetaan
+            // nomor hari (menimpa bulan lain / kehilangan bulan tengah)
+            $this->validateImportRange($startDate, $endDate);
 
             // 2. Deteksi dinamis blok karyawan di setiap sheet Kartu Laporan
             $detectedBlocks = [];
@@ -436,6 +501,9 @@ class AttendanceService
         $startDate = Carbon::parse(trim($startStr));
         $endDate = Carbon::parse(trim($endStr));
 
+        // Guard: rentang import maksimal 1 bulan (sama seperti jalur Kartu Laporan)
+        $this->validateImportRange($startDate, $endDate);
+
         // 2. Map header columns to dates (supports full month spanning up to column AE / 31 days)
         $dateCols = [];
         $cur = $startDate->copy();
@@ -736,12 +804,20 @@ class AttendanceService
     {
         // Periode yang sudah lunas tidak boleh berubah — sinkronisasi ulang akan
         // membalikkan grand_total dan menimpa koreksi manual admin.
-        if ($period->status !== OvertimePeriodStatus::DRAFT) {
+        if ($period->status !== null && $period->status !== OvertimePeriodStatus::DRAFT) {
             throw new InvalidArgumentException('Hanya periode berstatus Draf (Belum Dibayar) yang dapat disinkronkan dari log absensi.');
         }
 
         $startDate = Carbon::parse($period->start_date)->toDateString();
         $endDate = Carbon::parse($period->end_date)->toDateString();
+
+        // Hari kerja valid sesuai jadwal perusahaan: kecualikan Minggu (dan
+        // Sabtu bila jadwal 5 hari kerja) serta hari libur nasional. Tap di
+        // hari libur/akhir pekan tetap tersimpan di absensi sebagai data jam,
+        // tetapi TIDAK dihitung sebagai hari hadir berbayar — pembayarannya
+        // hanya lewat pengajuan lembur yang di-approve Direktur.
+        $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?: 6);
+        $validWorkDays = WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
 
         // Get all attendances in this date range
         $attendances = Attendance::whereBetween('date', [$startDate, $endDate])
@@ -752,21 +828,40 @@ class AttendanceService
         $linkedOvertimeEmpIds = $period->submissions()->pluck('employee_id')->unique()->all();
         $attendedEmpIds = $attendances->keys()->all();
 
-        // Target karyawan mingguan: Pegawai Harian Lepas aktif + karyawan yang memiliki kehadiran atau lembur
-        $candidateEmployees = Employee::where('status', 'active')
-            ->where(function ($q) use ($linkedOvertimeEmpIds, $attendedEmpIds) {
-                $q->where('employment_status', EmploymentStatus::HARIAN)
-                    ->orWhereIn('id', $linkedOvertimeEmpIds)
-                    ->orWhereIn('id', $attendedEmpIds);
+        // Karyawan yang sudah punya baris presensi mingguan pada periode ini
+        // (termasuk yang sudah resign / diarsipkan) tetap diikutkan sebagai
+        // kandidat agar barisnya diperbarui dari log, bukan terhapus.
+        $existingRowEmpIds = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+            ->pluck('employee_id')
+            ->unique()
+            ->all();
+
+        // Target karyawan mingguan: Pegawai Harian Lepas aktif + karyawan yang memiliki kehadiran atau lembur.
+        // withTrashed(): karyawan soft-delete yang masih punya baris/kehadiran tetap disinkronkan.
+        $candidateEmployees = Employee::withTrashed()
+            ->where(function ($q) use ($linkedOvertimeEmpIds, $attendedEmpIds, $existingRowEmpIds) {
+                $q->where(function ($q2) use ($linkedOvertimeEmpIds, $attendedEmpIds) {
+                    $q2->where('status', 'active')
+                        ->where(function ($q3) use ($linkedOvertimeEmpIds, $attendedEmpIds) {
+                            $q3->where('employment_status', EmploymentStatus::HARIAN)
+                                ->orWhereIn('id', $linkedOvertimeEmpIds)
+                                ->orWhereIn('id', $attendedEmpIds);
+                        });
+                })->orWhereIn('id', $existingRowEmpIds);
             })
             ->get();
 
         $syncedCount = 0;
 
-        DB::transaction(function () use ($period, $candidateEmployees, $linkedOvertimeEmpIds, $attendances, &$syncedCount) {
+        DB::transaction(function () use ($period, $candidateEmployees, $linkedOvertimeEmpIds, $attendances, $validWorkDays, &$syncedCount) {
             foreach ($candidateEmployees as $emp) {
                 $empAttendances = $attendances->get($emp->id);
-                $attendedDaysKeys = WorkingDays::attendedDayKeys($empAttendances ?? collect());
+
+                // Hanya hari kerja valid (bukan Minggu/Sabtu-jadwal-5-hari/
+                // libur nasional) yang dihitung sebagai hari hadir berbayar.
+                // Bila rentang tidak punya hari kerja valid sama sekali
+                // (kasus ekstrem), hasilnya memang 0 — bukan minimal 1.
+                $attendedDaysKeys = $this->attendedWorkDayKeys($empAttendances ?? collect(), $validWorkDays);
                 $attendedCount = count($attendedDaysKeys);
                 $hasOvertime = in_array($emp->id, $linkedOvertimeEmpIds, true);
                 $isHarian = $emp->employment_status === EmploymentStatus::HARIAN;
@@ -837,5 +932,34 @@ class AttendanceService
         );
 
         return $syncedCount;
+    }
+
+    /**
+     * Key hari hadir yang HANYA merupakan hari kerja valid menurut jadwal
+     * perusahaan (WorkingDays::workDays): Minggu, Sabtu bila jadwal 5 hari,
+     * dan hari libur nasional tidak dihitung sebagai hari hadir berbayar.
+     * Key tetap dedup per hari dan terurut mon..sun agar deterministik.
+     *
+     * @param  iterable  $attendances  kumpulan model Attendance (properti `date`)
+     * @param  array<string, string>  $validWorkDays  tanggal (Y-m-d) => key hari
+     * @return string[] daftar key hari
+     */
+    private function attendedWorkDayKeys(iterable $attendances, array $validWorkDays): array
+    {
+        $keys = [];
+        foreach ($attendances as $attendance) {
+            $dateString = $attendance->date instanceof CarbonInterface
+                ? $attendance->date->toDateString()
+                : substr((string) $attendance->date, 0, 10);
+
+            $key = $validWorkDays[$dateString] ?? null;
+            if ($key !== null && ! in_array($key, $keys, true)) {
+                $keys[] = $key;
+            }
+        }
+
+        usort($keys, fn (string $a, string $b) => array_search($a, WorkingDays::DAY_KEYS, true) <=> array_search($b, WorkingDays::DAY_KEYS, true));
+
+        return $keys;
     }
 }

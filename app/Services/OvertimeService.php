@@ -449,6 +449,10 @@ class OvertimeService
                     ? (float) $data['duration_hours']
                     : $this->calculateOvertimeDuration($startTime, $endTime);
 
+                // Clamp input admin: nilai negatif/ekstrem tidak boleh mengubah
+                // payout lembur (batas sama dengan clamp di updatePeriodAttendance).
+                $durationHours = max(0.0, min(7.0, $durationHours));
+
                 $startTimeStr = $startTime->format('H:i:s');
                 $endTimeStr = $endTime->format('H:i:s');
                 $totalAmount = round(($durationHours * $rate) + $mealAllowance, 2);
@@ -748,7 +752,8 @@ class OvertimeService
             // (kecualikan akhir pekan sesuai jadwal kerja dan hari libur
             // nasional dari kalender admin).
             $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6);
-            $defaultDays = array_values(WorkingDays::workDays($startDate->toDateString(), $endDate->toDateString(), $workDaysPerWeek));
+            $validWorkDays = WorkingDays::workDays($startDate->toDateString(), $endDate->toDateString(), $workDaysPerWeek);
+            $defaultDays = array_values($validWorkDays);
             $defaultDaysCount = max(1, count($defaultDays));
 
             foreach ($candidateEmployees as $emp) {
@@ -758,7 +763,10 @@ class OvertimeService
                 $hasOvertime = in_array($emp->id, $linkedEmpIds, true);
 
                 if ($hasAttendanceLog) {
-                    $attendedDaysKeys = WorkingDays::attendedDayKeys($attendances->get($emp->id, collect()));
+                    // Presensi mingguan hanya menghitung hari kerja valid
+                    // (Minggu/Sabtu sesuai jadwal dan libur nasional tidak
+                    // dihitung); log absensinya tetap tersimpan.
+                    $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances->get($emp->id, collect()), $validWorkDays);
                     $attendedCount = count($attendedDaysKeys);
 
                     // Hanya buat record presensi bagi yang memiliki kehadiran (> 0 hari) atau lembur
