@@ -1429,7 +1429,11 @@ class PayrollService
             // 2. Process Deductions
             foreach ($deductionRows as $row) {
                 $name = trim((string) ($row['name'] ?? ''));
-                $amount = round((float) ($row['amount'] ?? 0), 2);
+                $isDisabled = isset($row['is_enabled']) && $row['is_enabled'] === false;
+                // Baris yang dinonaktifkan tidak boleh ikut memotong gaji:
+                // nominal dipaksa 0 dan ditandai 'Nonaktif' agar toggle bertahan
+                // saat halaman dimuat ulang.
+                $amount = $isDisabled ? 0.0 : round((float) ($row['amount'] ?? 0), 2);
 
                 if ($name === '' && $amount <= 0) {
                     continue;
@@ -1470,7 +1474,7 @@ class PayrollService
                         'type' => PayrollLineType::DEDUCTION,
                         'category' => $category,
                         'cash_advance_installment_id' => $row['cash_advance_installment_id'] ?? $line->cash_advance_installment_id,
-                        'notes' => ! empty($row['notes']) ? trim((string) $row['notes']) : null,
+                        'notes' => $isDisabled ? 'Nonaktif' : (! empty($row['notes']) ? trim((string) $row['notes']) : null),
                     ]);
                     $retainedIds[] = $rowId;
                 } else {
@@ -1482,7 +1486,7 @@ class PayrollService
                         'type' => PayrollLineType::DEDUCTION,
                         'category' => $category,
                         'amount' => $amount,
-                        'notes' => ! empty($row['notes']) ? trim((string) $row['notes']) : null,
+                        'notes' => $isDisabled ? 'Nonaktif' : (! empty($row['notes']) ? trim((string) $row['notes']) : null),
                     ]);
                     $retainedIds[] = $newLine->id;
                 }

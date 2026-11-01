@@ -443,7 +443,10 @@ class ManageItem extends Component
             }
 
             $isEnabled = true;
-            if ($isSystem && ($line->category === PayrollLineCategory::TAX || $line->category === PayrollLineCategory::BPJS || str_starts_with($line->name, 'PPh 21'))) {
+            if ($isSystem && ($line->category === PayrollLineCategory::TAX
+                || $line->category === PayrollLineCategory::BPJS
+                || str_starts_with($line->name, 'PPh 21')
+                || ! empty($line->cash_advance_installment_id))) {
                 if ($line->notes === 'Nonaktif' || ($amount == 0 && ! empty($line->notes) && str_contains($line->notes, 'Nonaktif'))) {
                     $isEnabled = false;
                 }
@@ -1081,10 +1084,35 @@ class ManageItem extends Component
         }
 
         if (isset($this->deductionRows[$index])) {
-            $this->deductionRows[$index]['is_enabled'] = ! ($this->deductionRows[$index]['is_enabled'] ?? true);
+            $nowEnabled = ! ($this->deductionRows[$index]['is_enabled'] ?? true);
+            $this->deductionRows[$index]['is_enabled'] = $nowEnabled;
+
+            // Baris kasbon: matikan = nominal 0 (tidak dipotong), nyalakan lagi =
+            // kembalikan ke cicilan terjadwal yang belum dibayar.
+            if (! empty($this->deductionRows[$index]['cash_advance_installment_id'])) {
+                $this->deductionRows[$index]['amount'] = $nowEnabled ? $this->scheduledKasbonAmount((int) $this->deductionRows[$index]['cash_advance_installment_id']) : 0.0;
+            }
+
             $this->syncAutoBpjsAndTax();
             $this->clearComputedProperties();
         }
+    }
+
+    /** Cicilan terjadwal yang belum dibayar (dibatasi sisa saldo kasbon). */
+    protected function scheduledKasbonAmount(int $installmentId): float
+    {
+        $installment = CashAdvanceInstallment::query()
+            ->with('cashAdvance:id,remaining_amount')
+            ->find($installmentId);
+
+        if (! $installment) {
+            return 0.0;
+        }
+
+        $unpaid = max(0.0, round((float) $installment->amount - (float) $installment->paid_amount, 2));
+        $remaining = max(0.0, round((float) ($installment->cashAdvance?->remaining_amount ?? $unpaid), 2));
+
+        return min($unpaid, $remaining);
     }
 
     /**

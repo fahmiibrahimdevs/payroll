@@ -2916,6 +2916,137 @@ class PayrollTest extends TestCase
         $this->assertEquals(CashAdvanceStatus::ACTIVE, $ca->status);
     }
 
+    public function test_disabling_kasbon_deduction_switch_excludes_it_from_salary_and_installment(): void
+    {
+        $admin = $this->createAdminUser();
+        $direktur = $this->createDirectorUser();
+        $this->actingAs($admin);
+
+        $emp = Employee::factory()->create([
+            'status' => EmployeeStatus::ACTIVE,
+            'basic_salary' => 5_000_000,
+        ]);
+        $emp->detail()->create([
+            'tax_method' => TaxMethod::GROSS,
+            'ptkp_status' => PtkpStatus::TK_0,
+            'has_npwp' => true,
+        ]);
+
+        $ca = CashAdvance::create([
+            'reference_number' => 'KB-202610-DISABLED',
+            'employee_id' => $emp->id,
+            'amount' => 1_000_000,
+            'remaining_amount' => 1_000_000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 2,
+            'monthly_installment' => 500_000,
+            'disbursement_date' => '2026-10-01',
+            'reason' => 'Kasbon cicilan',
+            'status' => CashAdvanceStatus::ACTIVE->value,
+            'submitted_by' => $admin->id,
+            'approved_by' => $direktur->id,
+            'approved_at' => Carbon::now(),
+        ]);
+
+        $inst1 = CashAdvanceInstallment::create([
+            'cash_advance_id' => $ca->id,
+            'installment_number' => 1,
+            'due_date' => '2026-10-31',
+            'amount' => 500_000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING->value,
+        ]);
+
+        CashAdvanceInstallment::create([
+            'cash_advance_id' => $ca->id,
+            'installment_number' => 2,
+            'due_date' => '2026-11-30',
+            'amount' => 500_000,
+            'paid_amount' => 0,
+            'status' => InstallmentStatus::PENDING->value,
+        ]);
+
+        $service = app(PayrollService::class);
+        $period = $service->createPeriod([
+            'name' => 'Payroll Disabled Kasbon Period',
+            'year' => 2026,
+            'month' => 10,
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-10-31',
+            'payment_date' => '2026-10-31',
+        ], $admin);
+
+        $item = $period->items()->where('employee_id', $emp->id)->first();
+        $this->assertNotNull($item);
+
+        $lw = Livewire::test(PayrollManageItem::class, [
+            'period' => $period,
+            'item' => $item,
+        ]);
+
+        $deductionRows = $lw->get('deductionRows');
+        $caIdx = collect($deductionRows)->search(
+            fn ($row) => ($row['cash_advance_installment_id'] ?? null) === $inst1->id
+        );
+        $this->assertNotFalse($caIdx, 'Cash advance row must be found in deductionRows');
+        $this->assertEquals(500000.0, (float) $lw->get("deductionRows.{$caIdx}.amount"));
+
+        // Matikan switch: nominal baris langsung 0
+        $lw->call('toggleDeductionEnabled', $caIdx)
+            ->assertSet("deductionRows.{$caIdx}.is_enabled", false)
+            ->assertSet("deductionRows.{$caIdx}.amount", 0.0);
+
+        // Simpan: line tersimpan nominal 0 + notes 'Nonaktif' agar toggle bertahan
+        $lw->call('save')->assertHasNoErrors();
+
+        $item->refresh();
+        dump($item->lines()->whereNotNull('cash_advance_installment_id')->get(['id', 'name', 'amount', 'notes'])->toArray());
+        $caLine = $item->lines()->where('cash_advance_installment_id', $inst1->id)->first();
+        $this->assertNotNull($caLine);
+        $this->assertEquals(0.0, (float) $caLine->amount);
+        $this->assertEquals('Nonaktif', $caLine->notes);
+
+        // Saat dimuat ulang, baris tetap dinonaktifkan
+        $reloaded = Livewire::test(PayrollManageItem::class, [
+            'period' => $period,
+            'item' => $item,
+        ]);
+        $reloadedRows = $reloaded->get('deductionRows');
+        $reIdx = collect($reloadedRows)->search(
+            fn ($row) => ($row['cash_advance_installment_id'] ?? null) === $inst1->id
+        );
+        $this->assertNotFalse($reIdx);
+        $this->assertFalse($reloadedRows[$reIdx]['is_enabled']);
+
+        // Nyalakan lagi: nominal kembali ke cicilan terjadwal
+        $reloaded->call('toggleDeductionEnabled', $reIdx)
+            ->assertSet("deductionRows.{$reIdx}.is_enabled", true)
+            ->assertSet("deductionRows.{$reIdx}.amount", 500000.0);
+
+        // Alur payout: baris dinonaktifkan lagi lalu dibayar — tidak boleh ada potongan kasbon
+        $reloaded->call('toggleDeductionEnabled', $reIdx);
+        $reloaded->call('save')->assertHasNoErrors();
+
+        $service->verifyAllItems($period, $admin);
+        $service->submitPeriod($period, $admin);
+        $this->actingAs($direktur);
+        $service->approvePeriod($period, $direktur);
+
+        $item->refresh();
+        $this->actingAs($admin);
+        $service->markItemAsPaid($item, [
+            'payment_date' => '2026-10-31',
+            'payment_method' => 'bank_transfer',
+        ], $admin);
+
+        $this->assertNull(CashAdvancePayment::where('cash_advance_id', $ca->id)->first());
+        $inst1->refresh();
+        $this->assertEquals(InstallmentStatus::PENDING, $inst1->status);
+        $this->assertEquals(0.0, (float) $inst1->paid_amount);
+        $ca->refresh();
+        $this->assertEquals(1000000.0, (float) $ca->remaining_amount);
+    }
+
     public function test_director_does_not_see_approval_buttons_in_draft_and_sees_them_when_submitted(): void
     {
         $admin = $this->createAdminUser();

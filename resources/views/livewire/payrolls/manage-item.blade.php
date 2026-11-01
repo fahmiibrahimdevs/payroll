@@ -778,13 +778,17 @@
                                 @foreach ($this->displayDeductionRows as $index => $row)
                                     @if (! empty($row['cash_advance_installment_id']))
                                         @php $deductionCounter++; @endphp
-                                        <tr wire:key="deduction-row-kasbon-{{ $index }}">
-                                            <td class="text-center text-muted align-middle !px-3 !py-2.5" style="font-size: 12.5px;">{{ $deductionCounter }}</td>
+                                        <tr wire:key="deduction-row-kasbon-{{ $index }}" class="{{ ! $row['enabled'] ? 'payroll-row-disabled' : '' }}">
+                                            <td class="text-center {{ $row['enabled'] ? 'text-muted' : 'payroll-text-disabled' }} align-middle !px-3 !py-2.5" style="font-size: 12.5px;">{{ $deductionCounter }}</td>
                                             <td class="align-middle !px-3 !py-2.5">
                                                 <div class="d-flex flex-column" style="gap: 2px;">
                                                     <div class="d-flex align-items-center flex-wrap" style="gap: 6px;">
-                                                        <span class="text-dark font-weight-600" style="font-size: 13px;">{{ $row['name'] }}</span>
-                                                        @if ($row['amount_float'] <= 0)
+                                                        <span class="{{ $row['enabled'] ? 'text-dark' : 'payroll-text-disabled' }} font-weight-600" style="font-size: 13px;">{{ $row['name'] }}</span>
+                                                        @if (! $row['enabled'])
+                                                            <span class="badge badge-light border text-muted text-xs" style="font-weight: 500;">
+                                                                <i class="fas fa-toggle-off mr-1"></i>Nonaktif
+                                                            </span>
+                                                        @elseif ($row['amount_float'] <= 0)
                                                             <span class="badge badge-success text-xs" style="font-weight: 500;">
                                                                 <i class="fas fa-check-circle mr-1"></i>Sudah Lunas Lebih Awal
                                                             </span>
@@ -868,7 +872,7 @@
                                                                    x-model="formatted"
                                                                    x-on:input="onInput($el.value)"
                                                                    x-on:change="onChange($el.value)"
-                                                                   class="form-control text-right payroll-input payroll-input-deduction @error('deductionRows.'.$index.'.amount') is-invalid @enderror"
+                                                                   class="form-control text-right payroll-input payroll-input-deduction {{ ! $row['enabled'] ? 'payroll-text-disabled' : '' }} @error('deductionRows.'.$index.'.amount') is-invalid @enderror"
                                                                    placeholder="0"
                                                                    autocomplete="off">
                                                         </div>
@@ -877,7 +881,7 @@
                                                         @enderror
                                                     </div>
                                                 @else
-                                                    <span class="{{ $row['amount_float'] > 0 ? 'text-danger' : 'text-muted' }}" style="font-weight: 600; font-size: 13.5px;">
+                                                    <span class="{{ ! $row['enabled'] ? 'payroll-text-disabled' : ($row['amount_float'] > 0 ? 'text-danger' : 'text-muted') }}" style="font-weight: 600; font-size: 13.5px;">
                                                         -Rp {{ number_format($row['amount_float'], 0, ',', '.') }}
                                                     </span>
                                                 @endif
