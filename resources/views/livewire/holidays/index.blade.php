@@ -14,32 +14,25 @@
     </p>
 
     <div class="card">
-        <div class="card-header">
-            <h4>Hari Libur {{ $year }}</h4>
+        <div class="card-header d-flex align-items-center justify-content-between flex-wrap" style="gap: 10px;">
+            <h4 class="mb-0">Hari Libur {{ $year }}</h4>
+            <div class="d-flex align-items-center" style="gap: 6px;">
+                <button type="button" wire:click="previousYear" class="btn btn-light border shadow-none d-inline-flex align-items-center justify-content-center" style="width: 30px; height: 30px; border-radius: 8px; color: #334155;" title="Tahun sebelumnya">
+                    <i class="fas fa-chevron-left" style="font-size: 11px;"></i>
+                </button>
+                <span class="font-weight-700" style="font-size: 15px; color: #0f172a; min-width: 52px; text-align: center;">{{ $year }}</span>
+                <button type="button" wire:click="nextYear" class="btn btn-light border shadow-none d-inline-flex align-items-center justify-content-center" style="width: 30px; height: 30px; border-radius: 8px; color: #334155;" title="Tahun berikutnya">
+                    <i class="fas fa-chevron-right" style="font-size: 11px;"></i>
+                </button>
+            </div>
         </div>
 
         <div class="card-body p-3">
-            <!-- Nav-pills: Tampilan Kalender / Tabel -->
-            <ul class="nav nav-pills mb-2" role="tablist">
-                <li class="nav-item">
-                    <button type="button" class="nav-link {{ $viewTab === 'calendar' ? 'active' : '' }} font-weight-600 border-0 text-nowrap" wire:click="switchViewTab('calendar')">Kalender</button>
-                </li>
-                <li class="nav-item">
-                    <button type="button" class="nav-link {{ $viewTab === 'table' ? 'active' : '' }} font-weight-600 border-0 text-nowrap" wire:click="switchViewTab('table')">Tabel</button>
-                </li>
-            </ul>
-
-            <!-- Controls: Tahun & Search (+ Show Entries hanya di tab tabel) -->
+            <!-- Controls: Search (+ Show Entries hanya di tab tabel) -->
             <div class="dt-control-wrapper">
                 <div class="dt-show-entries">
-                    Tahun
-                    <select wire:model.live="year" class="dt-select-entries">
-                        @foreach ($yearOptions as $y)
-                            <option value="{{ $y }}">{{ $y }}</option>
-                        @endforeach
-                    </select>
                     @if ($viewTab === 'table')
-                        &nbsp;·&nbsp; Show
+                        Show
                         <select wire:model.live="perPage" class="dt-select-entries">
                             @foreach ([10, 25, 50, 100] as $n)
                                 <option value="{{ $n }}" {{ $perPage == $n ? 'selected' : '' }}>{{ $n }}</option>
@@ -54,6 +47,16 @@
                     <input type="text" wire:model.live.debounce.300ms="search" class="dt-search-input" placeholder="Cari nama hari libur...">
                 </div>
             </div>
+
+            <!-- Nav-pills: Tampilan Kalender / Tabel (di bawah controls) -->
+            <ul class="nav nav-pills mb-2" role="tablist">
+                <li class="nav-item">
+                    <button type="button" class="nav-link {{ $viewTab === 'calendar' ? 'active' : '' }} font-weight-600 border-0 text-nowrap" wire:click="switchViewTab('calendar')">Kalender</button>
+                </li>
+                <li class="nav-item">
+                    <button type="button" class="nav-link {{ $viewTab === 'table' ? 'active' : '' }} font-weight-600 border-0 text-nowrap" wire:click="switchViewTab('table')">Tabel</button>
+                </li>
+            </ul>
 
             @php
                 $isAdmin = auth()->user()?->hasRole('admin');

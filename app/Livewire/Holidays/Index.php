@@ -53,6 +53,16 @@ class Index extends Component
         $this->resetPage();
     }
 
+    public function previousYear(): void
+    {
+        $this->year--;
+    }
+
+    public function nextYear(): void
+    {
+        $this->year++;
+    }
+
     public function switchViewTab(string $tab): void
     {
         if (in_array($tab, ['calendar', 'table'], true)) {
@@ -239,28 +249,6 @@ class Index extends Component
             'holidayInfo' => $holidayInfo,
             'matchingDates' => $matchingDates,
             'holidays' => $holidays,
-            'yearOptions' => $this->yearOptions(),
         ]);
-    }
-
-    /**
-     * Daftar tahun yang punya data libur, plus tahun berjalan ± 1.
-     *
-     * @return array<int, int>
-     */
-    private function yearOptions(): array
-    {
-        // Ekstrak tahun di PHP - tabel libur kecil, jauh lebih portable
-        // daripada fungsi YEAR()/strftime() yang spesifik driver.
-        $fromDb = Holiday::query()
-            ->pluck('date')
-            ->map(fn ($d) => (int) substr($d instanceof Carbon ? $d->toDateString() : (string) $d, 0, 4));
-
-        return $fromDb
-            ->push((int) now()->year, (int) now()->year + 1)
-            ->unique()
-            ->sort()
-            ->values()
-            ->all();
     }
 }
