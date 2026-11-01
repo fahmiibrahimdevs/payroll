@@ -165,21 +165,23 @@
                         </div>
                     </div>
 
-                    <!-- Filter status kasbon (default: Kasbon Aktif agar baris Rp 0 tidak menenggelamkan data) -->
-                    <div class="d-flex align-items-center flex-wrap mb-2" style="gap: 8px;">
+                    <!-- Nav-pills filter status kasbon (default: Kasbon Aktif agar baris Rp 0 tidak menenggelamkan data) -->
+                    <ul class="nav nav-pills mb-2" role="tablist">
                         @foreach ([
                             'active_balance' => 'Kasbon Aktif',
                             'pending' => 'Menunggu ACC',
                             'paid_off' => 'Sudah Lunas',
                             'all' => 'Semua Karyawan',
                         ] as $filterValue => $filterLabel)
-                            <button type="button" wire:click="$set('recapFilter', '{{ $filterValue }}')"
-                                    class="btn btn-sm"
-                                    style="border-radius: 9999px; padding: 5px 14px; font-size: 12.5px; font-weight: 500; border: 1px solid {{ $recapFilter === $filterValue ? '#0b52aa' : '#e2e8f0' }}; {{ $recapFilter === $filterValue ? 'background-color: #0b52aa; color: #ffffff;' : 'background-color: #ffffff; color: #334155;' }}">
-                                {{ $filterLabel }}
-                            </button>
+                            <li class="nav-item">
+                                <button type="button"
+                                        class="nav-link {{ $recapFilter === $filterValue ? 'active' : '' }} font-weight-600 border-0 text-nowrap d-flex align-items-center justify-content-center"
+                                        wire:click="$set('recapFilter', '{{ $filterValue }}')">
+                                    {{ $filterLabel }}
+                                </button>
+                            </li>
                         @endforeach
-                    </div>
+                    </ul>
 
                     <!-- Row 2: Full-Width Data Table -->
                     <div class="table-responsive">

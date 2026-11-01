@@ -1487,19 +1487,12 @@ class CashAdvanceService
     /**
      * Get paginated summary of employees with their cash advances for the overview table.
      */
-    public function getEmployeesCashAdvanceSummary(
-        ?string $search = null,
-        ?int $departmentId = null,
-        string $filter = 'all',
-        int $perPage = 10,
-        int $page = 1
-    ): LengthAwarePaginator {
-        $perPage = max(1, min($perPage, 100));
-
-        $query = Employee::query()
-            ->where('status', 'active')
-            ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId));
-
+    /**
+     * Terapkan filter status & pencarian rekap kasbon pada query karyawan
+     * (dipakai bersama oleh ringkasan paginasi dan hitungan badge filter).
+     */
+    private function applyRecapEmployeeQueryFilters($query, string $filter, ?string $search): void
+    {
         if ($filter === 'active_balance') {
             $query->whereHas('cashAdvances', function ($q) {
                 $q->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
@@ -1531,6 +1524,22 @@ class CashAdvanceService
                     ->orWhereHas('position', fn ($p) => $p->where('name', 'like', "%{$searchTerm}%"));
             });
         }
+    }
+
+    public function getEmployeesCashAdvanceSummary(
+        ?string $search = null,
+        ?int $departmentId = null,
+        string $filter = 'all',
+        int $perPage = 10,
+        int $page = 1
+    ): LengthAwarePaginator {
+        $perPage = max(1, min($perPage, 100));
+
+        $query = Employee::query()
+            ->where('status', 'active')
+            ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId));
+
+        $this->applyRecapEmployeeQueryFilters($query, $filter, $search);
 
         $query->with([
             'department:id,name',
