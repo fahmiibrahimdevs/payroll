@@ -1598,7 +1598,6 @@ class CashAdvanceService
 
             $repaymentPercentage = 0.0;
             $repaymentText = null;
-            $activeAdvance = $advances->first(fn ($a) => (float) $a->remaining_amount > 0);
 
             if ($hasActive) {
                 $totalInstallments = max(1, $totalInstallments);
@@ -1625,7 +1624,6 @@ class CashAdvanceService
                 'monthly_deduction' => $monthlyDeduction,
                 'formatted_monthly_deduction' => 'Rp '.number_format($monthlyDeduction, 0, ',', '.'),
                 'has_active' => $hasActive,
-                'active_advance_hashid' => $activeAdvance?->hashid,
                 'paid_installments' => $paidInstallments,
                 'total_installments' => $totalInstallments,
                 'repayment_percentage' => $repaymentPercentage,

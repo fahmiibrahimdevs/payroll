@@ -277,8 +277,8 @@
                                                     @endif
                                                 </td>
                                                 <td class="text-center align-middle text-nowrap !px-3 !py-2.5">
-                                                    @if ($row['active_advance_hashid'] && auth()->user()?->hasRole('admin'))
-                                                        <button type="button" wire:click="openPayment('{{ $row['active_advance_hashid'] }}')" class="btn btn-success btn-action mr-1" title="Catat Pelunasan {{ $row['name'] }}">
+                                                    @if (auth()->user()?->hasRole('admin') && $row['has_active'])
+                                                        <button type="button" wire:click="quickEarlyPayment('{{ $row['hashid'] }}')" class="btn btn-success btn-action mr-1" title="Pelunasan Tagihan Lebih Awal — {{ $row['name'] }}">
                                                             <i class="fas fa-hand-holding-usd"></i>
                                                         </button>
                                                     @endif

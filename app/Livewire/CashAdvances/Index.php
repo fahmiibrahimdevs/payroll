@@ -1398,6 +1398,16 @@ class Index extends Component
     }
 
     /**
+     * Shortcut dari baris rekap: pilih karyawan lalu buka modal
+     * Pelunasan Tagihan Lebih Awal.
+     */
+    public function quickEarlyPayment(string $employeeHashid): void
+    {
+        $this->selectEmployee($employeeHashid);
+        $this->openEarlyPaymentModal();
+    }
+
+    /**
      * Open modal for early payment (Pelunasan Lebih Awal).
      */
     public function openEarlyPaymentModal(?string $targetMonthKey = null, ?CashAdvanceService $service = null): void
