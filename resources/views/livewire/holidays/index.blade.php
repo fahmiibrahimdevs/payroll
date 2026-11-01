@@ -89,27 +89,27 @@
                                         $isValid = $dayNum >= 1 && $dayNum <= $daysInMonth;
                                         $dateStr = $isValid ? sprintf('%04d-%02d-%02d', $year, $m, $dayNum) : null;
                                         $holiday = $isValid ? ($holidayInfo[$dateStr] ?? null) : null;
+                                        $isSunday = $isValid && ($i % 7) === 6;
                                         $isToday = $dateStr === $todayStr;
                                         $isDimmed = $holiday && $searchActive && ! in_array($dateStr, $matchingDates, true);
                                     @endphp
-                                    <div class="text-center" style="aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;">
-                                        @if (! $isValid)
-                            {{-- kosong --}}
-                                        @elseif ($holiday)
-                                            <button type="button"
-                                                    @click="sel = sel === '{{ $dateStr }}' ? null : '{{ $dateStr }}'"
-                                                    title="{{ $holiday['name'] }}"
-                                                    class="w-100 h-100 d-flex align-items-center justify-content-center"
-                                                    style="border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid #fecaca; background-color: #fef2f2; color: #dc2626; transition: all 0.15s ease; opacity: {{ $isDimmed ? 0.4 : 1 }};">
-                                                {{ $dayNum }}
-                                            </button>
-                                        @else
-                                            <span class="w-100 h-100 d-flex align-items-center justify-content-center"
-                                                  style="font-size: 12px; color: {{ $isToday ? '#0b52aa' : '#334155' }}; font-weight: {{ $isToday ? '700' : '400' }}; {{ $isToday ? 'border: 2px solid #0b52aa; border-radius: 8px;' : '' }}">
-                                                {{ $dayNum }}
-                                            </span>
-                                        @endif
-                                    </div>
+                                    @if (! $isValid)
+                                        <div style="min-height: 46px;"></div>
+                                    @elseif ($holiday)
+                                        <button type="button"
+                                                @click="sel = sel === '{{ $dateStr }}' ? null : '{{ $dateStr }}'"
+                                                title="{{ $holiday['name'] }}"
+                                                class="w-100 text-center"
+                                                style="min-height: 46px; border-radius: 8px; cursor: pointer; border: 1px solid #fecaca; background-color: #fef2f2; padding: 3px 1px; transition: all 0.15s ease; opacity: {{ $isDimmed ? 0.4 : 1 }}; {{ $isToday ? 'outline: 2px solid #0b52aa; outline-offset: -2px;' : '' }}">
+                                            <div style="font-size: 11.5px; font-weight: 700; color: #dc2626; line-height: 1.2;">{{ $dayNum }}</div>
+                                            <div style="font-size: 8.5px; font-weight: 600; color: #b91c1c; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word;">{{ $holiday['name'] }}</div>
+                                        </button>
+                                    @else
+                                        <span class="w-100 h-100 d-flex align-items-center justify-content-center"
+                                              style="min-height: 46px; font-size: 12px; color: {{ $isToday ? '#0b52aa' : ($isSunday ? '#dc2626' : '#334155') }}; font-weight: {{ $isToday || $isSunday ? '600' : '400' }}; {{ $isToday ? 'border: 2px solid #0b52aa; border-radius: 8px;' : '' }}">
+                                            {{ $dayNum }}
+                                        </span>
+                                    @endif
                                 @endfor
                             </div>
 
