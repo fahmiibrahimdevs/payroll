@@ -55,7 +55,7 @@
                     </a>
                 </li> --}}
 
-                <li class="nav-item dropdown {{ request()->routeIs(['departments.*', 'positions.*', 'employees.*', 'salary-components.*']) ? 'active' : '' }}">
+                <li class="nav-item dropdown {{ request()->routeIs(['departments.*', 'positions.*', 'employees.*', 'salary-components.*', 'holidays.*']) ? 'active' : '' }}">
                     <a href="#" class="nav-link has-dropdown"><i class="fas fa-database"></i><span>Master Data</span></a>
                     <ul class="dropdown-menu">
                         @if (auth()->user()?->hasRole(['admin', 'direktur']))
