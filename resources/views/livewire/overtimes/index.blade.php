@@ -628,14 +628,14 @@
                             <div class="form-group">
                                 @if ($this->formIsNonWorkDay)
                                     <div class="mb-2" style="background-color: #ffffff; border: 1px solid #fef3c7; border-left: 3px solid #d97706; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                        <div class="d-flex align-items-start" style="font-size: 12.5px; line-height: 1.5; color: #92400e;">
+                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.65; color: #92400e;">
                                             <i class="fas fa-exclamation-circle mr-2 mt-1"></i>
                                             <span>Tanggal lembur ini <span class="font-weight-600">{{ $this->formNonWorkDayLabel }}</span>. Uang makan hari libur <span class="font-weight-600">tidak otomatis</span> dari absensi — aktifkan di bawah bila kebijakan memberi uang makan lembur hari libur.</span>
                                         </div>
                                     </div>
                                 @else
                                     <div class="mb-2" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                        <div class="d-flex align-items-start" style="font-size: 12.5px; line-height: 1.5; color: #334155;">
+                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.65; color: #334155;">
                                             <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
                                             <span>Uang makan hari kerja otomatis dihitung dari kehadiran di periode mingguan. Aktifkan hanya untuk tambahan khusus.</span>
                                         </div>
@@ -705,32 +705,46 @@
                 <form wire:submit.prevent="submitAdjustment">
                     <div class="modal-body py-3 px-4 bg-white">
                         @if ($adjustingSubmission)
-                            <!-- Identitas & Data Asli Pengajuan (Clean White Card dengan Rounded 12px & Shadow) -->
-                            <div class="alert alert-light border small text-muted mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <div>
-                                        <div class="text-dark font-weight-600" style="font-size: 14px;">{{ $adjustingSubmission->employee?->full_name ?: 'Karyawan' }}</div>
-                                        <div style="font-size: 11.5px; color: #64748b;">
+                            <!-- Identitas & Data Asli Pengajuan (Clean White Card, Avatar Circle, Dark Slate) -->
+                            <div class="mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 14px 16px;">
+                                <div class="d-flex align-items-center">
+                                    @if ($adjustingSubmission->employee && $adjustingSubmission->employee->photo_url)
+                                        <img src="{{ $adjustingSubmission->employee->photo_url }}" alt="{{ $adjustingSubmission->employee?->full_name ?: 'Karyawan' }}" class="rounded-circle flex-shrink-0" style="width: 46px; height: 46px; object-fit: cover; border: 2px solid #e2e8f0;">
+                                    @else
+                                        <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 font-weight-600"
+                                             style="width: 46px; height: 46px; background-color: #eff6ff; color: #0284c7; border: 2px solid #bae6fd; font-size: 14px; letter-spacing: 0.5px;">
+                                            {{ \App\Support\Initials::fromName($adjustingSubmission->employee?->full_name) }}
+                                        </div>
+                                    @endif
+                                    <div class="ml-3 flex-grow-1" style="min-width: 0;">
+                                        <div class="d-flex align-items-center justify-content-between">
+                                            <div class="font-weight-600 text-truncate" style="font-size: 15px; color: #0f172a; line-height: 1.35;">
+                                                {{ $adjustingSubmission->employee?->full_name ?: 'Karyawan' }}
+                                            </div>
+                                            <span class="badge font-weight-600 ml-2 flex-shrink-0" style="font-size: 11.5px; background-color: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 10px;">
+                                                {{ $adjustingSubmission->date->locale('id')->translatedFormat('d M Y') }}
+                                            </span>
+                                        </div>
+                                        <div style="font-size: 12.5px; color: #475569; line-height: 1.45;">
                                             {{ $adjustingSubmission->employee?->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $adjustingSubmission->employee?->position?->name ?? 'Staff' }}
                                         </div>
                                     </div>
-                                    <div class="text-right">
-                                        <span class="badge badge-light border font-weight-600" style="font-size: 11px;">
-                                            {{ $adjustingSubmission->date->locale('id')->translatedFormat('d M Y') }}
-                                        </span>
-                                    </div>
                                 </div>
-                                <div class="d-flex justify-content-between align-items-center pt-2 border-top" style="border-color: #e2e8f0; font-size: 12px;">
-                                    <div>
-                                        <span class="text-muted">Diajukan:</span> {{ $adjustingSubmission->isDaily() ? 'Lembur Harian (1 Hari)' : $adjustingSubmission->formatted_work_hours . ' (' . number_format($adjustingSubmission->duration_hours, 2) . ' jam)' }}
+
+                                <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top" style="border-color: #f1f5f9;">
+                                    <div style="font-size: 12.5px; line-height: 1.55;">
+                                        <span style="color: #475569;">Diajukan</span>
+                                        <span class="font-weight-600" style="color: #1e293b;">{{ $adjustingSubmission->isDaily() ? 'Lembur Harian (1 Hari)' : $adjustingSubmission->formatted_work_hours . ' (' . number_format($adjustingSubmission->duration_hours, 2) . ' jam)' }}</span>
                                     </div>
-                                    <div>
-                                        <span class="text-muted">Nominal:</span> {{ $adjustingSubmission->formatted_rate_label }}
+                                    <div class="text-right" style="font-size: 12.5px; line-height: 1.55;">
+                                        <span style="color: #475569;">Nominal</span>
+                                        <span class="font-weight-600" style="color: #1e293b;">{{ $adjustingSubmission->formatted_rate_label }}</span>
                                     </div>
                                 </div>
                                 @if ($adjustingSubmission->reason)
-                                    <div class="mt-2 pt-2 border-top text-xs text-muted" style="border-color: #e2e8f0;">
-                                        <span class="font-weight-500">Keperluan:</span> {{ $adjustingSubmission->reason }}
+                                    <div class="mt-2 pt-2 border-top" style="border-color: #f1f5f9; font-size: 12.5px; line-height: 1.65;">
+                                        <span style="color: #475569;">Keperluan</span>
+                                        <span style="color: #334155;">{{ $adjustingSubmission->reason }}</span>
                                     </div>
                                 @endif
                             </div>
@@ -786,14 +800,14 @@
                         <div class="form-group">
                             @if ($adjustingSubmission && $this->adjustIsNonWorkDay)
                                 <div class="mb-2" style="background-color: #ffffff; border: 1px solid #fef3c7; border-left: 3px solid #d97706; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                    <div class="d-flex align-items-start" style="font-size: 12.5px; line-height: 1.5; color: #92400e;">
+                                    <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.65; color: #92400e;">
                                         <i class="fas fa-exclamation-circle mr-2 mt-1"></i>
                                         <span>Tanggal lembur ini <span class="font-weight-600">{{ $this->adjustNonWorkDayLabel }}</span>. Uang makan hari libur <span class="font-weight-600">tidak otomatis</span> dari absensi — aktifkan di bawah bila kebijakan memberi uang makan lembur hari libur.</span>
                                     </div>
                                 </div>
                             @else
                                 <div class="mb-2" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                    <div class="d-flex align-items-start" style="font-size: 12.5px; line-height: 1.5; color: #334155;">
+                                    <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.65; color: #334155;">
                                         <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
                                         <span>Hari kerja biasa — uang makan sudah otomatis dihitung dari kehadiran di periode mingguan. Aktifkan di bawah hanya untuk tambahan khusus.</span>
                                     </div>
