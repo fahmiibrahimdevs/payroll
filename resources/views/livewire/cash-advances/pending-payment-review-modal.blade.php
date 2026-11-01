@@ -94,7 +94,7 @@
                                                 <i class="fas fa-times" style="font-size: 12px;"></i>
                                             </button>
                                         @else
-                                            <span class="badge badge-warning" style="font-size: 11px; font-weight: 600;">Menunggu Direktur</span>
+                                            <span class="badge badge-warning d-inline-flex align-items-center justify-content-center" style="height: 32px; padding: 0 12px; font-size: 11.5px; font-weight: 600; border-radius: 8px;">Menunggu Direktur</span>
                                         @endcan
                                     </div>
                                 </div>
