@@ -206,21 +206,21 @@
                             @endphp
 
                             @foreach ($groupedSubmissions as $dateKey => $group)
-                                <!-- Baris Sub-Header Group Tanggal (Format: Senin, 27 Okt 2026) -->
-                                <tr class="table-group-header" style="background-color: #f0f6ff; border-top: 1px solid #bfdbfe; border-bottom: 1px solid #dbeafe;">
-                                    <td colspan="{{ $isKaryawan ? 7 : 8 }}" class="!py-2 !px-3" style="border-left: 4px solid #0b52aa !important;">
+                                <!-- Baris Sub-Header Group Tanggal (bersih: garis pemisah tipis, tanpa blok warna) -->
+                                <tr class="table-group-header" style="border-top: 1px solid #e2e8f0;">
+                                    <td colspan="{{ $isKaryawan ? 7 : 8 }}" class="!py-2 !px-3" style="background-color: #ffffff;">
                                         <div class="d-flex align-items-center justify-content-between flex-wrap" style="gap: 8px;">
                                             <div class="d-flex align-items-center">
-                                                <span class="d-inline-flex align-items-center justify-content-center mr-2" style="width: 24px; height: 24px; border-radius: 6px; background-color: #dbeafe; font-size: 11px; flex-shrink: 0;">
+                                                <span class="d-inline-flex align-items-center justify-content-center mr-2" style="width: 22px; height: 22px; border-radius: 6px; background-color: #eff6ff; font-size: 10.5px; flex-shrink: 0;">
                                                     <i class="far fa-calendar-alt" style="color: #0b52aa;"></i>
                                                 </span>
-                                                <span class="font-weight-bold" style="font-size: 13px; letter-spacing: 0.2px; color: #0f172a;">
+                                                <span class="font-weight-600" style="font-size: 12.5px; letter-spacing: 0.2px; color: #334155;">
                                                     {{ $group['label'] }}
                                                 </span>
-                                                <span class="badge ml-2 font-weight-600" style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe;">
-                                                    {{ $group['items']->count() }} Pengajuan
-                                                </span>
                                             </div>
+                                            <span class="badge font-weight-600" style="font-size: 10.5px; padding: 2.5px 10px; border-radius: 9999px; background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;">
+                                                {{ $group['items']->count() }} Pengajuan
+                                            </span>
                                         </div>
                                     </td>
                                 </tr>
