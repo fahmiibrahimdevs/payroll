@@ -352,6 +352,65 @@ class Index extends Component
         $this->adjust_meal_allowance = $this->adjust_give_meal ? $this->adjustMealRate : 0.0;
     }
 
+    #[Computed]
+    public function formMealRate(): float
+    {
+        $employee = $this->form->employee_id ? Employee::find($this->form->employee_id) : null;
+
+        return $employee
+            ? $employee->getEffectiveMealAllowancePerDay()
+            : (float) (CompanyProfile::getProfile()->default_meal_allowance_per_day ?? 25000);
+    }
+
+    #[Computed]
+    public function formMealRateSourceLabel(): string
+    {
+        $company = CompanyProfile::getProfile();
+
+        if ($company->is_uniform_meal_allowance ?? true) {
+            return 'tarif seragam perusahaan';
+        }
+
+        return $this->form->employee_id ? 'tarif uang makan karyawan' : 'tarif default perusahaan';
+    }
+
+    #[Computed]
+    public function formNonWorkDayLabel(): ?string
+    {
+        if (empty($this->form->date)) {
+            return null;
+        }
+
+        $date = Carbon::parse($this->form->date);
+
+        if ($date->isSunday()) {
+            return 'hari Minggu';
+        }
+
+        if ($date->isSaturday() && (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6) === 5) {
+            return 'hari Sabtu (jadwal kerja 5 hari)';
+        }
+
+        $holiday = Holiday::query()->whereDate('date', $date->toDateString())->first();
+
+        if ($holiday) {
+            return 'hari libur nasional'.($holiday->name ? ' "'.$holiday->name.'"' : '');
+        }
+
+        return null;
+    }
+
+    #[Computed]
+    public function formIsNonWorkDay(): bool
+    {
+        return $this->formNonWorkDayLabel !== null;
+    }
+
+    public function toggleFormMeal(): void
+    {
+        $this->form->meal_allowance = $this->form->meal_allowance > 0 ? 0 : $this->formMealRate;
+    }
+
     /**
      * Admin submits adjustment and forwards to Direktur.
      */

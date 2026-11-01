@@ -560,7 +560,7 @@
                                 <div class="col-md-4 col-12">
                                     <div class="form-group">
                                         <label for="form_date">Tanggal Lembur <span class="text-danger">*</span></label>
-                                        <input type="date" id="form_date" wire:model="form.date" class="form-control @error('form.date') is-invalid @enderror">
+                                        <input type="date" id="form_date" wire:model.live="form.date" class="form-control @error('form.date') is-invalid @enderror">
                                         @error('form.date')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
@@ -606,7 +606,7 @@
                             <!-- 3. Form Lembur Harian (Clean White Card dengan Rounded 12px & Shadow) -->
                             <div class="form-group">
                                 <label for="form_date_daily">Tanggal Lembur <span class="text-danger">*</span></label>
-                                <input type="date" id="form_date_daily" wire:model="form.date" class="form-control @error('form.date') is-invalid @enderror">
+                                <input type="date" id="form_date_daily" wire:model.live="form.date" class="form-control @error('form.date') is-invalid @enderror">
                                 @error('form.date')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -620,6 +620,42 @@
                                 <div style="font-size: 11px; line-height: 1.45; color: #64748b;">
                                     Durasi dihitung 1 hari penuh otomatis menggunakan nominal lembur harian karyawan. Range jam kerja tidak diperlukan.
                                 </div>
+                            </div>
+                        @endif
+
+                        @if (! $isKaryawan)
+                            <!-- UANG MAKAN (ADMIN) -->
+                            <div class="form-group">
+                                @if ($this->formIsNonWorkDay)
+                                    <div class="mb-2" style="background-color: #ffffff; border: 1px solid #fef3c7; border-left: 3px solid #d97706; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                        <div class="d-flex align-items-start" style="font-size: 12.5px; line-height: 1.5; color: #92400e;">
+                                            <i class="fas fa-exclamation-circle mr-2 mt-1"></i>
+                                            <span>Tanggal lembur ini <span class="font-weight-600">{{ $this->formNonWorkDayLabel }}</span>. Uang makan hari libur <span class="font-weight-600">tidak otomatis</span> dari absensi — aktifkan di bawah bila kebijakan memberi uang makan lembur hari libur.</span>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="mb-2" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                        <div class="d-flex align-items-start" style="font-size: 12.5px; line-height: 1.5; color: #334155;">
+                                            <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
+                                            <span>Uang makan hari kerja otomatis dihitung dari kehadiran di periode mingguan. Aktifkan hanya untuk tambahan khusus.</span>
+                                        </div>
+                                    </div>
+                                @endif
+
+                                <div class="d-flex align-items-center">
+                                    <label class="custom-switch mb-0" for="form_give_meal">
+                                        <input type="checkbox" id="form_give_meal" class="custom-switch-input" @checked($form->meal_allowance > 0) wire:click="toggleFormMeal">
+                                        <span class="custom-switch-indicator"></span>
+                                    </label>
+                                    <span class="ml-2" style="font-size: 13.5px; color: #1e293b;">
+                                        Beri uang makan
+                                        <span class="font-weight-600">Rp {{ number_format($this->formMealRate, 0, ',', '.') }}</span>/hari
+                                        ({{ $this->formMealRateSourceLabel }})
+                                    </span>
+                                </div>
+                                @error('form.meal_allowance')
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                @enderror
                             </div>
                         @endif
 

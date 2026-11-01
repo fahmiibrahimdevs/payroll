@@ -305,6 +305,37 @@ class OvertimeTest extends TestCase
         ]);
     }
 
+    public function test_admin_create_form_meal_toggle_fills_effective_rate(): void
+    {
+        CompanyProfile::getProfile()->update([
+            'default_meal_allowance_per_day' => 30000,
+            'is_uniform_meal_allowance' => true,
+        ]);
+
+        Holiday::create(['date' => '2026-10-30', 'name' => 'Cuti Bersama Test']);
+        $this->actingAs($this->adminUser);
+
+        Livewire::test(OvertimeIndex::class)
+            ->set('form.employee_id', $this->employee->id)
+            ->set('form.date', '2026-10-30')
+            ->assertSet('formIsNonWorkDay', true)
+            ->call('toggleFormMeal')
+            ->assertSet('form.meal_allowance', 30000.0)
+            ->set('form.start_time', '09:00')
+            ->set('form.end_time', '13:00')
+            ->set('form.reason', 'Lembur hari libur diinput admin')
+            ->call('storeSubmission')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('overtime_submissions', [
+            'employee_id' => $this->employee->id,
+            'date' => '2026-10-30',
+            'status' => OvertimeStatus::PENDING_DIREKTUR->value,
+            'submission_source' => OvertimeSubmissionSource::ADMIN->value,
+            'meal_allowance' => 30000.00,
+        ]);
+    }
+
     public function test_direktur_can_approve_submission(): void
     {
         $service = app(OvertimeService::class);
