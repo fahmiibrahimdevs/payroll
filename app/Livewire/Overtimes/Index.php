@@ -8,6 +8,7 @@ use App\Livewire\Forms\OvertimeSubmissionForm;
 use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
+use App\Models\Holiday;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Models\OvertimeSubmission;
@@ -70,6 +71,8 @@ class Index extends Component
     public float $adjust_duration_hours = 0;
 
     public float $adjust_meal_allowance = 0;
+
+    public bool $adjust_give_meal = false;
 
     public string $adjust_admin_notes = '';
 
@@ -258,6 +261,10 @@ class Index extends Component
         $this->adjust_end_time = ! empty($submission->end_time) ? Carbon::parse($submission->end_time)->format('H:i') : '';
         $this->adjust_duration_hours = (float) $submission->duration_hours;
         $this->adjust_meal_allowance = (float) $submission->meal_allowance;
+        $this->adjust_give_meal = $this->adjust_meal_allowance > 0 || $this->adjustIsNonWorkDay;
+        if ($this->adjust_give_meal && $this->adjust_meal_allowance <= 0) {
+            $this->adjust_meal_allowance = $this->adjustMealRate;
+        }
         $this->adjust_admin_notes = $submission->admin_notes ?? '';
 
         $this->dispatch('open-modal', id: 'overtimeAdjustModal');
@@ -289,6 +296,60 @@ class Index extends Component
                 // ignore
             }
         }
+    }
+
+    #[Computed]
+    public function adjustMealRate(): float
+    {
+        return (float) ($this->adjustingSubmission?->employee?->getEffectiveMealAllowancePerDay() ?? 0);
+    }
+
+    #[Computed]
+    public function adjustMealRateSourceLabel(): string
+    {
+        $company = CompanyProfile::getProfile();
+
+        return ($company->is_uniform_meal_allowance ?? true) ? 'tarif seragam perusahaan' : 'tarif uang makan karyawan';
+    }
+
+    #[Computed]
+    public function adjustNonWorkDayLabel(): ?string
+    {
+        $submission = $this->adjustingSubmission;
+
+        if (! $submission?->date) {
+            return null;
+        }
+
+        $date = Carbon::parse($submission->date);
+
+        if ($date->isSunday()) {
+            return 'hari Minggu';
+        }
+
+        if ($date->isSaturday() && (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6) === 5) {
+            return 'hari Sabtu (jadwal kerja 5 hari)';
+        }
+
+        $holiday = Holiday::query()->whereDate('date', $date->toDateString())->first();
+
+        if ($holiday) {
+            return 'hari libur nasional'.($holiday->name ? ' "'.$holiday->name.'"' : '');
+        }
+
+        return null;
+    }
+
+    #[Computed]
+    public function adjustIsNonWorkDay(): bool
+    {
+        return $this->adjustNonWorkDayLabel !== null;
+    }
+
+    public function toggleAdjustMeal(): void
+    {
+        $this->adjust_give_meal = ! $this->adjust_give_meal;
+        $this->adjust_meal_allowance = $this->adjust_give_meal ? $this->adjustMealRate : 0.0;
     }
 
     /**

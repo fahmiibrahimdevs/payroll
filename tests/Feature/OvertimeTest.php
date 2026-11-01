@@ -202,6 +202,85 @@ class OvertimeTest extends TestCase
         $this->assertEquals($this->adminUser->id, $submission->verified_by_admin_id);
     }
 
+    public function test_adjust_modal_meal_toggle_uses_effective_rate(): void
+    {
+        CompanyProfile::getProfile()->update([
+            'default_meal_allowance_per_day' => 30000,
+            'is_uniform_meal_allowance' => true,
+        ]);
+
+        $service = app(OvertimeService::class);
+        // 2026-11-04 adalah hari Rabu — hari kerja biasa tanpa libur nasional.
+        $submission = OvertimeSubmission::create([
+            'reference_number' => $service->generateSubmissionReference(),
+            'employee_id' => $this->employee->id,
+            'date' => '2026-11-04',
+            'start_time' => '17:00',
+            'end_time' => '20:00',
+            'duration_hours' => 3.00,
+            'hourly_rate' => 25000.00,
+            'meal_allowance' => 0,
+            'total_amount' => 75000.00,
+            'reason' => 'Lembur hari kerja',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::PENDING_ADMIN,
+            'submitted_by' => $this->karyawanUser->id,
+        ]);
+
+        $this->actingAs($this->adminUser);
+
+        Livewire::test(OvertimeIndex::class)
+            ->call('openAdjustModal', $submission->id)
+            ->assertSet('adjust_give_meal', false)
+            ->call('toggleAdjustMeal')
+            ->assertSet('adjust_give_meal', true)
+            ->assertSet('adjust_meal_allowance', 30000.0)
+            ->call('submitAdjustment')
+            ->assertHasNoErrors();
+
+        $submission->refresh();
+        $this->assertEquals(30000.00, (float) $submission->meal_allowance);
+    }
+
+    public function test_adjust_modal_auto_enables_meal_for_holiday_overtime(): void
+    {
+        CompanyProfile::getProfile()->update([
+            'default_meal_allowance_per_day' => 30000,
+            'is_uniform_meal_allowance' => true,
+        ]);
+
+        Holiday::create(['date' => '2026-12-25', 'name' => 'Natal']);
+
+        $service = app(OvertimeService::class);
+        $submission = OvertimeSubmission::create([
+            'reference_number' => $service->generateSubmissionReference(),
+            'employee_id' => $this->employee->id,
+            'date' => '2026-12-25',
+            'start_time' => '09:00',
+            'end_time' => '13:00',
+            'duration_hours' => 4.00,
+            'hourly_rate' => 25000.00,
+            'meal_allowance' => 0,
+            'total_amount' => 100000.00,
+            'reason' => 'Lembur hari libur nasional',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::PENDING_ADMIN,
+            'submitted_by' => $this->karyawanUser->id,
+        ]);
+
+        $this->actingAs($this->adminUser);
+
+        Livewire::test(OvertimeIndex::class)
+            ->call('openAdjustModal', $submission->id)
+            ->assertSet('adjust_give_meal', true)
+            ->assertSet('adjust_meal_allowance', 30000.0)
+            ->call('submitAdjustment')
+            ->assertHasNoErrors();
+
+        $submission->refresh();
+        $this->assertEquals(30000.00, (float) $submission->meal_allowance);
+    }
+
     public function test_admin_can_submit_overtime_directly_and_it_skips_to_pending_direktur(): void
     {
         $this->actingAs($this->adminUser);

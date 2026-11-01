@@ -748,10 +748,35 @@
 
                         <!-- UANG MAKAN -->
                         <div class="form-group">
-                            <label for="adjust_meal_allowance">Uang Makan <small class="text-muted">(Opsional — Rp, misal lembur di hari libur nasional)</small></label>
-                            <input type="number" step="500" min="0" id="adjust_meal_allowance" wire:model="adjust_meal_allowance" class="form-control @error('adjust_meal_allowance') is-invalid @enderror" placeholder="0">
+                            @if ($adjustingSubmission && $this->adjustIsNonWorkDay)
+                                <div class="mb-2" style="background-color: #ffffff; border: 1px solid #fef3c7; border-left: 3px solid #d97706; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                    <div class="d-flex align-items-start" style="font-size: 12.5px; line-height: 1.5; color: #92400e;">
+                                        <i class="fas fa-exclamation-circle mr-2 mt-1"></i>
+                                        <span>Tanggal lembur ini <span class="font-weight-600">{{ $this->adjustNonWorkDayLabel }}</span>. Uang makan hari libur <span class="font-weight-600">tidak otomatis</span> dari absensi — aktifkan di bawah bila kebijakan memberi uang makan lembur hari libur.</span>
+                                    </div>
+                                </div>
+                            @else
+                                <div class="mb-2" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                    <div class="d-flex align-items-start" style="font-size: 12.5px; line-height: 1.5; color: #334155;">
+                                        <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
+                                        <span>Hari kerja biasa — uang makan sudah otomatis dihitung dari kehadiran di periode mingguan. Aktifkan di bawah hanya untuk tambahan khusus.</span>
+                                    </div>
+                                </div>
+                            @endif
+
+                            <div class="d-flex align-items-center">
+                                <label class="custom-switch mb-0" for="adjust_give_meal">
+                                    <input type="checkbox" id="adjust_give_meal" class="custom-switch-input" @checked($adjust_give_meal) wire:click="toggleAdjustMeal">
+                                    <span class="custom-switch-indicator"></span>
+                                </label>
+                                <span class="ml-2" style="font-size: 13.5px; color: #1e293b;">
+                                    Beri uang makan
+                                    <span class="font-weight-600">Rp {{ number_format($this->adjustMealRate, 0, ',', '.') }}</span>/hari
+                                    ({{ $this->adjustMealRateSourceLabel }})
+                                </span>
+                            </div>
                             @error('adjust_meal_allowance')
-                                <div class="invalid-feedback">{{ $message }}</div>
+                                <div class="invalid-feedback d-block">{{ $message }}</div>
                             @enderror
                         </div>
 
