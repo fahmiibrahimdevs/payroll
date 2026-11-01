@@ -81,12 +81,19 @@
                             </thead>
                             <tbody>
                                 @forelse ($salaryComponents->groupBy(fn($item) => $item->category_label) as $groupLabel => $items)
-                                    <!-- Row Group Header -->
-                                    <tr class="bg-gray-100/70" wire:key="group-header-{{ Str::slug($groupLabel) }}">
-                                        <td colspan="7" class="py-2.5 px-4 text-xs text-uppercase letter-spacing-1 border-top border-bottom bg-gray-100">
+                                    <!-- Row Group Header (bersih: garis atas tipis, tanpa blok warna) -->
+                                    <tr class="table-group-header" style="border-top: 1px solid #e2e8f0;" wire:key="group-header-{{ Str::slug($groupLabel) }}">
+                                        <td colspan="7" class="!py-2 !px-3" style="background-color: #ffffff;">
                                             <div class="d-flex align-items-center justify-content-between">
-                                                <span class="text-dark font-weight-600 uppercase"><i class="fas fa-layer-group text-primary mr-1.5"></i> {{ $groupLabel }}</span>
-                                                <span class="badge badge-light border text-xs py-0.5 px-2">{{ $items->count() }} Komponen</span>
+                                                <div class="d-flex align-items-center">
+                                                    <span class="d-inline-flex align-items-center justify-content-center mr-2" style="width: 22px; height: 22px; border-radius: 6px; background-color: #eff6ff; font-size: 10.5px; flex-shrink: 0;">
+                                                        <i class="fas fa-layer-group" style="color: #0b52aa;"></i>
+                                                    </span>
+                                                    <span class="font-weight-600 text-uppercase" style="font-size: 12.5px; letter-spacing: 0.3px; color: #334155;">{{ $groupLabel }}</span>
+                                                </div>
+                                                <span class="badge font-weight-600" style="font-size: 10.5px; padding: 2.5px 10px; border-radius: 9999px; background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;">
+                                                    {{ $items->count() }} Komponen
+                                                </span>
                                             </div>
                                         </td>
                                     </tr>
