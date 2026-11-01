@@ -595,44 +595,40 @@
                                 $isOfficialDept = $itemDeptId > 0;
                             @endphp
                             <!-- Baris Sub-Header Group Departemen (Sesuai Gambar 1 & Konsep Subtotal Gambar 2) -->
-                            <tr class="table-group-header" style="background-color: {{ $isOfficialDept ? '#f0f6ff' : '#fffdf5' }}; border-top: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }}; border-bottom: 1px solid {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }};">
-                                <td colspan="{{ $totalColspan }}" class="!py-2.5 !px-3.5" style="border-left: 4px solid {{ $isOfficialDept ? '#0b52aa' : '#f59e0b' }} !important;">
+                            <tr class="table-group-header" style="border-top: 1px solid #e2e8f0;">
+                                <td colspan="{{ $totalColspan }}" class="!py-2 !px-3" style="background-color: #ffffff;">
                                     <div class="d-flex align-items-center justify-content-between flex-wrap" style="gap: 10px;">
                                         <div class="d-flex align-items-center">
-                                            <span class="d-inline-flex align-items-center justify-content-center mr-2" style="width: 26px; height: 26px; border-radius: 6px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; font-size: 12px; flex-shrink: 0;">
+                                            <span class="d-inline-flex align-items-center justify-content-center mr-2" style="width: 22px; height: 22px; border-radius: 6px; background-color: {{ $isOfficialDept ? '#eff6ff' : '#fef3c7' }}; font-size: 10.5px; flex-shrink: 0;">
                                                 @if ($isOfficialDept)
                                                     <i class="fas fa-building" style="color: #0b52aa;"></i>
                                                 @else
                                                     <i class="fas fa-exclamation-triangle" style="color: #b45309;"></i>
                                                 @endif
                                             </span>
-                                            <div>
-                                                <span class="font-weight-bold" style="font-size: 13px; letter-spacing: 0.3px; color: #0f172a;">
-                                                    DEPARTEMEN {{ strtoupper($deptName) }}
-                                                </span>
-                                                @if ($deptSummary)
-                                                    <span class="badge ml-2 font-weight-700" style="font-size: 11px; padding: 2.5px 8px; border-radius: 12px; background-color: {{ $isOfficialDept ? '#dbeafe' : '#fef3c7' }}; color: {{ $isOfficialDept ? '#1e40af' : '#92400e' }}; border: 1px solid {{ $isOfficialDept ? '#bfdbfe' : '#fde68a' }};">
-                                                        {{ $deptSummary['count'] }} Karyawan
-                                                    </span>
-                                                @endif
-                                                @if (! $isOfficialDept)
-                                                    <span class="badge ml-1 font-weight-700" style="font-size: 10.5px; padding: 2.5px 7px; border-radius: 12px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
-                                                        Perlu Dilengkapi
-                                                    </span>
-                                                @endif
-                                            </div>
+                                            <span class="font-weight-600" style="font-size: 12.5px; letter-spacing: 0.3px; color: #334155;">
+                                                DEPARTEMEN {{ strtoupper($deptName) }}
+                                            </span>
                                         </div>
 
-                                        @if ($deptSummary)
-                                            <div class="d-flex align-items-center flex-wrap" style="font-size: 12px; gap: 14px; padding-right: 4px;">
-                                                <span style="color: #334155; font-weight: 600;" class="d-none d-md-inline">
+                                        <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
+                                            @if (! $isOfficialDept)
+                                                <span class="badge font-weight-600" style="font-size: 10.5px; padding: 2.5px 9px; border-radius: 9999px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
+                                                    Perlu Dilengkapi
+                                                </span>
+                                            @endif
+                                            @if ($deptSummary)
+                                                <span class="badge font-weight-600" style="font-size: 10.5px; padding: 2.5px 10px; border-radius: 9999px; background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;">
+                                                    {{ $deptSummary['count'] }} Karyawan
+                                                </span>
+                                                <span style="color: #334155; font-weight: 600; font-size: 12px;" class="d-none d-md-inline">
                                                     Gaji Kotor: <strong style="color: #0f172a; font-weight: 700;">{{ $deptSummary['formatted_total_gross'] }}</strong>
                                                 </span>
                                                 <span class="px-2.5 py-1 rounded font-weight-700 shadow-none" style="background-color: #eff6ff; color: #0b52aa; border: 1px solid #bfdbfe; font-size: 12px;">
                                                     Subtotal Ditransfer: {{ $deptSummary['formatted_total_net'] }}
                                                 </span>
-                                            </div>
-                                        @endif
+                                            @endif
+                                        </div>
                                     </div>
                                 </td>
                             </tr>

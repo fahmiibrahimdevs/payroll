@@ -545,23 +545,23 @@
                             $statusMeta = $employmentStatusMeta[$statusKey] ?? ['label' => ucfirst($statusKey), 'icon' => 'fas fa-users'];
                         @endphp
                         <!-- Baris Sub-Header Group Status Kerja -->
-                        <tr class="table-group-header" style="background-color: #f0f6ff; border-top: 1px solid #bfdbfe; border-bottom: 1px solid #dbeafe;">
-                            <td class="sticky-emp-col text-nowrap !py-2 !px-3.5" style="border-left: 4px solid #0b52aa !important; background-color: #f0f6ff !important; white-space: nowrap !important;">
+                        <tr class="table-group-header" style="border-top: 1px solid #e2e8f0;">
+                            <td class="sticky-emp-col text-nowrap !py-2 !px-3.5" style="background-color: #ffffff !important; white-space: nowrap !important;">
                                 <div class="d-flex align-items-center justify-content-between text-nowrap" style="white-space: nowrap; gap: 10px;">
                                     <div class="d-flex align-items-center text-nowrap" style="white-space: nowrap;">
-                                        <span class="d-inline-flex align-items-center justify-content-center mr-2 flex-shrink-0" style="width: 22px; height: 22px; border-radius: 5px; background-color: #dbeafe; font-size: 11px; flex-shrink: 0;">
+                                        <span class="d-inline-flex align-items-center justify-content-center mr-2 flex-shrink-0" style="width: 22px; height: 22px; border-radius: 6px; background-color: #eff6ff; font-size: 10.5px; flex-shrink: 0;">
                                             <i class="{{ $statusMeta['icon'] }}" style="color: #0b52aa;"></i>
                                         </span>
-                                        <span class="font-weight-600 text-nowrap" style="font-size: 12.5px; letter-spacing: 0.3px; color: #0f172a; text-transform: uppercase; white-space: nowrap;">
+                                        <span class="font-weight-600 text-nowrap" style="font-size: 12.5px; letter-spacing: 0.3px; color: #334155; text-transform: uppercase; white-space: nowrap;">
                                             STATUS: {{ $statusMeta['label'] }}
                                         </span>
                                     </div>
-                                    <span class="badge font-weight-500 text-nowrap flex-shrink-0" style="font-size: 11px; padding: 2.5px 8px; border-radius: 9999px; background-color: #ffffff; color: #0b52aa; border: 1px solid #bfdbfe; white-space: nowrap;">
+                                    <span class="badge font-weight-600 text-nowrap flex-shrink-0" style="font-size: 10.5px; padding: 2.5px 10px; border-radius: 9999px; background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; white-space: nowrap;">
                                         {{ $groupEmployees->count() }} Orang
                                     </span>
                                 </div>
                             </td>
-                            <td colspan="{{ count($matrixDates) + 1 }}" style="background-color: #f0f6ff; border-top: 1px solid #bfdbfe; border-bottom: 1px solid #dbeafe;"></td>
+                            <td colspan="{{ count($matrixDates) + 1 }}" style="background-color: #ffffff;"></td>
                         </tr>
 
                         @foreach ($groupEmployees as $emp)

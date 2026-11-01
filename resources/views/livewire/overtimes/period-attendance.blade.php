@@ -200,18 +200,18 @@
                             @endphp
 
                             <!-- Baris Sub-Header Group Status Kerja -->
-                            <tr class="table-group-header" style="background-color: #f0f6ff; border-top: 1px solid #bfdbfe; border-bottom: 1px solid #dbeafe;">
-                                <td colspan="8" class="text-nowrap !py-2 !px-3.5" style="border-left: 4px solid #0b52aa !important; background-color: #f0f6ff !important;">
+                            <tr class="table-group-header" style="border-top: 1px solid #e2e8f0;">
+                                <td colspan="8" class="text-nowrap !py-2 !px-3.5" style="background-color: #ffffff !important;">
                                     <div class="d-flex align-items-center justify-content-between">
                                         <div class="d-flex align-items-center">
-                                            <span class="d-inline-flex align-items-center justify-content-center mr-2 flex-shrink-0" style="width: 22px; height: 22px; border-radius: 5px; background-color: #dbeafe; font-size: 11px;">
+                                            <span class="d-inline-flex align-items-center justify-content-center mr-2 flex-shrink-0" style="width: 22px; height: 22px; border-radius: 6px; background-color: #eff6ff; font-size: 10.5px;">
                                                 <i class="{{ $statusMeta['icon'] }}" style="color: #0b52aa;"></i>
                                             </span>
-                                            <span class="font-weight-600" style="font-size: 12px; letter-spacing: 0.3px; color: #0f172a; text-transform: uppercase;">
+                                            <span class="font-weight-600" style="font-size: 12.5px; letter-spacing: 0.3px; color: #334155; text-transform: uppercase;">
                                                 STATUS: {{ $statusMeta['label'] }}
                                             </span>
                                         </div>
-                                        <span class="badge font-weight-500" style="font-size: 11px; padding: 2px 8px; border-radius: 9999px; background-color: #ffffff; color: #0b52aa; border: 1px solid #bfdbfe;">
+                                        <span class="badge font-weight-600" style="font-size: 10.5px; padding: 2.5px 10px; border-radius: 9999px; background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;">
                                             {{ count($groupItems) }} Orang
                                         </span>
                                     </div>
