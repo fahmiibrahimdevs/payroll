@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Enums\CashAdvanceStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
 use App\Enums\PayrollPeriodStatus;
 use App\Enums\SalaryAdjustmentType;
+use App\Models\CashAdvance;
 use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
@@ -401,7 +403,15 @@ class EmployeeService
                     if (! empty($data['password'])) {
                         $userUpdate['password'] = $data['password'];
                     }
+                    $userUpdate['is_active'] = $employee->status === EmployeeStatus::ACTIVE;
                     $employee->user->update($userUpdate);
+
+                    // Status karyawan nonaktif/aktif harus tercermin di akun login:
+                    // cabut sesi + rotasi remember token saat dinonaktifkan.
+                    if ($userUpdate['is_active'] === false) {
+                        $this->revokeUserAccess($employee->user);
+                    }
+
                     if ($role) {
                         Role::firstOrCreate(
                             ['name' => $role],
@@ -565,6 +575,21 @@ class EmployeeService
     {
         $employee->loadMissing('detail');
 
+        // Karyawan dengan kasbon berjalan tidak boleh diarsipkan — cicilan tidak akan
+        // pernah terjadwal di payroll baru dan diam-diam macet.
+        $activeAdvance = CashAdvance::query()
+            ->where('employee_id', $employee->id)
+            ->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
+            ->where('remaining_amount', '>', 0)
+            ->first();
+        if ($activeAdvance) {
+            throw new InvalidArgumentException(
+                'Karyawan masih memiliki kasbon aktif ('.$activeAdvance->reference_number.
+                ', sisa Rp '.number_format((float) $activeAdvance->remaining_amount, 0, ',', '.').
+                '). Selesaikan kasbon terlebih dahulu sebelum mengarsipkan karyawan.'
+            );
+        }
+
         try {
             return DB::transaction(function () use ($employee) {
                 $deletedInfo = [
@@ -600,6 +625,11 @@ class EmployeeService
 
                 $deleted = $employee->delete();
 
+                // Arsip karyawan = akses login dicabut.
+                if ($employee->user) {
+                    $this->revokeUserAccess($employee->user);
+                }
+
                 $this->logger->info(
                     action: 'DELETE',
                     module: 'employees',
@@ -622,6 +652,20 @@ class EmployeeService
 
             throw $e;
         }
+    }
+
+    /**
+     * Cabut akses login akun milik karyawan: nonaktifkan, rotasi remember token,
+     * dan hapus semua sesi aktif (pola yang sama dengan UserService::toggleUserStatus).
+     */
+    protected function revokeUserAccess(User $user): void
+    {
+        $user->forceFill([
+            'is_active' => false,
+            'remember_token' => Str::random(60),
+        ])->save();
+
+        DB::table('sessions')->where('user_id', $user->id)->delete();
     }
 
     /**

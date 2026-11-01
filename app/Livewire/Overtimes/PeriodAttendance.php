@@ -383,6 +383,8 @@ class PeriodAttendance extends Component
      */
     public function openPayEmployeeModal(int $employeeId): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
         $att = OvertimePeriodAttendance::with(['employee.department', 'employee.position', 'employee.detail'])
             ->where('overtime_period_id', $this->period->id)
             ->where('employee_id', $employeeId)
@@ -411,6 +413,8 @@ class PeriodAttendance extends Component
      */
     public function openPaymentDetailModal(int $employeeId): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
         $att = OvertimePeriodAttendance::with(['employee.department', 'employee.position', 'payer'])
             ->where('overtime_period_id', $this->period->id)
             ->where('employee_id', $employeeId)
@@ -428,6 +432,8 @@ class PeriodAttendance extends Component
      */
     public function openEditPaymentModal(int $employeeId): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
         $att = OvertimePeriodAttendance::with(['employee.department', 'employee.position', 'employee.detail'])
             ->where('overtime_period_id', $this->period->id)
             ->where('employee_id', $employeeId)
@@ -455,6 +461,8 @@ class PeriodAttendance extends Component
      */
     public function processEmployeePayment(OvertimeService $service): void
     {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
         if (! $this->selectedAttendance && $this->selectedEmployeeId) {
             $this->selectedAttendance = OvertimePeriodAttendance::with(['employee.department', 'employee.position', 'employee.detail'])
                 ->where('overtime_period_id', $this->period->id)

@@ -2607,7 +2607,7 @@ class CashAdvanceService
     /**
      * Synchronize open/editable payroll lines when an installment receives a payment.
      */
-    protected function syncOpenPayrollLinesForInstallment(CashAdvanceInstallment $installment): void
+    public function syncOpenPayrollLinesForInstallment(CashAdvanceInstallment $installment): void
     {
         $openLines = PayrollItemLine::query()
             ->where('cash_advance_installment_id', $installment->id)

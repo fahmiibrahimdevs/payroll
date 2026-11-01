@@ -908,9 +908,10 @@ class PayrollService
                 $activeAdvances = $activeAdvancesByEmployee->get($employee->id, collect());
 
                 foreach ($activeAdvances as $advance) {
-                    $installment = $advance->installments->first();
-                    if ($installment) {
-                        $deductionAmount = (float) ($installment->amount - $installment->paid_amount);
+                    // Semua cicilan jatuh tempo dipotong — bukan hanya yang pertama —
+                    // supaya backlog cicilan lewat tempo ikut tertagih bulan ini.
+                    foreach ($advance->installments as $installment) {
+                        $deductionAmount = round((float) ($installment->amount - $installment->paid_amount), 2);
                         if ($deductionAmount > 0) {
                             $this->createOrQueuePayrollItemLine([
                                 'payroll_item_id' => $item->id,
@@ -1202,9 +1203,9 @@ class PayrollService
                 ->get();
 
             foreach ($activeAdvances as $advance) {
-                $installment = $advance->installments->first();
-                if ($installment) {
-                    $deductionAmount = (float) ($installment->amount - $installment->paid_amount);
+                // Semua cicilan jatuh tempo dipotong, bukan hanya yang pertama.
+                foreach ($advance->installments as $installment) {
+                    $deductionAmount = round((float) ($installment->amount - $installment->paid_amount), 2);
                     if ($deductionAmount > 0) {
                         PayrollItemLine::create([
                             'payroll_item_id' => $item->id,
@@ -1777,6 +1778,39 @@ class PayrollService
                 } else {
                     $pphDeductionLine?->delete();
                 }
+            } elseif ($taxResult['tax_method'] === TaxMethod::NET && $taxResult['pph21_amount'] > 0) {
+                // Skema Nett: pajak ditanggung perusahaan — karyawan TIDAK dipotong.
+                // Nominal pajak dicatat sebagai Tanggungan Perusahaan agar laporan
+                // biaya tetap akurat; baris potongan karyawan dinolkan.
+                $pph21Comp = $systemComponents->get('PPH21');
+                $companyTaxLine = $lines->first(fn (PayrollItemLine $line) => $line->type === PayrollLineType::COMPANY_CONTRIBUTION
+                    && $line->category === PayrollLineCategory::TAX);
+
+                if ($companyTaxLine) {
+                    $companyTaxLine->update([
+                        'name' => 'PPh 21 (Ditanggung Perusahaan)',
+                        'amount' => $taxResult['pph21_amount'],
+                        'notes' => 'PPh 21 skema Nett ditanggung perusahaan',
+                    ]);
+                } else {
+                    $this->createOrQueuePayrollItemLine([
+                        'payroll_item_id' => $item->id,
+                        'salary_component_id' => $pph21Comp?->id,
+                        'name' => 'PPh 21 (Ditanggung Perusahaan)',
+                        'type' => PayrollLineType::COMPANY_CONTRIBUTION,
+                        'category' => PayrollLineCategory::TAX,
+                        'amount' => $taxResult['pph21_amount'],
+                        'notes' => 'PPh 21 skema Nett ditanggung perusahaan',
+                    ], $pendingLines);
+                }
+
+                if ($pphDeductionLine) {
+                    $pphDeductionLine->update([
+                        'name' => 'PPh 21',
+                        'amount' => 0,
+                        'notes' => 'Nonaktif (Nett - ditanggung perusahaan)',
+                    ]);
+                }
             } elseif ($taxResult['pph21_amount'] > 0) {
                 $pph21Comp = $systemComponents->get('PPH21');
                 if ($pphDeductionLine) {
@@ -1819,6 +1853,14 @@ class PayrollService
                 }
             } else {
                 $pphDeductionLine?->delete();
+            }
+
+            // Bersihkan baris tanggungan pajak perusahaan bila karyawan bukan skema Nett
+            if ($taxResult['tax_method'] !== TaxMethod::NET) {
+                $item->lines()
+                    ->where('type', PayrollLineType::COMPANY_CONTRIBUTION)
+                    ->where('category', PayrollLineCategory::TAX)
+                    ->delete();
             }
         }
 
@@ -2799,6 +2841,11 @@ class PayrollService
                 ->with(['cashAdvanceInstallment.cashAdvance'])
                 ->get();
             $cashAdvancePaymentCount = 0;
+            $affectedInstallmentIds = [];
+            // Kredit kasbon dibatasi dana gaji yang benar-benar tersedia per item:
+            // total potongan yang melebihi pendapatan (net di-clamp 0) tidak boleh
+            // dikreditkan ke saldo hutang tanpa arus kas.
+            $kasbonBudgetRemaining = [];
 
             foreach ($advanceLines as $line) {
                 if (! $line->cashAdvanceInstallment) {
@@ -2821,7 +2868,10 @@ class PayrollService
                     continue;
                 }
 
-                $totalToDeduct = min((float) $line->amount, (float) $cashAdvance->remaining_amount);
+                $kasbonBudget = $kasbonBudgetRemaining[$line->payroll_item_id]
+                    ?? $this->availableKasbonBudget($line->item);
+                $totalToDeduct = min((float) $line->amount, (float) $cashAdvance->remaining_amount, $kasbonBudget);
+                $kasbonBudgetRemaining[$line->payroll_item_id] = max(0.0, round($kasbonBudget - $totalToDeduct, 2));
                 // Line payroll lebih besar dari sisa hutang: gaji sudah terpotong penuh
                 // tetapi kasbon hanya dikredit sebesar sisa hutang - beri peringatan untuk tindak lanjut.
                 if ((float) $line->amount > (float) $cashAdvance->remaining_amount + 0.01) {
@@ -2890,6 +2940,7 @@ class PayrollService
                     ]);
 
                     $leftToDeduct = max(0.0, round($leftToDeduct - $alloc, 2));
+                    $affectedInstallmentIds[$inst->id] = $inst;
                 }
 
                 $newRemaining = max(0.0, round((float) $cashAdvance->remaining_amount - $totalToDeduct, 2));
@@ -2898,6 +2949,14 @@ class PayrollService
                     'remaining_amount' => $newRemaining,
                     'status' => $newAdvanceStatus,
                 ]);
+            }
+
+            // Baris payroll periode lain yang masih menunjuk cicilan yang sama
+            // harus disinkronkan agar tidak memotong gaji untuk cicilan yang
+            // sudah lunas lewat pembayaran ini.
+            $cashAdvanceService = app(CashAdvanceService::class);
+            foreach ($affectedInstallmentIds as $affectedInstallment) {
+                $cashAdvanceService->syncOpenPayrollLinesForInstallment($affectedInstallment->fresh());
             }
 
             $this->logPeriodActivity('PERIOD_PAID', 'Payroll period marked as paid', $lockedPeriod, $user, [
@@ -2915,6 +2974,23 @@ class PayrollService
         }, 'success');
 
         return $paidPeriod;
+    }
+
+    /**
+     * Dana gaji maksimum yang bisa dialokasikan ke kredit kasbon untuk satu slip:
+     * pendapatan bruto dikurangi seluruh potongan non-kasbon. Total potongan yang
+     * melebihi pendapatan (net di-clamp 0) tidak pernah benar-benar dipotong dari
+     * karyawan sehingga tidak boleh dikreditkan ke saldo hutang.
+     */
+    protected function availableKasbonBudget(PayrollItem $item): float
+    {
+        $income = (float) $item->basic_salary + (float) $item->total_allowances;
+        $kasbonLines = (float) $item->lines()
+            ->whereNotNull('cash_advance_installment_id')
+            ->sum('amount');
+        $otherDeductions = (float) $item->total_deductions - $kasbonLines;
+
+        return max(0.0, round($income - $otherDeductions, 2));
     }
 
     /**
@@ -2958,6 +3034,8 @@ class PayrollService
                 'updated_by' => $user->id,
             ]);
 
+            $affectedInstallmentIds = [];
+            $kasbonBudgetRemaining = [];
             // Execute cash advance deductions atomically for this item
             $advanceLines = PayrollItemLine::query()
                 ->where('payroll_item_id', $lockedItem->id)
@@ -2988,7 +3066,10 @@ class PayrollService
                     continue;
                 }
 
-                $totalToDeduct = min((float) $line->amount, (float) $cashAdvance->remaining_amount);
+                $kasbonBudget = $kasbonBudgetRemaining[$lockedItem->id]
+                    ?? $this->availableKasbonBudget($lockedItem);
+                $totalToDeduct = min((float) $line->amount, (float) $cashAdvance->remaining_amount, $kasbonBudget);
+                $kasbonBudgetRemaining[$lockedItem->id] = max(0.0, round($kasbonBudget - $totalToDeduct, 2));
                 // Line payroll lebih besar dari sisa hutang: gaji sudah terpotong penuh
                 // tetapi kasbon hanya dikredit sebesar sisa hutang - beri peringatan untuk tindak lanjut.
                 if ((float) $line->amount > (float) $cashAdvance->remaining_amount + 0.01) {
@@ -3059,6 +3140,7 @@ class PayrollService
                     ]);
 
                     $leftToDeduct = max(0.0, round($leftToDeduct - $alloc, 2));
+                    $affectedInstallmentIds[$inst->id] = $inst;
                 }
 
                 $newRemaining = max(0.0, round((float) $cashAdvance->remaining_amount - $totalToDeduct, 2));
@@ -3068,6 +3150,12 @@ class PayrollService
                     'remaining_amount' => $newRemaining,
                     'status' => $newAdvanceStatus,
                 ]);
+            }
+
+            // Sinkronkan baris payroll periode lain yang masih menunjuk cicilan yang sama.
+            $cashAdvanceService = app(CashAdvanceService::class);
+            foreach ($affectedInstallmentIds as $affectedInstallment) {
+                $cashAdvanceService->syncOpenPayrollLinesForInstallment($affectedInstallment->fresh());
             }
 
             // Check if all items in period are now paid

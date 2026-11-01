@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Support\Rupiah;
 use App\Support\WorkingDays;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -645,14 +646,43 @@ class OvertimeService
     /**
      * Create weekly overtime period and group approved unassigned submissions.
      */
+    /**
+     * Lapisan kedua: seluruh mutasi periode mingguan hanya untuk Admin.
+     * Service ini tidak punya policy, jadi guard harus eksplisit di sini.
+     */
+    private function authorizeWeeklyAdmin(User $actor): void
+    {
+        if (! $actor->hasRole('admin')) {
+            throw new AuthorizationException('Hanya Admin yang dapat mengubah periode gaji mingguan.');
+        }
+    }
+
     public function createPeriod(array $data, User $actor): OvertimePeriod
     {
+        $this->authorizeWeeklyAdmin($actor);
+
         return DB::transaction(function () use ($data, $actor) {
             $startDate = Carbon::parse($data['start_date'])->startOfDay();
             $endDate = Carbon::parse($data['end_date'])->endOfDay();
 
             if ($endDate->lessThan($startDate)) {
                 throw new InvalidArgumentException('Tanggal akhir periode tidak boleh lebih awal dari tanggal mulai.');
+            }
+
+            // Cegah periode bertumpang tindih: upah harian + uang makan hari yang
+            // sama akan dibayar dua kali di dua periode bila rentangnya overlap.
+            $overlapping = OvertimePeriod::query()
+                ->where(function ($q) use ($startDate, $endDate) {
+                    $q->whereBetween('start_date', [$startDate->toDateString(), $endDate->toDateString()])
+                        ->orWhereBetween('end_date', [$startDate->toDateString(), $endDate->toDateString()])
+                        ->orWhere(function ($q2) use ($startDate, $endDate) {
+                            $q2->where('start_date', '<=', $startDate->toDateString())
+                                ->where('end_date', '>=', $endDate->toDateString());
+                        });
+                })
+                ->exists();
+            if ($overlapping) {
+                throw new InvalidArgumentException('Rentang tanggal bertumpang tindih dengan periode gaji mingguan yang sudah ada. Sesuaikan rentang periode.');
             }
 
             $approvedSubmissions = OvertimeSubmission::query()
@@ -790,6 +820,7 @@ class OvertimeService
      */
     public function deletePeriod(OvertimePeriod $period, User $actor): void
     {
+        $this->authorizeWeeklyAdmin($actor);
         if ($period->status !== OvertimePeriodStatus::DRAFT) {
             throw new InvalidArgumentException('Hanya periode mingguan berstatus Draf (Belum Dibayar) yang dapat dihapus.');
         }
@@ -832,6 +863,8 @@ class OvertimeService
      */
     public function updatePeriodAttendance(OvertimePeriod $period, int $employeeId, array $data, User $actor, bool $recalculateTotals = true): OvertimePeriodAttendance
     {
+        $this->authorizeWeeklyAdmin($actor);
+
         return DB::transaction(function () use ($period, $employeeId, $data, $recalculateTotals) {
             $attendance = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
                 ->where('employee_id', $employeeId)
@@ -892,6 +925,8 @@ class OvertimeService
      */
     public function markPeriodAsPaid(OvertimePeriod $period, User $actor): OvertimePeriod
     {
+        $this->authorizeWeeklyAdmin($actor);
+
         return DB::transaction(function () use ($period, $actor) {
             $lockedPeriod = OvertimePeriod::query()
                 ->lockForUpdate()
@@ -942,6 +977,8 @@ class OvertimeService
      */
     public function payEmployeeWeekly(OvertimePeriodAttendance $attendance, array $data, User $actor): OvertimePeriodAttendance
     {
+        $this->authorizeWeeklyAdmin($actor);
+
         return DB::transaction(function () use ($attendance, $data, $actor) {
             // Guard pembayaran ganda: pembaruan data untuk yang sudah dibayar wajib lewat updateEmployeeWeeklyPayment().
             if ($attendance->payment_status === 'paid') {
@@ -981,6 +1018,8 @@ class OvertimeService
      */
     public function updateEmployeeWeeklyPayment(OvertimePeriodAttendance $attendance, array $data, User $actor): OvertimePeriodAttendance
     {
+        $this->authorizeWeeklyAdmin($actor);
+
         return DB::transaction(function () use ($attendance, $data, $actor) {
             $updates = [
                 'paid_at' => $data['payment_date'] ?? $attendance->paid_at,

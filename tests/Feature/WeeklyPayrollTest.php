@@ -144,7 +144,7 @@ class WeeklyPayrollTest extends TestCase
             ->assertHasErrors(['period_end_date']);
     }
 
-    public function test_admin_and_direktur_can_delete_draft_period(): void
+    public function test_admin_can_delete_draft_period_and_direktur_cannot(): void
     {
         $period = OvertimePeriod::create([
             'reference_number' => 'PER-TEST-'.uniqid(),
@@ -157,7 +157,19 @@ class WeeklyPayrollTest extends TestCase
             'grand_total' => 0,
         ]);
 
+        // Direktur tidak lagi boleh menghapus periode mingguan (admin saja)
         Livewire::actingAs($this->direkturUser)
+            ->test(WeeklyPayrollIndex::class)
+            ->call('deletePeriod', $period->id)
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('overtime_periods', [
+            'id' => $period->id,
+            'deleted_at' => null,
+        ]);
+
+        // Admin tetap bisa menghapus draf
+        Livewire::actingAs($this->adminUser)
             ->test(WeeklyPayrollIndex::class)
             ->call('confirmDelete', $period->id)
             ->assertDispatched('swal:confirm-delete')

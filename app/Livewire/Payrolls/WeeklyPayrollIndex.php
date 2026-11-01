@@ -147,7 +147,7 @@ class WeeklyPayrollIndex extends Component
             ->where('status', EmployeeStatus::ACTIVE)
             ->where(function ($q) use ($approvedSubmissions, $attendances, $hasAttendanceLog) {
                 $q->where('employment_status', EmploymentStatus::HARIAN)
-                  ->orWhereIn('id', $approvedSubmissions);
+                    ->orWhereIn('id', $approvedSubmissions);
                 if ($hasAttendanceLog) {
                     $q->orWhereIn('id', $attendances);
                 }
@@ -157,7 +157,7 @@ class WeeklyPayrollIndex extends Component
 
     public function storePeriod(OvertimeService $service, AttendanceService $attendanceService): void
     {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
 
         $this->validate([
             'period_start_date' => ['required', 'date'],
@@ -176,11 +176,13 @@ class WeeklyPayrollIndex extends Component
 
         if (! $startDate->isFriday()) {
             $this->addError('period_start_date', 'Tanggal mulai harus jatuh pada hari Jum\'at.');
+
             return;
         }
 
         if (! $endDate->isThursday() || $startDate->copy()->addDays(6)->format('Y-m-d') !== $endDate->format('Y-m-d')) {
             $this->addError('period_end_date', 'Tanggal akhir harus jatuh pada hari Kamis (persis 7 hari siklus Jum\'at s/d Kamis).');
+
             return;
         }
 
@@ -206,7 +208,7 @@ class WeeklyPayrollIndex extends Component
             try {
                 $attendanceService->syncToWeeklyOvertimePeriod($period, auth()->user());
             } catch (\Throwable $syncErr) {
-                Log::warning('Sinkronisasi otomatis saat buat periode gagal/parsial: ' . $syncErr->getMessage());
+                Log::warning('Sinkronisasi otomatis saat buat periode gagal/parsial: '.$syncErr->getMessage());
             }
 
             $this->dispatch('close-modal', id: 'weeklyPeriodModal');
@@ -228,7 +230,7 @@ class WeeklyPayrollIndex extends Component
 
     public function confirmMarkPaid(int $periodId): void
     {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
 
         $period = OvertimePeriod::find($periodId);
 
@@ -267,7 +269,7 @@ class WeeklyPayrollIndex extends Component
     #[On('mark-weekly-period-paid')]
     public function markPeriodPaid(int $id, OvertimeService $service): void
     {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
 
         try {
             $period = OvertimePeriod::findOrFail($id);
@@ -289,7 +291,7 @@ class WeeklyPayrollIndex extends Component
 
     public function confirmDelete(int $periodId): void
     {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
 
         $period = OvertimePeriod::find($periodId);
 
@@ -324,7 +326,7 @@ class WeeklyPayrollIndex extends Component
     #[On('delete-weekly-period')]
     public function deletePeriod(int $id, OvertimeService $service): void
     {
-        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403, 'Hanya Admin dan Direktur yang dapat menghapus periode gaji mingguan.');
+        abort_unless(auth()->user()?->hasRole('admin'), 403, 'Hanya Admin yang dapat menghapus periode gaji mingguan.');
 
         try {
             $period = OvertimePeriod::findOrFail($id);
@@ -356,7 +358,7 @@ class WeeklyPayrollIndex extends Component
             $term = $this->search;
             $query->where(function ($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")
-                  ->orWhere('reference_number', 'like', "%{$term}%");
+                    ->orWhere('reference_number', 'like', "%{$term}%");
             });
         }
 

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\EmploymentStatus;
+use App\Enums\OvertimePeriodStatus;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\OvertimePeriod;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -94,7 +96,7 @@ class AttendanceService
             }
 
             if (empty($rangeMatch)) {
-                throw new \InvalidArgumentException('Format rentang tanggal absensi pada berkas Kartu Laporan tidak terbaca.');
+                throw new InvalidArgumentException('Format rentang tanggal absensi pada berkas Kartu Laporan tidak terbaca.');
             }
 
             $startDate = Carbon::parse(trim($rangeMatch[1]));
@@ -410,7 +412,7 @@ class AttendanceService
         }
 
         if (! $sheetLog) {
-            throw new \InvalidArgumentException('Format berkas tidak valid: Lembar kerja laporan absensi tidak ditemukan.');
+            throw new InvalidArgumentException('Format berkas tidak valid: Lembar kerja laporan absensi tidak ditemukan.');
         }
 
         // 1. Detect date range
@@ -427,7 +429,7 @@ class AttendanceService
         }
 
         if (! $rangeText || ! str_contains((string) $rangeText, '~')) {
-            throw new \InvalidArgumentException('Format rentang tanggal absensi pada berkas tidak terbaca.');
+            throw new InvalidArgumentException('Format rentang tanggal absensi pada berkas tidak terbaca.');
         }
 
         [$startStr, $endStr] = explode('~', (string) $rangeText);
@@ -732,6 +734,12 @@ class AttendanceService
      */
     public function syncToWeeklyOvertimePeriod(OvertimePeriod $period, ?User $actor = null): int
     {
+        // Periode yang sudah lunas tidak boleh berubah — sinkronisasi ulang akan
+        // membalikkan grand_total dan menimpa koreksi manual admin.
+        if ($period->status !== OvertimePeriodStatus::DRAFT) {
+            throw new InvalidArgumentException('Hanya periode berstatus Draf (Belum Dibayar) yang dapat disinkronkan dari log absensi.');
+        }
+
         $startDate = Carbon::parse($period->start_date)->toDateString();
         $endDate = Carbon::parse($period->end_date)->toDateString();
 

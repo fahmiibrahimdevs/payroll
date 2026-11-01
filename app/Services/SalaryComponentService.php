@@ -105,6 +105,11 @@ class SalaryComponentService
     {
         try {
             return DB::transaction(function () use ($salaryComponent, $data) {
+                // Kode & nama komponen sistem (PPH21/BPJS_*) adalah kunci logika
+                // perhitungan pajak & BPJS — tidak boleh diubah via UI.
+                if ($salaryComponent->is_system) {
+                    unset($data['code'], $data['name']);
+                }
                 if (array_key_exists('code', $data)) {
                     $data['code'] = ! empty(trim((string) ($data['code'] ?? ''))) ? strtoupper(trim((string) $data['code'])) : null;
                 }
