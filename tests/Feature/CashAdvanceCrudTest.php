@@ -1494,6 +1494,89 @@ class CashAdvanceCrudTest extends TestCase
             ->assertSee('Sisa kasbon aktif');
     }
 
+    public function test_recap_defaults_to_active_balance_and_filters_views(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        $dept = Department::firstOrCreate(['name' => 'Recap Filter Dept']);
+
+        $activeEmp = Employee::firstOrCreate(
+            ['full_name' => 'Kasbon Aktif Filter'],
+            ['department_id' => $dept->id, 'join_date' => Carbon::now()->subYear()->toDateString(), 'employment_status' => EmploymentStatus::TETAP, 'status' => EmployeeStatus::ACTIVE, 'basic_salary' => 5000000]
+        );
+        $paidEmp = Employee::firstOrCreate(
+            ['full_name' => 'Kasbon Lunas Filter'],
+            ['department_id' => $dept->id, 'join_date' => Carbon::now()->subYear()->toDateString(), 'employment_status' => EmploymentStatus::TETAP, 'status' => EmployeeStatus::ACTIVE, 'basic_salary' => 5000000]
+        );
+        $plainEmp = Employee::firstOrCreate(
+            ['full_name' => 'Tanpa Kasbon Filter'],
+            ['department_id' => $dept->id, 'join_date' => Carbon::now()->subYear()->toDateString(), 'employment_status' => EmploymentStatus::TETAP, 'status' => EmployeeStatus::ACTIVE, 'basic_salary' => 5000000]
+        );
+
+        CashAdvance::create([
+            'reference_number' => 'KB-FILTER-AKTIF',
+            'employee_id' => $activeEmp->id,
+            'amount' => 1000000,
+            'remaining_amount' => 500000,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 2,
+            'monthly_installment' => 500000,
+            'disbursement_date' => Carbon::now()->subMonth()->toDateString(),
+            'reason' => 'Kasbon aktif filter',
+            'status' => CashAdvanceStatus::ACTIVE->value,
+            'submitted_by' => $this->adminUser->id,
+        ]);
+
+        CashAdvance::create([
+            'reference_number' => 'KB-FILTER-LUNAS',
+            'employee_id' => $paidEmp->id,
+            'amount' => 800000,
+            'remaining_amount' => 0,
+            'repayment_scheme' => RepaymentScheme::SALARY_INSTALLMENT->value,
+            'installment_count' => 1,
+            'monthly_installment' => 800000,
+            'disbursement_date' => Carbon::now()->subMonths(2)->toDateString(),
+            'reason' => 'Kasbon lunas filter',
+            'status' => CashAdvanceStatus::PAID->value,
+            'submitted_by' => $this->adminUser->id,
+        ]);
+
+        // Default: hanya karyawan dengan saldo kasbon aktif.
+        // (Nama karyawan tetap muncul di dropdown modal form, jadi asersi
+        // dilakukan terhadap isi recap, bukan seluruh HTML.)
+        Livewire::test(Index::class)
+            ->assertSet('recapFilter', 'active_balance')
+            ->assertViewHas('recap', function ($recap) {
+                $names = collect($recap->items())->pluck('name')->all();
+
+                return in_array('Kasbon Aktif Filter', $names)
+                    && ! in_array('Kasbon Lunas Filter', $names)
+                    && ! in_array('Tanpa Kasbon Filter', $names);
+            });
+
+        // Semua Karyawan menampilkan ketiganya
+        Livewire::test(Index::class)
+            ->set('recapFilter', 'all')
+            ->assertViewHas('recap', function ($recap) {
+                $names = collect($recap->items())->pluck('name')->all();
+
+                return in_array('Kasbon Aktif Filter', $names)
+                    && in_array('Kasbon Lunas Filter', $names)
+                    && in_array('Tanpa Kasbon Filter', $names);
+            });
+
+        // Sudah Lunas hanya yang berstatus PAID tanpa saldo aktif
+        Livewire::test(Index::class)
+            ->set('recapFilter', 'paid_off')
+            ->assertViewHas('recap', function ($recap) {
+                $names = collect($recap->items())->pluck('name')->all();
+
+                return ! in_array('Kasbon Aktif Filter', $names)
+                    && in_array('Kasbon Lunas Filter', $names)
+                    && ! in_array('Tanpa Kasbon Filter', $names);
+            });
+    }
+
     public function test_all_employees_recap_displays_totals_and_supports_department_position_search(): void
     {
         $this->actingAs($this->adminUser);
@@ -1515,6 +1598,7 @@ class CashAdvanceCrudTest extends TestCase
 
         $component = Livewire::test(Index::class)
             ->assertSet('selectedEmployeeId', null)
+            ->set('recapFilter', 'all')
             ->assertSee('TOTAL PINJAMAN')
             ->assertSee('SUDAH DIBAYAR')
             ->assertSee('SISA KASBON')
@@ -1693,6 +1777,7 @@ class CashAdvanceCrudTest extends TestCase
 
         Livewire::test(Index::class)
             ->assertOk()
+            ->set('recapFilter', 'all')
             ->assertSee('table-group-header')
             ->assertSee('DEPARTEMEN IT DEPARTMENT')
             ->assertSee('Karyawan', false);

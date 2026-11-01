@@ -1509,6 +1509,13 @@ class CashAdvanceService
             $query->whereHas('cashAdvances', function ($q) {
                 $q->where('status', CashAdvanceStatus::PENDING->value);
             });
+        } elseif ($filter === 'paid_off') {
+            // Punya catatan kasbon, tapi tidak ada saldo aktif tersisa
+            $query->whereHas('cashAdvances')
+                ->whereDoesntHave('cashAdvances', function ($q) {
+                    $q->whereIn('status', [CashAdvanceStatus::ACTIVE->value, CashAdvanceStatus::APPROVED->value])
+                        ->where('remaining_amount', '>', 0);
+                });
         } elseif ($filter === 'has_advance') {
             $query->whereHas('cashAdvances');
         } else {
@@ -1591,6 +1598,7 @@ class CashAdvanceService
 
             $repaymentPercentage = 0.0;
             $repaymentText = null;
+            $activeAdvance = $advances->first(fn ($a) => (float) $a->remaining_amount > 0);
 
             if ($hasActive) {
                 $totalInstallments = max(1, $totalInstallments);
@@ -1617,6 +1625,7 @@ class CashAdvanceService
                 'monthly_deduction' => $monthlyDeduction,
                 'formatted_monthly_deduction' => 'Rp '.number_format($monthlyDeduction, 0, ',', '.'),
                 'has_active' => $hasActive,
+                'active_advance_hashid' => $activeAdvance?->hashid,
                 'paid_installments' => $paidInstallments,
                 'total_installments' => $totalInstallments,
                 'repayment_percentage' => $repaymentPercentage,

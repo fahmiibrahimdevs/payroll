@@ -154,7 +154,8 @@
             </div>
         </div>
 
-        <!-- 3. Seksi 2: Top 5 Kasbon Terbesar (Donut Chart dengan Center Text Overlay) -->
+        <!-- 3. Seksi 2: Top 5 Kasbon Terbesar (Donut hanya bila debitur >= 3; di bawah itu daftar ringkas) -->
+        @php $debtorCount = count($chartData['top_debtors']['data'] ?? []); @endphp
         <div style="border-top: 1px solid #f1f5f9; padding: 16px 20px 14px;">
             <div class="d-flex align-items-center justify-content-between mb-1">
                 <div style="font-size: 12px; font-weight: 700; color: #334155;">
@@ -165,6 +166,7 @@
                 </span>
             </div>
 
+            @if ($debtorCount >= 3)
             <!-- Donut Chart Container -->
             <div wire:ignore
                  wire:key="ca-top-debtors-donut-{{ md5(json_encode($chartData['top_debtors'] ?? [])) }}"
@@ -265,23 +267,31 @@
                     </span>
                 </div>
             </div>
+            @endif
 
-            <!-- Breakdown List: Top 5 Karyawan -->
-            <div class="d-flex flex-column mt-2" style="gap: 4px;">
+            <!-- Breakdown List: Top 5 Karyawan (menjadi daftar utama bila debitur < 3) -->
+            <div class="d-flex flex-column mt-2" style="gap: {{ $debtorCount >= 3 ? '4px' : '8px' }};">
                 @if (!empty($chartData['top_debtors']['labels']) && ($chartData['top_debtors']['has_data'] ?? false))
                     @foreach ($this->chartSummary['top_debtors']['items'] as $item)
-                        <div class="d-flex align-items-center justify-content-between py-1 px-1 rounded" style="font-size: 11.5px; line-height: 1.4; transition: background 0.15s ease;">
-                            <div class="d-flex align-items-center text-truncate mr-2">
-                                <span style="width: 8px; height: 8px; border-radius: 2px; background-color: {{ $item['color'] }}; margin-right: 7px; flex-shrink: 0;"></span>
-                                <span class="text-truncate" style="color: #475569; font-weight: 500;" title="{{ $item['label'] }}">{{ $item['label'] }}</span>
+                        <div class="py-1 px-1 rounded" style="transition: background 0.15s ease;">
+                            <div class="d-flex align-items-center justify-content-between" style="font-size: {{ $debtorCount >= 3 ? '11.5px' : '13px' }}; line-height: 1.4;">
+                                <div class="d-flex align-items-center text-truncate mr-2">
+                                    <span style="width: 8px; height: 8px; border-radius: 2px; background-color: {{ $item['color'] }}; margin-right: 7px; flex-shrink: 0;"></span>
+                                    <span class="text-truncate" style="color: #334155; font-weight: 500;" title="{{ $item['label'] }}">{{ $item['label'] }}</span>
+                                </div>
+                                <span style="font-weight: 600; color: #0f172a; flex-shrink: 0; font-variant-numeric: tabular-nums;">
+                                    Rp {{ number_format($item['value'], 0, ',', '.') }} · {{ $item['percentage'] }}%
+                                </span>
                             </div>
-                            <span style="font-weight: 600; color: #0f172a; flex-shrink: 0; font-variant-numeric: tabular-nums;">
-                                Rp {{ number_format($item['value'], 0, ',', '.') }} · {{ $item['percentage'] }}%
-                            </span>
+                            @if ($debtorCount < 3)
+                                <div class="progress mt-1.5" style="height: 4px; background-color: #e2e8f0; border-radius: 9999px;">
+                                    <div class="progress-bar" role="progressbar" style="width: {{ min(100, $item['percentage']) }}%; background-color: {{ $item['color'] }}; border-radius: 9999px;" aria-valuenow="{{ $item['percentage'] }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            @endif
                         </div>
                     @endforeach
                 @else
-                    <div class="text-center py-2 text-muted" style="font-size: 11px;">
+                    <div class="text-center py-2" style="font-size: 11.5px; color: #64748b;">
                         Belum ada kasbon aktif
                     </div>
                 @endif

@@ -55,7 +55,7 @@ class Index extends Component
 
     public int $perPage = 25;
 
-    public string $recapFilter = 'all';
+    public string $recapFilter = 'active_balance';
 
     public ?int $selectedCashAdvanceIdForPayment = null;
 
