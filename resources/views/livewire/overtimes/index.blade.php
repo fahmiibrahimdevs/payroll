@@ -904,67 +904,82 @@
                 <div class="modal-body px-4 py-3 bg-white">
                     @if ($detailSubmission)
 
-                        <!-- 1. Identitas Karyawan -->
-                        <div class="text-center pt-1">
-                            <div class="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2 font-weight-bold"
-                                 style="width: 60px; height: 60px; background-color: #eff6ff; color: #0284c7; border: 2px solid #bae6fd; font-size: 19px;">
-                                {{ \App\Support\Initials::fromName($detailSubmission->employee?->full_name) }}
+                        <!-- 1. Identitas + Total (satu kartu: avatar kiri, status kanan, total di bawah) -->
+                        <div class="mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 14px 16px;">
+                            <div class="d-flex align-items-center">
+                                @if ($detailSubmission->employee && $detailSubmission->employee->photo_url)
+                                    <img src="{{ $detailSubmission->employee->photo_url }}" alt="{{ $detailSubmission->employee?->full_name ?: 'Karyawan' }}" class="rounded-circle flex-shrink-0" style="width: 46px; height: 46px; object-fit: cover; border: 2px solid #e2e8f0;">
+                                @else
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 font-weight-600"
+                                         style="width: 46px; height: 46px; background-color: #eff6ff; color: #0284c7; border: 2px solid #bae6fd; font-size: 14px; letter-spacing: 0.5px;">
+                                        {{ \App\Support\Initials::fromName($detailSubmission->employee?->full_name) }}
+                                    </div>
+                                @endif
+                                <div class="ml-3 flex-grow-1" style="min-width: 0;">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div class="font-weight-600 text-truncate" style="font-size: 15px; color: #0f172a; line-height: 1.35;">
+                                            {{ $detailSubmission->employee?->full_name ?: 'Karyawan' }}
+                                        </div>
+                                        <span class="ml-2 flex-shrink-0" style="display: inline-flex; align-items: center; padding: 4px 11px; font-size: 11.5px; font-weight: 600; border-radius: 8px; {{ $detailSubmission->status->badgeStyle() }}">
+                                            <i class="{{ $detailSubmission->status->icon() }} mr-1.5" style="font-size: 10.5px;"></i>
+                                            {{ $detailSubmission->status->label() }}
+                                        </span>
+                                    </div>
+                                    <div style="font-size: 12.5px; color: #475569; line-height: 1.45;">
+                                        {{ $detailSubmission->employee?->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $detailSubmission->employee?->position?->name ?? 'Staff' }}
+                                    </div>
+                                </div>
                             </div>
-                            <div class="font-weight-bold" style="font-size: 17px; color: #0f172a; margin-bottom: 2px;">
-                                {{ $detailSubmission->employee?->full_name ?: 'Karyawan' }}
-                            </div>
-                            <div style="font-size: 12.5px; color: #64748b; font-weight: 500;">
-                                {{ $detailSubmission->employee?->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $detailSubmission->employee?->position?->name ?? 'Staff' }}
+
+                            <div class="text-center mt-3 pt-3 border-top" style="border-color: #f1f5f9;">
+                                <div style="font-size: 11.5px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: #475569; margin-bottom: 2px;">
+                                    Total Upah Lembur
+                                </div>
+                                <div style="font-size: 27px; font-weight: 700; color: #0f172a; line-height: 1.25; font-variant-numeric: tabular-nums;">
+                                    Rp {{ number_format((float) $detailSubmission->total_amount, 0, ',', '.') }}
+                                </div>
+                                <div style="font-size: 12px; color: #475569; line-height: 1.55; margin-top: 3px;">
+                                    @if ((float) $detailSubmission->meal_allowance > 0)
+                                        Upah lembur <span class="font-weight-600" style="color: #334155;">{{ $detailSubmission->formatted_subtotal_overtime }}</span>
+                                        + uang makan <span class="font-weight-600" style="color: #334155;">Rp {{ number_format((float) $detailSubmission->meal_allowance, 0, ',', '.') }}</span>
+                                    @else
+                                        Upah lembur <span class="font-weight-600" style="color: #334155;">{{ $detailSubmission->formatted_subtotal_overtime }}</span>{{ $detailSubmission->isDaily() ? ' (lembur harian)' : ' (' . number_format((float) $detailSubmission->duration_hours, 2) . ' jam × tarif)' }}
+                                    @endif
+                                </div>
                             </div>
                         </div>
-
-                        <!-- Dashed Divider -->
-                        <div style="border-top: 1px dashed #e2e8f0; margin: 14px 0;"></div>
-
-                        <!-- 2. Nominal Upah Lembur & Status Badge -->
-                        <div class="text-center">
-                            <div class="text-uppercase" style="font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: #64748b; margin-bottom: 3px;">
-                                TOTAL UPAH LEMBUR
-                            </div>
-                            <div class="font-weight-bold" style="font-size: 26px; font-weight: 800; color: #0f172a; line-height: 1.2; margin-bottom: 6px;">
-                                {{ $detailSubmission->formatted_subtotal_overtime }}
-                            </div>
-                            <div>
-                                <span style="display: inline-flex; align-items: center; padding: 4px 12px; font-size: 11.5px; font-weight: 500; border-radius: 6px; {{ $detailSubmission->status->badgeStyle() }}">
-                                    <i class="{{ $detailSubmission->status->icon() }} mr-1.5" style="font-size: 10px;"></i>
-                                    {{ $detailSubmission->status->label() }}
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- Dashed Divider -->
-                        <div style="border-top: 1px dashed #e2e8f0; margin: 14px 0;"></div>
 
                         <!-- 3. Rincian Detail Box (Clean White Card dengan Rounded 12px & Shadow) -->
                         <div style="border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff; margin-bottom: 14px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
                             <!-- No. Referensi -->
                             <div class="d-flex justify-content-between align-items-center" style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9;">
                                 <div class="d-flex align-items-center">
-                                    <i class="fas fa-hashtag mr-2" style="color: #0b52aa; font-size: 13px; width: 16px; text-align: center;"></i>
-                                    <span style="color: #475569; font-size: 12.5px; font-weight: 500;">No. Referensi</span>
+                                    <div class="d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 28px; height: 28px; background-color: #eff6ff; border-radius: 8px;">
+                                        <i class="fas fa-hashtag" style="color: #0b52aa; font-size: 12px;"></i>
+                                    </div>
+                                    <span style="color: #334155; font-size: 13px; font-weight: 500;">No. Referensi</span>
                                 </div>
-                                <span style="color: #0f172a; font-size: 12.5px; font-weight: 500; font-family: monospace;">{{ $detailSubmission->reference_number }}</span>
+                                <span style="color: #0f172a; font-size: 13px; font-weight: 500; font-family: monospace; letter-spacing: 0.3px;">{{ $detailSubmission->reference_number }}</span>
                             </div>
 
                             <!-- Tanggal Lembur -->
                             <div class="d-flex justify-content-between align-items-center" style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9;">
                                 <div class="d-flex align-items-center">
-                                    <i class="far fa-calendar-alt mr-2" style="color: #0b52aa; font-size: 13px; width: 16px; text-align: center;"></i>
-                                    <span style="color: #475569; font-size: 12.5px; font-weight: 500;">Tanggal Lembur</span>
+                                    <div class="d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 28px; height: 28px; background-color: #eff6ff; border-radius: 8px;">
+                                        <i class="far fa-calendar-alt" style="color: #0b52aa; font-size: 12px;"></i>
+                                    </div>
+                                    <span style="color: #334155; font-size: 13px; font-weight: 500;">Tanggal Lembur</span>
                                 </div>
-                                <span style="color: #0f172a; font-size: 12.5px; font-weight: 500;">{{ $detailSubmission->date->locale('id')->translatedFormat('d F Y') }}</span>
+                                <span style="color: #0f172a; font-size: 13px; font-weight: 500;">{{ $detailSubmission->date->locale('id')->translatedFormat('d F Y') }}</span>
                             </div>
 
                             <!-- Jam Kerja & Durasi -->
                             <div class="d-flex justify-content-between align-items-center" style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9;">
                                 <div class="d-flex align-items-center">
-                                    <i class="far fa-clock mr-2" style="color: #0b52aa; font-size: 13px; width: 16px; text-align: center;"></i>
-                                    <span style="color: #475569; font-size: 12.5px; font-weight: 500;">Jam Kerja &amp; Durasi</span>
+                                    <div class="d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 28px; height: 28px; background-color: #eff6ff; border-radius: 8px;">
+                                        <i class="far fa-clock" style="color: #0b52aa; font-size: 12px;"></i>
+                                    </div>
+                                    <span style="color: #334155; font-size: 13px; font-weight: 500;">Jam Kerja &amp; Durasi</span>
                                 </div>
                                 <span style="color: #0f172a; font-size: 12.5px; font-weight: 500;">
                                     @if ($detailSubmission->isDaily())
@@ -982,17 +997,21 @@
                             <!-- Nominal Lembur -->
                             <div class="d-flex justify-content-between align-items-center" style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9;">
                                 <div class="d-flex align-items-center">
-                                    <i class="fas fa-coins mr-2" style="color: #0b52aa; font-size: 13px; width: 16px; text-align: center;"></i>
-                                    <span style="color: #475569; font-size: 12.5px; font-weight: 500;">Nominal Lembur</span>
+                                    <div class="d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 28px; height: 28px; background-color: #eff6ff; border-radius: 8px;">
+                                        <i class="fas fa-coins" style="color: #0b52aa; font-size: 12px;"></i>
+                                    </div>
+                                    <span style="color: #334155; font-size: 13px; font-weight: 500;">Nominal Lembur</span>
                                 </div>
-                                <span style="color: #0f172a; font-size: 12.5px; font-weight: 500;">{{ $detailSubmission->formatted_rate_label }}</span>
+                                <span style="color: #0f172a; font-size: 13px; font-weight: 500;">{{ $detailSubmission->formatted_rate_label }}</span>
                             </div>
 
                             <!-- Asal Pengajuan -->
                             <div class="d-flex justify-content-between align-items-center" style="padding: 10px 14px;">
                                 <div class="d-flex align-items-center">
-                                    <i class="fas fa-user-tag mr-2" style="color: #0b52aa; font-size: 13px; width: 16px; text-align: center;"></i>
-                                    <span style="color: #475569; font-size: 12.5px; font-weight: 500;">Asal Pengajuan</span>
+                                    <div class="d-flex align-items-center justify-content-center mr-2.5 flex-shrink-0" style="width: 28px; height: 28px; background-color: #eff6ff; border-radius: 8px;">
+                                        <i class="fas fa-user-tag" style="color: #0b52aa; font-size: 12px;"></i>
+                                    </div>
+                                    <span style="color: #334155; font-size: 13px; font-weight: 500;">Asal Pengajuan</span>
                                 </div>
                                 <span class="font-weight-600" style="font-size: 11px; padding: 2px 8px; border-radius: 6px; {{ $detailSubmission->submission_source->badgeStyle() }}">
                                     {{ $detailSubmission->submission_source->label() }}
@@ -1002,8 +1021,8 @@
 
                         <!-- Uraian Pekerjaan (Clean White Card dengan Rounded & Shadow) -->
                         <div class="mb-3">
-                            <label class="mb-1" style="font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; color: #475569;">Alasan / Uraian Pekerjaan:</label>
-                            <div class="p-3 text-dark" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); font-size: 12.5px; line-height: 1.5; font-weight: 400;">
+                            <label class="mb-1" style="font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #475569;">Uraian Pekerjaan</label>
+                            <div class="p-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); font-size: 13px; line-height: 1.65; font-weight: 400; color: #334155;">
                                 {{ $detailSubmission->reason }}
                             </div>
                         </div>
@@ -1060,7 +1079,7 @@
                     @else
                         <div></div>
                     @endif
-                    <button type="button" class="btn btn-secondary shadow-none" data-dismiss="modal" style="font-weight: 500;">Tutup</button>
+                    <button type="button" class="btn btn-light shadow-none" data-dismiss="modal" style="font-weight: 500; border: 1px solid #e2e8f0; color: #334155; border-radius: 8px; padding: 6px 18px;">Tutup</button>
                 </div>
             </div>
         </div>
