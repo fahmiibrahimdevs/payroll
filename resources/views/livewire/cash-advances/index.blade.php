@@ -166,7 +166,8 @@
                     </div>
 
                     <!-- Nav-pills filter status kasbon (default: Kasbon Aktif agar baris Rp 0 tidak menenggelamkan data) -->
-                    <ul class="nav nav-pills mb-2" role="tablist">
+                    <div class="cash-advance-tabs-wrapper">
+                    <ul class="nav nav-pills" role="tablist">
                         @foreach ([
                             'active_balance' => 'Kasbon Aktif',
                             'pending' => 'Menunggu ACC',
@@ -182,6 +183,7 @@
                             </li>
                         @endforeach
                     </ul>
+                    </div>
 
                     <!-- Row 2: Full-Width Data Table -->
                     <div class="table-responsive">
