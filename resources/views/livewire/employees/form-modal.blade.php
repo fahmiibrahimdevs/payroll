@@ -150,7 +150,9 @@
                                     <!-- Upah Harian Pegawai Harian -->
                                     <div class="col-md-6">
                                         <div class="form-group mb-2">
-                                            <label for="daily_rate">Upah Harian (Rp/hari) <span class="text-danger">*</span></label>
+                                            <label for="daily_rate">Upah Harian (Rp/hari) <span class="text-danger">*</span>
+                                                <i class="fas fa-info-circle text-muted ml-1 cursor-pointer" data-toggle="tooltip" data-placement="top" title="Pegawai harian dibayar mingguan dan tidak ada gaji pokok bulanan."></i>
+                                            </label>
                                             <div class="input-group"
                                                  wire:key="emp-daily-rate-wrap-{{ $form->employee?->id ?? 'new' }}"
                                                  x-data="{
@@ -181,7 +183,6 @@
                                             @error('form.daily_rate')
                                                 <div class="invalid-feedback d-block">{{ $message }}</div>
                                             @enderror
-                                            <small class="form-text text-muted">Pegawai harian dibayar mingguan dan tidak ada gaji pokok bulanan.</small>
                                         </div>
                                     </div>
                                 @else
