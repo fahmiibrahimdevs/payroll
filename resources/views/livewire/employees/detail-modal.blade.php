@@ -234,7 +234,7 @@
                                 <div class="emp-tile-group mb-0">
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-users text-primary"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-users"></i></div>
                                             <span>Status PTKP</span>
                                         </div>
                                         <div class="emp-tile-right font-weight-bold text-dark">
@@ -243,7 +243,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-calculator text-primary"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-calculator"></i></div>
                                             <span>Metode PPh 21</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -254,7 +254,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-file-invoice-dollar text-primary"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-file-invoice-dollar"></i></div>
                                             <span>Jenis Pajak Pegawai</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -263,7 +263,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-id-card text-primary"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-id-card"></i></div>
                                             <span>NIK KTP</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -272,7 +272,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-file-invoice text-primary"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-file-invoice"></i></div>
                                             <span>Nomor NPWP</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -281,7 +281,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-heartbeat text-success"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-heartbeat"></i></div>
                                             <span>BPJS Kesehatan</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -290,7 +290,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-shield-alt text-info"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-shield-alt"></i></div>
                                             <span>BPJS Ketenagakerjaan</span>
                                         </div>
                                         <div class="emp-tile-right">

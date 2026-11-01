@@ -95,7 +95,7 @@
                         <div class="emp-tile-group">
                             <div class="emp-tile-row">
                                 <div class="emp-tile-left">
-                                    <div class="emp-tile-icon"><i class="fas fa-id-badge text-primary"></i></div>
+                                    <div class="emp-tile-icon"><i class="fas fa-id-badge"></i></div>
                                     <span>ID / NIP</span>
                                 </div>
                                 <div class="emp-tile-right">
@@ -104,7 +104,7 @@
                             </div>
                             <div class="emp-tile-row">
                                 <div class="emp-tile-left">
-                                    <div class="emp-tile-icon"><i class="fas fa-user-clock text-info"></i></div>
+                                    <div class="emp-tile-icon"><i class="fas fa-user-clock"></i></div>
                                     <span>Masa Kerja</span>
                                 </div>
                                 <div class="emp-tile-right">
@@ -114,7 +114,7 @@
                             @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur') || auth()->user()->hasRole('karyawan'))
                                 <div class="emp-tile-row">
                                     <div class="emp-tile-left">
-                                        <div class="emp-tile-icon"><i class="fas fa-money-bill-wave text-success"></i></div>
+                                        <div class="emp-tile-icon"><i class="fas fa-money-bill-wave"></i></div>
                                         <span>{{ $employee->employment_status === \App\Enums\EmploymentStatus::HARIAN ? 'Upah Harian' : 'Gaji Pokok' }}</span>
                                     </div>
                                     <div class="emp-tile-right text-primary font-weight-500">
@@ -123,7 +123,7 @@
                                 </div>
                                 <div class="emp-tile-row">
                                     <div class="emp-tile-left">
-                                        <div class="emp-tile-icon"><i class="fas fa-business-time text-info"></i></div>
+                                        <div class="emp-tile-icon"><i class="fas fa-business-time"></i></div>
                                         <span>Nominal Lembur</span>
                                     </div>
                                     <div class="emp-tile-right text-primary font-weight-500">
@@ -134,7 +134,7 @@
                                 </div>
                                 <div class="emp-tile-row">
                                     <div class="emp-tile-left">
-                                        <div class="emp-tile-icon"><i class="fas fa-utensils text-warning"></i></div>
+                                        <div class="emp-tile-icon"><i class="fas fa-utensils"></i></div>
                                         <span>Uang Makan Harian</span>
                                     </div>
                                     <div class="emp-tile-right text-primary font-weight-500">
@@ -148,7 +148,7 @@
                             @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur'))
                                 <div class="emp-tile-row">
                                     <div class="emp-tile-left">
-                                        <div class="emp-tile-icon"><i class="fas fa-chart-line text-warning"></i></div>
+                                        <div class="emp-tile-icon"><i class="fas fa-chart-line"></i></div>
                                         <span>Status Gaji</span>
                                     </div>
                                     <div class="emp-tile-right">
@@ -185,7 +185,7 @@
                                 <div class="emp-tile-group">
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-calendar-check text-primary"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-calendar-check"></i></div>
                                             <span>Tanggal Bergabung</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -194,7 +194,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-calendar-times text-warning"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-calendar-times"></i></div>
                                             <span>Akhir Kontrak</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -204,7 +204,7 @@
                                     @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur') || auth()->user()->hasRole('karyawan'))
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-hand-holding-usd text-danger"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-hand-holding-usd"></i></div>
                                                 <span>Total Kasbon</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -216,7 +216,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-university text-info"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-university"></i></div>
                                                 <span>Nama Bank</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -225,7 +225,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-credit-card text-info"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-credit-card"></i></div>
                                                 <span>Nomor Rekening</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -234,7 +234,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-user-check text-info"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-user-check"></i></div>
                                                 <span>Atas Nama</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -250,7 +250,7 @@
                                 <div class="emp-tile-group">
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-venus-mars text-primary"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-venus-mars"></i></div>
                                             <span>Jenis Kelamin</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -259,7 +259,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-birthday-cake text-warning"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-birthday-cake"></i></div>
                                             <span>Tempat & Tgl Lahir</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -268,7 +268,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-phone text-success"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-phone"></i></div>
                                             <span>No. Telepon / WhatsApp</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -277,7 +277,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-envelope text-info"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-envelope"></i></div>
                                             <span>Alamat Email</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -286,7 +286,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-map-marker-alt text-danger"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-map-marker-alt"></i></div>
                                             <span>Alamat Domisili</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -296,7 +296,7 @@
                                     @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur') || auth()->user()->hasRole('karyawan'))
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-file-pdf text-danger"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-file-pdf"></i></div>
                                                 <span>Berkas CV</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -322,7 +322,7 @@
                                     <div class="emp-tile-group">
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-users text-primary"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-users"></i></div>
                                                 <span>Status PTKP</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -331,7 +331,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-calculator text-primary"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-calculator"></i></div>
                                                 <span>Metode PPh 21</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -342,7 +342,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-file-invoice-dollar text-primary"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-file-invoice-dollar"></i></div>
                                                 <span>Jenis Pajak Pegawai</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -351,7 +351,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-id-card text-primary"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-id-card"></i></div>
                                                 <span>NIK KTP</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -360,7 +360,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-file-invoice text-primary"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-file-invoice"></i></div>
                                                 <span>Nomor NPWP</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -369,7 +369,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-heartbeat text-success"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-heartbeat"></i></div>
                                                 <span>BPJS Kesehatan</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -378,7 +378,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-shield-alt text-info"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-shield-alt"></i></div>
                                                 <span>BPJS Ketenagakerjaan</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -1047,9 +1047,9 @@
         height: 26px !important;
         font-size: 11px !important;
         margin-right: 9px !important;
-        border-radius: 6px;
-        background-color: #f1f5f9;
-        color: #475569;
+        border-radius: 7px;
+        background-color: #eff6ff;
+        color: #0b52aa;
         display: flex;
         align-items: center;
         justify-content: center;
