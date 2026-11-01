@@ -542,7 +542,9 @@ class EmployeeCrudTest extends TestCase
         $html = $component->html();
         preg_match('/<tr class="table-group-header".*?<\/tr>/s', $html, $matches);
         $this->assertNotEmpty($matches);
-        $this->assertStringNotContainsString('Karyawan', $matches[0]);
+        // Header grup hanya berisi nama departemen + badge jumlah — tanpa nama karyawan.
+        $this->assertStringNotContainsString('Karyawan Kontrak Kritis', $matches[0]);
+        $this->assertStringNotContainsString('Karyawan Tetap 1', $matches[0]);
 
         $tetapEmp = Employee::where('full_name', 'Karyawan Tetap 1')->first();
         $this->assertSame('-', $tetapEmp->remaining_contract_label);
