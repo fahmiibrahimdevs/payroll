@@ -1,3 +1,14 @@
+@php
+    $navbarBg = config('app.navbar_bg') ?: (str_contains((string) config('app.url'), 'test') ? '#c2410c' : null);
+@endphp
+@if ($navbarBg)
+    <style>
+        .navbar-bg, .navbar.active, body.layout-2 .navbar-bg {
+            background-color: {{ $navbarBg }} !important;
+        }
+    </style>
+@endif
+
 <nav class="navbar navbar-expand-lg main-navbar">
     <form class="form-inline mr-auto">
         <ul class="navbar-nav mr-3">
