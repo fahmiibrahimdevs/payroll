@@ -57,13 +57,21 @@ class DatabaseSeeder extends Seeder
         }
 
         if (! app()->environment('testing')) {
-            $this->call([
-                EmployeeSeeder::class,
-                AttendanceSeeder::class,
-                CashAdvanceSeeder::class,
-                HolidaySeeder::class,
-                DeveloperUserSeeder::class,
-            ]);
+            $isWorkshop = config('database.connections.mysql.database') === 'workshop'
+                || str_contains(strtolower((string) config('app.name')), 'workshop');
+
+            if (! $isWorkshop) {
+                $this->call([
+                    EmployeeSeeder::class,
+                    HolidaySeeder::class,
+                    DeveloperUserSeeder::class,
+                ]);
+            } else {
+                $this->call([
+                    HolidaySeeder::class,
+                    DeveloperUserSeeder::class,
+                ]);
+            }
         } else {
             $this->call([
                 DeveloperUserSeeder::class,
