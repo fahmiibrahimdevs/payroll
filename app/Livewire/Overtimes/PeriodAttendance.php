@@ -191,7 +191,8 @@ class PeriodAttendance extends Component
             $empSubs = $overtimeSubmissions->get($att->employee_id, collect());
             $overtimeHours = (float) $empSubs->sum('duration_hours');
             $overtimePay = (float) $empSubs->sum(fn ($s) => (float) $s->subtotal_overtime);
-            $grandTotal = round($totalDailyWage + $totalMealAllowance + $overtimePay, 2);
+            $overtimeMeal = (float) $empSubs->sum('meal_allowance');
+            $grandTotal = round($totalDailyWage + $totalMealAllowance + $overtimePay + $overtimeMeal, 2);
 
             $this->periodAttendances[$att->employee_id] = [
                 'attendance_id' => (int) $att->id,
@@ -213,6 +214,7 @@ class PeriodAttendance extends Component
                 'total_daily_wage' => $totalDailyWage,
                 'overtime_hours' => $overtimeHours,
                 'overtime_pay' => $overtimePay,
+                'overtime_meal' => $overtimeMeal,
                 'grand_total' => $grandTotal,
                 'payment_status' => $att->payment_status ?: 'unpaid',
                 'paid_at' => $att->paid_at ? $att->paid_at->format('d M Y, H:i') : null,
@@ -650,8 +652,9 @@ class PeriodAttendance extends Component
         $totalDailyWage = array_sum(array_column($filteredAttendances, 'total_daily_wage'));
         $totalMealAllowance = array_sum(array_column($filteredAttendances, 'total_meal_allowance'));
         $totalOvertimePay = array_sum(array_column($filteredAttendances, 'overtime_pay'));
+        $totalOvertimeMeal = array_sum(array_column($filteredAttendances, 'overtime_meal'));
         $totalOvertimeHours = array_sum(array_column($filteredAttendances, 'overtime_hours'));
-        $grandTotal = $totalDailyWage + $totalMealAllowance + $totalOvertimePay;
+        $grandTotal = $totalDailyWage + $totalMealAllowance + $totalOvertimePay + $totalOvertimeMeal;
         $totalDays = array_sum(array_column($filteredAttendances, 'attended_days'));
         $avgDays = $activeEmployeesCount > 0 ? round($totalDays / $activeEmployeesCount, 1) : 0;
 

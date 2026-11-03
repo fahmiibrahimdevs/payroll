@@ -49,6 +49,10 @@ class Index extends Component
 
     public int $overtime_rounding_threshold_minutes = 10;
 
+    public float $overtime_meal_threshold_hours = 3.0;
+
+    public float $overtime_meal_allowance = 15000.00;
+
     public int $payroll_cutoff_day = 20;
 
     public int $payroll_pay_day = 25;
@@ -116,6 +120,8 @@ class Index extends Component
         $this->default_meal_allowance_per_day = (float) ($profile->default_meal_allowance_per_day ?? 25000);
         $this->overtime_rounding_mode = (string) ($profile->overtime_rounding_mode ?? 'round_60_min');
         $this->overtime_rounding_threshold_minutes = (int) ($profile->overtime_rounding_threshold_minutes ?? 10);
+        $this->overtime_meal_threshold_hours = (float) ($profile->overtime_meal_threshold_hours ?? 3.0);
+        $this->overtime_meal_allowance = (float) ($profile->overtime_meal_allowance ?? 15000.0);
         $this->payroll_cutoff_day = (int) ($profile->payroll_cutoff_day ?? 20);
         $this->payroll_pay_day = (int) ($profile->payroll_pay_day ?? 25);
         $this->enable_pph21 = (bool) $profile->enable_pph21;
@@ -155,6 +161,8 @@ class Index extends Component
             'default_meal_allowance_per_day' => 'required|numeric|min:0',
             'overtime_rounding_mode' => 'required|string|in:round_30_min,round_60_min,floor_hour,exact',
             'overtime_rounding_threshold_minutes' => 'required|integer|min:1|max:60',
+            'overtime_meal_threshold_hours' => 'required|numeric|min:0.5|max:24',
+            'overtime_meal_allowance' => 'required|numeric|min:0',
             'payroll_cutoff_day' => 'required|integer|min:1|max:31',
             'payroll_pay_day' => 'required|integer|min:1|max:31',
             'enable_pph21' => 'boolean',
@@ -201,7 +209,7 @@ class Index extends Component
             $failedKeys = array_keys($e->validator->failed());
             if (array_intersect($failedKeys, ['name', 'code', 'email', 'phone', 'website', 'email_domain', 'address', 'city', 'province', 'postal_code', 'tax_identification_number', 'logo'])) {
                 $this->activeTab = 'identitas';
-            } elseif (array_intersect($failedKeys, ['work_days_per_week', 'payroll_cutoff_day', 'payroll_pay_day', 'default_meal_allowance_per_day', 'overtime_rounding_mode', 'overtime_rounding_threshold_minutes'])) {
+            } elseif (array_intersect($failedKeys, ['work_days_per_week', 'payroll_cutoff_day', 'payroll_pay_day', 'default_meal_allowance_per_day', 'overtime_rounding_mode', 'overtime_rounding_threshold_minutes', 'overtime_meal_threshold_hours', 'overtime_meal_allowance'])) {
                 $this->activeTab = 'penggajian';
             } elseif (array_intersect($failedKeys, ['bpjs_jkk_risk_rate', 'bpjs_jkm_rate', 'bpjs_kes_emp_rate', 'bpjs_kes_comp_rate', 'bpjs_jht_emp_rate', 'bpjs_jht_comp_rate', 'bpjs_jp_emp_rate', 'bpjs_jp_comp_rate', 'bpjs_kes_cap', 'bpjs_jp_cap'])) {
                 $this->activeTab = 'pajak';
@@ -229,6 +237,8 @@ class Index extends Component
                 'default_meal_allowance_per_day' => (float) $this->default_meal_allowance_per_day,
                 'overtime_rounding_mode' => $this->overtime_rounding_mode,
                 'overtime_rounding_threshold_minutes' => (int) $this->overtime_rounding_threshold_minutes,
+                'overtime_meal_threshold_hours' => (float) $this->overtime_meal_threshold_hours,
+                'overtime_meal_allowance' => (float) $this->overtime_meal_allowance,
                 'payroll_cutoff_day' => (int) $this->payroll_cutoff_day,
                 'payroll_pay_day' => (int) $this->payroll_pay_day,
                 'enable_pph21' => $this->enable_pph21,

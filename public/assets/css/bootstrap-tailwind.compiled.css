@@ -895,12 +895,6 @@
   .bg-gray-100 {
     background-color: var(--color-gray-100);
   }
-  .bg-gray-100\/70 {
-    background-color: color-mix(in srgb, oklch(96.7% 0.003 264.542) 70%, transparent);
-    @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--color-gray-100) 70%, transparent);
-    }
-  }
   .bg-gray-500 {
     background-color: var(--color-gray-500);
   }
@@ -1052,9 +1046,6 @@
   }
   .py-2 {
     padding-block: calc(var(--spacing) * 2);
-  }
-  .py-2\.5 {
-    padding-block: calc(var(--spacing) * 2.5);
   }
   .py-3 {
     padding-block: calc(var(--spacing) * 3);

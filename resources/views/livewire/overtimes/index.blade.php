@@ -280,8 +280,15 @@
                                         </td>
 
                                         <!-- Kolom Khusus: Total Upah Lembur -->
-                                        <td class="text-right align-middle text-nowrap !px-2.5 !py-2" style="color: #0b52aa; font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums;">
-                                            {{ $sub->formatted_subtotal_overtime }}
+                                        <td class="text-right align-middle text-nowrap !px-2.5 !py-2" style="font-variant-numeric: tabular-nums;">
+                                            <div style="color: #0b52aa; font-size: 13.5px; font-weight: 700; line-height: 1.2;">
+                                                {{ $sub->formatted_total_amount }}
+                                            </div>
+                                            @if ((float) $sub->meal_allowance > 0)
+                                                <div style="font-size: 10.5px; color: #16a34a; font-weight: 600; line-height: 1.2; margin-top: 2px;">
+                                                    + Makan Rp {{ number_format((float) $sub->meal_allowance, 0, ',', '.') }}
+                                                </div>
+                                            @endif
                                         </td>
 
                                         <!-- Status Badge dengan Icon Pending & Font Nyaman Dibaca -->
@@ -507,18 +514,32 @@
 
                 <form wire:submit.prevent="storeSubmission">
                     <div class="modal-body py-3 px-4 bg-white">
+                        @php
+                            $isFormLocked = ! $isKaryawan && empty($form->employee_id);
+                        @endphp
+
                         @if (! $isKaryawan)
                             <!-- PILIH KARYAWAN UNTUK ADMIN (Select2 Searchable Sesuai Pola Kasbon) -->
                             <div class="form-group mb-3">
                                 <label for="form_employee_id">Karyawan <span class="text-danger">*</span></label>
                                 <div wire:ignore>
                                     <select id="form_employee_id" class="form-control select2 @error('form.employee_id') is-invalid @enderror">
-                                        <option value="">-- Pilih Karyawan Berhak Lembur --</option>
+                                        <option value="">-- Pilih Karyawan --</option>
                                         @foreach ($eligibleEmployeesGrouped as $deptName => $deptEmployees)
                                             <optgroup label="{{ $deptName }}">
                                                 @foreach ($deptEmployees as $emp)
-                                                    <option value="{{ $emp->id }}">
-                                                        {{ $emp->full_name }} · {{ \App\Support\Rupiah::hourly((float) $emp->overtime_rate_per_hour) }} · {{ \App\Support\Rupiah::daily((float) $emp->overtime_rate_per_day) }}
+                                                    @php
+                                                        $hasHourly = (float) ($emp->overtime_rate_per_hour ?? 0) > 0;
+                                                        $hasDaily = (float) ($emp->overtime_rate_per_day ?? 0) > 0;
+                                                        $hasAnyRate = $hasHourly || $hasDaily;
+                                                    @endphp
+                                                    <option value="{{ $emp->id }}" @disabled(! $hasAnyRate)>
+                                                        {{ $emp->full_name }}
+                                                        @if ($hasAnyRate)
+                                                            · {{ $hasHourly ? \App\Support\Rupiah::hourly((float) $emp->overtime_rate_per_hour) : '-' }} · {{ $hasDaily ? \App\Support\Rupiah::daily((float) $emp->overtime_rate_per_day) : '-' }}
+                                                        @else
+                                                            · (Tarif Belum Diset)
+                                                        @endif
                                                     </option>
                                                 @endforeach
                                             </optgroup>
@@ -529,6 +550,15 @@
                                     <div class="text-danger small mt-1">{{ $message }}</div>
                                 @enderror
                             </div>
+
+                            @if ($isFormLocked)
+                                <div class="mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-left: 3px solid #0b52aa; border-radius: 10px; padding: 9px 13px; font-size: 12.5px; color: #475569;">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-info-circle mr-2 text-primary"></i>
+                                        <span>Silakan pilih karyawan terlebih dahulu untuk mengisi formulir lembur.</span>
+                                    </div>
+                                </div>
+                            @endif
                         @endif
 
                         <!-- 2. Tipe Lembur (Badge Tab Tanpa Ikon) -->
@@ -537,14 +567,16 @@
                             <div class="d-flex" style="gap: 10px;">
                                 <button type="button"
                                         wire:click="setOvertimeType('hourly')"
+                                        @disabled($isFormLocked)
                                         class="btn flex-fill py-2 px-3 {{ $form->overtime_type === 'hourly' ? 'btn-primary text-white shadow-sm font-weight-600' : 'bg-white border text-dark font-weight-500' }}"
-                                        style="border-radius: 10px; font-size: 13px; transition: all 0.15s ease; border-color: {{ $form->overtime_type === 'hourly' ? '#0b52aa' : '#e2e8f0' }} !important; {{ $form->overtime_type === 'hourly' ? 'background-color: #0b52aa !important;' : 'background-color: #ffffff !important;' }}">
+                                        style="border-radius: 10px; font-size: 13px; transition: all 0.15s ease; border-color: {{ $form->overtime_type === 'hourly' ? '#0b52aa' : '#e2e8f0' }} !important; {{ $form->overtime_type === 'hourly' ? 'background-color: #0b52aa !important;' : 'background-color: #ffffff !important;' }} {{ $isFormLocked ? 'opacity: 0.55; cursor: not-allowed; pointer-events: none;' : '' }}">
                                     Lembur Per Jam
                                 </button>
                                 <button type="button"
                                         wire:click="setOvertimeType('daily')"
+                                        @disabled($isFormLocked)
                                         class="btn flex-fill py-2 px-3 {{ $form->overtime_type === 'daily' ? 'btn-primary text-white shadow-sm font-weight-600' : 'bg-white border text-dark font-weight-500' }}"
-                                        style="border-radius: 10px; font-size: 13px; transition: all 0.15s ease; border-color: {{ $form->overtime_type === 'daily' ? '#0b52aa' : '#e2e8f0' }} !important; {{ $form->overtime_type === 'daily' ? 'background-color: #0b52aa !important;' : 'background-color: #ffffff !important;' }}">
+                                        style="border-radius: 10px; font-size: 13px; transition: all 0.15s ease; border-color: {{ $form->overtime_type === 'daily' ? '#0b52aa' : '#e2e8f0' }} !important; {{ $form->overtime_type === 'daily' ? 'background-color: #0b52aa !important;' : 'background-color: #ffffff !important;' }} {{ $isFormLocked ? 'opacity: 0.55; cursor: not-allowed; pointer-events: none;' : '' }}">
                                     Lembur Seharian (Harian)
                                 </button>
                             </div>
@@ -560,7 +592,7 @@
                                 <div class="col-md-4 col-12">
                                     <div class="form-group">
                                         <label for="form_date">Tanggal Lembur <span class="text-danger">*</span></label>
-                                        <input type="date" id="form_date" wire:model.live="form.date" class="form-control @error('form.date') is-invalid @enderror">
+                                        <input type="date" id="form_date" wire:model.live="form.date" @disabled($isFormLocked) class="form-control @error('form.date') is-invalid @enderror">
                                         @error('form.date')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
@@ -571,7 +603,7 @@
                                 <div class="col-md-4 col-12">
                                     <div class="form-group">
                                         <label for="form_start_time">Jam Mulai <span class="text-danger">*</span></label>
-                                        <input type="time" id="form_start_time" wire:model.live="form.start_time" class="form-control @error('form.start_time') is-invalid @enderror">
+                                        <input type="time" id="form_start_time" wire:model.live="form.start_time" @disabled($isFormLocked) class="form-control @error('form.start_time') is-invalid @enderror">
                                         @error('form.start_time')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
@@ -582,7 +614,7 @@
                                 <div class="col-md-4 col-12">
                                     <div class="form-group">
                                         <label for="form_end_time">Jam Selesai <span class="text-danger">*</span></label>
-                                        <input type="time" id="form_end_time" wire:model.live="form.end_time" class="form-control @error('form.end_time') is-invalid @enderror">
+                                        <input type="time" id="form_end_time" wire:model.live="form.end_time" @disabled($isFormLocked) class="form-control @error('form.end_time') is-invalid @enderror">
                                         @error('form.end_time')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
@@ -590,79 +622,84 @@
                                 </div>
                             </div>
 
-                            <!-- ESTIMASI DURASI (Clean White Card dengan Rounded 12px & Shadow) -->
-                            @if ($form->calculateEstimatedHours() > 0)
-                                <div class="alert alert-light border small text-muted mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
-                                    <div class="d-flex align-items-center text-dark font-weight-500 mb-1" style="font-size: 12px;">
-                                        <i class="far fa-clock text-primary mr-1.5"></i>
-                                        <span>Estimasi Durasi Kerja Lembur: <span class="text-primary font-weight-600">{{ $form->calculateEstimatedHours() }} jam</span></span>
+                            <!-- KOTAK STATUS UANG MAKAN LEMBUR PER JAM -->
+                            @if (! $isFormLocked && $form->calculateEstimatedHours() > 0)
+                                @if ($form->calculateEstimatedHours() >= $this->companyOvertimeMealThresholdHours)
+                                    <div class="mb-3" style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #166534;">
+                                            <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
+                                            <div>
+                                                <div>Durasi lembur <span class="font-weight-600">{{ $form->calculateEstimatedHours() }} jam</span> ({{ $this->formTimeRangeLabel }}).</div>
+                                                <div class="font-weight-600 text-success">Otomatis mendapatkan uang makan lembur Rp {{ number_format($this->companyOvertimeMealAllowance, 0, ',', '.') }}.</div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div style="font-size: 11px; line-height: 1.45; color: #64748b;">
-                                        Durasi dihitung otomatis berdasarkan pembulatan yang berlaku di perusahaan.
+                                @else
+                                    <div class="mb-3" style="background-color: #ffffff; border: 1px solid #fed7aa; border-left: 3px solid #f97316; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #9a3412;">
+                                            <i class="fas fa-exclamation-triangle mr-2 mt-1 text-warning"></i>
+                                            <div>
+                                                <div>Durasi lembur <span class="font-weight-600">{{ $form->calculateEstimatedHours() }} jam</span> ({{ $this->formTimeRangeLabel }}, belum mencapai minimal {{ $this->companyOvertimeMealThresholdHours }} jam).</div>
+                                                <div class="font-weight-500">Tidak mendapatkan uang makan lembur (Rp 0).</div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
+                                @endif
                             @endif
                         @else
                             <!-- 3. Form Lembur Harian (Clean White Card dengan Rounded 12px & Shadow) -->
                             <div class="form-group">
                                 <label for="form_date_daily">Tanggal Lembur <span class="text-danger">*</span></label>
-                                <input type="date" id="form_date_daily" wire:model.live="form.date" class="form-control @error('form.date') is-invalid @enderror">
+                                <input type="date" id="form_date_daily" wire:model.live="form.date" @disabled($isFormLocked) class="form-control @error('form.date') is-invalid @enderror">
                                 @error('form.date')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
 
-                            <div class="alert alert-light border small text-muted mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
-                                <div class="d-flex align-items-center text-dark font-weight-500 mb-1" style="font-size: 12px;">
-                                    <i class="fas fa-sun text-warning mr-1.5"></i>
-                                    <span>Lembur Seharian Penuh</span>
-                                </div>
-                                <div style="font-size: 11px; line-height: 1.45; color: #64748b;">
-                                    Durasi dihitung 1 hari penuh otomatis menggunakan nominal lembur harian karyawan. Range jam kerja tidak diperlukan.
-                                </div>
-                            </div>
-                        @endif
-
-                        @if (! $isKaryawan)
-                            <!-- UANG MAKAN (ADMIN) -->
-                            <div class="form-group">
-                                @if ($this->formIsNonWorkDay)
-                                    <div class="mb-2" style="background-color: #ffffff; border: 1px solid #fef3c7; border-left: 3px solid #d97706; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.65; color: #92400e;">
-                                            <i class="fas fa-exclamation-circle mr-2 mt-1"></i>
-                                            <span>Tanggal lembur ini <span class="font-weight-600">{{ $this->formNonWorkDayLabel }}</span>. Uang makan hari libur <span class="font-weight-600">tidak otomatis</span> dari absensi — aktifkan di bawah bila kebijakan memberi uang makan lembur hari libur.</span>
-                                        </div>
+                            @if (! $isFormLocked)
+                                <div class="mb-2" style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                    <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #166534;">
+                                        <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
+                                        <span>Lembur seharian penuh berhak mendapatkan uang makan.</span>
                                     </div>
-                                @else
-                                    <div class="mb-2" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.65; color: #334155;">
-                                            <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
-                                            <span>Uang makan hari kerja otomatis dihitung dari kehadiran di periode mingguan. Aktifkan hanya untuk tambahan khusus.</span>
+                                </div>
+
+                                @if (! $isKaryawan)
+                                    <div class="form-group mb-3">
+                                        <label class="text-dark font-weight-500 mb-1.5" style="font-size: 12.5px;">Pilihan Tarif Uang Makan:</label>
+                                        <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
+                                            <button type="button" 
+                                                    wire:click="setDailyMealSource('daily')" 
+                                                    class="btn btn-sm d-inline-flex align-items-center {{ $form_daily_meal_source === 'daily' ? 'btn-primary font-weight-600 shadow-sm' : 'btn-outline-secondary font-weight-normal' }}" 
+                                                    style="border-radius: 20px; padding: 4px 12px; font-size: 12px; border-width: 1px;">
+                                                @if ($form_daily_meal_source === 'daily')
+                                                    <i class="fas fa-check-circle mr-1 text-white" style="font-size: 11px;"></i>
+                                                @endif
+                                                <span>Tarif Harian: <strong>Rp {{ number_format($this->formMealRate, 0, ',', '.') }}</strong></span>
+                                            </button>
+
+                                            <button type="button" 
+                                                    wire:click="setDailyMealSource('overtime')" 
+                                                    class="btn btn-sm d-inline-flex align-items-center {{ $form_daily_meal_source === 'overtime' ? 'btn-primary font-weight-600 shadow-sm' : 'btn-outline-secondary font-weight-normal' }}" 
+                                                    style="border-radius: 20px; padding: 4px 12px; font-size: 12px; border-width: 1px;">
+                                                @if ($form_daily_meal_source === 'overtime')
+                                                    <i class="fas fa-check-circle mr-1 text-white" style="font-size: 11px;"></i>
+                                                @endif
+                                                <span>Tarif Lembur: <strong>Rp {{ number_format($this->companyOvertimeMealAllowance, 0, ',', '.') }}</strong></span>
+                                            </button>
                                         </div>
+                                        <small class="text-dark mt-1.5 d-block" style="font-size: 11.5px; color: #475569 !important;">
+                                            {{ $form_daily_meal_source === 'daily' ? 'Tarif harian (' . $this->formMealRateSourceLabel . ') - Default' : 'Tarif standar uang makan lembur perusahaan' }}
+                                        </small>
                                     </div>
                                 @endif
-
-                                <div class="d-flex align-items-center">
-                                    <label class="custom-switch mb-0" for="form_give_meal">
-                                        <input type="checkbox" id="form_give_meal" class="custom-switch-input" @checked($form->meal_allowance > 0) wire:click="toggleFormMeal">
-                                        <span class="custom-switch-indicator"></span>
-                                    </label>
-                                    <span class="ml-2" style="font-size: 13.5px; color: #1e293b;">
-                                        Beri uang makan
-                                        <span class="font-weight-600">Rp {{ number_format($this->formMealRate, 0, ',', '.') }}</span>/hari
-                                        ({{ $this->formMealRateSourceLabel }})
-                                    </span>
-                                </div>
-                                @error('form.meal_allowance')
-                                    <div class="invalid-feedback d-block">{{ $message }}</div>
-                                @enderror
-                            </div>
+                            @endif
                         @endif
 
                         <!-- KEPERLUAN / ALASAN LEMBUR -->
                         <div class="form-group">
                             <label for="form_reason">Uraian / Pekerjaan yang Dikerjakan <span class="text-danger">*</span></label>
-                            <textarea id="form_reason" wire:model="form.reason" rows="3" placeholder="Tuliskan rincian tugas atau pekerjaan lembur..." class="form-control @error('form.reason') is-invalid @enderror"></textarea>
+                            <textarea id="form_reason" wire:model="form.reason" rows="3" placeholder="{{ $isFormLocked ? 'Silakan pilih karyawan terlebih dahulu...' : 'Tuliskan rincian tugas atau pekerjaan lembur...' }}" @disabled($isFormLocked) class="form-control @error('form.reason') is-invalid @enderror"></textarea>
                             @error('form.reason')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
@@ -672,14 +709,14 @@
                             <!-- CATATAN ADMIN -->
                             <div class="form-group mb-0">
                                 <label for="form_admin_notes">Catatan Admin <small class="text-muted">(Opsional)</small></label>
-                                <input type="text" id="form_admin_notes" wire:model="form.admin_notes" class="form-control" placeholder="Catatan tambahan bila diinput oleh admin...">
+                                <input type="text" id="form_admin_notes" wire:model="form.admin_notes" @disabled($isFormLocked) class="form-control" placeholder="{{ $isFormLocked ? 'Silakan pilih karyawan terlebih dahulu...' : 'Catatan tambahan bila diinput oleh admin...' }}">
                             </div>
                         @endif
                     </div>
 
                     <div class="modal-footer bg-white border-top px-4 py-3">
                         <button type="button" class="btn btn-secondary shadow-none" data-dismiss="modal" style="font-weight: 500;">Batal</button>
-                        <button type="submit" class="btn btn-primary shadow-none" wire:loading.attr="disabled" wire:target="storeSubmission" style="font-weight: 500;">
+                        <button type="submit" class="btn btn-primary shadow-none" @disabled($isFormLocked) wire:loading.attr="disabled" wire:target="storeSubmission" style="font-weight: 500; {{ $isFormLocked ? 'opacity: 0.6; cursor: not-allowed;' : '' }}">
                             <span wire:loading wire:target="storeSubmission"><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...</span>
                             <span wire:loading.remove wire:target="storeSubmission"><i class="fas fa-paper-plane mr-1"></i> Kirim Pengajuan</span>
                         </button>
@@ -796,39 +833,67 @@
                         </div>
                         @endif
 
-                        <!-- UANG MAKAN -->
-                        <div class="form-group">
-                            @if ($adjustingSubmission && $this->adjustIsNonWorkDay)
-                                <div class="mb-2" style="background-color: #ffffff; border: 1px solid #fef3c7; border-left: 3px solid #d97706; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                    <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.65; color: #92400e;">
-                                        <i class="fas fa-exclamation-circle mr-2 mt-1"></i>
-                                        <span>Tanggal lembur ini <span class="font-weight-600">{{ $this->adjustNonWorkDayLabel }}</span>. Uang makan hari libur <span class="font-weight-600">tidak otomatis</span> dari absensi — aktifkan di bawah bila kebijakan memberi uang makan lembur hari libur.</span>
+                        <!-- UANG MAKAN PENYESUAIAN -->
+                        @if ($adjustingSubmission?->isHourly())
+                            <div class="form-group mb-3">
+                                @if ($adjust_duration_hours >= $this->companyOvertimeMealThresholdHours)
+                                    <div style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #166534;">
+                                            <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
+                                            <div>
+                                                <div>Durasi lembur <span class="font-weight-600">{{ $adjust_duration_hours }} jam</span> ({{ $this->adjustTimeRangeLabel }}).</div>
+                                                <div class="font-weight-600 text-success">Otomatis mendapatkan uang makan lembur Rp {{ number_format($this->companyOvertimeMealAllowance, 0, ',', '.') }}.</div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            @else
-                                <div class="mb-2" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                    <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.65; color: #334155;">
-                                        <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
-                                        <span>Hari kerja biasa — uang makan sudah otomatis dihitung dari kehadiran di periode mingguan. Aktifkan di bawah hanya untuk tambahan khusus.</span>
+                                @else
+                                    <div style="background-color: #ffffff; border: 1px solid #fed7aa; border-left: 3px solid #f97316; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #9a3412;">
+                                            <i class="fas fa-exclamation-triangle mr-2 mt-1 text-warning"></i>
+                                            <div>
+                                                <div>Durasi lembur <span class="font-weight-600">{{ $adjust_duration_hours }} jam</span> ({{ $this->adjustTimeRangeLabel }}, belum mencapai minimal {{ $this->companyOvertimeMealThresholdHours }} jam).</div>
+                                                <div class="font-weight-500">Tidak mendapatkan uang makan lembur (Rp 0).</div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            @endif
-
-                            <div class="d-flex align-items-center">
-                                <label class="custom-switch mb-0" for="adjust_give_meal">
-                                    <input type="checkbox" id="adjust_give_meal" class="custom-switch-input" @checked($adjust_give_meal) wire:click="toggleAdjustMeal">
-                                    <span class="custom-switch-indicator"></span>
-                                </label>
-                                <span class="ml-2" style="font-size: 13.5px; color: #1e293b;">
-                                    Beri uang makan
-                                    <span class="font-weight-600">Rp {{ number_format($this->adjustMealRate, 0, ',', '.') }}</span>/hari
-                                    ({{ $this->adjustMealRateSourceLabel }})
-                                </span>
+                                @endif
                             </div>
-                            @error('adjust_meal_allowance')
-                                <div class="invalid-feedback d-block">{{ $message }}</div>
-                            @enderror
-                        </div>
+                        @else
+                            <div class="form-group mb-3">
+                                <div class="mb-2" style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                    <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #166534;">
+                                        <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
+                                        <span>Lembur seharian penuh berhak mendapatkan uang makan. Silakan pilih sumber tarif:</span>
+                                    </div>
+                                </div>
+
+                                <label class="text-dark font-weight-500 mb-1.5" style="font-size: 12.5px;">Pilihan Tarif Uang Makan:</label>
+                                <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
+                                    <button type="button" 
+                                            wire:click="setAdjustDailyMealSource('daily')" 
+                                            class="btn btn-sm d-inline-flex align-items-center {{ $adjust_daily_meal_source === 'daily' ? 'btn-primary font-weight-600 shadow-sm' : 'btn-outline-secondary font-weight-normal' }}" 
+                                            style="border-radius: 20px; padding: 4px 12px; font-size: 12px; border-width: 1px;">
+                                        @if ($adjust_daily_meal_source === 'daily')
+                                            <i class="fas fa-check-circle mr-1 text-white" style="font-size: 11px;"></i>
+                                        @endif
+                                        <span>Tarif Harian: <strong>Rp {{ number_format($this->adjustMealRate, 0, ',', '.') }}</strong></span>
+                                    </button>
+
+                                    <button type="button" 
+                                            wire:click="setAdjustDailyMealSource('overtime')" 
+                                            class="btn btn-sm d-inline-flex align-items-center {{ $adjust_daily_meal_source === 'overtime' ? 'btn-primary font-weight-600 shadow-sm' : 'btn-outline-secondary' }}" 
+                                            style="border-radius: 20px; padding: 4px 12px; font-size: 12px; border-width: 1px;">
+                                        @if ($adjust_daily_meal_source === 'overtime')
+                                            <i class="fas fa-check-circle mr-1 text-white" style="font-size: 11px;"></i>
+                                        @endif
+                                        <span>Tarif Lembur: <strong>Rp {{ number_format($this->companyOvertimeMealAllowance, 0, ',', '.') }}</strong></span>
+                                    </button>
+                                </div>
+                                <small class="text-dark mt-1.5 d-block" style="font-size: 11.5px; color: #475569 !important;">
+                                    {{ $adjust_daily_meal_source === 'daily' ? 'Tarif harian (' . $this->adjustMealRateSourceLabel . ') - Default' : 'Tarif standar uang makan lembur perusahaan' }}
+                                </small>
+                            </div>
+                        @endif
 
                         <!-- CATATAN ADMIN -->
                         <div class="form-group mb-0">
@@ -1234,7 +1299,7 @@
                 $('#form_employee_id').select2({
                     dropdownParent: $('#overtimeSubmissionModal'),
                     width: '100%',
-                    placeholder: '-- Pilih Karyawan Berhak Lembur --',
+                    placeholder: '-- Pilih Karyawan --',
                     allowClear: true
                 }).off('change').on('change', function () {
                     const val = $(this).val();

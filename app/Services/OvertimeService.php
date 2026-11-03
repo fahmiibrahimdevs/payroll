@@ -278,7 +278,7 @@ class OvertimeService
             $overtimeType = $data['overtime_type'] ?? 'hourly';
             $isDaily = $overtimeType === 'daily' || $overtimeType === OvertimeType::DAILY;
 
-            // 2. Cek apakah karyawan sudah memiliki pengajuan lembur harian di tanggal yang sama
+            // 2. Cek apakah karyawan sudah memiliki pengajuan lembur harian di tanggal yang sama (maksimal 1 lembur harian per tanggal)
             $hasDailySubmission = OvertimeSubmission::query()
                 ->where('employee_id', $employeeId)
                 ->where('date', $submissionDate)
@@ -295,38 +295,18 @@ class OvertimeService
                     throw new InvalidArgumentException("Karyawan {$employee->full_name} sudah memiliki pengajuan lembur harian pada tanggal {$submissionDate}.");
                 }
 
-                // Tidak boleh mengajukan lembur harian jika sudah ada lembur per jam di tanggal yang sama
-                $hasHourlySubmission = OvertimeSubmission::query()
-                    ->where('employee_id', $employeeId)
-                    ->where('date', $submissionDate)
-                    ->where('overtime_type', OvertimeType::HOURLY)
-                    ->whereIn('status', [
-                        OvertimeStatus::PENDING_ADMIN,
-                        OvertimeStatus::PENDING_DIREKTUR,
-                        OvertimeStatus::APPROVED,
-                    ])
-                    ->exists();
-
-                if ($hasHourlySubmission) {
-                    throw new InvalidArgumentException("Karyawan {$employee->full_name} sudah memiliki pengajuan lembur per jam pada tanggal {$submissionDate}. Lembur harian tidak dapat digabungkan.");
-                }
-
                 $rate = (float) ($employee->overtime_rate_per_day ?? 0);
                 if ($rate <= 0) {
-                    throw new InvalidArgumentException("Karyawan {$employee->full_name} belum memiliki nominal lembur harian di profilnya.");
+                    throw new InvalidArgumentException("Karyawan {$employee->full_name} belum memiliki nominal lembur harian di profilnya. Silakan atur tarif lembur di profil karyawan terlebih dahulu.");
                 }
 
                 $startTimeVal = null;
                 $endTimeVal = null;
                 $durationHours = 1.0;
             } else {
-                if ($hasDailySubmission) {
-                    throw new InvalidArgumentException("Karyawan {$employee->full_name} sudah memiliki pengajuan lembur harian pada tanggal {$submissionDate}. Tidak dapat mengajukan lembur per jam.");
-                }
-
                 $rate = (float) ($employee->overtime_rate_per_hour ?? 0);
                 if ($rate <= 0) {
-                    throw new InvalidArgumentException("Karyawan {$employee->full_name} belum memiliki tarif lembur per jam di profilnya.");
+                    throw new InvalidArgumentException("Karyawan {$employee->full_name} belum memiliki tarif lembur per jam di profilnya. Silakan atur tarif lembur di profil karyawan terlebih dahulu.");
                 }
 
                 $startTime = Carbon::parse($data['start_time']);
@@ -335,7 +315,7 @@ class OvertimeService
                     throw new InvalidArgumentException('Jam selesai lembur tidak boleh sama dengan jam mulai.');
                 }
 
-                // Cek tumpang tindih jam lembur (overlapping hours)
+                // Cek tumpang tindih jam lembur (overlapping hours antar lembur per jam)
                 $overlapping = $this->checkSubmissionOverlap(
                     $employeeId,
                     $submissionDate,
@@ -356,8 +336,24 @@ class OvertimeService
             }
 
             $isAdmin = $actor->hasRole('admin');
-            // Karyawan cannot self-assign meal allowance via Inspect Element; only Admin can set it.
-            $mealAllowance = ($isAdmin && isset($data['meal_allowance'])) ? max(0, (float) $data['meal_allowance']) : 0;
+
+            // Aturan Uang Makan (Dinamis dari Pengaturan Perusahaan):
+            // Pada lembur per jam, jika durasi >= threshold (default 3 jam) otomatis mendapatkan Uang Makan Malam flat (default Rp 15.000).
+            $company = CompanyProfile::getProfile();
+            $mealThreshold = (float) ($company->overtime_meal_threshold_hours ?? 3.0);
+            $defaultMealAmount = (float) ($company->overtime_meal_allowance ?? 15000.0);
+
+            if (! $isDaily) {
+                if ($durationHours >= $mealThreshold) {
+                    $mealAllowance = $defaultMealAmount;
+                } else {
+                    $mealAllowance = 0.0;
+                }
+            } else {
+                // Lembur harian (holiday): uang makan dari pilihan admin ($data['meal_allowance'])
+                $mealAllowance = isset($data['meal_allowance']) ? max(0, (float) $data['meal_allowance']) : 0.0;
+            }
+
             $baseOvertimePay = $isDaily ? $rate : ($durationHours * $rate);
             $totalAmount = round($baseOvertimePay + $mealAllowance, 2);
 
@@ -449,9 +445,18 @@ class OvertimeService
                     ? (float) $data['duration_hours']
                     : $this->calculateOvertimeDuration($startTime, $endTime);
 
-                // Clamp input admin: nilai negatif/ekstrem tidak boleh mengubah
-                // payout lembur (batas sama dengan clamp di updatePeriodAttendance).
-                $durationHours = max(0.0, min(7.0, $durationHours));
+                $durationHours = max(0.0, min(24.0, $durationHours));
+
+                // Aturan Uang Makan Malam flat (dinamis dari Pengaturan Perusahaan) jika durasi >= threshold
+                $company = CompanyProfile::getProfile();
+                $mealThreshold = (float) ($company->overtime_meal_threshold_hours ?? 3.0);
+                $defaultMealAmount = (float) ($company->overtime_meal_allowance ?? 15000.0);
+
+                if ($durationHours >= $mealThreshold) {
+                    $mealAllowance = $defaultMealAmount;
+                } else {
+                    $mealAllowance = 0.0;
+                }
 
                 $startTimeStr = $startTime->format('H:i:s');
                 $endTimeStr = $endTime->format('H:i:s');
@@ -1081,7 +1086,7 @@ class OvertimeService
             ->get();
 
         $totalHours = (float) $submissions->sum('duration_hours');
-        $totalOvertimePay = (float) $submissions->sum(fn ($sub) => (float) $sub->duration_hours * (float) $sub->hourly_rate);
+        $totalOvertimePay = (float) $submissions->sum(fn ($sub) => (float) $sub->subtotal_overtime);
 
         // Jika tidak ada pengajuan manual tapi ada log jam lembur mesin di absensi
         if ($totalOvertimePay <= 0) {
@@ -1108,10 +1113,9 @@ class OvertimeService
             })
             ->get();
 
-        $totalMealAllowance = (float) $attendances->sum('total_meal_allowance');
-        if ($totalMealAllowance <= 0) {
-            $totalMealAllowance = (float) $submissions->sum('meal_allowance');
-        }
+        $attendanceMeal = (float) $attendances->sum('total_meal_allowance');
+        $overtimeMeal = (float) $submissions->sum('meal_allowance');
+        $totalMealAllowance = $attendanceMeal + $overtimeMeal;
 
         $grandTotal = $totalOvertimePay + $totalMealAllowance;
 

@@ -36,6 +36,10 @@ trait HasObfuscatedId
         $decodedId = IdObfuscator::decode($value, static::class);
 
         if ($decodedId === null || $decodedId <= 0) {
+            if (is_numeric($value) && (int) $value > 0) {
+                return $this->where($this->getQualifiedKeyName(), (int) $value)->first();
+            }
+
             return null;
         }
 

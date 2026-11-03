@@ -765,7 +765,12 @@
                             <td class="td-center font-monospace">{{ $sub->formatted_work_hours }}</td>
                             <td class="td-center font-weight-bold">{{ $sub->formatted_duration }}</td>
                             <td class="td-right">{{ $sub->formatted_rate_label }}</td>
-                            <td class="td-right font-weight-bold">{{ $sub->formatted_subtotal_overtime }}</td>
+                            <td class="td-right font-weight-bold">
+                                {{ $sub->formatted_subtotal_overtime }}
+                                @if ((float) $sub->meal_allowance > 0)
+                                    <div style="font-size: 8.5px; color: #16a34a; font-weight: normal;">+ Makan Rp {{ number_format((float) $sub->meal_allowance, 0, ',', '.') }}</div>
+                                @endif
+                            </td>
                             <td>{{ $sub->reason }}</td>
                         </tr>
                     @empty

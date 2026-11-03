@@ -150,10 +150,20 @@ class OvertimeSubmission extends Model
                 }
 
                 try {
-                    $start = Carbon::parse($this->start_time)->format('H:i');
-                    $end = Carbon::parse($this->end_time)->format('H:i');
+                    $start = Carbon::parse($this->start_time);
+                    $end = Carbon::parse($this->end_time);
+                    $startTime = $start->format('H:i');
+                    $endTime = $end->format('H:i');
 
-                    return "{$start} - {$end}";
+                    if ($end->lessThanOrEqualTo($start)) {
+                        $dateCarbon = $this->date ? Carbon::parse($this->date) : null;
+                        $startDate = $dateCarbon ? $dateCarbon->locale('id')->isoFormat('DD MMM') : '';
+                        $endDate = $dateCarbon ? $dateCarbon->copy()->addDay()->locale('id')->isoFormat('DD MMM') : '';
+
+                        return "{$startDate} {$startTime} s.d. {$endDate} {$endTime}";
+                    }
+
+                    return "{$startTime} - {$endTime}";
                 } catch (\Throwable) {
                     return "{$this->start_time} - {$this->end_time}";
                 }

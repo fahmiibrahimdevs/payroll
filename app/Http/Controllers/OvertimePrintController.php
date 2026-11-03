@@ -69,7 +69,9 @@ class OvertimePrintController extends Controller
 
             $totalHours = (float) $submissions->sum('duration_hours');
             $totalOvertimePay = (float) $submissions->sum(fn ($s) => (float) $s->subtotal_overtime);
-            $totalMealAllowance = $attendance ? (float) $attendance->total_meal_allowance : (float) $submissions->sum('meal_allowance');
+            $overtimeMealAllowance = (float) $submissions->sum('meal_allowance');
+            $attendanceMealAllowance = $attendance ? (float) $attendance->total_meal_allowance : 0;
+            $totalMealAllowance = $attendanceMealAllowance + $overtimeMealAllowance;
             $totalDailyWage = $attendance ? (float) ($attendance->total_daily_wage ?? 0) : 0;
 
             $slips = [];
@@ -124,7 +126,9 @@ class OvertimePrintController extends Controller
 
             $totalHours = (float) $empSubmissions->sum('duration_hours');
             $totalOvertimePay = (float) $empSubmissions->sum(fn ($s) => (float) $s->subtotal_overtime);
-            $totalMealAllowance = $attendance ? (float) $attendance->total_meal_allowance : (float) $empSubmissions->sum('meal_allowance');
+            $overtimeMealAllowance = (float) $empSubmissions->sum('meal_allowance');
+            $attendanceMealAllowance = $attendance ? (float) $attendance->total_meal_allowance : 0;
+            $totalMealAllowance = $attendanceMealAllowance + $overtimeMealAllowance;
             $totalDailyWage = $attendance ? (float) ($attendance->total_daily_wage ?? 0) : 0;
 
             // Hanya cetak karyawan yang memiliki kehadiran kerja (> 0 hari) atau memiliki lembur/upah

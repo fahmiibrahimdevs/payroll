@@ -54,6 +54,8 @@ class CompanyProfileService
             'default_meal_allowance_per_day' => isset($data['default_meal_allowance_per_day']) ? (float) $data['default_meal_allowance_per_day'] : ($profile->default_meal_allowance_per_day ?? 25000),
             'overtime_rounding_mode' => $data['overtime_rounding_mode'] ?? $profile->overtime_rounding_mode ?? 'round_60_min',
             'overtime_rounding_threshold_minutes' => isset($data['overtime_rounding_threshold_minutes']) ? (int) $data['overtime_rounding_threshold_minutes'] : ($profile->overtime_rounding_threshold_minutes ?? 10),
+            'overtime_meal_threshold_hours' => isset($data['overtime_meal_threshold_hours']) ? (float) $data['overtime_meal_threshold_hours'] : ($profile->overtime_meal_threshold_hours ?? 3.0),
+            'overtime_meal_allowance' => isset($data['overtime_meal_allowance']) ? (float) $data['overtime_meal_allowance'] : ($profile->overtime_meal_allowance ?? 15000.0),
             'is_uniform_meal_allowance' => isset($data['is_uniform_meal_allowance']) ? (bool) $data['is_uniform_meal_allowance'] : (bool) ($profile->is_uniform_meal_allowance ?? true),
             'payroll_cutoff_day' => isset($data['payroll_cutoff_day']) ? (int) $data['payroll_cutoff_day'] : ($profile->payroll_cutoff_day ?? 20),
             'payroll_pay_day' => isset($data['payroll_pay_day']) ? (int) $data['payroll_pay_day'] : ($profile->payroll_pay_day ?? 25),

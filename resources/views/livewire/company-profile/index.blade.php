@@ -102,7 +102,7 @@
                                    wire:click="setTab('penggajian')"
                                    role="tab">
                                     <i class="fas fa-calendar-alt mr-1.5"></i> Penggajian &amp; Uang Makan
-                                    @if ($errors->hasAny(['work_days_per_week', 'payroll_cutoff_day', 'payroll_pay_day', 'default_meal_allowance_per_day', 'overtime_rounding_mode']))
+                                    @if ($errors->hasAny(['work_days_per_week', 'payroll_cutoff_day', 'payroll_pay_day', 'default_meal_allowance_per_day', 'overtime_rounding_mode', 'overtime_meal_threshold_hours', 'overtime_meal_allowance']))
                                         <span class="badge badge-danger ml-1 px-1.5 py-0.5" style="font-size: 10px;">!</span>
                                     @endif
                                 </a>
@@ -427,6 +427,68 @@
                                                 </div>
                                             </div>
                                         @endif
+
+                                        <!-- Kebijakan Uang Makan Lembur Malam (Minimal Jam & Nominal Flat) -->
+                                        <div class="row align-items-center pt-3 border-top" style="border-color: #f1f5f9 !important;">
+                                            <div class="col-md-7 mb-3 mb-md-0">
+                                                <label for="overtime_meal_threshold_hours" class="d-block font-weight-600 mb-1">
+                                                    Minimal Jam Lembur Dapat Uang Makan
+                                                </label>
+                                                <div class="text-muted" style="font-size: 12px; line-height: 1.45;">
+                                                    Batas minimal durasi lembur per jam agar karyawan otomatis berhak mendapatkan uang makan lembur malam.
+                                                </div>
+                                            </div>
+                                            <div class="col-md-5">
+                                                <div class="form-group mb-0">
+                                                    <div class="input-group">
+                                                        <input type="number"
+                                                               id="overtime_meal_threshold_hours"
+                                                               wire:model="overtime_meal_threshold_hours"
+                                                               min="0.5"
+                                                               max="24"
+                                                               step="0.5"
+                                                               class="form-control text-right @error('overtime_meal_threshold_hours') is-invalid @enderror"
+                                                               placeholder="3">
+                                                        <div class="input-group-append">
+                                                            <span class="input-group-text bg-white" style="border-left: 0; color: #64748b; font-size: 13px;">Jam</span>
+                                                        </div>
+                                                    </div>
+                                                    @error('overtime_meal_threshold_hours')
+                                                        <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                    @enderror
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row align-items-center pt-3 border-top" style="border-color: #f1f5f9 !important;">
+                                            <div class="col-md-7 mb-3 mb-md-0">
+                                                <label for="overtime_meal_allowance" class="d-block font-weight-600 mb-1">
+                                                    Nominal Uang Makan Lembur (Flat)
+                                                </label>
+                                                <div class="text-muted" style="font-size: 12px; line-height: 1.45;">
+                                                    Besaran uang makan lembur malam (flat per pengajuan lembur yang memenuhi syarat durasi minimal).
+                                                </div>
+                                            </div>
+                                            <div class="col-md-5">
+                                                <div class="form-group mb-0">
+                                                    <div class="input-group">
+                                                        <div class="input-group-prepend">
+                                                            <span class="input-group-text bg-white" style="border-right: 0; color: #64748b; font-size: 13px;">Rp</span>
+                                                        </div>
+                                                        <input type="number"
+                                                               id="overtime_meal_allowance"
+                                                               wire:model="overtime_meal_allowance"
+                                                               min="0"
+                                                               step="1000"
+                                                               class="form-control text-right @error('overtime_meal_allowance') is-invalid @enderror"
+                                                               placeholder="15000">
+                                                    </div>
+                                                    @error('overtime_meal_allowance')
+                                                        <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                    @enderror
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

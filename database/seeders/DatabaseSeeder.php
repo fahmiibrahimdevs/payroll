@@ -40,7 +40,7 @@ class DatabaseSeeder extends Seeder
             ->delete();
 
         foreach ([
-            ['role' => 'direktur', 'name' => 'Direktur Demo', 'email' => 'direktur@payroll.com', 'password' => '31750321@direktur'],
+            ['role' => 'direktur', 'name' => 'Pak Eka', 'email' => 'direktur@payroll.com', 'password' => '31750321@direktur'],
             ['role' => 'admin', 'name' => 'Admin Demo', 'email' => 'admin@payroll.com', 'password' => '31750321@admin'],
             ['role' => 'karyawan', 'name' => 'Karyawan Demo', 'email' => 'karyawan@payroll.com', 'password' => '31750321@karyawan'],
         ] as $account) {

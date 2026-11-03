@@ -74,6 +74,10 @@ class Index extends Component
 
     public bool $adjust_give_meal = false;
 
+    public string $form_daily_meal_source = 'daily';
+
+    public string $adjust_daily_meal_source = 'daily';
+
     public string $adjust_admin_notes = '';
 
     // Rejection modal
@@ -156,6 +160,8 @@ class Index extends Component
 
         $this->form->resetForm();
         $this->form->date = date('Y-m-d');
+        $this->form_daily_meal_source = 'daily';
+        $this->syncFormMealAllowance();
 
         if ($user->hasRole('karyawan')) {
             $emp = $user->getEmployeeRecord();
@@ -195,7 +201,9 @@ class Index extends Component
             $this->form->start_time = '';
             $this->form->end_time = '';
             $this->form->duration_hours = null;
+            $this->form_daily_meal_source = 'daily';
         }
+        $this->syncFormMealAllowance();
     }
 
     /**
@@ -212,6 +220,34 @@ class Index extends Component
         }
 
         $validated = $this->form->validate();
+
+        if (($validated['overtime_type'] ?? 'hourly') === 'daily') {
+            $validated['meal_allowance'] = $this->form_daily_meal_source === 'daily'
+                ? $this->formMealRate
+                : $this->companyOvertimeMealAllowance;
+            $this->form->meal_allowance = $validated['meal_allowance'];
+        } else {
+            $estHours = $this->form->calculateEstimatedHours();
+            $validated['meal_allowance'] = $estHours >= $this->companyOvertimeMealThresholdHours
+                ? $this->companyOvertimeMealAllowance
+                : 0.0;
+            $this->form->meal_allowance = $validated['meal_allowance'];
+        }
+
+        $targetEmp = Employee::find($validated['employee_id']);
+        if ($targetEmp) {
+            $isDaily = ($validated['overtime_type'] ?? 'hourly') === 'daily';
+            $rate = $isDaily ? (float) ($targetEmp->overtime_rate_per_day ?? 0) : (float) ($targetEmp->overtime_rate_per_hour ?? 0);
+            if ($rate <= 0) {
+                $this->dispatch('swal:alert', [
+                    'type' => 'warning',
+                    'title' => 'Tarif Lembur Belum Diset',
+                    'message' => "Karyawan {$targetEmp->full_name} belum memiliki tarif lembur " . ($isDaily ? 'harian' : 'per jam') . ' di profilnya. Silakan atur tarif lembur di Master Karyawan terlebih dahulu.',
+                ]);
+
+                return;
+            }
+        }
 
         try {
             $service->createSubmission($validated, $user);
@@ -260,12 +296,26 @@ class Index extends Component
         $this->adjust_start_time = ! empty($submission->start_time) ? Carbon::parse($submission->start_time)->format('H:i') : '';
         $this->adjust_end_time = ! empty($submission->end_time) ? Carbon::parse($submission->end_time)->format('H:i') : '';
         $this->adjust_duration_hours = (float) $submission->duration_hours;
-        $this->adjust_meal_allowance = (float) $submission->meal_allowance;
-        $this->adjust_give_meal = $this->adjust_meal_allowance > 0 || $this->adjustIsNonWorkDay;
-        if ($this->adjust_give_meal && $this->adjust_meal_allowance <= 0) {
-            $this->adjust_meal_allowance = $this->adjustMealRate;
-        }
         $this->adjust_admin_notes = $submission->admin_notes ?? '';
+
+        if ($submission->isDaily()) {
+            $dailyRate = (float) ($submission->employee?->getEffectiveMealAllowancePerDay() ?? 0);
+            $otRate = (float) $this->companyOvertimeMealAllowance;
+            $currentMeal = (float) $submission->meal_allowance;
+
+            if (abs($currentMeal - $otRate) < 0.01 && abs($currentMeal - $dailyRate) > 0.01) {
+                $this->adjust_daily_meal_source = 'overtime';
+                $this->adjust_meal_allowance = $otRate;
+            } else {
+                $this->adjust_daily_meal_source = 'daily';
+                $this->adjust_meal_allowance = $dailyRate;
+            }
+        } else {
+            $threshold = $this->companyOvertimeMealThresholdHours;
+            $this->adjust_meal_allowance = $this->adjust_duration_hours >= $threshold
+                ? $this->companyOvertimeMealAllowance
+                : 0.0;
+        }
 
         $this->dispatch('open-modal', id: 'overtimeAdjustModal');
     }
@@ -291,11 +341,33 @@ class Index extends Component
                         $this->adjust_start_time,
                         $this->adjust_end_time
                     );
+
+                    // Aturan uang makan lembur malam (dinamis dari CompanyProfile) jika durasi >= threshold
+                    if ($this->adjustingSubmission?->isHourly()) {
+                        $threshold = $this->companyOvertimeMealThresholdHours;
+                        $mealAmount = $this->companyOvertimeMealAllowance;
+
+                        $this->adjust_meal_allowance = $this->adjust_duration_hours >= $threshold
+                            ? $mealAmount
+                            : 0.0;
+                    }
                 }
             } catch (\Throwable) {
                 // ignore
             }
         }
+    }
+
+    #[Computed]
+    public function companyOvertimeMealThresholdHours(): float
+    {
+        return (float) (CompanyProfile::getProfile()->overtime_meal_threshold_hours ?? 3.0);
+    }
+
+    #[Computed]
+    public function companyOvertimeMealAllowance(): float
+    {
+        return (float) (CompanyProfile::getProfile()->overtime_meal_allowance ?? 15000.0);
     }
 
     #[Computed]
@@ -309,7 +381,7 @@ class Index extends Component
     {
         $company = CompanyProfile::getProfile();
 
-        return ($company->is_uniform_meal_allowance ?? true) ? 'tarif seragam perusahaan' : 'tarif uang makan karyawan';
+        return ($company->is_uniform_meal_allowance ?? true) ? 'standar perusahaan' : 'tarif per karyawan';
     }
 
     #[Computed]
@@ -328,13 +400,13 @@ class Index extends Component
         }
 
         if ($date->isSaturday() && (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6) === 5) {
-            return 'hari Sabtu (jadwal kerja 5 hari)';
+            return 'hari Sabtu';
         }
 
         $holiday = Holiday::query()->whereDate('date', $date->toDateString())->first();
 
         if ($holiday) {
-            return 'hari libur nasional'.($holiday->name ? ' "'.$holiday->name.'"' : '');
+            return $holiday->name ?: 'hari libur nasional';
         }
 
         return null;
@@ -346,8 +418,68 @@ class Index extends Component
         return $this->adjustNonWorkDayLabel !== null;
     }
 
+    #[Computed]
+    public function adjustTimeRangeLabel(): string
+    {
+        if (empty($this->adjust_start_time) || empty($this->adjust_end_time)) {
+            return '';
+        }
+
+        try {
+            $start = Carbon::parse($this->adjust_start_time);
+            $end = Carbon::parse($this->adjust_end_time);
+            $startTime = $start->format('H:i');
+            $endTime = $end->format('H:i');
+
+            if ($end->lessThanOrEqualTo($start)) {
+                $baseDate = $this->adjustingSubmission?->date ? Carbon::parse($this->adjustingSubmission->date) : now();
+                $startDate = $baseDate->locale('id')->isoFormat('DD MMM');
+                $endDate = $baseDate->copy()->addDay()->locale('id')->isoFormat('DD MMM');
+
+                return "{$startDate} {$startTime} s.d. {$endDate} {$endTime}";
+            }
+
+            return "{$startTime} s.d. {$endTime}";
+        } catch (\Throwable) {
+            return "{$this->adjust_start_time} s.d. {$this->adjust_end_time}";
+        }
+    }
+
+    #[Computed]
+    public function formTimeRangeLabel(): string
+    {
+        if (empty($this->form->start_time) || empty($this->form->end_time)) {
+            return '';
+        }
+
+        try {
+            $start = Carbon::parse($this->form->start_time);
+            $end = Carbon::parse($this->form->end_time);
+            $startTime = $start->format('H:i');
+            $endTime = $end->format('H:i');
+
+            if ($end->lessThanOrEqualTo($start)) {
+                $baseDate = ! empty($this->form->date) ? Carbon::parse($this->form->date) : now();
+                $startDate = $baseDate->locale('id')->isoFormat('DD MMM');
+                $endDate = $baseDate->copy()->addDay()->locale('id')->isoFormat('DD MMM');
+
+                return "{$startDate} {$startTime} s.d. {$endDate} {$endTime}";
+            }
+
+            return "{$startTime} s.d. {$endTime}";
+        } catch (\Throwable) {
+            return "{$this->form->start_time} s.d. {$this->form->end_time}";
+        }
+    }
+
     public function toggleAdjustMeal(): void
     {
+        if (! $this->adjustIsNonWorkDay) {
+            $this->adjust_give_meal = false;
+            $this->adjust_meal_allowance = 0.0;
+            return;
+        }
+
         $this->adjust_give_meal = ! $this->adjust_give_meal;
         $this->adjust_meal_allowance = $this->adjust_give_meal ? $this->adjustMealRate : 0.0;
     }
@@ -367,11 +499,7 @@ class Index extends Component
     {
         $company = CompanyProfile::getProfile();
 
-        if ($company->is_uniform_meal_allowance ?? true) {
-            return 'tarif seragam perusahaan';
-        }
-
-        return $this->form->employee_id ? 'tarif uang makan karyawan' : 'tarif default perusahaan';
+        return ($company->is_uniform_meal_allowance ?? true) ? 'standar perusahaan' : 'tarif per karyawan';
     }
 
     #[Computed]
@@ -388,13 +516,13 @@ class Index extends Component
         }
 
         if ($date->isSaturday() && (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6) === 5) {
-            return 'hari Sabtu (jadwal kerja 5 hari)';
+            return 'hari Sabtu';
         }
 
         $holiday = Holiday::query()->whereDate('date', $date->toDateString())->first();
 
         if ($holiday) {
-            return 'hari libur nasional'.($holiday->name ? ' "'.$holiday->name.'"' : '');
+            return $holiday->name ?: 'hari libur nasional';
         }
 
         return null;
@@ -406,9 +534,54 @@ class Index extends Component
         return $this->formNonWorkDayLabel !== null;
     }
 
-    public function toggleFormMeal(): void
+    public function setDailyMealSource(string $source): void
     {
-        $this->form->meal_allowance = $this->form->meal_allowance > 0 ? 0 : $this->formMealRate;
+        $this->form_daily_meal_source = in_array($source, ['daily', 'overtime'], true) ? $source : 'daily';
+        $this->syncFormMealAllowance();
+    }
+
+    public function setAdjustDailyMealSource(string $source): void
+    {
+        $this->adjust_daily_meal_source = in_array($source, ['daily', 'overtime'], true) ? $source : 'daily';
+        if ($this->adjust_daily_meal_source === 'daily') {
+            $this->adjust_meal_allowance = $this->adjustMealRate;
+        } else {
+            $this->adjust_meal_allowance = $this->companyOvertimeMealAllowance;
+        }
+    }
+
+    public function syncFormMealAllowance(): void
+    {
+        if ($this->form->overtime_type === 'daily') {
+            $this->form->meal_allowance = $this->form_daily_meal_source === 'daily'
+                ? $this->formMealRate
+                : $this->companyOvertimeMealAllowance;
+        } else {
+            $estHours = $this->form->calculateEstimatedHours();
+            $this->form->meal_allowance = $estHours >= $this->companyOvertimeMealThresholdHours
+                ? $this->companyOvertimeMealAllowance
+                : 0.0;
+        }
+    }
+
+    public function updatedFormEmployeeId(): void
+    {
+        $this->syncFormMealAllowance();
+    }
+
+    public function updatedFormStartTime(): void
+    {
+        $this->syncFormMealAllowance();
+    }
+
+    public function updatedFormEndTime(): void
+    {
+        $this->syncFormMealAllowance();
+    }
+
+    public function updatedFormDate(): void
+    {
+        $this->syncFormMealAllowance();
     }
 
     /**
@@ -444,6 +617,16 @@ class Index extends Component
             'adjust_meal_allowance' => 'Uang Makan',
             'adjust_admin_notes' => 'Catatan Admin',
         ]);
+
+        if ($submission->isDaily()) {
+            $this->adjust_meal_allowance = $this->adjust_daily_meal_source === 'daily'
+                ? $this->adjustMealRate
+                : $this->companyOvertimeMealAllowance;
+        } else {
+            $this->adjust_meal_allowance = $this->adjust_duration_hours >= $this->companyOvertimeMealThresholdHours
+                ? $this->companyOvertimeMealAllowance
+                : 0.0;
+        }
 
         try {
             $service->adjustAndForwardToDirector($submission, [
@@ -1087,7 +1270,7 @@ class Index extends Component
             ]);
     }
 
-    /** Karyawan berhak lembur (punya tarif per jam atau per hari) untuk dropdown admin. */
+    /** Karyawan aktif untuk dropdown pengajuan lembur admin. */
     #[Computed]
     public function eligibleEmployees(): Collection
     {
@@ -1098,10 +1281,6 @@ class Index extends Component
 
         return Employee::query()
             ->with('department:id,name')
-            ->where(function ($q) {
-                $q->where('overtime_rate_per_hour', '>', 0)
-                    ->orWhere('overtime_rate_per_day', '>', 0);
-            })
             ->where('status', 'active')
             ->orderBy('full_name')
             ->get(['id', 'full_name', 'department_id', 'overtime_rate_per_hour', 'overtime_rate_per_day']);
