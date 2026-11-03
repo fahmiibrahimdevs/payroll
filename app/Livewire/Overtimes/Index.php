@@ -222,9 +222,7 @@ class Index extends Component
         $validated = $this->form->validate();
 
         if (($validated['overtime_type'] ?? 'hourly') === 'daily') {
-            $validated['meal_allowance'] = $this->form_daily_meal_source === 'daily'
-                ? $this->formMealRate
-                : $this->companyOvertimeMealAllowance;
+            $validated['meal_allowance'] = $this->formMealRate;
             $this->form->meal_allowance = $validated['meal_allowance'];
         } else {
             $estHours = $this->form->calculateEstimatedHours();
@@ -300,16 +298,8 @@ class Index extends Component
 
         if ($submission->isDaily()) {
             $dailyRate = (float) ($submission->employee?->getEffectiveMealAllowancePerDay() ?? 0);
-            $otRate = (float) $this->companyOvertimeMealAllowance;
-            $currentMeal = (float) $submission->meal_allowance;
-
-            if (abs($currentMeal - $otRate) < 0.01 && abs($currentMeal - $dailyRate) > 0.01) {
-                $this->adjust_daily_meal_source = 'overtime';
-                $this->adjust_meal_allowance = $otRate;
-            } else {
-                $this->adjust_daily_meal_source = 'daily';
-                $this->adjust_meal_allowance = $dailyRate;
-            }
+            $this->adjust_daily_meal_source = 'daily';
+            $this->adjust_meal_allowance = $dailyRate > 0 ? $dailyRate : (float) $submission->meal_allowance;
         } else {
             $threshold = $this->companyOvertimeMealThresholdHours;
             $this->adjust_meal_allowance = $this->adjust_duration_hours >= $threshold
@@ -553,9 +543,7 @@ class Index extends Component
     public function syncFormMealAllowance(): void
     {
         if ($this->form->overtime_type === 'daily') {
-            $this->form->meal_allowance = $this->form_daily_meal_source === 'daily'
-                ? $this->formMealRate
-                : $this->companyOvertimeMealAllowance;
+            $this->form->meal_allowance = $this->formMealRate;
         } else {
             $estHours = $this->form->calculateEstimatedHours();
             $this->form->meal_allowance = $estHours >= $this->companyOvertimeMealThresholdHours
@@ -619,9 +607,7 @@ class Index extends Component
         ]);
 
         if ($submission->isDaily()) {
-            $this->adjust_meal_allowance = $this->adjust_daily_meal_source === 'daily'
-                ? $this->adjustMealRate
-                : $this->companyOvertimeMealAllowance;
+            $this->adjust_meal_allowance = $this->adjustMealRate;
         } else {
             $this->adjust_meal_allowance = $this->adjust_duration_hours >= $this->companyOvertimeMealThresholdHours
                 ? $this->companyOvertimeMealAllowance

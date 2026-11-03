@@ -174,6 +174,7 @@ class OvertimePrintController extends Controller
         float $totalMealAllowance,
         float $totalDailyWage
     ): array {
+        $overtimeMealAllowance = (float) $submissions->sum('meal_allowance');
         $grandTotal = $totalOvertimePay + $totalMealAllowance + $totalDailyWage;
         $daysCount = $attendance ? (int) $attendance->attended_days : 0;
         $mealRate = $attendance ? (float) $attendance->meal_allowance_per_day : $emp->getEffectiveMealAllowancePerDay();
@@ -193,6 +194,7 @@ class OvertimePrintController extends Controller
             'attendance' => $attendance,
             'total_hours' => $totalHours,
             'total_overtime_pay' => $totalOvertimePay,
+            'overtime_meal_allowance' => $overtimeMealAllowance,
             'total_meal_allowance' => $totalMealAllowance,
             'total_daily_wage' => $totalDailyWage,
             'grand_total' => $grandTotal,

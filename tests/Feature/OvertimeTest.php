@@ -158,7 +158,8 @@ class OvertimeTest extends TestCase
             'submission_source' => OvertimeSubmissionSource::KARYAWAN->value,
             'duration_hours' => 3.00,
             'hourly_rate' => 25000.00,
-            'total_amount' => 75000.00,
+            'meal_allowance' => 15000.00,
+            'total_amount' => 90000.00,
         ]);
     }
 
@@ -202,25 +203,19 @@ class OvertimeTest extends TestCase
         $this->assertEquals($this->adminUser->id, $submission->verified_by_admin_id);
     }
 
-    public function test_adjust_modal_meal_toggle_uses_effective_rate(): void
+    public function test_adjust_modal_auto_calculates_meal_allowance_for_hourly(): void
     {
-        CompanyProfile::getProfile()->update([
-            'default_meal_allowance_per_day' => 30000,
-            'is_uniform_meal_allowance' => true,
-        ]);
-
         $service = app(OvertimeService::class);
-        // 2026-11-04 adalah hari Rabu — hari kerja biasa tanpa libur nasional.
         $submission = OvertimeSubmission::create([
             'reference_number' => $service->generateSubmissionReference(),
             'employee_id' => $this->employee->id,
             'date' => '2026-11-04',
             'start_time' => '17:00',
-            'end_time' => '20:00',
-            'duration_hours' => 3.00,
+            'end_time' => '21:00',
+            'duration_hours' => 4.00,
             'hourly_rate' => 25000.00,
-            'meal_allowance' => 0,
-            'total_amount' => 75000.00,
+            'meal_allowance' => 15000.00,
+            'total_amount' => 115000.00,
             'reason' => 'Lembur hari kerja',
             'submission_source' => OvertimeSubmissionSource::KARYAWAN,
             'status' => OvertimeStatus::PENDING_ADMIN,
@@ -231,38 +226,41 @@ class OvertimeTest extends TestCase
 
         Livewire::test(OvertimeIndex::class)
             ->call('openAdjustModal', $submission->id)
-            ->assertSet('adjust_give_meal', false)
-            ->call('toggleAdjustMeal')
-            ->assertSet('adjust_give_meal', true)
-            ->assertSet('adjust_meal_allowance', 30000.0)
+            ->set('adjust_start_time', '17:00')
+            ->set('adjust_end_time', '19:00')
+            ->set('adjust_duration_hours', 2.00)
             ->call('submitAdjustment')
             ->assertHasNoErrors();
 
         $submission->refresh();
-        $this->assertEquals(30000.00, (float) $submission->meal_allowance);
+        $this->assertEquals(0.00, (float) $submission->meal_allowance);
+        $this->assertEquals(50000.00, (float) $submission->total_amount);
     }
 
-    public function test_adjust_modal_auto_enables_meal_for_holiday_overtime(): void
+    public function test_adjust_modal_daily_overtime_automatically_gets_daily_meal_rate(): void
     {
         CompanyProfile::getProfile()->update([
             'default_meal_allowance_per_day' => 30000,
             'is_uniform_meal_allowance' => true,
         ]);
 
-        Holiday::create(['date' => '2026-12-25', 'name' => 'Natal']);
+        $this->employee->update([
+            'overtime_rate_per_day' => 200000,
+        ]);
 
         $service = app(OvertimeService::class);
         $submission = OvertimeSubmission::create([
             'reference_number' => $service->generateSubmissionReference(),
             'employee_id' => $this->employee->id,
+            'overtime_type' => OvertimeType::DAILY,
             'date' => '2026-12-25',
-            'start_time' => '09:00',
-            'end_time' => '13:00',
-            'duration_hours' => 4.00,
-            'hourly_rate' => 25000.00,
+            'start_time' => null,
+            'end_time' => null,
+            'duration_hours' => 1.00,
+            'hourly_rate' => 200000.00,
             'meal_allowance' => 0,
-            'total_amount' => 100000.00,
-            'reason' => 'Lembur hari libur nasional',
+            'total_amount' => 200000.00,
+            'reason' => 'Lembur seharian',
             'submission_source' => OvertimeSubmissionSource::KARYAWAN,
             'status' => OvertimeStatus::PENDING_ADMIN,
             'submitted_by' => $this->karyawanUser->id,
@@ -272,13 +270,12 @@ class OvertimeTest extends TestCase
 
         Livewire::test(OvertimeIndex::class)
             ->call('openAdjustModal', $submission->id)
-            ->assertSet('adjust_give_meal', true)
-            ->assertSet('adjust_meal_allowance', 30000.0)
             ->call('submitAdjustment')
             ->assertHasNoErrors();
 
         $submission->refresh();
         $this->assertEquals(30000.00, (float) $submission->meal_allowance);
+        $this->assertEquals(230000.00, (float) $submission->total_amount);
     }
 
     public function test_admin_can_submit_overtime_directly_and_it_skips_to_pending_direktur(): void
@@ -290,7 +287,6 @@ class OvertimeTest extends TestCase
             ->set('form.date', Carbon::today()->format('Y-m-d'))
             ->set('form.start_time', '18:00')
             ->set('form.end_time', '20:00')
-            ->set('form.meal_allowance', 20000)
             ->set('form.reason', 'Diinput oleh admin untuk pekerjaan darurat')
             ->call('storeSubmission')
             ->assertHasNoErrors();
@@ -300,16 +296,20 @@ class OvertimeTest extends TestCase
             'status' => OvertimeStatus::PENDING_DIREKTUR->value,
             'submission_source' => OvertimeSubmissionSource::ADMIN->value,
             'duration_hours' => 2.00,
-            'meal_allowance' => 20000.00,
-            'total_amount' => 70000.00, // 2 * 25.000 + 20.000
+            'meal_allowance' => 0.00,
+            'total_amount' => 50000.00,
         ]);
     }
 
-    public function test_admin_create_form_meal_toggle_fills_effective_rate(): void
+    public function test_admin_create_form_daily_overtime_automatically_gets_daily_meal_rate(): void
     {
         CompanyProfile::getProfile()->update([
             'default_meal_allowance_per_day' => 30000,
             'is_uniform_meal_allowance' => true,
+        ]);
+
+        $this->employee->update([
+            'overtime_rate_per_day' => 200000,
         ]);
 
         Holiday::create(['date' => '2026-10-30', 'name' => 'Cuti Bersama Test']);
@@ -318,11 +318,7 @@ class OvertimeTest extends TestCase
         Livewire::test(OvertimeIndex::class)
             ->set('form.employee_id', $this->employee->id)
             ->set('form.date', '2026-10-30')
-            ->assertSet('formIsNonWorkDay', true)
-            ->call('toggleFormMeal')
-            ->assertSet('form.meal_allowance', 30000.0)
-            ->set('form.start_time', '09:00')
-            ->set('form.end_time', '13:00')
+            ->set('form.overtime_type', 'daily')
             ->set('form.reason', 'Lembur hari libur diinput admin')
             ->call('storeSubmission')
             ->assertHasNoErrors();
@@ -330,9 +326,11 @@ class OvertimeTest extends TestCase
         $this->assertDatabaseHas('overtime_submissions', [
             'employee_id' => $this->employee->id,
             'date' => '2026-10-30',
+            'overtime_type' => 'daily',
             'status' => OvertimeStatus::PENDING_DIREKTUR->value,
             'submission_source' => OvertimeSubmissionSource::ADMIN->value,
             'meal_allowance' => 30000.00,
+            'total_amount' => 230000.00,
         ]);
     }
 
@@ -752,7 +750,8 @@ class OvertimeTest extends TestCase
             'end_time' => null,
             'duration_hours' => 1.00,
             'hourly_rate' => 175000.00,
-            'total_amount' => 175000.00,
+            'meal_allowance' => 25000.00,
+            'total_amount' => 200000.00,
         ]);
     }
 
@@ -772,8 +771,8 @@ class OvertimeTest extends TestCase
             'end_time' => null,
             'duration_hours' => 1.00,
             'hourly_rate' => 200000.00,
-            'meal_allowance' => 0.00,
-            'total_amount' => 200000.00,
+            'meal_allowance' => 25000.00,
+            'total_amount' => 225000.00,
             'reason' => 'Lembur seharian maintenance mesin',
             'submission_source' => OvertimeSubmissionSource::KARYAWAN,
             'status' => OvertimeStatus::PENDING_ADMIN,
@@ -784,8 +783,7 @@ class OvertimeTest extends TestCase
 
         Livewire::test(OvertimeIndex::class)
             ->call('openAdjustModal', $submission->id)
-            ->set('adjust_meal_allowance', 30000)
-            ->set('adjust_admin_notes', 'Disetujui lembur harian dengan tambahan uang makan')
+            ->set('adjust_admin_notes', 'Disetujui lembur harian')
             ->call('submitAdjustment')
             ->assertHasNoErrors()
             ->assertDispatched('close-modal', id: 'overtimeAdjustModal')
@@ -794,8 +792,8 @@ class OvertimeTest extends TestCase
         $submission->refresh();
         $this->assertEquals(OvertimeStatus::PENDING_DIREKTUR, $submission->status);
         $this->assertEquals(1.00, (float) $submission->duration_hours);
-        $this->assertEquals(30000.00, (float) $submission->meal_allowance);
-        $this->assertEquals(230000.00, (float) $submission->total_amount); // 200.000 + 30.000
+        $this->assertEquals(25000.00, (float) $submission->meal_allowance);
+        $this->assertEquals(225000.00, (float) $submission->total_amount); // 200.000 + 25.000
         $this->assertNull($submission->start_time);
         $this->assertNull($submission->end_time);
     }

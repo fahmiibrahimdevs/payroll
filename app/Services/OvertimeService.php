@@ -350,8 +350,10 @@ class OvertimeService
                     $mealAllowance = 0.0;
                 }
             } else {
-                // Lembur harian (holiday): uang makan dari pilihan admin ($data['meal_allowance'])
-                $mealAllowance = isset($data['meal_allowance']) ? max(0, (float) $data['meal_allowance']) : 0.0;
+                // Lembur harian: uang makan otomatis menggunakan tarif harian karyawan
+                $mealAllowance = isset($data['meal_allowance']) && (float) $data['meal_allowance'] > 0
+                    ? (float) $data['meal_allowance']
+                    : (float) $employee->getEffectiveMealAllowancePerDay();
             }
 
             $baseOvertimePay = $isDaily ? $rate : ($durationHours * $rate);

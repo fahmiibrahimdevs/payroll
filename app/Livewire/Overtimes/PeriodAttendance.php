@@ -678,6 +678,7 @@ class PeriodAttendance extends Component
             'totalEmployees' => $activeEmployeesCount,
             'totalDailyWage' => $totalDailyWage,
             'totalMealAllowance' => $totalMealAllowance,
+            'totalOvertimeMeal' => $totalOvertimeMeal,
             'totalOvertimePay' => $totalOvertimePay,
             'totalOvertimeHours' => $totalOvertimeHours,
             'grandTotal' => $grandTotal,

@@ -598,7 +598,7 @@
         </div>
     </div>
 
-    @forelse ($slips as ['employee' => $emp, 'submissions' => $submissions, 'attendance' => $attendance, 'total_hours' => $totalHours, 'total_overtime_pay' => $totalOvertimePay, 'grand_total' => $grandTotal, 'grand_total_in_words' => $grandTotalInWords, 'is_harian' => $isHarian, 'days_count' => $daysCount, 'meal_rate' => $mealRate, 'daily_rate' => $dailyRate, 'total_meal' => $totalMeal, 'total_daily_wage' => $totalDailyWage, 'attended_days_labels' => $attendedDaysList, 'is_paid' => $isSlipPaid])
+    @forelse ($slips as ['employee' => $emp, 'submissions' => $submissions, 'attendance' => $attendance, 'total_hours' => $totalHours, 'total_overtime_pay' => $totalOvertimePay, 'overtime_meal_allowance' => $overtimeMealAllowance, 'grand_total' => $grandTotal, 'grand_total_in_words' => $grandTotalInWords, 'is_harian' => $isHarian, 'days_count' => $daysCount, 'meal_rate' => $mealRate, 'daily_rate' => $dailyRate, 'total_meal' => $totalMeal, 'total_daily_wage' => $totalDailyWage, 'attended_days_labels' => $attendedDaysList, 'is_paid' => $isSlipPaid])
         <div class="slip-paper {{ $isHarian ? 'slip-theme-harian' : 'slip-theme-staff' }}">
             @if (! $isSlipPaid)
                 <!-- Watermark Status Belum Lunas (User Request: Batch print tetap cetak semua namun diberi watermark) -->
@@ -781,10 +781,27 @@
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colspan="3" class="td-center"><strong>TOTAL LEMBUR</strong></td>
+                        <td colspan="3" class="td-center"><strong>UPAH POKOK LEMBUR</strong></td>
                         <td class="td-center"><strong>{{ number_format($totalHours, 2) }} jam</strong></td>
                         <td></td>
-                        <td class="td-right subtotal-theme"><strong>Rp {{ number_format($totalOvertimePay, 0, ',', '.') }}</strong></td>
+                        <td class="td-right"><strong>Rp {{ number_format($totalOvertimePay, 0, ',', '.') }}</strong></td>
+                        <td></td>
+                    </tr>
+                    @if ($overtimeMealAllowance > 0)
+                        <tr>
+                            <td colspan="3" class="td-center"><strong>TOTAL UANG MAKAN LEMBUR</strong></td>
+                            <td colspan="2" class="td-center" style="font-size: 10px; color: #475569;">(Lembur Seharian &amp; Jam &ge; 3 Jam)</td>
+                            <td class="td-right" style="color: #16a34a;"><strong>+ Rp {{ number_format($overtimeMealAllowance, 0, ',', '.') }}</strong></td>
+                            <td></td>
+                        </tr>
+                    @endif
+                    <tr>
+                        <td colspan="5" class="td-center">
+                            <strong>TOTAL LEMBUR {{ $overtimeMealAllowance > 0 ? '& UANG MAKAN LEMBUR' : '' }}</strong>
+                        </td>
+                        <td class="td-right subtotal-theme">
+                            <strong>Rp {{ number_format($totalOvertimePay + $overtimeMealAllowance, 0, ',', '.') }}</strong>
+                        </td>
                         <td></td>
                     </tr>
                 </tfoot>
@@ -794,7 +811,13 @@
             <div class="gaji-bersih-box">
                 <div class="gaji-bersih-left">
                     <div class="gaji-bersih-title">TOTAL DITERIMA MINGGU INI</div>
-                    <div class="gaji-bersih-sub">({{ $isHarian ? 'UPAH HARIAN + UANG MAKAN + UPAH LEMBUR' : 'UANG MAKAN KEHADIRAN + UPAH LEMBUR' }})</div>
+                    <div class="gaji-bersih-sub">
+                        @if ($isHarian)
+                            (UPAH HARIAN + UANG MAKAN KEHADIRAN + LEMBUR{{ $overtimeMealAllowance > 0 ? ' & MAKAN LEMBUR' : '' }})
+                        @else
+                            (UANG MAKAN KEHADIRAN + UPAH LEMBUR{{ $overtimeMealAllowance > 0 ? ' + UANG MAKAN LEMBUR' : '' }})
+                        @endif
+                    </div>
                 </div>
                 <div class="gaji-bersih-right">
                     <div class="gaji-bersih-amount">Rp {{ number_format($grandTotal, 0, ',', '.') }}</div>

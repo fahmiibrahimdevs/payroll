@@ -108,7 +108,7 @@
                         </span>
                     </div>
                     <div class="cash-advance-stat-subtext">
-                        {{ $totalOvertimeHours }} Jam lembur mingguan
+                        {{ $totalOvertimeHours }} Jam lembur @if (($totalOvertimeMeal ?? 0) > 0) <span style="color: #16a34a; font-weight: 600;">(+ Makan Rp {{ number_format($totalOvertimeMeal, 0, ',', '.') }})</span> @else mingguan @endif
                     </div>
                 </div>
             </div>
@@ -185,7 +185,7 @@
                             <th class="text-nowrap !px-3.5 !py-3" style="min-width: 320px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">KEHADIRAN (JUM'AT &ndash; KAMIS)</th>
                             <th class="text-right text-nowrap !px-3.5 !py-3" style="min-width: 130px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">UPAH HARIAN</th>
                             <th class="text-right text-nowrap !px-3.5 !py-3" style="min-width: 130px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">UANG MAKAN</th>
-                            <th class="text-right text-nowrap !px-3.5 !py-3" style="min-width: 140px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">LEMBUR MINGGUAN</th>
+                            <th class="text-right text-nowrap !px-3.5 !py-3" style="min-width: 185px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">LEMBUR MINGGUAN</th>
                             <th class="text-right text-nowrap !px-3.5 !py-3" style="min-width: 140px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">TOTAL DITERIMA</th>
                             <th class="text-center text-nowrap !px-3.5 !py-3" style="min-width: 115px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">AKSI</th>
                         </tr>
@@ -272,42 +272,67 @@
                                     <!-- 1. Upah Harian -->
                                     <td class="text-right align-middle !px-3.5 !py-2.5 text-nowrap" style="font-variant-numeric: tabular-nums;">
                                         @if ($attData['is_harian'])
-                                            <div style="color: #047857; font-size: 12.5px; font-weight: 600;">
-                                                Rp {{ number_format($attData['total_daily_wage'], 0, ',', '.') }}
-                                            </div>
-                                            <small class="d-block font-weight-normal" style="font-size: 10.5px; color: #475569;">
-                                                @ Rp {{ number_format($attData['daily_rate'], 0, ',', '.') }}
-                                            </small>
+                                            @if (($attData['total_daily_wage'] ?? 0) > 0)
+                                                <div style="color: #047857; font-size: 12.5px; font-weight: 600;">
+                                                    Rp {{ number_format($attData['total_daily_wage'], 0, ',', '.') }}
+                                                </div>
+                                                <small class="d-block font-weight-normal" style="font-size: 10.5px; color: #475569;" title="{{ $attData['attended_days'] ?? 0 }} Hari &times; Rp {{ number_format($attData['daily_rate'], 0, ',', '.') }}">
+                                                    {{ $attData['attended_days'] ?? 0 }} Hari Kerja
+                                                </small>
+                                            @else
+                                                <div style="color: #64748b; font-size: 12px; font-weight: 500;">
+                                                    Rp 0
+                                                </div>
+                                                <small class="d-block font-weight-normal" style="font-size: 10.5px; color: #64748b;">
+                                                    0 Hari Kerja
+                                                </small>
+                                            @endif
                                         @else
                                             <span class="badge badge-light border font-weight-normal" style="font-size: 10px; padding: 2px 6px; color: #475569;">-</span>
                                             <small class="d-block" style="font-size: 10.5px; color: #475569;">Gaji Bulanan</small>
                                         @endif
                                     </td>
 
-                                    <!-- 2. Uang Makan (Teks Biasa Bersih Tanpa Input Form) -->
+                                    <!-- 2. Uang Makan (Teks Bersih Berdasarkan Hari Masuk) -->
                                     <td class="text-right align-middle !px-3.5 !py-2.5 text-nowrap" style="font-variant-numeric: tabular-nums;">
-                                        <div style="color: #d97706; font-size: 12.5px; font-weight: 600;">
-                                            Rp {{ number_format($attData['total_meal_allowance'], 0, ',', '.') }}
-                                        </div>
-                                        <small class="d-block font-weight-normal" style="font-size: 10.5px; color: #475569;">
-                                            @ Rp {{ number_format($attData['meal_allowance_per_day'], 0, ',', '.') }}
-                                        </small>
+                                        @if (($attData['total_meal_allowance'] ?? 0) > 0)
+                                            <div style="color: #d97706; font-size: 12.5px; font-weight: 600;">
+                                                Rp {{ number_format($attData['total_meal_allowance'], 0, ',', '.') }}
+                                            </div>
+                                            <small class="d-block font-weight-normal" style="font-size: 10.5px; color: #475569;" title="{{ $attData['attended_days'] ?? 0 }} Hari &times; Rp {{ number_format($attData['meal_allowance_per_day'], 0, ',', '.') }}">
+                                                {{ $attData['attended_days'] ?? 0 }} Hari Masuk
+                                            </small>
+                                        @else
+                                            <div style="color: #64748b; font-size: 12px; font-weight: 500;">
+                                                Rp 0
+                                            </div>
+                                            <small class="d-block font-weight-normal" style="font-size: 10.5px; color: #64748b;">
+                                                0 Hari Masuk
+                                            </small>
+                                        @endif
                                     </td>
 
                                     <!-- 3. Upah Lembur -->
                                     <td class="text-right align-middle !px-3.5 !py-2.5 text-nowrap" style="font-variant-numeric: tabular-nums;">
-                                        @if (($attData['overtime_pay'] ?? 0) > 0 || ($attData['overtime_hours'] ?? 0) > 0)
-                                            <div style="color: #1e293b; font-size: 12.5px; font-weight: 600;">
+                                        @if (($attData['overtime_pay'] ?? 0) > 0 || ($attData['overtime_hours'] ?? 0) > 0 || ($attData['overtime_meal'] ?? 0) > 0)
+                                            <div style="color: #0f172a; font-size: 12.5px; font-weight: 600;">
                                                 Rp {{ number_format($attData['overtime_pay'], 0, ',', '.') }}
                                             </div>
-                                            <span class="badge badge-light border text-primary font-weight-600 mt-0.5" style="font-size: 9.5px; padding: 1px 5px;">
-                                                <i class="far fa-clock mr-1"></i>{{ $attData['overtime_hours'] }} Jam
-                                            </span>
+                                            <div class="d-flex align-items-center justify-content-end flex-nowrap mt-1" style="gap: 5px;">
+                                                <span class="d-inline-flex align-items-center text-nowrap" style="padding: 2.5px 7px; font-size: 10px; font-weight: 600; border-radius: 6px; background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;">
+                                                    <i class="far fa-clock mr-1" style="font-size: 9.5px;"></i>{{ $attData['overtime_hours'] }} Jam
+                                                </span>
+                                                @if (($attData['overtime_meal'] ?? 0) > 0)
+                                                    <span class="d-inline-flex align-items-center text-nowrap" style="padding: 2.5px 7px; font-size: 10px; font-weight: 600; border-radius: 6px; background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;" title="Total Uang Makan Lembur (Harian &amp; Jam &ge; 3 Jam)">
+                                                        <i class="fas fa-utensils mr-1" style="font-size: 9px;"></i>+ Makan Rp {{ number_format($attData['overtime_meal'], 0, ',', '.') }}
+                                                    </span>
+                                                @endif
+                                            </div>
                                         @else
-                                            <div style="color: #475569; font-size: 12px; font-weight: 500;">
+                                            <div style="color: #64748b; font-size: 12px; font-weight: 500;">
                                                 Rp 0
                                             </div>
-                                            <small class="d-block" style="font-size: 10.5px; color: #475569;">0 Jam</small>
+                                            <small class="d-block" style="font-size: 10.5px; color: #64748b;">0 Jam</small>
                                         @endif
                                     </td>
 

@@ -657,42 +657,20 @@
                             </div>
 
                             @if (! $isFormLocked)
-                                <div class="mb-2" style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                <div class="mb-3" style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 12px 14px;">
                                     <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #166534;">
                                         <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
-                                        <span>Lembur seharian penuh berhak mendapatkan uang makan.</span>
+                                        <div>
+                                            <div>Lembur seharian penuh berhak mendapatkan uang makan harian:</div>
+                                            <div class="mt-1 d-flex align-items-center flex-wrap" style="gap: 6px;">
+                                                <span class="badge badge-success px-2.5 py-1" style="border-radius: 6px; font-size: 13px; font-weight: 600;">
+                                                    Rp {{ number_format($this->formMealRate, 0, ',', '.') }}
+                                                </span>
+                                                <span class="font-weight-normal text-muted" style="color: #475569 !important; font-size: 12px;">({{ $this->formMealRateSourceLabel }})</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-
-                                @if (! $isKaryawan)
-                                    <div class="form-group mb-3">
-                                        <label class="text-dark font-weight-500 mb-1.5" style="font-size: 12.5px;">Pilihan Tarif Uang Makan:</label>
-                                        <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
-                                            <button type="button" 
-                                                    wire:click="setDailyMealSource('daily')" 
-                                                    class="btn btn-sm d-inline-flex align-items-center {{ $form_daily_meal_source === 'daily' ? 'btn-primary font-weight-600 shadow-sm' : 'btn-outline-secondary font-weight-normal' }}" 
-                                                    style="border-radius: 20px; padding: 4px 12px; font-size: 12px; border-width: 1px;">
-                                                @if ($form_daily_meal_source === 'daily')
-                                                    <i class="fas fa-check-circle mr-1 text-white" style="font-size: 11px;"></i>
-                                                @endif
-                                                <span>Tarif Harian: <strong>Rp {{ number_format($this->formMealRate, 0, ',', '.') }}</strong></span>
-                                            </button>
-
-                                            <button type="button" 
-                                                    wire:click="setDailyMealSource('overtime')" 
-                                                    class="btn btn-sm d-inline-flex align-items-center {{ $form_daily_meal_source === 'overtime' ? 'btn-primary font-weight-600 shadow-sm' : 'btn-outline-secondary font-weight-normal' }}" 
-                                                    style="border-radius: 20px; padding: 4px 12px; font-size: 12px; border-width: 1px;">
-                                                @if ($form_daily_meal_source === 'overtime')
-                                                    <i class="fas fa-check-circle mr-1 text-white" style="font-size: 11px;"></i>
-                                                @endif
-                                                <span>Tarif Lembur: <strong>Rp {{ number_format($this->companyOvertimeMealAllowance, 0, ',', '.') }}</strong></span>
-                                            </button>
-                                        </div>
-                                        <small class="text-dark mt-1.5 d-block" style="font-size: 11.5px; color: #475569 !important;">
-                                            {{ $form_daily_meal_source === 'daily' ? 'Tarif harian (' . $this->formMealRateSourceLabel . ') - Default' : 'Tarif standar uang makan lembur perusahaan' }}
-                                        </small>
-                                    </div>
-                                @endif
                             @endif
                         @endif
 
@@ -860,38 +838,20 @@
                             </div>
                         @else
                             <div class="form-group mb-3">
-                                <div class="mb-2" style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                <div style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 12px 14px;">
                                     <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #166534;">
                                         <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
-                                        <span>Lembur seharian penuh berhak mendapatkan uang makan. Silakan pilih sumber tarif:</span>
+                                        <div>
+                                            <div>Lembur seharian penuh berhak mendapatkan uang makan harian:</div>
+                                            <div class="mt-1 d-flex align-items-center flex-wrap" style="gap: 6px;">
+                                                <span class="badge badge-success px-2.5 py-1" style="border-radius: 6px; font-size: 13px; font-weight: 600;">
+                                                    Rp {{ number_format($this->adjustMealRate, 0, ',', '.') }}
+                                                </span>
+                                                <span class="font-weight-normal text-muted" style="color: #475569 !important; font-size: 12px;">({{ $this->adjustMealRateSourceLabel }})</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-
-                                <label class="text-dark font-weight-500 mb-1.5" style="font-size: 12.5px;">Pilihan Tarif Uang Makan:</label>
-                                <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
-                                    <button type="button" 
-                                            wire:click="setAdjustDailyMealSource('daily')" 
-                                            class="btn btn-sm d-inline-flex align-items-center {{ $adjust_daily_meal_source === 'daily' ? 'btn-primary font-weight-600 shadow-sm' : 'btn-outline-secondary font-weight-normal' }}" 
-                                            style="border-radius: 20px; padding: 4px 12px; font-size: 12px; border-width: 1px;">
-                                        @if ($adjust_daily_meal_source === 'daily')
-                                            <i class="fas fa-check-circle mr-1 text-white" style="font-size: 11px;"></i>
-                                        @endif
-                                        <span>Tarif Harian: <strong>Rp {{ number_format($this->adjustMealRate, 0, ',', '.') }}</strong></span>
-                                    </button>
-
-                                    <button type="button" 
-                                            wire:click="setAdjustDailyMealSource('overtime')" 
-                                            class="btn btn-sm d-inline-flex align-items-center {{ $adjust_daily_meal_source === 'overtime' ? 'btn-primary font-weight-600 shadow-sm' : 'btn-outline-secondary' }}" 
-                                            style="border-radius: 20px; padding: 4px 12px; font-size: 12px; border-width: 1px;">
-                                        @if ($adjust_daily_meal_source === 'overtime')
-                                            <i class="fas fa-check-circle mr-1 text-white" style="font-size: 11px;"></i>
-                                        @endif
-                                        <span>Tarif Lembur: <strong>Rp {{ number_format($this->companyOvertimeMealAllowance, 0, ',', '.') }}</strong></span>
-                                    </button>
-                                </div>
-                                <small class="text-dark mt-1.5 d-block" style="font-size: 11.5px; color: #475569 !important;">
-                                    {{ $adjust_daily_meal_source === 'daily' ? 'Tarif harian (' . $this->adjustMealRateSourceLabel . ') - Default' : 'Tarif standar uang makan lembur perusahaan' }}
-                                </small>
                             </div>
                         @endif
 
