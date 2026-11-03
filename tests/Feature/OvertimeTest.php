@@ -1678,4 +1678,145 @@ class OvertimeTest extends TestCase
         $this->assertEquals($employee->id, OvertimePeriodAttendance::findOrFail($att->id)->employee->id);
         $this->assertEquals($employee->id, Attendance::findOrFail($log->id)->employee->id);
     }
+
+    public function test_approved_overtime_automatically_links_to_active_draft_period_and_adds_employee(): void
+    {
+        $service = app(OvertimeService::class);
+        $this->employee->update(['overtime_rate_per_hour' => 20000]);
+
+        $period = OvertimePeriod::create([
+            'reference_number' => 'PRD-AUTO-'.uniqid(),
+            'name' => 'Gaji Mingguan Test Auto',
+            'start_date' => Carbon::now()->startOfWeek()->toDateString(),
+            'end_date' => Carbon::now()->endOfWeek()->toDateString(),
+            'status' => OvertimePeriodStatus::DRAFT,
+            'total_hours' => 0,
+            'total_overtime_pay' => 0,
+            'grand_total' => 0,
+            'employee_count' => 0,
+            'created_by' => $this->adminUser->id,
+        ]);
+
+        $submission = $service->createSubmission([
+            'employee_id' => $this->employee->id,
+            'overtime_type' => 'hourly',
+            'date' => Carbon::now()->toDateString(),
+            'start_time' => '17:00',
+            'end_time' => '20:00',
+            'reason' => 'Lembur baru diapprove',
+        ], $this->adminUser);
+
+        // Approve by Direktur
+        $service->approveByDirector($submission, $this->direkturUser);
+
+        // Verifikasi lembur otomatis tertaut ke periode draf
+        $submission->refresh();
+        $this->assertEquals($period->id, $submission->overtime_period_id);
+
+        // Verifikasi karyawan otomatis ditambahkan ke OvertimePeriodAttendance
+        $att = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+            ->where('employee_id', $this->employee->id)
+            ->first();
+        $this->assertNotNull($att);
+
+        // Verifikasi total periode terhitung ulang
+        $period->refresh();
+        $this->assertEquals(1, $period->employee_count);
+        $this->assertGreaterThan(0, $period->grand_total);
+    }
+
+    public function test_approved_overtime_does_not_link_to_period_if_employee_is_already_paid(): void
+    {
+        $service = app(OvertimeService::class);
+        $this->employee->update(['overtime_rate_per_hour' => 20000]);
+
+        $period = OvertimePeriod::create([
+            'reference_number' => 'PRD-PAID-'.uniqid(),
+            'name' => 'Gaji Mingguan Test Paid',
+            'start_date' => Carbon::now()->startOfWeek()->toDateString(),
+            'end_date' => Carbon::now()->endOfWeek()->toDateString(),
+            'status' => OvertimePeriodStatus::DRAFT,
+            'total_hours' => 0,
+            'total_overtime_pay' => 0,
+            'grand_total' => 50000,
+            'employee_count' => 1,
+            'created_by' => $this->adminUser->id,
+        ]);
+
+        // Karyawan sudah berstatus PAID
+        OvertimePeriodAttendance::create([
+            'overtime_period_id' => $period->id,
+            'employee_id' => $this->employee->id,
+            'attended_days' => 2,
+            'attendance_days' => ['mon', 'tue'],
+            'total_meal_allowance' => 50000,
+            'payment_status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        $submission = $service->createSubmission([
+            'employee_id' => $this->employee->id,
+            'overtime_type' => 'hourly',
+            'date' => Carbon::now()->toDateString(),
+            'start_time' => '17:00',
+            'end_time' => '20:00',
+            'reason' => 'Lembur susulan setelah gajian dibayar',
+        ], $this->adminUser);
+
+        // Approve by Direktur
+        $service->approveByDirector($submission, $this->direkturUser);
+
+        // Verifikasi lembur TIDAK ditautkan (Strict Lock: mencegah selisih pembukuan yang sudah dibayar)
+        $submission->refresh();
+        $this->assertNull($submission->overtime_period_id);
+    }
+
+    public function test_sync_unlinked_approved_submissions_links_existing_submissions_and_creates_attendance(): void
+    {
+        $service = app(OvertimeService::class);
+        $this->employee->update(['overtime_rate_per_hour' => 25000]);
+
+        $period = OvertimePeriod::create([
+            'reference_number' => 'PRD-SYNC-'.uniqid(),
+            'name' => 'Gaji Mingguan Test Sync',
+            'start_date' => Carbon::now()->startOfWeek()->toDateString(),
+            'end_date' => Carbon::now()->endOfWeek()->toDateString(),
+            'status' => OvertimePeriodStatus::DRAFT,
+            'total_hours' => 0,
+            'total_overtime_pay' => 0,
+            'grand_total' => 0,
+            'employee_count' => 0,
+            'created_by' => $this->adminUser->id,
+        ]);
+
+        // Buat pengajuan lembur yang sudah berstatus APPROVED tapi overtime_period_id NULL (seperti kasus Fauzy)
+        $submission = OvertimeSubmission::create([
+            'reference_number' => 'LMB-FAUZY-'.uniqid(),
+            'employee_id' => $this->employee->id,
+            'overtime_type' => OvertimeType::HOURLY,
+            'date' => Carbon::now()->toDateString(),
+            'start_time' => '10:00',
+            'end_time' => '13:00',
+            'duration_hours' => 3.0,
+            'hourly_rate' => 25000,
+            'meal_allowance' => 15000,
+            'total_amount' => 90000,
+            'reason' => 'Lembur ketinggalan',
+            'submission_source' => OvertimeSubmissionSource::ADMIN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->adminUser->id,
+            'overtime_period_id' => null,
+        ]);
+
+        $syncedCount = $service->syncUnlinkedApprovedSubmissions($period);
+        $this->assertEquals(1, $syncedCount);
+
+        $submission->refresh();
+        $this->assertEquals($period->id, $submission->overtime_period_id);
+
+        $att = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+            ->where('employee_id', $this->employee->id)
+            ->first();
+        $this->assertNotNull($att);
+    }
 }

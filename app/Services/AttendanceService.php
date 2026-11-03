@@ -825,6 +825,9 @@ class AttendanceService
             ->get()
             ->groupBy('employee_id');
 
+        // Sinkronkan pengajuan lembur yang sudah diapprove tapi belum tertaut (overtime_period_id IS NULL)
+        app(OvertimeService::class)->syncUnlinkedApprovedSubmissions($period);
+
         $linkedOvertimeEmpIds = $period->submissions()->pluck('employee_id')->unique()->all();
         $attendedEmpIds = $attendances->keys()->all();
 
@@ -854,7 +857,18 @@ class AttendanceService
         $syncedCount = 0;
 
         DB::transaction(function () use ($period, $candidateEmployees, $linkedOvertimeEmpIds, $attendances, $validWorkDays, &$syncedCount) {
+            $paidEmployeeIds = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+                ->where('payment_status', 'paid')
+                ->pluck('employee_id')
+                ->all();
+
             foreach ($candidateEmployees as $emp) {
+                // STRICT LOCK: Karyawan yang sudah dibayar tidak boleh diubah
+                if (in_array($emp->id, $paidEmployeeIds, true)) {
+                    $syncedCount++;
+                    continue;
+                }
+
                 $empAttendances = $attendances->get($emp->id);
 
                 // Hanya hari kerja valid (bukan Minggu/Sabtu-jadwal-5-hari/
@@ -870,6 +884,7 @@ class AttendanceService
                 if ($attendedCount <= 0 && ! $hasOvertime) {
                     OvertimePeriodAttendance::where('overtime_period_id', $period->id)
                         ->where('employee_id', $emp->id)
+                        ->where('payment_status', '!=', 'paid')
                         ->delete();
 
                     continue;
@@ -900,8 +915,9 @@ class AttendanceService
                 $syncedCount++;
             }
 
-            // Bersihkan karyawan di luar kandidat yang mungkin sempat tersimpan
+            // Bersihkan karyawan di luar kandidat yang belum dibayar
             OvertimePeriodAttendance::where('overtime_period_id', $period->id)
+                ->where('payment_status', '!=', 'paid')
                 ->whereNotIn('employee_id', $candidateEmployees->pluck('id'))
                 ->delete();
 

@@ -541,7 +541,212 @@ class OvertimeService
             );
         }
 
+        // Tautkan otomatis ke periode mingguan draf berjalan bila ada & belum dibayar
+        $this->autoLinkSubmissionToDraftPeriod($lockedSubmission);
+
         return $lockedSubmission;
+    }
+
+    /**
+     * Auto-link an approved overtime submission to an active draft weekly period,
+     * ensuring strict lock if the employee has already been paid for that period.
+     */
+    public function autoLinkSubmissionToDraftPeriod(OvertimeSubmission $submission): ?OvertimePeriod
+    {
+        if ($submission->overtime_period_id !== null) {
+            return null;
+        }
+
+        if ($submission->status !== OvertimeStatus::APPROVED) {
+            return null;
+        }
+
+        $submissionDate = $submission->date instanceof Carbon
+            ? $submission->date->toDateString()
+            : substr((string) $submission->date, 0, 10);
+
+        $period = OvertimePeriod::query()
+            ->where('status', OvertimePeriodStatus::DRAFT)
+            ->where('start_date', '<=', $submissionDate)
+            ->where('end_date', '>=', $submissionDate)
+            ->first();
+
+        if (! $period) {
+            return null;
+        }
+
+        // STRICT LOCK: Jika karyawan sudah berstatus 'paid' pada periode ini, jangan tautkan!
+        $existingAttendance = OvertimePeriodAttendance::query()
+            ->where('overtime_period_id', $period->id)
+            ->where('employee_id', $submission->employee_id)
+            ->first();
+
+        if ($existingAttendance && $existingAttendance->isPaid()) {
+            $this->logger->info(
+                action: 'OVERTIME_SKIPPED_AUTO_LINK_PAID',
+                module: 'overtimes',
+                message: "Lembur {$submission->reference_number} tidak ditautkan ke {$period->name} karena karyawan sudah dibayar",
+                context: [
+                    'submission_id' => $submission->id,
+                    'period_id' => $period->id,
+                    'employee_id' => $submission->employee_id,
+                ]
+            );
+
+            return null;
+        }
+
+        DB::transaction(function () use ($submission, $period, $existingAttendance) {
+            $submission->update(['overtime_period_id' => $period->id]);
+
+            if (! $existingAttendance) {
+                $employee = $submission->employee ?? Employee::find($submission->employee_id);
+                if ($employee) {
+                    $rate = $employee->getEffectiveMealAllowancePerDay();
+                    $isHarian = $employee->employment_status === EmploymentStatus::HARIAN;
+                    $dailyRate = $isHarian ? (float) ($employee->daily_rate ?? 0) : 0.0;
+
+                    $startDate = Carbon::parse($period->start_date)->toDateString();
+                    $endDate = Carbon::parse($period->end_date)->toDateString();
+
+                    $attendances = Attendance::where('employee_id', $employee->id)
+                        ->whereBetween('date', [$startDate, $endDate])
+                        ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+                        ->get();
+
+                    $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?: 6);
+                    $validWorkDays = WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
+                    $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances, $validWorkDays);
+                    $daysCount = count($attendedDaysKeys);
+
+                    OvertimePeriodAttendance::create([
+                        'overtime_period_id' => $period->id,
+                        'employee_id' => $employee->id,
+                        'meal_allowance_type' => $employee->meal_allowance_type ?: 'standar',
+                        'meal_allowance_per_day' => $rate,
+                        'daily_rate' => $dailyRate,
+                        'attended_days' => $daysCount,
+                        'attendance_days' => $attendedDaysKeys,
+                        'total_meal_allowance' => round($daysCount * $rate, 2),
+                        'total_daily_wage' => round($daysCount * $dailyRate, 2),
+                    ]);
+                }
+            }
+
+            $period->recalculateTotals();
+        });
+
+        $this->logger->info(
+            action: 'OVERTIME_AUTO_LINKED_TO_PERIOD',
+            module: 'overtimes',
+            message: "Pengajuan lembur {$submission->reference_number} otomatis ditautkan ke {$period->name}",
+            context: [
+                'submission_id' => $submission->id,
+                'period_id' => $period->id,
+                'employee_id' => $submission->employee_id,
+            ]
+        );
+
+        return $period;
+    }
+
+    /**
+     * Synchronize any unlinked approved overtime submissions in the period's date range,
+     * ensuring employees not yet marked as paid are linked and added to the weekly list.
+     */
+    public function syncUnlinkedApprovedSubmissions(OvertimePeriod $period): int
+    {
+        if ($period->status !== OvertimePeriodStatus::DRAFT) {
+            return 0;
+        }
+
+        $startDate = Carbon::parse($period->start_date)->toDateString();
+        $endDate = Carbon::parse($period->end_date)->toDateString();
+
+        $unlinkedSubmissions = OvertimeSubmission::query()
+            ->where('status', OvertimeStatus::APPROVED)
+            ->whereNull('overtime_period_id')
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get();
+
+        if ($unlinkedSubmissions->isEmpty()) {
+            return 0;
+        }
+
+        $paidEmployeeIds = OvertimePeriodAttendance::query()
+            ->where('overtime_period_id', $period->id)
+            ->where('payment_status', 'paid')
+            ->pluck('employee_id')
+            ->all();
+
+        $linkedCount = 0;
+
+        DB::transaction(function () use ($period, $unlinkedSubmissions, $paidEmployeeIds, &$linkedCount, $startDate, $endDate) {
+            $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?: 6);
+            $validWorkDays = WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
+
+            foreach ($unlinkedSubmissions as $submission) {
+                // STRICT LOCK: Lewati jika karyawan sudah berstatus dibayar di periode ini
+                if (in_array($submission->employee_id, $paidEmployeeIds, true)) {
+                    continue;
+                }
+
+                $submission->update(['overtime_period_id' => $period->id]);
+                $linkedCount++;
+
+                $existingAtt = OvertimePeriodAttendance::query()
+                    ->where('overtime_period_id', $period->id)
+                    ->where('employee_id', $submission->employee_id)
+                    ->first();
+
+                if (! $existingAtt) {
+                    $employee = $submission->employee ?? Employee::find($submission->employee_id);
+                    if ($employee) {
+                        $rate = $employee->getEffectiveMealAllowancePerDay();
+                        $isHarian = $employee->employment_status === EmploymentStatus::HARIAN;
+                        $dailyRate = $isHarian ? (float) ($employee->daily_rate ?? 0) : 0.0;
+
+                        $attendances = Attendance::where('employee_id', $employee->id)
+                            ->whereBetween('date', [$startDate, $endDate])
+                            ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+                            ->get();
+
+                        $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances, $validWorkDays);
+                        $daysCount = count($attendedDaysKeys);
+
+                        OvertimePeriodAttendance::create([
+                            'overtime_period_id' => $period->id,
+                            'employee_id' => $employee->id,
+                            'meal_allowance_type' => $employee->meal_allowance_type ?: 'standar',
+                            'meal_allowance_per_day' => $rate,
+                            'daily_rate' => $dailyRate,
+                            'attended_days' => $daysCount,
+                            'attendance_days' => $attendedDaysKeys,
+                            'total_meal_allowance' => round($daysCount * $rate, 2),
+                            'total_daily_wage' => round($daysCount * $dailyRate, 2),
+                        ]);
+                    }
+                }
+            }
+
+            if ($linkedCount > 0) {
+                $period->recalculateTotals();
+            }
+        });
+
+        if ($linkedCount > 0) {
+            $this->logger->info(
+                action: 'OVERTIME_SYNCED_TO_PERIOD',
+                module: 'overtimes',
+                message: "{$linkedCount} pengajuan lembur susulan berhasil disinkronkan ke {$period->name}",
+                context: [
+                    'period_id' => $period->id,
+                    'linked_count' => $linkedCount,
+                ]
+            );
+        }
+
+        return $linkedCount;
     }
 
     /**
@@ -699,7 +904,7 @@ class OvertimeService
             $approvedSubmissions = OvertimeSubmission::query()
                 ->where('status', OvertimeStatus::APPROVED)
                 ->whereNull('overtime_period_id')
-                ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                ->where('date', '<=', $endDate->format('Y-m-d'))
                 ->lockForUpdate()
                 ->get();
 

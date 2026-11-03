@@ -174,6 +174,26 @@
             </div>
         </div>
 
+        @if ($this->unlinkedOvertimeSubmissionsCount > 0)
+            <div class="px-4 pt-3 pb-0">
+                <div class="alert d-flex align-items-center justify-content-between mb-0 px-3.5 py-2.5 shadow-sm" style="border-radius: 8px; background-color: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;">
+                    <div class="d-flex align-items-center" style="font-size: 13px;">
+                        <i class="fas fa-bell mr-2.5" style="color: #15803d; font-size: 15px;"></i>
+                        <span>Ditemukan <strong>{{ $this->unlinkedOvertimeSubmissionsCount }} pengajuan lembur baru yang telah disetujui</strong> dan siap dimasukkan ke slip mingguan ini.</span>
+                    </div>
+                    <button type="button"
+                            wire:click="syncUnlinkedOvertimes"
+                            wire:loading.attr="disabled"
+                            wire:target="syncUnlinkedOvertimes"
+                            class="btn btn-sm btn-success font-weight-600 shadow-sm"
+                            style="font-size: 12px; border-radius: 6px; padding: 4px 12px; background-color: #16a34a; border-color: #16a34a;">
+                        <span wire:loading.remove wire:target="syncUnlinkedOvertimes"><i class="fas fa-sync-alt mr-1"></i> Sinkronkan Sekarang</span>
+                        <span wire:loading wire:target="syncUnlinkedOvertimes"><i class="fas fa-spinner fa-spin mr-1"></i> Menyinkronkan...</span>
+                    </button>
+                </div>
+            </div>
+        @endif
+
         <div class="card-body p-0">
             <!-- Table Responsive -->
             <div class="table-responsive">

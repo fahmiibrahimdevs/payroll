@@ -3,12 +3,14 @@
 namespace App\Livewire\Overtimes;
 
 use App\Enums\EmploymentStatus;
+use App\Enums\OvertimeStatus;
 use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
+use App\Models\OvertimeSubmission;
 use App\Services\AttendanceService;
 use App\Services\OvertimeService;
 use App\Support\WorkingDays;
@@ -74,6 +76,7 @@ class PeriodAttendance extends Component
         abort_unless(auth()->user()?->hasRole('admin'), 403, 'Hanya Admin yang dapat mengatur kehadiran & uang makan mingguan.');
 
         $this->period = $period;
+        app(OvertimeService::class)->syncUnlinkedApprovedSubmissions($this->period);
         $this->syncActiveEmployees();
         $this->loadAttendances();
     }
@@ -83,6 +86,8 @@ class PeriodAttendance extends Component
      */
     protected function syncActiveEmployees(): void
     {
+        app(OvertimeService::class)->syncUnlinkedApprovedSubmissions($this->period);
+
         $linkedEmpIds = $this->period->submissions()->pluck('employee_id')->unique()->all();
 
         $startDate = Carbon::parse($this->period->start_date)->toDateString();
@@ -239,6 +244,11 @@ class PeriodAttendance extends Component
             return;
         }
 
+        // STRICT LOCK: Karyawan yang sudah dibayar tidak boleh diubah
+        if (($this->periodAttendances[$employeeId]['payment_status'] ?? 'unpaid') === 'paid') {
+            return;
+        }
+
         $days = $this->periodAttendances[$employeeId]['attendance_days'];
         $day = strtolower($day);
 
@@ -259,6 +269,11 @@ class PeriodAttendance extends Component
     public function updateAttendedDaysCount(int $employeeId, mixed $count): void
     {
         if (! isset($this->periodAttendances[$employeeId])) {
+            return;
+        }
+
+        // STRICT LOCK: Karyawan yang sudah dibayar tidak boleh diubah
+        if (($this->periodAttendances[$employeeId]['payment_status'] ?? 'unpaid') === 'paid') {
             return;
         }
 
@@ -287,6 +302,10 @@ class PeriodAttendance extends Component
      */
     public function setAllDaysPresent(int $employeeId): void
     {
+        if (($this->periodAttendances[$employeeId]['payment_status'] ?? 'unpaid') === 'paid') {
+            return;
+        }
+
         $this->updateAttendedDaysCount($employeeId, 6);
     }
 
@@ -297,6 +316,10 @@ class PeriodAttendance extends Component
     {
         $allDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
         foreach ($this->periodAttendances as $empId => $data) {
+            if (($data['payment_status'] ?? 'unpaid') === 'paid') {
+                continue;
+            }
+
             $this->periodAttendances[$empId]['attended_days'] = 6;
             $this->periodAttendances[$empId]['attendance_days'] = $allDays;
             $this->recalcEmployeeMealTotal($empId);
@@ -317,6 +340,7 @@ class PeriodAttendance extends Component
         abort_unless(auth()->user()?->hasRole('admin'), 403);
 
         $syncedCount = $attendanceService->syncToWeeklyOvertimePeriod($this->period, auth()->user());
+        $this->syncActiveEmployees();
         $this->loadAttendances();
 
         $this->dispatch('swal:alert', [
@@ -327,11 +351,57 @@ class PeriodAttendance extends Component
     }
 
     /**
+     * Count unlinked approved overtime submissions in this period that belong to unpaid employees.
+     */
+    #[Computed]
+    public function unlinkedOvertimeSubmissionsCount(): int
+    {
+        $startDate = Carbon::parse($this->period->start_date)->toDateString();
+        $endDate = Carbon::parse($this->period->end_date)->toDateString();
+
+        $paidEmployeeIds = OvertimePeriodAttendance::query()
+            ->where('overtime_period_id', $this->period->id)
+            ->where('payment_status', 'paid')
+            ->pluck('employee_id')
+            ->all();
+
+        return OvertimeSubmission::query()
+            ->where('status', OvertimeStatus::APPROVED)
+            ->whereNull('overtime_period_id')
+            ->whereBetween('date', [$startDate, $endDate])
+            ->whereNotIn('employee_id', $paidEmployeeIds)
+            ->count();
+    }
+
+    /**
+     * Explicit 1-click sync for newly approved overtimes in this period.
+     */
+    public function syncUnlinkedOvertimes(OvertimeService $service): void
+    {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+
+        $syncedCount = $service->syncUnlinkedApprovedSubmissions($this->period);
+        $this->syncActiveEmployees();
+        $this->loadAttendances();
+
+        $this->dispatch('swal:alert', [
+            'type' => 'success',
+            'title' => 'Lembur Disinkronkan',
+            'message' => "Sebanyak {$syncedCount} pengajuan lembur yang telah disetujui berhasil disinkronkan ke rincian periode mingguan ini.",
+        ]);
+    }
+
+    /**
      * Update employee's meal allowance per day rate.
      */
     public function updateMealAllowanceRate(int $employeeId, mixed $rate): void
     {
         if (! isset($this->periodAttendances[$employeeId])) {
+            return;
+        }
+
+        // STRICT LOCK: Karyawan yang sudah dibayar tidak boleh diubah
+        if (($this->periodAttendances[$employeeId]['payment_status'] ?? 'unpaid') === 'paid') {
             return;
         }
 
@@ -363,6 +433,11 @@ class PeriodAttendance extends Component
 
         DB::transaction(function () use ($service) {
             foreach ($this->periodAttendances as $employeeId => $data) {
+                // STRICT LOCK: Karyawan yang sudah dibayar tidak boleh ditimpa
+                if (($data['payment_status'] ?? 'unpaid') === 'paid') {
+                    continue;
+                }
+
                 $service->updatePeriodAttendance($this->period, (int) $employeeId, [
                     'attended_days' => $data['attended_days'],
                     'attendance_days' => $data['attendance_days'],
@@ -376,6 +451,7 @@ class PeriodAttendance extends Component
         });
 
         $this->period->refresh();
+        $this->loadAttendances();
 
         $this->dispatch('swal:alert', [
             'type' => 'success',
