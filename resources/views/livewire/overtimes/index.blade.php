@@ -192,9 +192,8 @@
                                 <th class="text-nowrap !px-2.5 !py-2" style="color: #334155; font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px;">KARYAWAN</th>
                             @endif
                             <th class="text-nowrap !px-2.5 !py-2" style="color: #334155; font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px;">JAM KERJA</th>
-                            <th class="text-center text-nowrap !px-2.5 !py-2" style="width: 75px; color: #334155; font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px;">DURASI</th>
-                            <th class="text-right text-nowrap !px-2.5 !py-2" style="color: #334155; font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px;">UPAH / SATUAN</th>
-                            <th class="text-right text-nowrap !px-2.5 !py-2" style="color: #334155; font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px;">TOTAL UPAH</th>
+                            <th class="text-right text-nowrap !px-2.5 !py-2" style="color: #334155; font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px;">PERHITUNGAN UPAH POKOK</th>
+                            <th class="text-right text-nowrap !px-2.5 !py-2" style="color: #334155; font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px;">TOTAL DITERIMA</th>
                             <th class="text-center text-nowrap !px-2.5 !py-2" style="width: 130px; color: #334155; font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px;">STATUS</th>
                             <th class="text-center text-nowrap !px-2.5 !py-2" style="width: 80px; color: #334155; font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px;"><i class="fas fa-cog text-muted" title="Aksi"></i></th>
                         </tr>
@@ -208,7 +207,7 @@
                             @foreach ($groupedSubmissions as $dateKey => $group)
                                 <!-- Baris Sub-Header Group Tanggal (bersih: garis pemisah tipis, tanpa blok warna) -->
                                 <tr class="table-group-header" style="border-top: 1px solid #e2e8f0;">
-                                    <td colspan="{{ $isKaryawan ? 7 : 8 }}" class="!py-2 !px-3" style="background-color: #ffffff;">
+                                    <td colspan="{{ $isKaryawan ? 6 : 7 }}" class="!py-2 !px-3" style="background-color: #ffffff;">
                                         <div class="d-flex align-items-center justify-content-between flex-wrap" style="gap: 8px;">
                                             <div class="d-flex align-items-center">
                                                 <span class="d-inline-flex align-items-center justify-content-center mr-2" style="width: 22px; height: 22px; border-radius: 6px; background-color: #eff6ff; font-size: 10.5px; flex-shrink: 0;">
@@ -267,16 +266,13 @@
                                             @endif
                                         </td>
 
-                                        <!-- Kolom Khusus: Durasi -->
-                                        <td class="text-center align-middle text-nowrap !px-2.5 !py-2">
-                                            <span class="badge px-2.5 py-1" style="font-size: 12px; font-weight: 600; background-color: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; border-radius: 6px;">
-                                                {{ $sub->formatted_duration }}
-                                            </span>
-                                        </td>
-
-                                        <!-- Kolom Khusus: Upah per Jam / per Hari -->
-                                        <td class="text-right align-middle text-nowrap !px-2.5 !py-2" style="color: #475569; font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums;">
-                                            {{ $sub->formatted_rate_label }}
+                                        <!-- Kolom Khusus: Perhitungan Upah Pokok (Durasi x Tarif = Pokok) -->
+                                        <td class="text-right align-middle text-nowrap !px-2.5 !py-2" style="font-variant-numeric: tabular-nums; font-size: 12.5px; color: #334155;">
+                                            @if ($sub->isDaily())
+                                                <span class="font-weight-600">1 Hari</span> &times; Rp {{ number_format((float) $sub->hourly_rate, 0, ',', '.') }} = <span class="font-weight-600" style="color: #0f172a;">Rp {{ number_format((float) $sub->subtotal_overtime, 0, ',', '.') }}</span>
+                                            @else
+                                                <span class="font-weight-600">{{ $sub->formatted_duration }}</span> &times; Rp {{ number_format((float) $sub->hourly_rate, 0, ',', '.') }} = <span class="font-weight-600" style="color: #0f172a;">Rp {{ number_format((float) $sub->subtotal_overtime, 0, ',', '.') }}</span>
+                                            @endif
                                         </td>
 
                                         <!-- Kolom Khusus: Total Upah Lembur -->
@@ -345,7 +341,7 @@
                             @endforeach
                         @else
                             <tr>
-                                <td colspan="{{ $isKaryawan ? 7 : 8 }}" class="p-0 border-0">
+                                <td colspan="{{ $isKaryawan ? 6 : 7 }}" class="p-0 border-0">
                                     <x-empty-state
                                         icon="fas fa-business-time"
                                         :title="($search || $statusFilter !== 'all') ? 'Tidak Ada Pengajuan Lembur yang Cocok' : 'Belum Ada Pengajuan Lembur'"
@@ -622,30 +618,6 @@
                                 </div>
                             </div>
 
-                            <!-- KOTAK STATUS UANG MAKAN LEMBUR PER JAM -->
-                            @if (! $isFormLocked && $form->calculateEstimatedHours() > 0)
-                                @if ($form->calculateEstimatedHours() >= $this->companyOvertimeMealThresholdHours)
-                                    <div class="mb-3" style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #166534;">
-                                            <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
-                                            <div>
-                                                <div>Durasi lembur <span class="font-weight-600">{{ $form->calculateEstimatedHours() }} jam</span> ({{ $this->formTimeRangeLabel }}).</div>
-                                                <div class="font-weight-600 text-success">Otomatis mendapatkan uang makan lembur Rp {{ number_format($this->companyOvertimeMealAllowance, 0, ',', '.') }}.</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                @else
-                                    <div class="mb-3" style="background-color: #ffffff; border: 1px solid #fed7aa; border-left: 3px solid #f97316; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #9a3412;">
-                                            <i class="fas fa-exclamation-triangle mr-2 mt-1 text-warning"></i>
-                                            <div>
-                                                <div>Durasi lembur <span class="font-weight-600">{{ $form->calculateEstimatedHours() }} jam</span> ({{ $this->formTimeRangeLabel }}, belum mencapai minimal {{ $this->companyOvertimeMealThresholdHours }} jam).</div>
-                                                <div class="font-weight-500">Tidak mendapatkan uang makan lembur (Rp 0).</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                @endif
-                            @endif
                         @else
                             <!-- 3. Form Lembur Harian (Clean White Card dengan Rounded 12px & Shadow) -->
                             <div class="form-group">
@@ -655,23 +627,62 @@
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
+                        @endif
 
-                            @if (! $isFormLocked)
-                                <div class="mb-3" style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 12px 14px;">
-                                    <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #166534;">
-                                        <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
-                                        <div>
-                                            <div>Lembur seharian penuh berhak mendapatkan uang makan harian:</div>
-                                            <div class="mt-1 d-flex align-items-center flex-wrap" style="gap: 6px;">
-                                                <span class="badge badge-success px-2.5 py-1" style="border-radius: 6px; font-size: 13px; font-weight: 600;">
-                                                    Rp {{ number_format($this->formMealRate, 0, ',', '.') }}
-                                                </span>
-                                                <span class="font-weight-normal text-muted" style="color: #475569 !important; font-size: 12px;">({{ $this->formMealRateSourceLabel }})</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                        <!-- KOTAK LIVE CALCULATION: RINCIAN PERHITUNGAN UPAH LEMBUR -->
+                        @if (! $isFormLocked && (($form->overtime_type === 'hourly' && $form->calculateEstimatedHours() > 0) || $form->overtime_type === 'daily'))
+                            @php
+                                $estHours = $form->calculateEstimatedHours();
+                            @endphp
+                            <div class="mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 12px 16px;">
+                                <div class="d-flex align-items-center justify-content-between mb-2 pb-1 border-bottom" style="border-color: #f1f5f9 !important;">
+                                    <span style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569;">
+                                        <i class="fas fa-calculator mr-1 text-primary"></i> Rincian Perhitungan Upah Lembur
+                                    </span>
+                                    @if ($form->overtime_type === 'hourly' && ! empty($this->formTimeRangeLabel))
+                                        <span style="font-size: 11px; color: #64748b;">{{ $this->formTimeRangeLabel }}</span>
+                                    @endif
                                 </div>
-                            @endif
+
+                                <!-- 1. Baris Upah Pokok Lembur (Input x Input = Pokok) -->
+                                <div class="d-flex align-items-center justify-content-between py-1" style="font-size: 12.5px;">
+                                    <span style="color: #475569;">Upah Pokok Lembur:</span>
+                                    <span style="color: #0f172a; font-variant-numeric: tabular-nums;">
+                                        @if ($form->overtime_type === 'daily')
+                                            <span class="font-weight-600">1 Hari</span> &times; Rp {{ number_format($this->formOvertimeRate, 0, ',', '.') }} = <strong class="font-weight-700">Rp {{ number_format($this->formSubtotalOvertime, 0, ',', '.') }}</strong>
+                                        @else
+                                            <span class="font-weight-600">{{ $estHours }} Jam</span> &times; Rp {{ number_format($this->formOvertimeRate, 0, ',', '.') }} = <strong class="font-weight-700">Rp {{ number_format($this->formSubtotalOvertime, 0, ',', '.') }}</strong>
+                                        @endif
+                                    </span>
+                                </div>
+
+                                <!-- 2. Baris Uang Makan Lembur -->
+                                <div class="d-flex align-items-center justify-content-between py-1" style="font-size: 12.5px;">
+                                    <span style="color: #475569;">Uang Makan Lembur:</span>
+                                    @if ($form->overtime_type === 'daily')
+                                        <span class="d-inline-flex align-items-center font-weight-600" style="padding: 2px 7px; font-size: 10.5px; border-radius: 6px; background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;" title="Lembur seharian otomatis dapat uang makan harian">
+                                            <i class="fas fa-utensils mr-1" style="font-size: 9.5px;"></i>+ Makan Rp {{ number_format($this->formMealRate, 0, ',', '.') }}
+                                        </span>
+                                    @elseif ($estHours >= $this->companyOvertimeMealThresholdHours)
+                                        <span class="d-inline-flex align-items-center font-weight-600" style="padding: 2px 7px; font-size: 10.5px; border-radius: 6px; background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;" title="Otomatis berhak dapat uang makan lembur malam (&ge; {{ $this->companyOvertimeMealThresholdHours }} jam)">
+                                            <i class="fas fa-utensils mr-1" style="font-size: 9.5px;"></i>+ Makan Rp {{ number_format($this->companyOvertimeMealAllowance, 0, ',', '.') }}
+                                        </span>
+                                    @else
+                                        <!-- KONDISI TIDAK DAPAT UANG MAKAN: Kotak hijau TIDAK MUNCUL, teks netral -->
+                                        <span style="color: #64748b; font-size: 11.5px; font-variant-numeric: tabular-nums;">
+                                            Rp 0 <small style="color: #94a3b8;">(Durasi &lt; {{ $this->companyOvertimeMealThresholdHours }} jam)</small>
+                                        </span>
+                                    @endif
+                                </div>
+
+                                <!-- 3. Garis Pembatas & Grand Total Diterima -->
+                                <div class="d-flex align-items-center justify-content-between pt-2 mt-1 border-top" style="border-color: #e2e8f0 !important; font-size: 13.5px;">
+                                    <strong style="color: #0f172a; font-weight: 700;">Total Diterima:</strong>
+                                    <strong style="color: #0b52aa; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;">
+                                        Rp {{ number_format($this->formGrandTotal, 0, ',', '.') }}
+                                    </strong>
+                                </div>
+                            </div>
                         @endif
 
                         <!-- KEPERLUAN / ALASAN LEMBUR -->
@@ -811,46 +822,55 @@
                         </div>
                         @endif
 
-                        <!-- UANG MAKAN PENYESUAIAN -->
-                        @if ($adjustingSubmission?->isHourly())
-                            <div class="form-group mb-3">
-                                @if ($adjust_duration_hours >= $this->companyOvertimeMealThresholdHours)
-                                    <div style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #166534;">
-                                            <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
-                                            <div>
-                                                <div>Durasi lembur <span class="font-weight-600">{{ $adjust_duration_hours }} jam</span> ({{ $this->adjustTimeRangeLabel }}).</div>
-                                                <div class="font-weight-600 text-success">Otomatis mendapatkan uang makan lembur Rp {{ number_format($this->companyOvertimeMealAllowance, 0, ',', '.') }}.</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                @else
-                                    <div style="background-color: #ffffff; border: 1px solid #fed7aa; border-left: 3px solid #f97316; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
-                                        <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #9a3412;">
-                                            <i class="fas fa-exclamation-triangle mr-2 mt-1 text-warning"></i>
-                                            <div>
-                                                <div>Durasi lembur <span class="font-weight-600">{{ $adjust_duration_hours }} jam</span> ({{ $this->adjustTimeRangeLabel }}, belum mencapai minimal {{ $this->companyOvertimeMealThresholdHours }} jam).</div>
-                                                <div class="font-weight-500">Tidak mendapatkan uang makan lembur (Rp 0).</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                @endif
-                            </div>
-                        @else
-                            <div class="form-group mb-3">
-                                <div style="background-color: #ffffff; border: 1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 12px 14px;">
-                                    <div class="d-flex align-items-start" style="font-size: 13px; line-height: 1.6; color: #166534;">
-                                        <i class="fas fa-check-circle mr-2 mt-1 text-success"></i>
-                                        <div>
-                                            <div>Lembur seharian penuh berhak mendapatkan uang makan harian:</div>
-                                            <div class="mt-1 d-flex align-items-center flex-wrap" style="gap: 6px;">
-                                                <span class="badge badge-success px-2.5 py-1" style="border-radius: 6px; font-size: 13px; font-weight: 600;">
-                                                    Rp {{ number_format($this->adjustMealRate, 0, ',', '.') }}
-                                                </span>
-                                                <span class="font-weight-normal text-muted" style="color: #475569 !important; font-size: 12px;">({{ $this->adjustMealRateSourceLabel }})</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                        <!-- KOTAK LIVE CALCULATION: RINCIAN PERHITUNGAN UPAH LEMBUR ADJUSTMENT -->
+                        @if ($adjust_duration_hours > 0 || $adjustingSubmission?->isDaily())
+                            @php
+                                $isAdjDaily = (bool) $adjustingSubmission?->isDaily();
+                                $hasAdjMeal = (float) $this->adjust_meal_allowance > 0;
+                            @endphp
+                            <div class="mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 12px 16px;">
+                                <div class="d-flex align-items-center justify-content-between mb-2 pb-1 border-bottom" style="border-color: #f1f5f9 !important;">
+                                    <span style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569;">
+                                        <i class="fas fa-calculator mr-1 text-primary"></i> Rincian Perhitungan Upah Lembur
+                                    </span>
+                                    @if (! $isAdjDaily && ! empty($this->adjustTimeRangeLabel))
+                                        <span style="font-size: 11px; color: #64748b;">{{ $this->adjustTimeRangeLabel }}</span>
+                                    @endif
+                                </div>
+
+                                <!-- 1. Baris Upah Pokok Lembur -->
+                                <div class="d-flex align-items-center justify-content-between py-1" style="font-size: 12.5px;">
+                                    <span style="color: #475569;">Upah Pokok Lembur:</span>
+                                    <span style="color: #0f172a; font-variant-numeric: tabular-nums;">
+                                        @if ($isAdjDaily)
+                                            <span class="font-weight-600">1 Hari</span> &times; Rp {{ number_format($this->adjustOvertimeRate, 0, ',', '.') }} = <strong class="font-weight-700">Rp {{ number_format($this->adjustSubtotalOvertime, 0, ',', '.') }}</strong>
+                                        @else
+                                            <span class="font-weight-600">{{ $adjust_duration_hours }} Jam</span> &times; Rp {{ number_format($this->adjustOvertimeRate, 0, ',', '.') }} = <strong class="font-weight-700">Rp {{ number_format($this->adjustSubtotalOvertime, 0, ',', '.') }}</strong>
+                                        @endif
+                                    </span>
+                                </div>
+
+                                <!-- 2. Baris Uang Makan Lembur -->
+                                <div class="d-flex align-items-center justify-content-between py-1" style="font-size: 12.5px;">
+                                    <span style="color: #475569;">Uang Makan Lembur:</span>
+                                    @if ($hasAdjMeal)
+                                        <span class="d-inline-flex align-items-center font-weight-600" style="padding: 2px 7px; font-size: 10.5px; border-radius: 6px; background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;" title="Uang Makan Lembur">
+                                            <i class="fas fa-utensils mr-1" style="font-size: 9.5px;"></i>+ Makan Rp {{ number_format((float) $this->adjust_meal_allowance, 0, ',', '.') }}
+                                        </span>
+                                    @else
+                                        <!-- KONDISI TIDAK DAPAT UANG MAKAN: Kotak hijau TIDAK MUNCUL, teks netral -->
+                                        <span style="color: #64748b; font-size: 11.5px; font-variant-numeric: tabular-nums;">
+                                            Rp 0 <small style="color: #94a3b8;">(Durasi &lt; {{ $this->companyOvertimeMealThresholdHours }} jam)</small>
+                                        </span>
+                                    @endif
+                                </div>
+
+                                <!-- 3. Garis Pembatas & Grand Total Diterima -->
+                                <div class="d-flex align-items-center justify-content-between pt-2 mt-1 border-top" style="border-color: #e2e8f0 !important; font-size: 13.5px;">
+                                    <strong style="color: #0f172a; font-weight: 700;">Total Diterima:</strong>
+                                    <strong style="color: #0b52aa; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;">
+                                        Rp {{ number_format($this->adjustGrandTotal, 0, ',', '.') }}
+                                    </strong>
                                 </div>
                             </div>
                         @endif
@@ -958,7 +978,7 @@
 
                             <div class="text-center mt-3 pt-3 border-top" style="border-color: #f1f5f9;">
                                 <div style="font-size: 11.5px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: #475569; margin-bottom: 2px;">
-                                    Total Upah Lembur
+                                    Total Diterima
                                 </div>
                                 <div style="font-size: 27px; font-weight: 700; color: #0f172a; line-height: 1.25; font-variant-numeric: tabular-nums;">
                                     Rp {{ number_format((float) $detailSubmission->total_amount, 0, ',', '.') }}

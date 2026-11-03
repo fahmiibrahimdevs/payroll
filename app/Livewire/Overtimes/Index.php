@@ -485,6 +485,71 @@ class Index extends Component
     }
 
     #[Computed]
+    public function formOvertimeRate(): float
+    {
+        $employee = $this->form->employee_id ? Employee::find($this->form->employee_id) : null;
+        if (! $employee) {
+            return 0.0;
+        }
+
+        return $this->form->overtime_type === 'daily'
+            ? (float) ($employee->overtime_rate_per_day ?? 0)
+            : (float) ($employee->overtime_rate_per_hour ?? 0);
+    }
+
+    #[Computed]
+    public function formSubtotalOvertime(): float
+    {
+        if ($this->form->overtime_type === 'daily') {
+            return $this->formOvertimeRate;
+        }
+
+        $hours = $this->form->calculateEstimatedHours();
+
+        return round($hours * $this->formOvertimeRate, 2);
+    }
+
+    #[Computed]
+    public function formGrandTotal(): float
+    {
+        $meal = $this->form->overtime_type === 'daily'
+            ? $this->formMealRate
+            : ($this->form->calculateEstimatedHours() >= $this->companyOvertimeMealThresholdHours ? $this->companyOvertimeMealAllowance : 0.0);
+
+        return round($this->formSubtotalOvertime + $meal, 2);
+    }
+
+    #[Computed]
+    public function adjustOvertimeRate(): float
+    {
+        if (! $this->adjustingSubmission) {
+            return 0.0;
+        }
+
+        return (float) ($this->adjustingSubmission->hourly_rate ?? 0);
+    }
+
+    #[Computed]
+    public function adjustSubtotalOvertime(): float
+    {
+        if (! $this->adjustingSubmission) {
+            return 0.0;
+        }
+
+        if ($this->adjustingSubmission->isDaily()) {
+            return $this->adjustOvertimeRate;
+        }
+
+        return round($this->adjust_duration_hours * $this->adjustOvertimeRate, 2);
+    }
+
+    #[Computed]
+    public function adjustGrandTotal(): float
+    {
+        return round($this->adjustSubtotalOvertime + (float) $this->adjust_meal_allowance, 2);
+    }
+
+    #[Computed]
     public function formMealRateSourceLabel(): string
     {
         $company = CompanyProfile::getProfile();
