@@ -8,6 +8,7 @@ use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmployeeSchedule;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Models\OvertimeSubmission;
@@ -115,11 +116,17 @@ class PeriodAttendance extends Component
         $existingEmpIds = $this->period->attendances()->pluck('employee_id')->all();
         // Fallback tanpa log absensi: hari kerja aktual dalam rentang
         // (kecualikan akhir pekan sesuai jadwal kerja dan hari libur nasional).
-        $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6);
+        $company = CompanyProfile::getProfile();
+        $workDaysPerWeek = (int) ($company->work_days_per_week ?? 6);
+        $isRoster = $company->isRosterMode();
         $validWorkDays = WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
         $defaultDays = array_values($validWorkDays);
         $defaultDaysCount = max(1, count($defaultDays));
         $hasNew = false;
+
+        $rosterSchedules = $isRoster
+            ? EmployeeSchedule::schedulesForEmployees($targetEmployees->pluck('id')->all(), $startDate, $endDate)
+            : collect();
 
         foreach ($targetEmployees as $emp) {
             if (! in_array($emp->id, $existingEmpIds, true)) {
@@ -128,11 +135,15 @@ class PeriodAttendance extends Component
                 $dailyRate = $isHarian ? (float) ($emp->daily_rate ?? 0) : 0.0;
                 $hasOvertime = in_array($emp->id, $linkedEmpIds, true);
 
+                $empValidWorkDays = $isRoster
+                    ? WorkingDays::employeeWorkDays($emp->id, $startDate, $endDate, $company, $rosterSchedules->get($emp->id))
+                    : $validWorkDays;
+
                 if ($hasAttendanceLog) {
                     // Presensi mingguan hanya menghitung hari kerja valid
                     // (Minggu/Sabtu sesuai jadwal dan libur nasional tidak
                     // dihitung); log absensinya tetap tersimpan.
-                    $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances->get($emp->id, collect()), $validWorkDays);
+                    $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances->get($emp->id, collect()), $empValidWorkDays);
                     $daysCount = count($attendedDaysKeys);
                     $daysList = $attendedDaysKeys;
 
@@ -141,8 +152,9 @@ class PeriodAttendance extends Component
                         continue;
                     }
                 } else {
-                    $daysCount = $defaultDaysCount;
-                    $daysList = $defaultDays;
+                    $empDefaultDays = $isRoster ? array_values($empValidWorkDays) : $defaultDays;
+                    $daysCount = max(1, count($empDefaultDays));
+                    $daysList = $empDefaultDays;
                 }
 
                 $totalDailyWage = $daysCount * $dailyRate;
@@ -281,11 +293,33 @@ class PeriodAttendance extends Component
         $existingDays = $this->periodAttendances[$employeeId]['attendance_days'] ?? [];
         $hasSunday = is_array($existingDays) && in_array('sun', $existingDays, true);
 
-        // Hari Minggu yang tercatat harus ikut dalam daftar (upah/uang makan hari
-        // Minggu), kuota hari naik menjadi 7 saat Minggu tercatat.
-        $count = max(0, min($hasSunday ? 7 : 6, (int) $count));
+        $company = CompanyProfile::getProfile();
+        $isRoster = $company->isRosterMode();
 
-        if ($hasSunday && $count > 0) {
+        $rosterAllowsSunday = false;
+        if ($isRoster) {
+            $startDate = Carbon::parse($this->period->start_date)->toDateString();
+            $endDate = Carbon::parse($this->period->end_date)->toDateString();
+
+            $schedules = EmployeeSchedule::query()
+                ->where('employee_id', $employeeId)
+                ->whereBetween('date', [$startDate, $endDate])
+                ->get();
+
+            if ($schedules->isNotEmpty()) {
+                $rosterAllowsSunday = $schedules->contains(fn ($s) => $s->isWork() && $s->date->isSunday());
+            } else {
+                $rosterAllowsSunday = true;
+            }
+        }
+
+        $allowSunday = $hasSunday || $rosterAllowsSunday;
+
+        // Hari Minggu yang tercatat/diizinkan roster harus ikut dalam daftar (upah/uang makan hari
+        // Minggu), kuota hari naik menjadi 7 saat Minggu tercatat atau diizinkan roster.
+        $count = max(0, min($allowSunday ? 7 : 6, (int) $count));
+
+        if ($allowSunday && $count > 0) {
             $selectedDays = array_slice($allDays, 0, $count - 1);
             $selectedDays[] = 'sun';
         } else {

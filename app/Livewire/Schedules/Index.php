@@ -52,25 +52,60 @@ class Index extends Component
 
     public function mount(): void
     {
-        $now = Carbon::now();
-        $this->year = (int) ($this->year ?: $now->year);
-        $this->month = (int) ($this->month ?: $now->month);
+        $this->validateYearMonth();
         $this->customEmployeeOrder = cache()->get('roster_employee_order', []);
         $this->employeeColors = cache()->get('roster_employee_colors', []);
     }
 
+    /**
+     * Validasi batas nilai tahun (2000-2100) dan bulan (1-12).
+     */
+    protected function validateYearMonth(): void
+    {
+        $now = Carbon::now();
+        $year = (int) ($this->year ?: $now->year);
+        $month = (int) ($this->month ?: $now->month);
+
+        $this->year = ($year >= 2000 && $year <= 2100) ? $year : (int) $now->year;
+        $this->month = ($month >= 1 && $month <= 12) ? $month : (int) $now->month;
+    }
+
     public function prevMonth(): void
     {
+        $this->validateYearMonth();
         $c = Carbon::createFromDate($this->year, $this->month, 1)->subMonth();
-        $this->year = (int) $c->year;
-        $this->month = (int) $c->month;
+        $year = (int) $c->year;
+        $month = (int) $c->month;
+
+        if ($year < 2020) {
+            $year = 2020;
+            $month = 1;
+        } elseif ($year > 2050) {
+            $year = 2050;
+            $month = 12;
+        }
+
+        $this->year = $year;
+        $this->month = $month;
     }
 
     public function nextMonth(): void
     {
+        $this->validateYearMonth();
         $c = Carbon::createFromDate($this->year, $this->month, 1)->addMonth();
-        $this->year = (int) $c->year;
-        $this->month = (int) $c->month;
+        $year = (int) $c->year;
+        $month = (int) $c->month;
+
+        if ($year < 2020) {
+            $year = 2020;
+            $month = 1;
+        } elseif ($year > 2050) {
+            $year = 2050;
+            $month = 12;
+        }
+
+        $this->year = $year;
+        $this->month = $month;
     }
 
     public function currentMonth(): void
@@ -85,6 +120,10 @@ class Index extends Component
      */
     public function openColorModal(int $employeeId, string $employeeName): void
     {
+        if (! auth()->user()?->hasRole('admin')) {
+            return;
+        }
+
         $this->selectedEmployeeForColor = $employeeId;
         $this->selectedEmployeeName = $employeeName;
     }
@@ -236,6 +275,16 @@ class Index extends Component
 
     public function openImportModal(): void
     {
+        if (! auth()->user()?->hasRole('admin')) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Akses Ditolak',
+                'message' => 'Hanya Admin yang dapat mengimpor jadwal.',
+            ]);
+
+            return;
+        }
+
         $this->resetErrorBag();
         $this->importFile = null;
         $this->showImportModal = true;
@@ -263,10 +312,11 @@ class Index extends Component
         }
 
         $this->validate([
-            'importFile' => 'required|file|mimes:xlsx,xls|max:10240',
+            'importFile' => 'required|file|mimes:xlsx,xls|extensions:xlsx,xls|max:10240',
         ], [
             'importFile.required' => 'Pilih file Excel jadwal terlebih dahulu.',
             'importFile.mimes' => 'Format file harus berupa .xlsx atau .xls.',
+            'importFile.extensions' => 'Format file harus berupa .xlsx atau .xls.',
             'importFile.max' => 'Ukuran file maksimal 10MB.',
         ]);
 
@@ -292,15 +342,36 @@ class Index extends Component
                 'title' => 'Gagal Impor Jadwal',
                 'message' => $e->getMessage(),
             ]);
+        } finally {
+            if ($this->importFile && method_exists($this->importFile, 'delete')) {
+                try {
+                    $this->importFile->delete();
+                } catch (\Throwable) {
+                    // Abaikan kesalahan penghapusan berkas sementara
+                }
+            }
+            $this->importFile = null;
         }
     }
 
     /**
      * Export jadwal bulan berjalan ke format Excel (.xlsx).
      */
-    public function exportExcel(WorkScheduleService $service): StreamedResponse
+    public function exportExcel(WorkScheduleService $service): ?StreamedResponse
     {
-        $spreadsheet = $service->exportRosterToExcel($this->year, $this->month);
+        if (! auth()->user()?->hasRole(['admin', 'direktur'])) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Akses Ditolak',
+                'message' => 'Hanya Admin atau Direktur yang dapat mengunduh jadwal kerja.',
+            ]);
+
+            return null;
+        }
+
+        $this->validateYearMonth();
+
+        $spreadsheet = $service->exportRosterToExcel($this->year, $this->month, $this->departmentId, $this->search);
         $monthName = Carbon::createFromDate($this->year, $this->month, 1)->format('Y-m');
         $fileName = "Jadwal_Kerja_Roster_{$monthName}.xlsx";
 
@@ -342,10 +413,9 @@ class Index extends Component
 
     public function render(WorkScheduleService $service): View
     {
-        $year = (int) ($this->year ?: now()->year);
-        $month = (int) ($this->month ?: now()->month);
-        $this->year = $year;
-        $this->month = $month;
+        $this->validateYearMonth();
+        $year = $this->year;
+        $month = $this->month;
 
         $roster = $service->getMonthlyRoster($year, $month, $this->departmentId, $this->search);
         $sortedEmployees = $this->sortEmployeeCollection($roster['employees']);

@@ -4,6 +4,7 @@ namespace App\Livewire\Attendances;
 
 use App\Enums\EmploymentStatus;
 use App\Models\Attendance;
+use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
 use App\Models\Holiday;
@@ -790,7 +791,15 @@ class Index extends Component
 
         $status = 'hadir';
         if ($clockIn === null) {
-            $status = $isSunday ? 'libur' : 'absen';
+            if (CompanyProfile::getProfile()->isRosterMode()) {
+                $schedule = EmployeeSchedule::where('employee_id', $attendance->employee_id)
+                    ->where('date', $attendance->date?->toDateString() ?? $dateObj->toDateString())
+                    ->first();
+
+                $status = ($schedule && $schedule->isOff()) ? 'libur' : 'absen';
+            } else {
+                $status = $isSunday ? 'libur' : 'absen';
+            }
         }
 
         $attendance->update([

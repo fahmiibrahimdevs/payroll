@@ -18,18 +18,20 @@
         </div>
 
         <div class="mt-2 mt-md-0 flex-shrink-0 d-flex align-items-center flex-wrap" style="gap: 8px;">
-            <button type="button" wire:click="exportExcel" wire:loading.attr="disabled" wire:target="exportExcel" class="btn font-weight-bold d-inline-flex align-items-center text-white" style="background: #10b981; border: none; border-radius: 8px; padding: 7px 14px; font-size: 12px; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25); transition: all 0.15s;">
-                <span wire:loading.remove wire:target="exportExcel"><i class="fas fa-file-excel mr-1.5"></i> Export Excel</span>
-                <span wire:loading wire:target="exportExcel"><i class="fas fa-spinner fa-spin mr-1.5"></i> Mengunduh...</span>
-            </button>
+            @if (auth()->user()?->hasRole(['admin', 'direktur']))
+                <button type="button" wire:click="exportExcel" wire:loading.attr="disabled" wire:target="exportExcel" class="btn font-weight-bold d-inline-flex align-items-center text-white" style="background-color: #0b52aa; border: none; border-radius: 8px; padding: 7px 15px; font-size: 12px; box-shadow: 0 2px 6px rgba(11, 82, 170, 0.25); transition: all 0.15s;">
+                    <span wire:loading.remove wire:target="exportExcel"><i class="fas fa-file-excel mr-1.5"></i> Export Excel</span>
+                    <span wire:loading wire:target="exportExcel"><i class="fas fa-spinner fa-spin mr-1.5"></i> Mengunduh...</span>
+                </button>
+            @endif
 
             @if (auth()->user()?->hasRole('admin'))
-                <button type="button" wire:click="copyFromPreviousMonth" wire:confirm="Salin pola jadwal libur dari bulan sebelumnya ke bulan ini?" wire:loading.attr="disabled" wire:target="copyFromPreviousMonth" class="btn font-weight-bold d-inline-flex align-items-center text-white" style="background: #3b82f6; border: none; border-radius: 8px; padding: 7px 14px; font-size: 12px; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.25); transition: all 0.15s;">
+                <button type="button" wire:click="copyFromPreviousMonth" wire:confirm="Salin pola jadwal libur dari bulan sebelumnya ke bulan ini?" wire:loading.attr="disabled" wire:target="copyFromPreviousMonth" class="btn font-weight-bold d-inline-flex align-items-center text-white" style="background-color: #1e40af; border: none; border-radius: 8px; padding: 7px 15px; font-size: 12px; box-shadow: 0 2px 6px rgba(30, 64, 175, 0.25); transition: all 0.15s;">
                     <span wire:loading.remove wire:target="copyFromPreviousMonth"><i class="fas fa-copy mr-1.5"></i> Salin Bulan Lalu</span>
                     <span wire:loading wire:target="copyFromPreviousMonth"><i class="fas fa-spinner fa-spin mr-1.5"></i> Menyalin Jadwal...</span>
                 </button>
 
-                <button type="button" wire:click="openImportModal" wire:loading.attr="disabled" wire:target="openImportModal" class="btn font-weight-bold d-inline-flex align-items-center text-white" style="background: #1d4ed8; border: none; border-radius: 8px; padding: 7px 16px; font-size: 12px; box-shadow: 0 2px 6px rgba(29, 78, 216, 0.25); transition: all 0.15s;">
+                <button type="button" wire:click="openImportModal" wire:loading.attr="disabled" wire:target="openImportModal" class="btn font-weight-bold d-inline-flex align-items-center text-white" style="background-color: #0b52aa; border: none; border-radius: 8px; padding: 7px 16px; font-size: 12px; box-shadow: 0 2px 6px rgba(11, 82, 170, 0.25); transition: all 0.15s;">
                     <span wire:loading.remove wire:target="openImportModal"><i class="fas fa-file-upload mr-1.5"></i> Import Excel</span>
                     <span wire:loading wire:target="openImportModal"><i class="fas fa-spinner fa-spin mr-1.5"></i> Membuka...</span>
                 </button>
@@ -37,13 +39,112 @@
         </div>
     </div>
 
+    <!-- 4-Card KPI Stat Grid Sesuai Standar RULES_FRONTEND.md -->
+    <div class="cash-advance-stat-grid mb-4">
+        <!-- 1. Total Karyawan Aktif (Blue) -->
+        <div class="card cash-advance-stat-card">
+            <div class="card-body cash-advance-stat-body">
+                <div class="cash-advance-stat-icon cash-advance-stat-icon-blue">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="cash-advance-stat-content">
+                    <div class="cash-advance-stat-title" title="Total Karyawan Terjadwal">Karyawan Terjadwal</div>
+                    <div class="cash-advance-stat-value-row">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1e293b;">
+                            <span>{{ number_format(count($roster['employees'])) }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1e293b;">Orang</span>
+                        </div>
+                        <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
+                            <i class="fas fa-user-check text-[10px]"></i>
+                        </span>
+                    </div>
+                    <div class="cash-advance-stat-subtext" style="color: #475569;">
+                        Karyawan aktif dalam roster
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Hari Kalender Bulan Ini (Amber) -->
+        <div class="card cash-advance-stat-card">
+            <div class="card-body cash-advance-stat-body">
+                <div class="cash-advance-stat-icon cash-advance-stat-icon-amber">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+                <div class="cash-advance-stat-content">
+                    <div class="cash-advance-stat-title" title="Hari Kalender">Hari Kalender</div>
+                    <div class="cash-advance-stat-value-row">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1e293b;">
+                            <span>{{ number_format($roster['days_in_month']) }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1e293b;">Hari</span>
+                        </div>
+                        <span class="cash-advance-stat-badge cash-advance-stat-badge-amber">
+                            <i class="fas fa-clock text-[10px]"></i>
+                        </span>
+                    </div>
+                    <div class="cash-advance-stat-subtext" style="color: #475569;">
+                        Periode {{ $monthName }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Total Shift Masuk (Green) -->
+        <div class="card cash-advance-stat-card">
+            <div class="card-body cash-advance-stat-body">
+                <div class="cash-advance-stat-icon cash-advance-stat-icon-green">
+                    <i class="fas fa-briefcase"></i>
+                </div>
+                <div class="cash-advance-stat-content">
+                    <div class="cash-advance-stat-title" title="Total Shift Masuk">Total Shift Masuk</div>
+                    <div class="cash-advance-stat-value-row">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1e293b;">
+                            <span>{{ number_format(collect($roster['employees'])->sum('total_work_days')) }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1e293b;">Shift</span>
+                        </div>
+                        <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
+                            <i class="fas fa-check-circle text-[10px]"></i>
+                        </span>
+                    </div>
+                    <div class="cash-advance-stat-subtext" style="color: #475569;">
+                        Jadwal masuk (Work) bulan ini
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Total Shift Libur (Purple) -->
+        <div class="card cash-advance-stat-card">
+            <div class="card-body cash-advance-stat-body">
+                <div class="cash-advance-stat-icon cash-advance-stat-icon-purple">
+                    <i class="fas fa-calendar-minus"></i>
+                </div>
+                <div class="cash-advance-stat-content">
+                    <div class="cash-advance-stat-title" title="Total Shift Libur">Total Shift Libur</div>
+                    <div class="cash-advance-stat-value-row">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1e293b;">
+                            <span>{{ number_format(collect($roster['employees'])->sum('total_off_days')) }}</span>
+                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1e293b;">Shift</span>
+                        </div>
+                        <span class="cash-advance-stat-badge cash-advance-stat-badge-purple">
+                            <i class="fas fa-bed text-[10px]"></i>
+                        </span>
+                    </div>
+                    <div class="cash-advance-stat-subtext" style="color: #475569;">
+                        Libur bergilir (Off Day)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Alert Status Mode Perusahaan -->
     @if (!$company->isRosterMode())
-        <div class="alert alert-warning border-0 d-flex align-items-center mb-2 py-2 px-3" style="background: #fffbeb; color: #b45309; border-radius: 10px; font-size: 12px;">
-            <i class="fas fa-exclamation-triangle mr-2 text-warning"></i>
+        <div class="alert border-0 d-flex align-items-center mb-3 py-2.5 px-3" style="background: #fffbeb; color: #92400e; border-left: 4px solid #f59e0b !important; border-radius: 10px; font-size: 12.5px;">
+            <i class="fas fa-exclamation-triangle mr-2 text-warning" style="font-size: 15px;"></i>
             <div>
                 <strong>Perhatian:</strong> Mode Penjadwalan saat ini masih diatur ke <em>Standar Kantor</em>.
-                Ubah ke <strong>Roster Toko</strong> di menu <a href="{{ route('company-profile.index') }}" class="font-weight-bold text-dark text-underline">Profil Perusahaan &gt; Penggajian</a>.
+                Ubah ke <strong>Roster Toko</strong> di menu <a href="{{ route('company-profile.index') }}" class="font-weight-600 text-dark text-underline">Profil Perusahaan &gt; Penggajian</a> untuk mengaktifkan rotasi libur bergilir.
             </div>
         </div>
     @endif
@@ -218,18 +319,18 @@
                                 <td class="sticky-col first-col align-middle text-center p-0" style="background: #ffffff; width: 46px; min-width: 46px;">
                                     <div class="d-flex align-items-center justify-content-center" style="gap: 4px; height: 100%;">
                                         @if (auth()->user()?->hasRole('admin'))
-                                            <span class="drag-handle text-muted" title="Klik & geser baris ini untuk menata urutan" style="cursor: grab;">
+                                            <span class="drag-handle" title="Klik & geser baris ini untuk menata urutan" style="cursor: grab; color: #475569;">
                                                 <i class="fas fa-bars" style="font-size: 11px;"></i>
                                             </span>
                                         @endif
-                                        <span class="row-num font-weight-bold text-dark">{{ $idx + 1 }}</span>
+                                        <span class="row-num text-dark" style="font-weight: 500; font-size: 11px; color: #334155;">{{ $idx + 1 }}</span>
                                     </div>
                                 </td>
 
                                 <!-- Kolom NAMA KARYAWAN (Dengan pemilih warna dasar individual & 1 warna dengan Jobdesk) -->
                                 <td class="sticky-col second-col align-middle text-left emp-cell-{{ $emp['id'] }} emp-bg-{{ $empColor }}" style="padding: 0 6px 0 8px !important; width: 175px; min-width: 175px; max-width: 175px;">
                                     <div class="d-flex align-items-center justify-content-between">
-                                        <span class="font-weight-bold text-truncate" style="font-size: 11.5px; line-height: 1.2;" title="{{ $emp['name'] }}">
+                                        <span class="font-weight-600 text-truncate" style="font-size: 11.5px; line-height: 1.2; color: #1e293b;" title="{{ $emp['name'] }}">
                                             {{ $emp['name'] }}
                                         </span>
 
@@ -247,7 +348,7 @@
 
                                 <!-- Kolom JOBDESK (Teks Polos & Warna Senada dengan Nama Karyawan) -->
                                 <td class="sticky-col third-col align-middle text-left emp-cell-{{ $emp['id'] }} emp-bg-{{ $empColor }}" style="padding: 0 8px !important; width: 110px; min-width: 110px; max-width: 110px;">
-                                    <div class="text-truncate font-weight-500" style="font-size: 11px; line-height: 1.2;" title="{{ $emp['jobdesk'] }}">
+                                    <div class="text-truncate" style="font-size: 11px; line-height: 1.2; font-weight: 500; color: #334155;" title="{{ $emp['jobdesk'] }}">
                                         {{ $emp['jobdesk'] }}
                                     </div>
                                 </td>
@@ -277,18 +378,21 @@
                                 @endforeach
 
                                 <!-- Kolom Total Masuk & Libur (Ringkas) -->
-                                <td class="align-middle p-0 font-weight-bold text-success" style="background: #ffffff; border-left: 2px solid #e2e8f0; font-size: 11px;">
+                                <td class="align-middle p-0 text-success" style="background: #ffffff; border-left: 2px solid #e2e8f0; font-size: 11px; font-weight: 600;">
                                     {{ $emp['total_work_days'] }} hr
                                 </td>
-                                <td class="align-middle p-0 font-weight-bold text-danger" style="background: #ffffff; font-size: 11px;">
+                                <td class="align-middle p-0 text-danger" style="background: #ffffff; font-size: 11px; font-weight: 600;">
                                     {{ $emp['total_off_days'] }} hr
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ count($roster['dates']) + 5 }}" class="text-center py-4 text-muted" style="background: #ffffff;">
-                                    <i class="fas fa-users-slash fa-lg mb-1 d-block text-muted" style="opacity: 0.5;"></i>
-                                    Tidak ada data karyawan yang cocok dengan kriteria pencarian.
+                                <td colspan="{{ count($roster['dates']) + 5 }}" class="p-0 border-0" style="background: #ffffff;">
+                                    <x-empty-state
+                                        icon="fas fa-calendar-times"
+                                        title="Tidak Ada Jadwal Kerja"
+                                        subtitle="Tidak ditemukan data karyawan atau jadwal yang cocok pada periode atau filter yang dipilih."
+                                    />
                                 </td>
                             </tr>
                         @endforelse
@@ -297,24 +401,24 @@
             </div>
 
             <!-- Footer: Legenda & Total Karyawan (Compact & Dominan Putih) -->
-            <div class="px-3 py-2 border-top d-flex flex-column flex-md-row justify-content-between align-items-md-center" style="background: #ffffff; border-color: #f1f5f9 !important; gap: 8px; font-size: 12px;">
+            <div class="px-3 py-2.5 border-top d-flex flex-column flex-md-row justify-content-between align-items-md-center" style="background: #ffffff; border-color: #e2e8f0 !important; gap: 8px; font-size: 12px;">
                 <div class="d-flex align-items-center flex-wrap" style="gap: 16px;">
                     <div class="d-flex align-items-center">
                         <span class="d-inline-block rounded mr-1.5" style="width: 14px; height: 14px; background-color: #22c55e;"></span>
-                        <span class="font-weight-600" style="color: #334155; font-size: 11.5px;">Masuk Kerja (Work)</span>
+                        <span style="color: #334155; font-size: 11.5px; font-weight: 500;">Masuk Kerja (Work)</span>
                     </div>
                     <div class="d-flex align-items-center">
                         <span class="d-inline-block rounded mr-1.5" style="width: 14px; height: 14px; background-color: #ef4444;"></span>
-                        <span class="font-weight-600" style="color: #334155; font-size: 11.5px;">Libur Bergilir (Off Day)</span>
+                        <span style="color: #334155; font-size: 11.5px; font-weight: 500;">Libur Bergilir (Off Day)</span>
                     </div>
-                    <div class="d-flex align-items-center text-muted" style="color: #64748b !important; font-size: 11px;">
-                        <i class="fas fa-hand-pointer mr-1 text-primary"></i>
+                    <div class="d-flex align-items-center" style="color: #475569; font-size: 11.5px;">
+                        <i class="fas fa-hand-pointer mr-1" style="color: #0b52aa;"></i>
                         <span>Klik tanggal untuk ubah Masuk &harr; Libur. Tarik <i class="fas fa-bars mx-0.5"></i> untuk drag urutan baris.</span>
                     </div>
                 </div>
 
-                <div class="font-weight-600" style="color: #475569; font-size: 11.5px;">
-                    Total Karyawan: <span class="badge px-2 py-1 ml-1" style="background: #f1f5f9; color: #0f172a; font-size: 11px; border-radius: 6px;">{{ count($roster['employees']) }} Orang</span>
+                <div style="color: #334155; font-size: 11.5px; font-weight: 500;">
+                    Total Karyawan: <span class="badge px-2.5 py-1 ml-1" style="background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-size: 11px; border-radius: 6px; font-weight: 600;">{{ count($roster['employees']) }} Orang</span>
                 </div>
             </div>
         </div>
@@ -330,14 +434,14 @@
                 <div class="modal-content border-0" style="border-radius: 14px; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.25); overflow: hidden; background: #ffffff;">
                     <div class="modal-header border-0 px-3 pt-3 pb-1 d-flex align-items-center justify-content-between">
                         <div class="d-flex align-items-center">
-                            <div class="d-inline-flex align-items-center justify-content-center mr-2 rounded-circle" style="width: 30px; height: 30px; background: #eff6ff; color: #2563eb;">
+                            <div class="d-inline-flex align-items-center justify-content-center mr-2 rounded-circle" style="width: 30px; height: 30px; background: #ffffff; border: 1px solid #e2e8f0; color: #0b52aa;">
                                 <i class="fas fa-palette" style="font-size: 13px;"></i>
                             </div>
                             <div>
                                 <h6 class="modal-title font-weight-bold mb-0" style="font-size: 13.5px; color: #0f172a;">
                                     Pilih Warna Baris
                                 </h6>
-                                <small class="text-muted d-block font-weight-bold text-truncate" style="max-width: 220px; font-size: 11px; color: #2563eb !important;">
+                                <small class="d-block font-weight-600 text-truncate" style="max-width: 220px; font-size: 11px; color: #0b52aa !important;">
                                     {{ $selectedEmployeeName }}
                                 </small>
                             </div>
@@ -348,7 +452,7 @@
                     </div>
 
                     <div class="modal-body px-3 py-3">
-                        <p class="text-muted mb-2.5" style="font-size: 12px; color: #64748b !important;">
+                        <p class="mb-2.5" style="font-size: 12px; color: #334155 !important;">
                             Warna yang dipilih akan mewarnai kolom <strong>Nama Karyawan</strong> dan <strong>Jobdesk</strong>:
                         </p>
 
@@ -421,7 +525,7 @@
                     </div>
 
                     <div class="modal-footer border-0 px-3 pb-3 pt-0 d-flex justify-content-end">
-                        <button type="button" wire:click="closeColorModal" class="btn font-weight-bold" style="background: #f1f5f9; color: #475569; border: none; border-radius: 8px; padding: 6px 14px; font-size: 12px;">
+                        <button type="button" wire:click="closeColorModal" class="btn" style="background: #ffffff; border: 1px solid #cbd5e1; color: #334155; border-radius: 8px; padding: 6px 14px; font-size: 12px; font-weight: 500;">
                             Tutup
                         </button>
                     </div>
@@ -437,10 +541,10 @@
                 <div class="modal-content border-0" style="border-radius: 14px; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.25); overflow: hidden; background: #ffffff;">
                     <div class="modal-header border-0 px-4 pt-3 pb-1">
                         <div class="d-flex align-items-center">
-                            <div class="d-inline-flex align-items-center justify-content-center mr-2 rounded-circle" style="width: 32px; height: 32px; background: #eff6ff; color: #1d4ed8;">
+                            <div class="d-inline-flex align-items-center justify-content-center mr-2 rounded-circle" style="width: 32px; height: 32px; background: #ffffff; border: 1px solid #e2e8f0; color: #0b52aa;">
                                 <i class="fas fa-file-upload"></i>
                             </div>
-                            <h5 class="modal-title font-weight-bold mb-0" style="font-size: 15px; color: #0f172a;">
+                            <h5 class="modal-title font-weight-bold mb-0" style="font-size: 15px; color: #1e293b;">
                                 Import Jadwal Kerja Excel
                             </h5>
                         </div>
@@ -451,14 +555,14 @@
 
                     <form wire:submit.prevent="processImport">
                         <div class="modal-body px-4 py-2">
-                            <p class="text-muted mb-2" style="font-size: 12.5px; color: #64748b !important;">
+                            <p class="mb-2" style="font-size: 12.5px; color: #334155 !important;">
                                 Unggah spreadsheet (.xlsx / .xls) jadwal bulanan <strong>{{ $monthName }}</strong>.
                                 Sistem membaca kolom tanggal 1 s/d {{ $roster['days_in_month'] }} serta sel merah atau teks <code>OFF</code> / <code>LIBUR</code>.
                             </p>
 
                             <div class="form-group mb-2">
-                                <label class="font-weight-bold mb-1" style="font-size: 12px; color: #334155;">Pilih Berkas Excel:</label>
-                                <div class="p-2.5 rounded" style="background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 10px;">
+                                <label class="mb-1" style="font-size: 12px; color: #1e293b; font-weight: 600;">Pilih Berkas Excel:</label>
+                                <div class="p-2.5 rounded" style="background: #ffffff; border: 1.5px dashed #0b52aa; border-radius: 10px;">
                                     <input type="file" wire:model="importFile" class="form-control-file @error('importFile') is-invalid @enderror" accept=".xlsx,.xls" style="font-size: 12px;">
                                 </div>
                                 @error('importFile')
@@ -470,17 +574,17 @@
                                 </div>
                             </div>
 
-                            <div class="alert border-0 py-2 px-2.5 mb-0" style="background: #eff6ff; color: #1d4ed8; font-size: 11.5px; border-radius: 8px;">
-                                <i class="fas fa-info-circle mr-1"></i>
+                            <div class="alert border-0 py-2 px-2.5 mb-0" style="background: #ffffff; border-left: 3px solid #0b52aa !important; color: #1e293b; font-size: 11.5px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                <i class="fas fa-info-circle mr-1" style="color: #0b52aa;"></i>
                                 Format kolom sesuai dengan file yang diunduh dari tombol <strong>Export Excel</strong>.
                             </div>
                         </div>
 
                         <div class="modal-footer border-0 px-4 pb-3 pt-2 d-flex justify-content-end" style="gap: 8px;">
-                            <button type="button" wire:click="closeImportModal" wire:loading.attr="disabled" wire:target="processImport" class="btn font-weight-bold" style="background: #f1f5f9; color: #475569; border: none; border-radius: 8px; padding: 7px 16px; font-size: 12.5px;">
+                            <button type="button" wire:click="closeImportModal" wire:loading.attr="disabled" wire:target="processImport" class="btn" style="background: #ffffff; border: 1px solid #cbd5e1; color: #334155; border-radius: 8px; padding: 7px 16px; font-size: 12.5px; font-weight: 500;">
                                 Batal
                             </button>
-                            <button type="submit" class="btn font-weight-bold text-white" style="background: #1d4ed8; border: none; border-radius: 8px; padding: 7px 18px; font-size: 12.5px; box-shadow: 0 2px 6px rgba(29, 78, 216, 0.25);" wire:loading.attr="disabled" wire:target="processImport">
+                            <button type="submit" class="btn text-white" style="background-color: #0b52aa; border: none; border-radius: 8px; padding: 7px 18px; font-size: 12.5px; font-weight: 600; box-shadow: 0 2px 6px rgba(11, 82, 170, 0.25);" wire:loading.attr="disabled" wire:target="processImport">
                                 <span wire:loading.remove wire:target="processImport"><i class="fas fa-check mr-1"></i> Proses Impor</span>
                                 <span wire:loading wire:target="processImport"><i class="fas fa-spinner fa-spin mr-1"></i> Memproses...</span>
                             </button>
@@ -729,8 +833,8 @@
         }
         .roster-toolbar-btn-current {
             height: 36px !important;
-            background: #eff6ff !important;
-            color: #2563eb !important;
+            background: #ffffff !important;
+            color: #0b52aa !important;
             border: 1px solid #bfdbfe !important;
             border-radius: 8px !important;
             padding: 0 14px !important;
@@ -745,9 +849,9 @@
             cursor: pointer;
         }
         .roster-toolbar-btn-current:hover {
-            background: #dbeafe !important;
-            color: #1d4ed8 !important;
-            border-color: #93c5fd !important;
+            background: #f0f7ff !important;
+            color: #0b52aa !important;
+            border-color: #0b52aa !important;
         }
 
         /* Prevent dropdown text clipping caused by default Stisla select padding */

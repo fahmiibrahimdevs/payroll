@@ -1242,14 +1242,35 @@
                                                     @endif
                                                 </div>
                                                 <div class="input-group">
-                                                    <input type="time" id="manualClockIn" wire:model.live="manualClockIn" class="form-control @error('manualClockIn') is-invalid @enderror">
-                                                    @if ($manualClockIn)
-                                                        <div class="input-group-append">
+                                                    <input type="text"
+                                                        id="manualClockIn"
+                                                        wire:model.live="manualClockIn"
+                                                        placeholder="00:00"
+                                                        autocomplete="off"
+                                                        x-data
+                                                        x-init="flatpickr($el, {
+                                                            enableTime: true,
+                                                            noCalendar: true,
+                                                            dateFormat: 'H:i',
+                                                            time_24hr: true,
+                                                            allowInput: true,
+                                                            minuteIncrement: 1,
+                                                            onChange: (dates, dateStr) => {
+                                                                $el.value = dateStr;
+                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                            }
+                                                        })"
+                                                        class="form-control timepicker-24 @error('manualClockIn') is-invalid @enderror">
+                                                    <div class="input-group-append">
+                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                            <i class="far fa-clock text-primary"></i>
+                                                        </span>
+                                                        @if ($manualClockIn)
                                                             <button type="button" class="btn btn-outline-secondary" wire:click="clearClockIn" title="Hapus jam masuk">
                                                                 <i class="fas fa-times text-danger"></i>
                                                             </button>
-                                                        </div>
-                                                    @endif
+                                                        @endif
+                                                    </div>
                                                 </div>
                                                 @error('manualClockIn')
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -1267,14 +1288,35 @@
                                                     @endif
                                                 </div>
                                                 <div class="input-group">
-                                                    <input type="time" id="manualClockOut" wire:model.live="manualClockOut" class="form-control @error('manualClockOut') is-invalid @enderror">
-                                                    @if ($manualClockOut)
-                                                        <div class="input-group-append">
+                                                    <input type="text"
+                                                        id="manualClockOut"
+                                                        wire:model.live="manualClockOut"
+                                                        placeholder="00:00"
+                                                        autocomplete="off"
+                                                        x-data
+                                                        x-init="flatpickr($el, {
+                                                            enableTime: true,
+                                                            noCalendar: true,
+                                                            dateFormat: 'H:i',
+                                                            time_24hr: true,
+                                                            allowInput: true,
+                                                            minuteIncrement: 1,
+                                                            onChange: (dates, dateStr) => {
+                                                                $el.value = dateStr;
+                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                            }
+                                                        })"
+                                                        class="form-control timepicker-24 @error('manualClockOut') is-invalid @enderror">
+                                                    <div class="input-group-append">
+                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                            <i class="far fa-clock text-primary"></i>
+                                                        </span>
+                                                        @if ($manualClockOut)
                                                             <button type="button" class="btn btn-outline-secondary" wire:click="clearClockOut" title="Hapus jam keluar">
                                                                 <i class="fas fa-times text-danger"></i>
                                                             </button>
-                                                        </div>
-                                                    @endif
+                                                        @endif
+                                                    </div>
                                                 </div>
                                                 @error('manualClockOut')
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -1313,14 +1355,35 @@
                                                     @endif
                                                 </div>
                                                 <div class="input-group">
-                                                    <input type="time" id="manualOvertimeIn" wire:model.live="manualOvertimeIn" class="form-control @error('manualOvertimeIn') is-invalid @enderror">
-                                                    @if ($manualOvertimeIn)
-                                                        <div class="input-group-append">
+                                                    <input type="text"
+                                                        id="manualOvertimeIn"
+                                                        wire:model.live="manualOvertimeIn"
+                                                        placeholder="00:00"
+                                                        autocomplete="off"
+                                                        x-data
+                                                        x-init="flatpickr($el, {
+                                                            enableTime: true,
+                                                            noCalendar: true,
+                                                            dateFormat: 'H:i',
+                                                            time_24hr: true,
+                                                            allowInput: true,
+                                                            minuteIncrement: 1,
+                                                            onChange: (dates, dateStr) => {
+                                                                $el.value = dateStr;
+                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                            }
+                                                        })"
+                                                        class="form-control timepicker-24 @error('manualOvertimeIn') is-invalid @enderror">
+                                                    <div class="input-group-append">
+                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                            <i class="far fa-clock text-primary"></i>
+                                                        </span>
+                                                        @if ($manualOvertimeIn)
                                                             <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeIn" title="Hapus lembur mulai">
                                                                 <i class="fas fa-times text-danger"></i>
                                                             </button>
-                                                        </div>
-                                                    @endif
+                                                        @endif
+                                                    </div>
                                                 </div>
                                                 @error('manualOvertimeIn')
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -1338,14 +1401,35 @@
                                                     @endif
                                                 </div>
                                                 <div class="input-group">
-                                                    <input type="time" id="manualOvertimeOut" wire:model.live="manualOvertimeOut" class="form-control @error('manualOvertimeOut') is-invalid @enderror">
-                                                    @if ($manualOvertimeOut)
-                                                        <div class="input-group-append">
+                                                    <input type="text"
+                                                        id="manualOvertimeOut"
+                                                        wire:model.live="manualOvertimeOut"
+                                                        placeholder="00:00"
+                                                        autocomplete="off"
+                                                        x-data
+                                                        x-init="flatpickr($el, {
+                                                            enableTime: true,
+                                                            noCalendar: true,
+                                                            dateFormat: 'H:i',
+                                                            time_24hr: true,
+                                                            allowInput: true,
+                                                            minuteIncrement: 1,
+                                                            onChange: (dates, dateStr) => {
+                                                                $el.value = dateStr;
+                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                            }
+                                                        })"
+                                                        class="form-control timepicker-24 @error('manualOvertimeOut') is-invalid @enderror">
+                                                    <div class="input-group-append">
+                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                            <i class="far fa-clock text-primary"></i>
+                                                        </span>
+                                                        @if ($manualOvertimeOut)
                                                             <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeOut" title="Hapus lembur selesai">
                                                                 <i class="fas fa-times text-danger"></i>
                                                             </button>
-                                                        </div>
-                                                    @endif
+                                                        @endif
+                                                    </div>
                                                 </div>
                                                 @error('manualOvertimeOut')
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -1399,14 +1483,35 @@
                                                     @endif
                                                 </div>
                                                 <div class="input-group">
-                                                    <input type="time" id="manualClockIn" wire:model.live="manualClockIn" class="form-control @error('manualClockIn') is-invalid @enderror">
-                                                    @if ($manualClockIn)
-                                                        <div class="input-group-append">
+                                                    <input type="text"
+                                                        id="manualClockIn"
+                                                        wire:model.live="manualClockIn"
+                                                        placeholder="00:00"
+                                                        autocomplete="off"
+                                                        x-data
+                                                        x-init="flatpickr($el, {
+                                                            enableTime: true,
+                                                            noCalendar: true,
+                                                            dateFormat: 'H:i',
+                                                            time_24hr: true,
+                                                            allowInput: true,
+                                                            minuteIncrement: 1,
+                                                            onChange: (dates, dateStr) => {
+                                                                $el.value = dateStr;
+                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                            }
+                                                        })"
+                                                        class="form-control timepicker-24 @error('manualClockIn') is-invalid @enderror">
+                                                    <div class="input-group-append">
+                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                            <i class="far fa-clock text-primary"></i>
+                                                        </span>
+                                                        @if ($manualClockIn)
                                                             <button type="button" class="btn btn-outline-secondary" wire:click="clearClockIn" title="Hapus jam masuk">
                                                                 <i class="fas fa-times text-danger"></i>
                                                             </button>
-                                                        </div>
-                                                    @endif
+                                                        @endif
+                                                    </div>
                                                 </div>
                                                 @error('manualClockIn')
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -1426,14 +1531,35 @@
                                                     @endif
                                                 </div>
                                                 <div class="input-group">
-                                                    <input type="time" id="manualClockOut" wire:model.live="manualClockOut" class="form-control @error('manualClockOut') is-invalid @enderror">
-                                                    @if ($manualClockOut)
-                                                        <div class="input-group-append">
+                                                    <input type="text"
+                                                        id="manualClockOut"
+                                                        wire:model.live="manualClockOut"
+                                                        placeholder="00:00"
+                                                        autocomplete="off"
+                                                        x-data
+                                                        x-init="flatpickr($el, {
+                                                            enableTime: true,
+                                                            noCalendar: true,
+                                                            dateFormat: 'H:i',
+                                                            time_24hr: true,
+                                                            allowInput: true,
+                                                            minuteIncrement: 1,
+                                                            onChange: (dates, dateStr) => {
+                                                                $el.value = dateStr;
+                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                            }
+                                                        })"
+                                                        class="form-control timepicker-24 @error('manualClockOut') is-invalid @enderror">
+                                                    <div class="input-group-append">
+                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                            <i class="far fa-clock text-primary"></i>
+                                                        </span>
+                                                        @if ($manualClockOut)
                                                             <button type="button" class="btn btn-outline-secondary" wire:click="clearClockOut" title="Hapus jam keluar">
                                                                 <i class="fas fa-times text-danger"></i>
                                                             </button>
-                                                        </div>
-                                                    @endif
+                                                        @endif
+                                                    </div>
                                                 </div>
                                                 @error('manualClockOut')
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -1472,14 +1598,35 @@
                                                     @endif
                                                 </div>
                                                 <div class="input-group">
-                                                    <input type="time" id="manualOvertimeIn" wire:model.live="manualOvertimeIn" class="form-control @error('manualOvertimeIn') is-invalid @enderror">
-                                                    @if ($manualOvertimeIn)
-                                                        <div class="input-group-append">
+                                                    <input type="text"
+                                                        id="manualOvertimeIn"
+                                                        wire:model.live="manualOvertimeIn"
+                                                        placeholder="00:00"
+                                                        autocomplete="off"
+                                                        x-data
+                                                        x-init="flatpickr($el, {
+                                                            enableTime: true,
+                                                            noCalendar: true,
+                                                            dateFormat: 'H:i',
+                                                            time_24hr: true,
+                                                            allowInput: true,
+                                                            minuteIncrement: 1,
+                                                            onChange: (dates, dateStr) => {
+                                                                $el.value = dateStr;
+                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                            }
+                                                        })"
+                                                        class="form-control timepicker-24 @error('manualOvertimeIn') is-invalid @enderror">
+                                                    <div class="input-group-append">
+                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                            <i class="far fa-clock text-primary"></i>
+                                                        </span>
+                                                        @if ($manualOvertimeIn)
                                                             <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeIn" title="Hapus lembur mulai">
                                                                 <i class="fas fa-times text-danger"></i>
                                                             </button>
-                                                        </div>
-                                                    @endif
+                                                        @endif
+                                                    </div>
                                                 </div>
                                                 @error('manualOvertimeIn')
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -1497,14 +1644,35 @@
                                                     @endif
                                                 </div>
                                                 <div class="input-group">
-                                                    <input type="time" id="manualOvertimeOut" wire:model.live="manualOvertimeOut" class="form-control @error('manualOvertimeOut') is-invalid @enderror">
-                                                    @if ($manualOvertimeOut)
-                                                        <div class="input-group-append">
+                                                    <input type="text"
+                                                        id="manualOvertimeOut"
+                                                        wire:model.live="manualOvertimeOut"
+                                                        placeholder="00:00"
+                                                        autocomplete="off"
+                                                        x-data
+                                                        x-init="flatpickr($el, {
+                                                            enableTime: true,
+                                                            noCalendar: true,
+                                                            dateFormat: 'H:i',
+                                                            time_24hr: true,
+                                                            allowInput: true,
+                                                            minuteIncrement: 1,
+                                                            onChange: (dates, dateStr) => {
+                                                                $el.value = dateStr;
+                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                            }
+                                                        })"
+                                                        class="form-control timepicker-24 @error('manualOvertimeOut') is-invalid @enderror">
+                                                    <div class="input-group-append">
+                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                            <i class="far fa-clock text-primary"></i>
+                                                        </span>
+                                                        @if ($manualOvertimeOut)
                                                             <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeOut" title="Hapus lembur selesai">
                                                                 <i class="fas fa-times text-danger"></i>
                                                             </button>
-                                                        </div>
-                                                    @endif
+                                                        @endif
+                                                    </div>
                                                 </div>
                                                 @error('manualOvertimeOut')
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>

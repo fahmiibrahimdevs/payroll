@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\EmployeeSchedule;
 use App\Models\Holiday;
 use App\Models\User;
+use App\Support\WorkingDays;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
@@ -59,12 +60,15 @@ class WorkScheduleService
         $endDateStr = $endDate->toDateString();
 
         $holidays = Holiday::datesBetween($startDateStr, $endDateStr);
+        $company = CompanyProfile::getProfile();
+        $workDaysPerWeek = (int) ($company->work_days_per_week ?: 6);
 
         $dates = [];
         for ($d = 1; $d <= $daysInMonth; $d++) {
             $curr = Carbon::createFromDate($year, $month, $d);
             $currDateStr = $curr->toDateString();
             $isSunday = $curr->isSunday();
+            $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
             $isHoliday = $holidays->has($currDateStr);
 
             $dates[$d] = [
@@ -72,6 +76,7 @@ class WorkScheduleService
                 'date' => $currDateStr,
                 'day_name' => self::DAY_NAMES[$curr->dayOfWeek],
                 'is_sunday' => $isSunday,
+                'is_weekend' => $isWeekend,
                 'is_holiday' => $isHoliday,
                 'holiday_name' => $isHoliday ? $holidays->get($currDateStr) : null,
             ];
@@ -116,10 +121,11 @@ class WorkScheduleService
                     $notes = $rec->notes;
                     $isCustom = true;
                 } else {
-                    // Default fallback jika belum pernah diset:
-                    // Hari Minggu libur (off), hari kerja biasa masuk (work)
-                    $status = $meta['is_sunday'] ? EmployeeSchedule::STATUS_OFF : EmployeeSchedule::STATUS_WORK;
-                    $notes = null;
+                    // Default fallback jika belum diset secara spesifik:
+                    // Libur jika akhir pekan (sesuai work_days_per_week) atau hari libur nasional
+                    $isDefaultOff = $meta['is_weekend'] || $meta['is_holiday'];
+                    $status = $isDefaultOff ? EmployeeSchedule::STATUS_OFF : EmployeeSchedule::STATUS_WORK;
+                    $notes = $meta['holiday_name'] ?? null;
                     $isCustom = false;
                 }
 
@@ -166,8 +172,12 @@ class WorkScheduleService
     {
         return DB::transaction(function () use ($employeeId, $date, $actor) {
             $carbonDate = Carbon::parse($date);
+            $dateStr = $carbonDate->toDateString();
+
+            // Kunci baris dengan lockForUpdate untuk mencegah race condition
             $schedule = EmployeeSchedule::where('employee_id', $employeeId)
-                ->whereDate('date', $carbonDate->toDateString())
+                ->where('date', $dateStr)
+                ->lockForUpdate()
                 ->first();
 
             if ($schedule) {
@@ -180,35 +190,60 @@ class WorkScheduleService
                     'updated_by' => $actor?->id,
                 ]);
             } else {
-                // Jika belum ada record: default Minggu adalah off (maka toggle jadi work), default weekday adalah work (maka toggle jadi off)
-                $defaultStatus = $carbonDate->isSunday() ? EmployeeSchedule::STATUS_OFF : EmployeeSchedule::STATUS_WORK;
+                $company = CompanyProfile::getProfile();
+                $workDaysPerWeek = (int) ($company->work_days_per_week ?: 6);
+                $isWeekend = WorkingDays::isWeekend($carbonDate, $workDaysPerWeek);
+                $isHoliday = Holiday::where('date', $dateStr)->exists();
+
+                $defaultStatus = ($isWeekend || $isHoliday) ? EmployeeSchedule::STATUS_OFF : EmployeeSchedule::STATUS_WORK;
                 $newStatus = $defaultStatus === EmployeeSchedule::STATUS_OFF
                     ? EmployeeSchedule::STATUS_WORK
                     : EmployeeSchedule::STATUS_OFF;
 
-                $schedule = EmployeeSchedule::create([
-                    'employee_id' => $employeeId,
-                    'date' => $carbonDate->toDateString(),
-                    'status' => $newStatus,
-                    'created_by' => $actor?->id,
-                    'updated_by' => $actor?->id,
-                ]);
+                try {
+                    $schedule = EmployeeSchedule::create([
+                        'employee_id' => $employeeId,
+                        'date' => $dateStr,
+                        'status' => $newStatus,
+                        'created_by' => $actor?->id,
+                        'updated_by' => $actor?->id,
+                    ]);
+                } catch (\Illuminate\Database\QueryException $e) {
+                    // Jika ada toggle konkuren yang baru saja dibuat, kunci dan update
+                    $schedule = EmployeeSchedule::where('employee_id', $employeeId)
+                        ->where('date', $dateStr)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($schedule) {
+                        $newStatus = $schedule->status === EmployeeSchedule::STATUS_OFF
+                            ? EmployeeSchedule::STATUS_WORK
+                            : EmployeeSchedule::STATUS_OFF;
+
+                        $schedule->update([
+                            'status' => $newStatus,
+                            'updated_by' => $actor?->id,
+                        ]);
+                    } else {
+                        throw $e;
+                    }
+                }
             }
 
             $this->logger->info(
                 action: 'SCHEDULE_UPDATED',
                 module: 'schedules',
-                message: "Jadwal karyawan ID {$employeeId} tgl {$date} diubah menjadi {$schedule->status}",
+                message: "Jadwal karyawan ID {$employeeId} tgl {$dateStr} diubah menjadi {$schedule->status}",
                 context: [
                     'employee_id' => $employeeId,
-                    'date' => $date,
+                    'date' => $dateStr,
                     'status' => $schedule->status,
                 ],
                 userId: $actor?->id
             );
 
             return $schedule;
-        });
+        }, 3);
     }
 
     /**
@@ -248,7 +283,9 @@ class WorkScheduleService
         $sourceYear = $prevCarbon->year;
         $sourceMonth = $prevCarbon->month;
 
+        // Hanya salin jadwal untuk karyawan aktif (status = 'active')
         $sourceSchedules = EmployeeSchedule::query()
+            ->whereIn('employee_id', Employee::where('status', 'active')->select('id'))
             ->month($sourceYear, $sourceMonth)
             ->get();
 
@@ -317,193 +354,351 @@ class WorkScheduleService
      */
     public function importRosterFromExcel(mixed $file, int $year, int $month, ?User $actor = null): array
     {
-        $filePath = $file instanceof UploadedFile ? $file->getRealPath() : $file;
-        $spreadsheet = IOFactory::load($filePath);
-        $sheet = $spreadsheet->getActiveSheet();
+        $spreadsheet = null;
 
-        $daysInMonth = Carbon::createFromDate($year, $month, 1)->daysInMonth;
+        try {
+            $filePath = $file instanceof UploadedFile ? $file->getRealPath() : $file;
+            $spreadsheet = IOFactory::load($filePath);
+            $sheet = $spreadsheet->getActiveSheet();
 
-        // Cari baris header yang memuat angka 1..daysInMonth
-        $headerRow = null;
-        $dateColumnMap = []; // [colLetter => dayNumber]
-        $nameCol = null;
+            $daysInMonth = Carbon::createFromDate($year, $month, 1)->daysInMonth;
 
-        $highestRow = min(200, $sheet->getHighestRow());
-        $highestColumn = $sheet->getHighestColumn();
-        $highestColIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumn);
+            // Cari baris header yang memuat angka 1..daysInMonth
+            $headerRow = null;
+            $dateColumnMap = []; // [colIndex => dayNumber]
+            $nameCol = null;
+            $codeCol = null;
+            $fingerprintCol = null;
+            $idCol = null;
 
-        for ($row = 1; $row <= min(15, $highestRow); $row++) {
-            $numericCount = 0;
-            $tempDateMap = [];
+            $highestRow = (int) $sheet->getHighestRow();
+            $highestColumn = $sheet->getHighestColumn();
+            $highestColIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumn);
 
-            for ($col = 1; $col <= $highestColIndex; $col++) {
-                $cellVal = trim((string) $sheet->getCell([$col, $row])->getValue());
-                if (is_numeric($cellVal) && (int) $cellVal >= 1 && (int) $cellVal <= $daysInMonth) {
-                    $dayInt = (int) $cellVal;
-                    $numericCount++;
-                    $tempDateMap[$col] = $dayInt;
-                }
+            for ($row = 1; $row <= min(15, $highestRow); $row++) {
+                $numericCount = 0;
+                $tempDateMap = [];
 
-                if (in_array(strtolower($cellVal), ['nama', 'name', 'nama karyawan'], true)) {
-                    $nameCol = $col;
-                }
-            }
+                for ($col = 1; $col <= $highestColIndex; $col++) {
+                    $cellVal = trim((string) $sheet->getCell([$col, $row])->getValue());
+                    $lowerVal = strtolower($cellVal);
 
-            if ($numericCount >= min(15, $daysInMonth - 5)) {
-                $headerRow = $row;
-                $dateColumnMap = $tempDateMap;
-                break;
-            }
-        }
-
-        if (! $headerRow || empty($dateColumnMap)) {
-            throw new InvalidArgumentException("Format Excel tidak sesuai. Baris tanggal (1 s/d {$daysInMonth}) tidak ditemukan.");
-        }
-
-        // Jika kolom Nama belum terdeteksi dari header baris yang sama, cari di baris sebelumnya atau default kolom 1 / 2
-        if (! $nameCol) {
-            for ($c = 1; $c <= min(4, $highestColIndex); $c++) {
-                $v = strtolower(trim((string) $sheet->getCell([$c, $headerRow - 1] ?? [$c, 1])->getValue()));
-                if (str_contains($v, 'nama')) {
-                    $nameCol = $c;
-                    break;
-                }
-            }
-            if (! $nameCol) {
-                $nameCol = 1;
-            }
-        }
-
-        // Cache karyawan untuk pencocokan nama
-        $employees = Employee::where('status', 'active')->get();
-        $employeeLookup = [];
-        foreach ($employees as $emp) {
-            $cleanName = strtolower(trim($emp->full_name));
-            $employeeLookup[$cleanName] = $emp;
-            // First name mapping jika nama panggilan
-            $parts = explode(' ', $cleanName);
-            if (! empty($parts[0]) && ! isset($employeeLookup[$parts[0]])) {
-                $employeeLookup[$parts[0]] = $emp;
-            }
-        }
-
-        $recordsSaved = 0;
-        $matchedEmployees = 0;
-        $unmatchedNames = [];
-
-        DB::transaction(function () use (
-            $sheet,
-            $headerRow,
-            $highestRow,
-            $nameCol,
-            $dateColumnMap,
-            $employeeLookup,
-            $year,
-            $month,
-            $actor,
-            &$recordsSaved,
-            &$matchedEmployees,
-            &$unmatchedNames
-        ) {
-            $upsertRows = [];
-            $now = now();
-
-            for ($row = $headerRow + 1; $row <= $highestRow; $row++) {
-                $rawName = trim((string) $sheet->getCell([$nameCol, $row])->getValue());
-                if (empty($rawName) || str_starts_with($rawName, '*') || str_contains(strtolower($rawName), 'periode')) {
-                    continue;
-                }
-
-                $cleanName = strtolower($rawName);
-                /** @var Employee|null $employee */
-                $employee = $employeeLookup[$cleanName] ?? null;
-
-                if (! $employee) {
-                    // Coba fuzzy match
-                    foreach ($employeeLookup as $key => $cand) {
-                        if (str_contains($key, $cleanName) || str_contains($cleanName, $key)) {
-                            $employee = $cand;
-                            break;
+                    // Abaikan Kolom A ($col === 1). Hanya deteksi header numerik tanggal (1..daysInMonth) mulai Kolom B ($col >= 2).
+                    if ($col >= 2 && is_numeric($cellVal)) {
+                        $dayInt = (int) $cellVal;
+                        if ($dayInt >= 1 && $dayInt <= $daysInMonth) {
+                            $numericCount++;
+                            $tempDateMap[$col] = $dayInt;
                         }
+                    }
+
+                    if (in_array($lowerVal, ['nama', 'name', 'nama karyawan'], true)) {
+                        $nameCol = $col;
+                    } elseif (in_array($lowerVal, ['fingerprint', 'fingerprint_id', 'pin', 'no absen', 'id fingerprint'], true)) {
+                        $fingerprintCol = $col;
+                    } elseif (in_array($lowerVal, ['nik', 'kode', 'kode karyawan', 'employee_code', 'nip'], true)) {
+                        $codeCol = $col;
+                    } elseif (in_array($lowerVal, ['id', 'emp_id', 'employee_id'], true)) {
+                        $idCol = $col;
                     }
                 }
 
-                if (! $employee) {
-                    $unmatchedNames[] = $rawName;
-                    continue;
-                }
-
-                $matchedEmployees++;
-
-                foreach ($dateColumnMap as $colIndex => $day) {
-                    $dateStr = sprintf('%04d-%02d-%02d', $year, $month, $day);
-                    $cell = $sheet->getCell([$colIndex, $row]);
-                    $val = strtoupper(trim((string) $cell->getValue()));
-
-                    // Deteksi warna background sel
-                    $fillColor = $cell->getStyle()->getFill()->getStartColor()->getRGB();
-                    $fillColor = strtoupper(trim((string) $fillColor));
-
-                    // Cek apakah merah (Off / Libur)
-                    // Warna merah umum: FF0000, F44336, EF4444, E11D48, C00000, atau varian red
-                    $isRedColor = in_array($fillColor, ['FF0000', 'C00000', 'F44336', 'EF4444', 'DC2626', 'E11D48', 'B91C1C', '991B1B'], true)
-                        || (strlen($fillColor) === 6 && hexdec(substr($fillColor, 0, 2)) > 180 && hexdec(substr($fillColor, 2, 2)) < 80);
-
-                    $isExplicitOff = in_array($val, ['OFF', 'LIBUR', 'X', 'L', 'O'], true) || $isRedColor;
-                    $status = $isExplicitOff ? EmployeeSchedule::STATUS_OFF : EmployeeSchedule::STATUS_WORK;
-
-                    $upsertRows[] = [
-                        'employee_id' => $employee->id,
-                        'date' => $dateStr,
-                        'status' => $status,
-                        'notes' => $isExplicitOff ? 'Import Jadwal Excel' : null,
-                        'created_by' => $actor?->id,
-                        'updated_by' => $actor?->id,
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ];
+                if ($numericCount >= min(15, $daysInMonth - 5)) {
+                    $headerRow = $row;
+                    $dateColumnMap = $tempDateMap;
+                    break;
                 }
             }
 
-            if (! empty($upsertRows)) {
-                foreach (array_chunk($upsertRows, 250) as $chunk) {
-                    EmployeeSchedule::upsert(
-                        $chunk,
-                        ['employee_id', 'date'],
-                        ['status', 'notes', 'updated_by', 'updated_at']
-                    );
-                    $recordsSaved += count($chunk);
+            if (! $headerRow || empty($dateColumnMap)) {
+                throw new InvalidArgumentException("Format Excel tidak sesuai. Baris tanggal (1 s/d {$daysInMonth}) tidak ditemukan.");
+            }
+
+            // Jika kolom Nama belum terdeteksi dari header baris yang sama, cari di baris sebelumnya atau default kolom 2 / 1
+            if (! $nameCol) {
+                for ($r = 1; $r <= max(1, $headerRow - 1); $r++) {
+                    for ($c = 1; $c <= min(5, $highestColIndex); $c++) {
+                        $v = strtolower(trim((string) $sheet->getCell([$c, $r])->getValue()));
+                        if (str_contains($v, 'nama')) {
+                            $nameCol = $c;
+                            break 2;
+                        }
+                    }
+                }
+                if (! $nameCol) {
+                    $valCol1 = strtolower(trim((string) $sheet->getCell([1, max(1, $headerRow - 1)])->getValue()));
+                    $nameCol = (in_array($valCol1, ['no', 'no.', 'nomor'], true)) ? 2 : 1;
                 }
             }
 
-            $this->logger->info(
-                action: 'SCHEDULES_IMPORTED',
-                module: 'schedules',
-                message: "Impor jadwal bulan {$month}/{$year} berhasil: {$recordsSaved} jadwal untuk {$matchedEmployees} karyawan",
-                context: [
-                    'year' => $year,
-                    'month' => $month,
-                    'matched_employees' => $matchedEmployees,
-                    'records_saved' => $recordsSaved,
-                    'unmatched_count' => count($unmatchedNames),
-                ],
-                userId: $actor?->id
-            );
-        });
+            // Ambil info hari kerja perusahaan dan hari libur nasional untuk penanganan cell kosong
+            $company = CompanyProfile::getProfile();
+            $workDaysPerWeek = (int) ($company->work_days_per_week ?: 6);
+            $startDateStr = sprintf('%04d-%02d-01', $year, $month);
+            $endDateStr = sprintf('%04d-%02d-%02d', $year, $month, $daysInMonth);
+            $holidays = Holiday::datesBetween($startDateStr, $endDateStr);
 
-        return [
-            'records_saved' => $recordsSaved,
-            'matched_employees' => $matchedEmployees,
-            'unmatched_names' => array_unique($unmatchedNames),
-        ];
+            // Pre-calculate default off days per date in month
+            $defaultOffDates = [];
+            for ($d = 1; $d <= $daysInMonth; $d++) {
+                $curr = Carbon::createFromDate($year, $month, $d);
+                $currStr = $curr->toDateString();
+                $defaultOffDates[$d] = WorkingDays::isWeekend($curr, $workDaysPerWeek) || $holidays->has($currStr);
+            }
+
+            // Cache karyawan untuk pencocokan yang aman dan robust
+            $employees = Employee::with('detail')->where('status', 'active')->get();
+            $byId = [];
+            $byFingerprint = [];
+            $byCode = [];
+            $byExactName = [];
+            $byNormalizedName = [];
+            $employeeTokenList = [];
+
+            foreach ($employees as $emp) {
+                $byId[(int) $emp->id] = $emp;
+                $byId[(string) $emp->id] = $emp;
+
+                if (! empty($emp->fingerprint_id)) {
+                    $byFingerprint[trim((string) $emp->fingerprint_id)] = $emp;
+                }
+
+                if (! empty($emp->detail?->employee_code)) {
+                    $byCode[strtolower(trim($emp->detail->employee_code))] = $emp;
+                }
+
+                $cleanName = strtolower(trim((string) $emp->full_name));
+                $byExactName[$cleanName] = $emp;
+
+                $normalized = preg_replace('/\s+/', ' ', preg_replace('/[^\p{L}\p{N}\s]/u', '', $cleanName));
+                if ($normalized !== '') {
+                    $byNormalizedName[$normalized] = $emp;
+                }
+
+                $tokens = array_values(array_filter(explode(' ', $normalized), fn ($t) => mb_strlen($t) >= 2));
+                $employeeTokenList[] = [
+                    'employee' => $emp,
+                    'normalized' => $normalized,
+                    'tokens' => $tokens,
+                ];
+            }
+
+            $recordsSaved = 0;
+            $matchedEmployees = 0;
+            $unmatchedNames = [];
+
+            DB::transaction(function () use (
+                $sheet,
+                $headerRow,
+                $highestRow,
+                $nameCol,
+                $codeCol,
+                $fingerprintCol,
+                $idCol,
+                $dateColumnMap,
+                $byId,
+                $byFingerprint,
+                $byCode,
+                $byExactName,
+                $byNormalizedName,
+                $employeeTokenList,
+                $defaultOffDates,
+                $year,
+                $month,
+                $actor,
+                &$recordsSaved,
+                &$matchedEmployees,
+                &$unmatchedNames
+            ) {
+                $upsertRows = [];
+                $now = now();
+
+                for ($row = $headerRow + 1; $row <= $highestRow; $row++) {
+                    $rawName = trim((string) $sheet->getCell([$nameCol, $row])->getValue());
+                    if (empty($rawName) || str_starts_with($rawName, '*') || str_contains(strtolower($rawName), 'periode') || str_contains(strtolower($rawName), 'total')) {
+                        continue;
+                    }
+
+                    /** @var Employee|null $employee */
+                    $employee = null;
+
+                    // 1. Cek dari kolom ID eksplisit jika ada
+                    if ($idCol) {
+                        $rawId = trim((string) $sheet->getCell([$idCol, $row])->getValue());
+                        if ($rawId !== '' && isset($byId[$rawId])) {
+                            $employee = $byId[$rawId];
+                        }
+                    }
+
+                    // 2. Cek dari kolom Fingerprint eksplisit jika ada
+                    if (! $employee && $fingerprintCol) {
+                        $rawFp = trim((string) $sheet->getCell([$fingerprintCol, $row])->getValue());
+                        if ($rawFp !== '' && isset($byFingerprint[$rawFp])) {
+                            $employee = $byFingerprint[$rawFp];
+                        }
+                    }
+
+                    // 3. Cek dari kolom Kode Karyawan jika ada
+                    if (! $employee && $codeCol) {
+                        $rawCode = strtolower(trim((string) $sheet->getCell([$codeCol, $row])->getValue()));
+                        if ($rawCode !== '' && isset($byCode[$rawCode])) {
+                            $employee = $byCode[$rawCode];
+                        }
+                    }
+
+                    // 4. Pencocokan kolom nama
+                    if (! $employee) {
+                        $cleanInput = strtolower($rawName);
+
+                        if (isset($byExactName[$cleanInput])) {
+                            $employee = $byExactName[$cleanInput];
+                        } elseif (isset($byCode[$cleanInput])) {
+                            $employee = $byCode[$cleanInput];
+                        } elseif (isset($byFingerprint[$cleanInput])) {
+                            $employee = $byFingerprint[$cleanInput];
+                        } elseif (is_numeric($cleanInput) && isset($byId[(int) $cleanInput])) {
+                            $employee = $byId[(int) $cleanInput];
+                        } else {
+                            $normalizedInput = preg_replace('/\s+/', ' ', preg_replace('/[^\p{L}\p{N}\s]/u', '', $cleanInput));
+                            if (isset($byNormalizedName[$normalizedInput])) {
+                                $employee = $byNormalizedName[$normalizedInput];
+                            } else {
+                                // 5. Unambiguous word token match (Mencegah collision nama depan dan false positive 'Ade' vs 'Dede')
+                                $inputTokens = array_values(array_filter(explode(' ', $normalizedInput), fn ($t) => mb_strlen($t) >= 2));
+                                if (! empty($inputTokens)) {
+                                    $candidates = [];
+                                    foreach ($employeeTokenList as $item) {
+                                        $empTokens = $item['tokens'];
+                                        $allInputTokensInEmp = true;
+                                        foreach ($inputTokens as $it) {
+                                            if (! in_array($it, $empTokens, true)) {
+                                                $allInputTokensInEmp = false;
+                                                break;
+                                            }
+                                        }
+
+                                        $allEmpTokensInInput = true;
+                                        foreach ($empTokens as $et) {
+                                            if (! in_array($et, $inputTokens, true)) {
+                                                $allEmpTokensInInput = false;
+                                                break;
+                                            }
+                                        }
+
+                                        if ($allInputTokensInEmp || $allEmpTokensInInput) {
+                                            $candidates[] = $item['employee'];
+                                        }
+                                    }
+
+                                    // HANYA terima jika strictly unambiguous (tepat 1 karyawan yang cocok)
+                                    if (count($candidates) === 1) {
+                                        $employee = $candidates[0];
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (! $employee) {
+                        $unmatchedNames[] = $rawName;
+                        continue;
+                    }
+
+                    $matchedEmployees++;
+
+                    foreach ($dateColumnMap as $colIndex => $day) {
+                        $dateStr = sprintf('%04d-%02d-%02d', $year, $month, $day);
+                        $isDefaultOff = $defaultOffDates[$day] ?? false;
+
+                        $cell = $sheet->getCell([$colIndex, $row]);
+                        $val = strtoupper(trim((string) $cell->getValue()));
+
+                        // Deteksi warna background sel
+                        $fillColor = '';
+                        try {
+                            $fill = $cell->getStyle()->getFill();
+                            if ($fill->getFillType() !== Fill::FILL_NONE) {
+                                $fillColor = strtoupper(trim((string) $fill->getStartColor()->getRGB()));
+                            }
+                        } catch (\Throwable) {}
+
+                        // Cek apakah merah (Off / Libur)
+                        $isRedColor = in_array($fillColor, ['FF0000', 'C00000', 'F44336', 'EF4444', 'DC2626', 'E11D48', 'B91C1C', '991B1B'], true)
+                            || (strlen($fillColor) === 6 && hexdec(substr($fillColor, 0, 2)) > 180 && hexdec(substr($fillColor, 2, 2)) < 80);
+
+                        $isExplicitOff = in_array($val, ['OFF', 'LIBUR', 'X', 'L', 'O'], true) || $isRedColor;
+                        $isExplicitWork = in_array($val, ['WORK', 'KERJA', 'MASUK', 'W', 'M', 'V', '1'], true);
+
+                        if ($isExplicitOff) {
+                            $status = EmployeeSchedule::STATUS_OFF;
+                            $notes = 'Import Jadwal Excel (OFF)';
+                        } elseif ($isExplicitWork) {
+                            $status = EmployeeSchedule::STATUS_WORK;
+                            $notes = 'Import Jadwal Excel (WORK)';
+                        } else {
+                            // Blank/empty cell: jangan paksakan WORK, pertahankan default libur jika akhir pekan/libur nasional
+                            $status = $isDefaultOff ? EmployeeSchedule::STATUS_OFF : EmployeeSchedule::STATUS_WORK;
+                            $notes = null;
+                        }
+
+                        $upsertRows[] = [
+                            'employee_id' => $employee->id,
+                            'date' => $dateStr,
+                            'status' => $status,
+                            'notes' => $notes,
+                            'created_by' => $actor?->id,
+                            'updated_by' => $actor?->id,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ];
+                    }
+                }
+
+                if (! empty($upsertRows)) {
+                    foreach (array_chunk($upsertRows, 250) as $chunk) {
+                        EmployeeSchedule::upsert(
+                            $chunk,
+                            ['employee_id', 'date'],
+                            ['status', 'notes', 'updated_by', 'updated_at']
+                        );
+                        $recordsSaved += count($chunk);
+                    }
+                }
+
+                $this->logger->info(
+                    action: 'SCHEDULES_IMPORTED',
+                    module: 'schedules',
+                    message: "Impor jadwal bulan {$month}/{$year} berhasil: {$recordsSaved} jadwal untuk {$matchedEmployees} karyawan",
+                    context: [
+                        'year' => $year,
+                        'month' => $month,
+                        'matched_employees' => $matchedEmployees,
+                        'records_saved' => $recordsSaved,
+                        'unmatched_count' => count($unmatchedNames),
+                    ],
+                    userId: $actor?->id
+                );
+            });
+
+            return [
+                'records_saved' => $recordsSaved,
+                'matched_employees' => $matchedEmployees,
+                'unmatched_names' => array_unique($unmatchedNames),
+            ];
+        } finally {
+            if ($spreadsheet instanceof Spreadsheet) {
+                $spreadsheet->disconnectWorksheets();
+                unset($spreadsheet);
+            }
+        }
     }
 
     /**
      * Export template Excel jadwal bulanan (format siap isi / edit seperti contoh klien).
      */
-    public function exportRosterToExcel(int $year, int $month): Spreadsheet
+    public function exportRosterToExcel(int $year, int $month, ?int $departmentId = null, ?string $search = null): Spreadsheet
     {
-        $roster = $this->getMonthlyRoster($year, $month);
+        $roster = $this->getMonthlyRoster($year, $month, $departmentId, $search);
         $daysInMonth = $roster['days_in_month'];
         $dates = $roster['dates'];
         $employees = $roster['employees'];
@@ -531,8 +726,8 @@ class WorkScheduleService
             $sheet->setCellValue("{$colLetter}3", $meta['day_name']);
             $sheet->setCellValue("{$colLetter}4", $day);
 
-            // Warna merah di header jika hari Minggu
-            if ($meta['is_sunday']) {
+            // Warna merah di header jika hari Minggu atau libur nasional
+            if ($meta['is_sunday'] || $meta['is_holiday']) {
                 $sheet->getStyle("{$colLetter}3:{$colLetter}4")->getFill()
                     ->setFillType(Fill::FILL_SOLID)
                     ->getStartColor()->setRGB('EF4444');
@@ -547,42 +742,66 @@ class WorkScheduleService
         $sheet->getStyle("A3:{$lastColLetter}4")->getFont()->setBold(true);
         $sheet->getStyle("A3:{$lastColLetter}4")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
 
-        // Baris Karyawan
         $rowNum = 5;
-        foreach ($employees as $idx => $emp) {
-            $sheet->setCellValue("A{$rowNum}", $idx + 1);
-            $sheet->setCellValue("B{$rowNum}", $emp['name']);
-            $sheet->setCellValue("C{$rowNum}", $emp['jobdesk']);
+        $totalEmployees = count($employees);
+        $lastRow = max(5, $rowNum + $totalEmployees - 1);
 
-            $colIdx = 4;
-            foreach ($dates as $day => $meta) {
-                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIdx);
-                $sch = $emp['schedules'][$meta['date']] ?? null;
-                $isOff = $sch && $sch['status'] === EmployeeSchedule::STATUS_OFF;
+        if ($totalEmployees > 0) {
+            // Optimasi styling massal: set default hijau untuk seluruh grid tanggal
+            $sheet->getStyle("D5:{$lastColLetter}{$lastRow}")->applyFromArray([
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => '22C55E'],
+                ],
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ],
+            ]);
 
-                // Sel Hijau (Masuk) atau Merah (Libur)
-                $fillColor = $isOff ? 'EF4444' : '22C55E';
-                $sheet->setCellValue("{$colLetter}{$rowNum}", $isOff ? 'OFF' : '');
+            $offStyle = [
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => 'EF4444'],
+                ],
+                'font' => [
+                    'color' => ['rgb' => 'FFFFFF'],
+                    'bold' => true,
+                    'size' => 9,
+                ],
+            ];
 
-                $sheet->getStyle("{$colLetter}{$rowNum}")->getFill()
-                    ->setFillType(Fill::FILL_SOLID)
-                    ->getStartColor()->setRGB($fillColor);
+            foreach ($employees as $idx => $emp) {
+                $sheet->setCellValue("A{$rowNum}", $idx + 1);
+                $sheet->setCellValue("B{$rowNum}", $emp['name']);
+                $sheet->setCellValue("C{$rowNum}", $emp['jobdesk']);
 
-                if ($isOff) {
-                    $sheet->getStyle("{$colLetter}{$rowNum}")->getFont()->getColor()->setRGB('FFFFFF');
-                    $sheet->getStyle("{$colLetter}{$rowNum}")->getFont()->setBold(true)->setSize(9);
+                $colIdx = 4;
+                foreach ($dates as $day => $meta) {
+                    $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIdx);
+                    $sch = $emp['schedules'][$meta['date']] ?? null;
+                    $isOff = $sch && $sch['status'] === EmployeeSchedule::STATUS_OFF;
+
+                    if ($isOff) {
+                        $cellCoord = "{$colLetter}{$rowNum}";
+                        $sheet->setCellValue($cellCoord, 'OFF');
+                        $sheet->getStyle($cellCoord)->applyFromArray($offStyle);
+                    } else {
+                        $sheet->setCellValue("{$colLetter}{$rowNum}", '');
+                    }
+
+                    $colIdx++;
                 }
 
-                $sheet->getStyle("{$colLetter}{$rowNum}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $colIdx++;
+                $rowNum++;
             }
-
-            $rowNum++;
         }
 
         // Border tabel
-        $lastRow = $rowNum - 1;
-        $sheet->getStyle("A3:{$lastColLetter}{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $actualLastRow = $rowNum - 1;
+        if ($actualLastRow >= 3) {
+            $sheet->getStyle("A3:{$lastColLetter}{$actualLastRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        }
 
         // Auto width untuk kolom A, B, C
         $sheet->getColumnDimension('A')->setWidth(6);

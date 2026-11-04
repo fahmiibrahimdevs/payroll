@@ -19,6 +19,7 @@ use App\Models\CashAdvanceInstallment;
 use App\Models\CashAdvancePayment;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
+use App\Models\EmployeeSchedule;
 use App\Models\Holiday;
 use App\Models\PayrollItem;
 use App\Models\PayrollItemLine;
@@ -982,13 +983,39 @@ class PayrollService
         // Hari libur nasional (kalender admin) dikecualikan dari hari kerja.
         $holidayDates = Holiday::datesBetween($startDate->toDateString(), $endDate->toDateString());
 
-        // Total working days in period (5 days: exclude Sat & Sun; 6 days: exclude Sun)
+        $isRoster = $company->isRosterMode();
+        $employeeSchedules = $isRoster
+            ? EmployeeSchedule::query()
+                ->where('employee_id', $employee->id)
+                ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->get()
+                ->keyBy(fn ($s) => $s->date->toDateString())
+            : collect();
+
+        $hasSchedules = $isRoster && $employeeSchedules->isNotEmpty();
+
+        // Total working days in period (5 days: exclude Sat & Sun; 6 days: exclude Sun; Roster: count scheduled work days)
         $totalWorkingDays = 0;
         $curr = $startDate->copy();
         while ($curr->lte($endDate)) {
-            $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
-            if (! $isWeekend && ! $holidayDates->has($curr->toDateString())) {
-                $totalWorkingDays++;
+            $dateString = $curr->toDateString();
+            if ($hasSchedules) {
+                $sch = $employeeSchedules->get($dateString);
+                if ($sch) {
+                    if ($sch->isWork()) {
+                        $totalWorkingDays++;
+                    }
+                } else {
+                    $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
+                    if (! $isWeekend && ! $holidayDates->has($dateString)) {
+                        $totalWorkingDays++;
+                    }
+                }
+            } else {
+                $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
+                if (! $isWeekend && ! $holidayDates->has($dateString)) {
+                    $totalWorkingDays++;
+                }
             }
             $curr->addDay();
         }
@@ -1000,12 +1027,27 @@ class PayrollService
         $this->periodHasAttendanceCache[$periodKey] ??= Attendance::whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->exists();
 
         if ($this->periodHasAttendanceCache[$periodKey]) {
-            // Hari libur dihitung di PHP (portabel antar driver DB, bukan DAYOFWEEK() yang MySQL-only)
+            // Hari libur / off dihitung di PHP (portabel antar driver DB, bukan DAYOFWEEK() yang MySQL-only)
             $weekendDates = [];
             for ($curr = $startDate->copy(); $curr->lte($endDate); $curr->addDay()) {
-                $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
-                if ($isWeekend || $holidayDates->has($curr->toDateString())) {
-                    $weekendDates[] = $curr->toDateString();
+                $dateString = $curr->toDateString();
+                if ($hasSchedules) {
+                    $sch = $employeeSchedules->get($dateString);
+                    if ($sch) {
+                        if ($sch->isOff()) {
+                            $weekendDates[] = $dateString;
+                        }
+                    } else {
+                        $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
+                        if ($isWeekend || $holidayDates->has($dateString)) {
+                            $weekendDates[] = $dateString;
+                        }
+                    }
+                } else {
+                    $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
+                    if ($isWeekend || $holidayDates->has($dateString)) {
+                        $weekendDates[] = $dateString;
+                    }
                 }
             }
 
@@ -1072,7 +1114,13 @@ class PayrollService
         $workedDays = 0;
         $curr = $workedStart->copy();
         while ($curr->lte($workedEnd)) {
-            $isWorkDay = ! WorkingDays::isWeekend($curr, $workDaysPerWeek);
+            $dateString = $curr->toDateString();
+            if ($hasSchedules) {
+                $sch = $employeeSchedules->get($dateString);
+                $isWorkDay = $sch ? $sch->isWork() : (! WorkingDays::isWeekend($curr, $workDaysPerWeek) && ! $holidayDates->has($dateString));
+            } else {
+                $isWorkDay = ! WorkingDays::isWeekend($curr, $workDaysPerWeek);
+            }
             if ($isWorkDay) {
                 $workedDays++;
             }

@@ -599,9 +599,35 @@
                                 <div class="col-md-4 col-12">
                                     <div class="form-group">
                                         <label for="form_start_time">Jam Mulai <span class="text-danger">*</span></label>
-                                        <input type="time" id="form_start_time" wire:model.live="form.start_time" @disabled($isFormLocked) class="form-control @error('form.start_time') is-invalid @enderror">
+                                        <div class="input-group">
+                                            <input type="text"
+                                                id="form_start_time"
+                                                wire:model.live="form.start_time"
+                                                @disabled($isFormLocked)
+                                                placeholder="00:00"
+                                                autocomplete="off"
+                                                x-data
+                                                x-init="flatpickr($el, {
+                                                    enableTime: true,
+                                                    noCalendar: true,
+                                                    dateFormat: 'H:i',
+                                                    time_24hr: true,
+                                                    allowInput: true,
+                                                    minuteIncrement: 1,
+                                                    onChange: (dates, dateStr) => {
+                                                        $el.value = dateStr;
+                                                        $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                    }
+                                                })"
+                                                class="form-control timepicker-24 @error('form.start_time') is-invalid @enderror">
+                                            <div class="input-group-append">
+                                                <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                    <i class="far fa-clock text-primary"></i>
+                                                </span>
+                                            </div>
+                                        </div>
                                         @error('form.start_time')
-                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
                                         @enderror
                                     </div>
                                 </div>
@@ -610,9 +636,35 @@
                                 <div class="col-md-4 col-12">
                                     <div class="form-group">
                                         <label for="form_end_time">Jam Selesai <span class="text-danger">*</span></label>
-                                        <input type="time" id="form_end_time" wire:model.live="form.end_time" @disabled($isFormLocked) class="form-control @error('form.end_time') is-invalid @enderror">
+                                        <div class="input-group">
+                                            <input type="text"
+                                                id="form_end_time"
+                                                wire:model.live="form.end_time"
+                                                @disabled($isFormLocked)
+                                                placeholder="00:00"
+                                                autocomplete="off"
+                                                x-data
+                                                x-init="flatpickr($el, {
+                                                    enableTime: true,
+                                                    noCalendar: true,
+                                                    dateFormat: 'H:i',
+                                                    time_24hr: true,
+                                                    allowInput: true,
+                                                    minuteIncrement: 1,
+                                                    onChange: (dates, dateStr) => {
+                                                        $el.value = dateStr;
+                                                        $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                    }
+                                                })"
+                                                class="form-control timepicker-24 @error('form.end_time') is-invalid @enderror">
+                                            <div class="input-group-append">
+                                                <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                    <i class="far fa-clock text-primary"></i>
+                                                </span>
+                                            </div>
+                                        </div>
                                         @error('form.end_time')
-                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
                                         @enderror
                                     </div>
                                 </div>
@@ -792,9 +844,34 @@
                             <div class="col-md-4 col-12">
                                 <div class="form-group">
                                     <label for="adjust_start_time">Jam Mulai <span class="text-danger">*</span></label>
-                                    <input type="time" id="adjust_start_time" wire:model.live="adjust_start_time" class="form-control @error('adjust_start_time') is-invalid @enderror">
+                                    <div class="input-group">
+                                        <input type="text"
+                                            id="adjust_start_time"
+                                            wire:model.live="adjust_start_time"
+                                            placeholder="00:00"
+                                            autocomplete="off"
+                                            x-data
+                                            x-init="flatpickr($el, {
+                                                enableTime: true,
+                                                noCalendar: true,
+                                                dateFormat: 'H:i',
+                                                time_24hr: true,
+                                                allowInput: true,
+                                                minuteIncrement: 1,
+                                                onChange: (dates, dateStr) => {
+                                                    $el.value = dateStr;
+                                                    $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                }
+                                            })"
+                                            class="form-control timepicker-24 @error('adjust_start_time') is-invalid @enderror">
+                                        <div class="input-group-append">
+                                            <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                <i class="far fa-clock text-primary"></i>
+                                            </span>
+                                        </div>
+                                    </div>
                                     @error('adjust_start_time')
-                                        <div class="invalid-feedback">{{ $message }}</div>
+                                        <div class="invalid-feedback d-block">{{ $message }}</div>
                                     @enderror
                                 </div>
                             </div>
@@ -803,9 +880,34 @@
                             <div class="col-md-4 col-12">
                                 <div class="form-group">
                                     <label for="adjust_end_time">Jam Selesai <span class="text-danger">*</span></label>
-                                    <input type="time" id="adjust_end_time" wire:model.live="adjust_end_time" class="form-control @error('adjust_end_time') is-invalid @enderror">
+                                    <div class="input-group">
+                                        <input type="text"
+                                            id="adjust_end_time"
+                                            wire:model.live="adjust_end_time"
+                                            placeholder="00:00"
+                                            autocomplete="off"
+                                            x-data
+                                            x-init="flatpickr($el, {
+                                                enableTime: true,
+                                                noCalendar: true,
+                                                dateFormat: 'H:i',
+                                                time_24hr: true,
+                                                allowInput: true,
+                                                minuteIncrement: 1,
+                                                onChange: (dates, dateStr) => {
+                                                    $el.value = dateStr;
+                                                    $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                                }
+                                            })"
+                                            class="form-control timepicker-24 @error('adjust_end_time') is-invalid @enderror">
+                                        <div class="input-group-append">
+                                            <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                <i class="far fa-clock text-primary"></i>
+                                            </span>
+                                        </div>
+                                    </div>
                                     @error('adjust_end_time')
-                                        <div class="invalid-feedback">{{ $message }}</div>
+                                        <div class="invalid-feedback d-block">{{ $message }}</div>
                                     @enderror
                                 </div>
                             </div>

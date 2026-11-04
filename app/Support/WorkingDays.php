@@ -86,11 +86,26 @@ class WorkingDays
         }
 
         $holidays = Holiday::datesBetween($startDate, $endDate);
-        $schedules = $employeeSchedules ?? \App\Models\EmployeeSchedule::query()
-            ->where('employee_id', $employeeId)
-            ->whereBetween('date', [$startDate, $endDate])
-            ->get()
-            ->keyBy(fn ($s) => $s->date->toDateString());
+
+        $hasSchedulesArg = func_num_args() >= 5;
+        if ($hasSchedulesArg) {
+            $schedules = $employeeSchedules ?? collect();
+        } else {
+            $schedules = \App\Models\EmployeeSchedule::query()
+                ->where('employee_id', $employeeId)
+                ->whereBetween('date', [$startDate, $endDate])
+                ->get();
+        }
+
+        if ($schedules->isNotEmpty() && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $schedules->keys()->first())) {
+            $schedules = $schedules->keyBy(function ($s) {
+                if ($s instanceof \App\Models\EmployeeSchedule) {
+                    return $s->date instanceof CarbonInterface ? $s->date->toDateString() : Carbon::parse($s->date)->toDateString();
+                }
+
+                return is_array($s) ? ($s['date'] ?? '') : (string) ($s->date ?? '');
+            });
+        }
 
         $workDays = [];
         $curr = Carbon::parse($startDate)->startOfDay();

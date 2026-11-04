@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css"
         integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+    <link rel="stylesheet" href="{{ asset('assets/css/flatpickr.min.css') }}">
 
     <!-- Template CSS -->
     <link rel="stylesheet" href="{{ asset('assets/css/style-tailwind.compiled.css') }}">
@@ -86,6 +87,46 @@
             background-color: #0b52aa !important;
             color: #ffffff !important;
         }
+
+        /* Flatpickr 24-Hour Timepicker Modern Executive Theme */
+        .flatpickr-calendar {
+            background: #ffffff !important;
+            border-radius: 12px !important;
+            border: 1px solid #e2e8f0 !important;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+            font-family: inherit !important;
+            z-index: 99999 !important;
+        }
+        .flatpickr-calendar.hasTime .flatpickr-time {
+            height: 48px !important;
+            line-height: 48px !important;
+            max-height: 48px !important;
+            border-top: none !important;
+            padding: 4px 8px !important;
+        }
+        .flatpickr-time input {
+            font-size: 16px !important;
+            font-weight: 700 !important;
+            color: #0f172a !important;
+            border-radius: 6px !important;
+        }
+        .flatpickr-time input:hover,
+        .flatpickr-time input:focus {
+            background: #f1f5f9 !important;
+        }
+        .flatpickr-time .flatpickr-time-separator {
+            font-size: 16px !important;
+            font-weight: 800 !important;
+            color: #0b52aa !important;
+        }
+        .flatpickr-time .arrowUp,
+        .flatpickr-time .arrowDown {
+            color: #64748b !important;
+        }
+        .flatpickr-time .arrowUp:hover,
+        .flatpickr-time .arrowDown:hover {
+            color: #0b52aa !important;
+        }
     </style>
     @stack('styles')
     {{ $styles ?? '' }}
@@ -128,6 +169,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.nicescroll/3.7.6/jquery.nicescroll.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.full.min.js"></script>
+    <script src="{{ asset('assets/js/flatpickr.min.js') }}"></script>
     <script src="{{ asset('assets/js/stisla.js') }}"></script>
 
     <!-- Template JS Scripts -->

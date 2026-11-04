@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -79,7 +80,18 @@ class EmployeeSchedule extends Model
      */
     public function scopeMonth(Builder $query, int $year, int $month): Builder
     {
-        return $query->whereYear('date', $year)->whereMonth('date', $month);
+        $startDate = sprintf('%04d-%02d-01', $year, $month);
+        $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth()->toDateString();
+
+        return $query->whereBetween('date', [$startDate, $endDate]);
+    }
+
+    /**
+     * Alias scope jadwal untuk bulan dan tahun tertentu.
+     */
+    public function scopeForMonth(Builder $query, int $year, int $month): Builder
+    {
+        return $this->scopeMonth($query, $year, $month);
     }
 
     /**

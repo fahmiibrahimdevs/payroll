@@ -10,6 +10,7 @@ use App\Enums\OvertimeType;
 use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
+use App\Models\EmployeeSchedule;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Models\OvertimeSubmission;
@@ -614,8 +615,11 @@ class OvertimeService
                         ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
                         ->get();
 
-                    $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?: 6);
-                    $validWorkDays = WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
+                    $company = CompanyProfile::getProfile();
+                    $workDaysPerWeek = (int) ($company->work_days_per_week ?: 6);
+                    $validWorkDays = $company->isRosterMode()
+                        ? WorkingDays::employeeWorkDays($employee->id, $startDate, $endDate, $company)
+                        : WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
                     $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances, $validWorkDays);
                     $daysCount = count($attendedDaysKeys);
 
@@ -682,8 +686,15 @@ class OvertimeService
         $linkedCount = 0;
 
         DB::transaction(function () use ($period, $unlinkedSubmissions, $paidEmployeeIds, &$linkedCount, $startDate, $endDate) {
-            $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?: 6);
+            $company = CompanyProfile::getProfile();
+            $workDaysPerWeek = (int) ($company->work_days_per_week ?: 6);
+            $isRoster = $company->isRosterMode();
             $validWorkDays = WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
+
+            $candidateEmpIds = $unlinkedSubmissions->pluck('employee_id')->unique()->all();
+            $rosterSchedules = $isRoster
+                ? EmployeeSchedule::schedulesForEmployees($candidateEmpIds, $startDate, $endDate)
+                : collect();
 
             foreach ($unlinkedSubmissions as $submission) {
                 // STRICT LOCK: Lewati jika karyawan sudah berstatus dibayar di periode ini
@@ -711,7 +722,11 @@ class OvertimeService
                             ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
                             ->get();
 
-                        $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances, $validWorkDays);
+                        $empValidWorkDays = $isRoster
+                            ? WorkingDays::employeeWorkDays($employee->id, $startDate, $endDate, $company, $rosterSchedules->get($employee->id))
+                            : $validWorkDays;
+
+                        $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances, $empValidWorkDays);
                         $daysCount = count($attendedDaysKeys);
 
                         OvertimePeriodAttendance::create([
@@ -963,10 +978,16 @@ class OvertimeService
             // Fallback tanpa log absensi: hari kerja aktual dalam rentang
             // (kecualikan akhir pekan sesuai jadwal kerja dan hari libur
             // nasional dari kalender admin).
-            $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6);
+            $company = CompanyProfile::getProfile();
+            $workDaysPerWeek = (int) ($company->work_days_per_week ?? 6);
+            $isRoster = $company->isRosterMode();
             $validWorkDays = WorkingDays::workDays($startDate->toDateString(), $endDate->toDateString(), $workDaysPerWeek);
             $defaultDays = array_values($validWorkDays);
             $defaultDaysCount = max(1, count($defaultDays));
+
+            $rosterSchedules = $isRoster
+                ? EmployeeSchedule::schedulesForEmployees($candidateEmployees->pluck('id')->all(), $startDate->toDateString(), $endDate->toDateString())
+                : collect();
 
             foreach ($candidateEmployees as $emp) {
                 $rate = $emp->getEffectiveMealAllowancePerDay();
@@ -974,11 +995,15 @@ class OvertimeService
                 $dailyRate = $isHarian ? (float) ($emp->daily_rate ?? 0) : 0.0;
                 $hasOvertime = in_array($emp->id, $linkedEmpIds, true);
 
+                $empValidWorkDays = $isRoster
+                    ? WorkingDays::employeeWorkDays($emp->id, $startDate->toDateString(), $endDate->toDateString(), $company, $rosterSchedules->get($emp->id))
+                    : $validWorkDays;
+
                 if ($hasAttendanceLog) {
                     // Presensi mingguan hanya menghitung hari kerja valid
                     // (Minggu/Sabtu sesuai jadwal dan libur nasional tidak
                     // dihitung); log absensinya tetap tersimpan.
-                    $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances->get($emp->id, collect()), $validWorkDays);
+                    $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances->get($emp->id, collect()), $empValidWorkDays);
                     $attendedCount = count($attendedDaysKeys);
 
                     // Hanya buat record presensi bagi yang memiliki kehadiran (> 0 hari) atau lembur
@@ -1002,16 +1027,18 @@ class OvertimeService
                     ]);
                 } else {
                     // Jika log absensi belum diimpor, default hanya untuk karyawan harian aktif & lembur
-                    $totalDailyWage = $defaultDaysCount * $dailyRate;
+                    $empDefaultDays = $isRoster ? array_values($empValidWorkDays) : $defaultDays;
+                    $empDefaultDaysCount = max(1, count($empDefaultDays));
+                    $totalDailyWage = $empDefaultDaysCount * $dailyRate;
                     OvertimePeriodAttendance::create([
                         'overtime_period_id' => $period->id,
                         'employee_id' => $emp->id,
                         'meal_allowance_type' => $emp->meal_allowance_type ?: 'standar',
                         'meal_allowance_per_day' => $rate,
                         'daily_rate' => $dailyRate,
-                        'attended_days' => $defaultDaysCount,
-                        'attendance_days' => $defaultDays,
-                        'total_meal_allowance' => $defaultDaysCount * $rate,
+                        'attended_days' => $empDefaultDaysCount,
+                        'attendance_days' => $empDefaultDays,
+                        'total_meal_allowance' => $empDefaultDaysCount * $rate,
                         'total_daily_wage' => $totalDailyWage,
                     ]);
                 }
