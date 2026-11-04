@@ -119,6 +119,24 @@ class CompanyProfileTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_update_work_schedule_mode_setting(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        Livewire::test(Index::class)
+            ->set('work_schedule_mode', 'roster')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseHas('company_profiles', [
+            'work_schedule_mode' => 'roster',
+        ]);
+
+        $this->assertTrue(CompanyProfile::getProfile()->isRosterMode());
+    }
+
     public function test_admin_can_update_payroll_cutoff_and_pay_day_settings(): void
     {
         $admin = $this->createAdminUser();

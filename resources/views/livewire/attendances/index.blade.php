@@ -13,17 +13,18 @@
         <div class="mr-md-3">
             <h2 class="section-title mt-0">Rekap Presensi &amp; Jam Kerja Mesin Fingerprint</h2>
             <p class="section-lead mb-0">
-                Tampilan matriks kehadiran harian seluruh karyawan lengkap dengan jam scan masuk dan scan pulang.
+                Tampilan Matriks Kehadiran harian seluruh karyawan lengkap dengan jam scan masuk dan scan pulang.
             </p>
         </div>
 
         @if (auth()->user()?->hasRole(['admin', 'direktur']))
             <div class="mt-3 mt-md-0 flex-shrink-0 d-flex align-items-center" style="gap: 8px;">
-                <button type="button" onclick="$('#importAttendanceModal').modal('show')" class="btn btn-primary d-inline-flex align-items-center font-weight-normal shadow-sm" style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; padding: 8px 16px; font-size: 13px;">
+                <button type="button" onclick="$('#importAttendanceModal').modal('show')" class="btn font-weight-bold d-inline-flex align-items-center text-white" style="background-color: #1d4ed8; border: none; border-radius: 8px; padding: 7px 16px; font-size: 12px; box-shadow: 0 2px 6px rgba(29, 78, 216, 0.25); transition: all 0.15s;">
                     <i class="fas fa-file-excel mr-1.5"></i> Import Excel Mesin
                 </button>
-                <button type="button" wire:click="openCreateModal" class="btn btn-secondary d-inline-flex align-items-center font-weight-normal shadow-sm" style="background-color: #f8fafc; border-color: #cbd5e1; color: #1e293b; border-radius: 8px; padding: 8px 16px; font-size: 13px;">
-                    <i class="fas fa-plus mr-1.5 text-primary"></i> Input Manual
+                <button type="button" wire:click="openCreateModal" wire:loading.attr="disabled" wire:target="openCreateModal" class="btn font-weight-bold d-inline-flex align-items-center" style="background-color: #f8fafc; border: 1px solid #cbd5e1; color: #1e293b; border-radius: 8px; padding: 7px 16px; font-size: 12px; transition: all 0.15s;">
+                    <span wire:loading.remove wire:target="openCreateModal"><i class="fas fa-plus mr-1.5 text-primary"></i> Input Manual</span>
+                    <span wire:loading wire:target="openCreateModal"><i class="fas fa-spinner fa-spin mr-1.5 text-primary"></i> Membuka...</span>
                 </button>
             </div>
         @endif
@@ -128,563 +129,863 @@
         </div>
     </div>
 
-    <!-- Keterangan Legenda Presensi (Clean Executive Single-Line Bar) -->
-    <div class="card mb-3 shadow-none" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 18px;">
-        <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between" style="gap: 12px;">
-            <!-- Kiri: Judul & Petunjuk Interaktif Ringkas -->
-            <div class="d-flex align-items-center" style="font-size: 12.5px; color: #334155; font-weight: 500;">
-                <span class="d-inline-flex align-items-center justify-content-center mr-2 flex-shrink-0" style="width: 22px; height: 22px; border-radius: 6px; background-color: #eff6ff; color: #0b52aa;">
-                    <i class="fas fa-info-circle" style="font-size: 11px;"></i>
-                </span>
-                <span class="font-weight-600 text-dark mr-1.5" style="color: #0f172a;">Petunjuk Presensi &amp; Keterangan Warna:</span>
-                <span style="color: #475569;">Klik kotak tanggal untuk melihat detail atau koreksi manual.</span>
-            </div>
-
-            <!-- Kanan: Pill Badges Legenda Presensi Ringkas & Elegan -->
-            <div class="d-flex flex-wrap align-items-center flex-shrink-0" style="gap: 8px; font-size: 11.5px;">
-                <span class="d-inline-flex align-items-center font-weight-500" style="padding: 3px 9px; border-radius: 6px; background-color: #ecfdf5; border: 1px solid #a7f3d0; color: #047857;">
-                    <span style="display:inline-block; width:6px; height:6px; background-color:#10b981; border-radius:50%; margin-right: 6px;"></span>
-                    Hadir (Mesin Fingerprint)
-                </span>
-                <span class="d-inline-flex align-items-center font-weight-500" style="padding: 3px 9px; border-radius: 6px; background-color: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8;">
-                    <span style="display:inline-block; width:6px; height:6px; background-color:#3b82f6; border-radius:50%; margin-right: 6px;"></span>
-                    Koreksi / Input Manual
-                </span>
-                <span class="d-inline-flex align-items-center font-weight-500" style="padding: 3px 9px; border-radius: 6px; background-color: #fffbeb; border: 1px solid #fde68a; color: #b45309;">
-                    <span style="display:inline-block; width:6px; height:6px; background-color:#f59e0b; border-radius:50%; margin-right: 6px;"></span>
-                    Lembur (OT)
-                </span>
-                <span class="d-inline-flex align-items-center font-weight-500" style="padding: 3px 9px; border-radius: 6px; background-color: #fff1f2; border: 1px solid #fecdd3; color: #e11d48;">
-                    <span style="display:inline-block; width:6px; height:6px; background-color:#f43f5e; border-radius:50%; margin-right: 6px;"></span>
-                    Minggu
-                </span>
-                <span class="d-inline-flex align-items-center font-weight-500" style="padding: 3px 9px; border-radius: 6px; background-color: #fff7ed; border: 1px solid #fed7aa; color: #c2410c;">
-                    <span style="display:inline-block; width:6px; height:6px; background-color:#f97316; border-radius:50%; margin-right: 6px;"></span>
-                    Libur Nasional
-                </span>
-                <span class="d-inline-flex align-items-center font-weight-500" style="padding: 3px 9px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #475569;">
-                    <span style="display:inline-block; width:6px; height:6px; background-color:#94a3b8; border-radius:50%; margin-right: 6px;"></span>
-                    Kosong
-                </span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Card (Modern SaaS Executive Attendance Matrix) -->
-    <div class="card cash-advance-main-card mb-4">
-        <div class="cash-advance-top-card">
-            <div class="card-header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center" style="gap: 12px; padding: 18px 24px; border-bottom: 1px solid #f1f5f9;">
-                <!-- Title & Period Subtitle -->
-                <div>
-                    <h4 class="mb-1" style="font-size: 16px; font-weight: 600; color: #0f172a;">
-                        Presensi &bull; <span class="text-primary font-weight-600">Matriks Kehadiran</span>
-                    </h4>
-                    <p class="text-muted mb-0" style="font-size: 12px; font-weight: 400;">
-                        Periode: <strong class="text-dark font-weight-500">{{ $periodFullRangeLabel }}</strong> &bull; <span style="color: #64748b;">{{ count($matrixDates) }} Hari Presensi</span>
-                    </p>
-                </div>
-
-                <!-- Modern Month Navigator Toolbar -->
-                <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
-                    <div class="d-inline-flex align-items-center bg-white border px-1.5 py-1" style="border-radius: 9999px; border-color: #e2e8f0 !important; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
-                        <button type="button" wire:click="previousMonth" class="btn btn-sm btn-icon text-muted p-0 d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent; transition: all 0.2s;" title="Bulan Sebelumnya">
-                            <i class="fas fa-chevron-left" style="font-size: 11px;"></i>
+    <!-- Card Filter & Navigasi Bulan (Clean White & Compact, Style Jadwal) -->
+    <div class="card border-0 mb-3 roster-toolbar-card">
+        <div class="card-body p-2 px-3">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center flex-wrap" style="gap: 10px;">
+                <!-- Navigasi Bulan & Tahun -->
+                <div class="d-flex align-items-center flex-wrap" style="gap: 10px;">
+                    <div class="roster-toolbar-month">
+                        <button type="button" wire:click="previousMonth" wire:loading.attr="disabled" wire:target="previousMonth, nextMonth, goToCurrentMonth" class="roster-toolbar-month-btn" title="Bulan Sebelumnya">
+                            <span wire:loading.remove wire:target="previousMonth"><i class="fas fa-chevron-left"></i></span>
+                            <span wire:loading wire:target="previousMonth"><i class="fas fa-spinner fa-spin"></i></span>
                         </button>
-                        <div class="px-2 font-weight-600 text-dark d-inline-flex align-items-center" style="font-size: 13px; min-width: 135px; justify-content: center; letter-spacing: 0.2px;">
-                            <i class="far fa-calendar-alt text-primary mr-1.5" style="font-size: 12px;"></i>
-                            <span>{{ $periodMonthLabel }}</span>
+                        <div class="roster-toolbar-month-text">
+                            <span wire:loading.remove wire:target="previousMonth, nextMonth, goToCurrentMonth">
+                                <i class="far fa-calendar-alt mr-2 text-primary"></i> {{ $periodMonthLabel }}
+                            </span>
+                            <span wire:loading wire:target="previousMonth, nextMonth, goToCurrentMonth" class="text-primary font-weight-bold">
+                                <i class="fas fa-spinner fa-spin mr-1.5"></i> Memuat...
+                            </span>
                         </div>
-                        <button type="button" wire:click="nextMonth" class="btn btn-sm btn-icon text-muted p-0 d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent; transition: all 0.2s;" title="Bulan Berikutnya">
-                            <i class="fas fa-chevron-right" style="font-size: 11px;"></i>
+                        <button type="button" wire:click="nextMonth" wire:loading.attr="disabled" wire:target="previousMonth, nextMonth, goToCurrentMonth" class="roster-toolbar-month-btn" title="Bulan Berikutnya">
+                            <span wire:loading.remove wire:target="nextMonth"><i class="fas fa-chevron-right"></i></span>
+                            <span wire:loading wire:target="nextMonth"><i class="fas fa-spinner fa-spin"></i></span>
                         </button>
                     </div>
 
                     @if (! $isCurrentMonth)
-                        <button type="button" wire:click="goToCurrentMonth" class="btn btn-sm font-weight-500 shadow-xs" style="border-radius: 9999px; font-size: 12px; padding: 4px 12px; border: 1px solid #cbd5e1; background-color: #f8fafc; color: #0b52aa;">
-                            <i class="fas fa-undo-alt mr-1" style="font-size: 10px;"></i> Bulan Ini
+                        <button type="button" wire:click="goToCurrentMonth" wire:loading.attr="disabled" wire:target="previousMonth, nextMonth, goToCurrentMonth" class="btn roster-toolbar-btn-current">
+                            <span wire:loading.remove wire:target="goToCurrentMonth"><i class="fas fa-undo-alt mr-1.5" style="font-size: 11px;"></i> Bulan Ini</span>
+                            <span wire:loading wire:target="goToCurrentMonth"><i class="fas fa-spinner fa-spin mr-1.5" style="font-size: 11px;"></i> Memuat...</span>
                         </button>
                     @endif
                 </div>
-            </div>
 
-            <!-- Controls: Show Entries & Search Bar -->
-            <div class="dt-control-wrapper" style="padding: 12px 24px; border-bottom: 1px solid #f1f5f9;">
-                <div class="dt-show-entries">
-                    Show
-                    <select wire:model.live="perPage" class="dt-select-entries">
-                        <option value="15">15</option>
-                        <option value="25">25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
-                    Entries
-                </div>
+                <!-- Filter & Search Karyawan -->
+                <div class="d-flex align-items-center flex-wrap" style="gap: 10px;">
+                    <!-- Dropdown Sorting Karyawan -->
+                    <div style="min-width: 185px; position: relative;">
+                        <select wire:model.live="sortBy" wire:loading.attr="disabled" wire:target="sortBy" class="form-control roster-toolbar-select" title="Urutan Karyawan">
+                            <option value="custom">&#8645; Urutan Roster (Jadwal)</option>
+                            <option value="name_asc">&#8595; Nama (A - Z)</option>
+                            <option value="name_desc">&#8593; Nama (Z - A)</option>
+                            <option value="position_asc">&#9881; Jobdesk / Posisi</option>
+                            <option value="department_asc">&#127970; Departemen</option>
+                            <option value="status_asc">&#128101; Status Kepegawaian</option>
+                        </select>
+                        <div wire:loading wire:target="sortBy" style="position: absolute; right: 28px; top: 50%; transform: translateY(-50%); pointer-events: none;">
+                            <i class="fas fa-spinner fa-spin text-primary" style="font-size: 11px;"></i>
+                        </div>
+                    </div>
 
-                <div class="dt-search-wrapper">
-                    <span class="mr-1 text-muted" style="font-size: 12px;">Search:</span>
-                    <input type="text" wire:model.live.debounce.300ms="search" class="dt-search-input" placeholder="Cari nama, PIN, jabatan...">
+                    <!-- Filter Departemen -->
+                    <div style="min-width: 165px; position: relative;">
+                        <select wire:model.live="departmentFilter" wire:loading.attr="disabled" wire:target="departmentFilter" class="form-control roster-toolbar-select" title="Filter Departemen">
+                            <option value="">Semua Departemen</option>
+                            @foreach ($departments as $dept)
+                                <option value="{{ $dept->id }}">{{ $dept->name }}</option>
+                            @endforeach
+                        </select>
+                        <div wire:loading wire:target="departmentFilter" style="position: absolute; right: 28px; top: 50%; transform: translateY(-50%); pointer-events: none;">
+                            <i class="fas fa-spinner fa-spin text-primary" style="font-size: 11px;"></i>
+                        </div>
+                    </div>
+
+                    <!-- Filter Status Kepegawaian -->
+                    <div style="min-width: 155px; position: relative;">
+                        <select wire:model.live="employmentStatusFilter" wire:loading.attr="disabled" wire:target="employmentStatusFilter" class="form-control roster-toolbar-select" title="Status Kepegawaian">
+                            <option value="">Semua Status</option>
+                            @foreach ($employmentStatuses as $es)
+                                <option value="{{ $es->value }}">{{ $es->label() }}</option>
+                            @endforeach
+                        </select>
+                        <div wire:loading wire:target="employmentStatusFilter" style="position: absolute; right: 28px; top: 50%; transform: translateY(-50%); pointer-events: none;">
+                            <i class="fas fa-spinner fa-spin text-primary" style="font-size: 11px;"></i>
+                        </div>
+                    </div>
+
+                    <!-- Search Box -->
+                    <div style="min-width: 200px;">
+                        <div class="input-group roster-toolbar-search">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text roster-toolbar-search-icon">
+                                    <span wire:loading.remove wire:target="search"><i class="fas fa-search" style="font-size: 11px;"></i></span>
+                                    <span wire:loading wire:target="search"><i class="fas fa-spinner fa-spin text-primary" style="font-size: 11px;"></i></span>
+                                </span>
+                            </div>
+                            <input type="text" wire:model.live.debounce.300ms="search" class="form-control roster-toolbar-search-input" placeholder="Cari nama, PIN, jabatan...">
+                        </div>
+                    </div>
+
+                    <!-- Per Page -->
+                    <div style="width: 85px;">
+                        <select wire:model.live="perPage" class="form-control roster-toolbar-select" title="Jumlah baris karyawan">
+                            <option value="0">Semua</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Modern Full-Width Data Table (Clean Executive Grid) & Callout Styles -->
-        <style>
-            /* Bootstrap Callout (.bd-callout) Component */
-            .bd-callout {
-                padding: 1rem 1.35rem !important;
-                margin-top: 0;
-                margin-bottom: 1.25rem !important;
-                background-color: #ffffff !important;
-                border: 1px solid #e2e8f0 !important;
-                border-left-width: 4px !important;
-                border-radius: 9px !important;
-                box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04) !important;
-                transition: all 0.2s ease-in-out !important;
-            }
-            .bd-callout-info {
-                border-left-color: #0b52aa !important;
-                background: linear-gradient(90deg, rgba(11, 82, 170, 0.04) 0%, rgba(255, 255, 255, 0.98) 20%, #ffffff 100%) !important;
-            }
-            .bd-callout-success {
-                border-left-color: #10b981 !important;
-                background: linear-gradient(90deg, rgba(16, 185, 129, 0.04) 0%, rgba(255, 255, 255, 0.98) 20%, #ffffff 100%) !important;
-            }
-            .bd-callout .bd-callout-icon {
-                font-size: 20px !important;
-                line-height: 1 !important;
-                flex-shrink: 0 !important;
-            }
-            .bd-callout-info .bd-callout-icon {
-                color: #0b52aa !important;
-            }
-            .bd-callout .bd-callout-title {
-                font-size: 14.5px !important;
-                font-weight: 600 !important;
-                line-height: 1.3 !important;
-                color: #0b52aa !important;
-            }
-            .bd-callout .bd-callout-desc {
-                font-size: 12.5px !important;
-                color: #334155 !important;
-                line-height: 1.5 !important;
-            }
-            /* High-Contrast Crisp Labels & Disabled Form Controls in Modals */
-            .modal .form-control:disabled,
-            .modal select:disabled,
-            .modal input:disabled {
-                background-color: #f8fafc !important;
-                color: #0f172a !important;
-                font-weight: 500 !important;
-                opacity: 1 !important;
-                border-color: #cbd5e1 !important;
-                cursor: not-allowed !important;
-            }
-            .modal .form-group label {
-                color: #1e293b !important;
-                font-weight: 500 !important;
-                font-size: 13px !important;
-            }
-
-            /* Select2 Clean Form Control Match (Sesuai Standar Stisla & Modal HRM) */
-            .select2-container--default .select2-selection--single {
-                height: 42px !important;
-                border: 1px solid #e4e6fc !important;
-                border-radius: 4px !important;
-                background-color: #fdfdff !important;
-                transition: all 0.2s ease-in-out !important;
-            }
-            .select2-container--default .select2-selection--single .select2-selection__rendered {
-                color: #495057 !important;
-                font-size: 13.5px !important;
-                line-height: 40px !important;
-                padding-left: 15px !important;
-                padding-right: 35px !important;
-                font-weight: 400 !important;
-            }
-            .select2-container--default .select2-selection--single .select2-selection__arrow {
-                height: 40px !important;
-                right: 10px !important;
-                top: 1px !important;
-            }
-            .select2-container--default.select2-container--focus .select2-selection--single,
-            .select2-container--default.select2-container--open .select2-selection--single {
-                border-color: #0b52aa !important;
-                background-color: #ffffff !important;
-                box-shadow: 0 0 0 0.2rem rgba(11, 82, 170, 0.15) !important;
-            }
-            .select2-container--default.select2-container--disabled .select2-selection--single {
-                background-color: #e9ecef !important;
-                border-color: #e4e6fc !important;
-                cursor: not-allowed !important;
-                opacity: 1 !important;
-            }
-            .select2-container--default.select2-container--disabled .select2-selection--single .select2-selection__rendered {
-                color: #495057 !important;
-            }
-            .select2-dropdown {
-                border: 1px solid #cbd5e1 !important;
-                border-radius: 6px !important;
-                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
-                font-size: 13px !important;
-                z-index: 1060 !important;
-            }
-            .select2-container--default .select2-results__group {
-                background-color: #f8fafc !important;
-                color: #0b52aa !important;
-                font-weight: 600 !important;
-                font-size: 11.5px !important;
-                text-transform: uppercase !important;
-                letter-spacing: 0.5px !important;
-                padding: 6px 12px !important;
-                border-bottom: 1px solid #e2e8f0 !important;
-                border-top: 1px solid #e2e8f0 !important;
-            }
-            .select2-container--default .select2-results__option--highlighted[aria-selected] {
-                background-color: #0b52aa !important;
-                color: #ffffff !important;
-            }
-
-            .modern-attendance-matrix {
-                border-collapse: separate !important;
-                border-spacing: 0 !important;
-                width: 100%;
-                background-color: #ffffff;
-            }
-            .modern-attendance-matrix thead th {
-                background-color: #ffffff;
-                border-top: none !important;
-                border-bottom: 2px solid #e2e8f0 !important;
-                padding: 7px 4px;
-                vertical-align: middle;
-            }
-            .modern-attendance-matrix tbody tr {
-                border-bottom: 1px solid #f1f5f9;
-                transition: background-color 0.15s ease;
-            }
-            .modern-attendance-matrix tbody tr:hover {
-                background-color: #f8fafc;
-            }
-            .modern-attendance-matrix tbody td {
-                border-bottom: 1px solid #f1f5f9 !important;
-                border-right: 1px solid #f8fafc !important;
-                padding: 4px 3px;
-                vertical-align: middle;
-            }
-            /* Sticky Employee Column */
-            .sticky-emp-col {
-                position: sticky !important;
-                left: 0;
-                background-color: #ffffff !important;
-                z-index: 10;
-                box-shadow: 4px 0 10px -3px rgba(0, 0, 0, 0.05);
-                border-right: 1px solid #e2e8f0 !important;
-                white-space: nowrap !important;
-            }
-            .modern-attendance-matrix tbody tr:hover .sticky-emp-col {
-                background-color: #f8fafc !important;
-            }
-            /* Table Group Header */
-            .modern-attendance-matrix tbody tr.table-group-header .sticky-emp-col,
-            .modern-attendance-matrix tbody tr.table-group-header:hover .sticky-emp-col {
-                background-color: #f0f6ff !important;
-                z-index: 11 !important;
-                white-space: nowrap !important;
-            }
-            .modern-attendance-matrix tbody tr.table-group-header:hover {
-                background-color: #f0f6ff !important;
-            }
-            .modern-attendance-matrix tbody tr.table-group-header td {
-                vertical-align: middle !important;
-                white-space: nowrap !important;
-            }
-            /* Modern Attendance Micro-Chip (Selalu Hijau untuk Hadir) */
-            .att-chip {
-                display: inline-flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                min-width: 76px;
-                padding: 2.5px 6px;
-                border-radius: 6px;
-                line-height: 1.25;
-                cursor: pointer;
-                transition: transform 0.12s ease, box-shadow 0.12s ease;
-                user-select: none;
-                white-space: nowrap;
-            }
-            .att-chip:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 3px 6px -1px rgba(0, 0, 0, 0.08);
-            }
-            .att-chip-present {
-                background-color: #ecfdf5;
-                border: 1px solid #a7f3d0;
-            }
-            .att-chip-present .att-time-in,
-            .att-chip-present .att-time-out {
-                color: #047857 !important;
-                font-weight: 600 !important;
-                font-size: 11px !important;
-            }
-            .att-chip-manual {
-                background-color: #eff6ff;
-                border: 1px solid #bfdbfe;
-            }
-            .att-chip-manual .att-time-in,
-            .att-chip-manual .att-time-out {
-                color: #1d4ed8 !important;
-                font-weight: 600 !important;
-                font-size: 11px !important;
-            }
-            .att-chip-ot {
-                background-color: #fffbeb;
-                border: 1px solid #fde68a;
-            }
-            .att-chip-ot .att-time-ot-badge {
-                color: #b45309;
-                font-weight: 600;
-                font-size: 11px;
-            }
-            .att-time-ot-sub {
-                color: #b45309;
-                font-weight: 600;
-                font-size: 9.5px;
-                line-height: 1;
-                margin-top: 2px;
-            }
-            .att-chip-empty {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 28px;
-                height: 28px;
-                border-radius: 6px;
-                cursor: pointer;
-                color: #cbd5e1;
-                font-size: 14px;
-                transition: background-color 0.15s ease, color 0.15s ease;
-            }
-            .att-chip-empty:hover {
-                background-color: #f1f5f9;
-                color: #0b52aa;
-            }
-            .att-chip-holiday {
-                background-color: #fff1f2;
-                border: 1px solid #fecdd3;
-                color: #e11d48;
-                font-weight: 500;
-                font-size: 11px;
-                padding: 3px 6px;
-                border-radius: 6px;
-                display: inline-block;
-            }
-            /* Summary Badges in Summary Column */
-            .summary-badge-hadir {
-                background-color: #ecfdf5;
-                color: #047857;
-                border: 1px solid #a7f3d0;
-                border-radius: 6px;
-                padding: 3.5px 9px;
-                font-size: 12px;
-                font-weight: 600;
-                white-space: nowrap;
-            }
-            .summary-badge-alpa {
-                background-color: #fef2f2;
-                color: #b91c1c;
-                border: 1px solid #fecaca;
-                border-radius: 6px;
-                padding: 3px 6px;
-                font-size: 10.5px;
-                font-weight: 500;
-                white-space: nowrap;
-            }
-        </style>
-
-        <div class="table-responsive">
-            <table class="table modern-attendance-matrix mb-0">
-                <thead>
-                    <tr>
-                        <!-- Kolom Karyawan (Sticky Left) -->
-                        <th class="sticky-emp-col text-left !px-3.5 !py-2 text-nowrap" style="min-width: 280px; width: 280px; white-space: nowrap;">
-                            <div class="d-flex align-items-center justify-content-between text-nowrap" style="white-space: nowrap;">
-                                <span class="font-weight-600 text-dark text-nowrap" style="font-size: 12.5px; letter-spacing: 0.3px; text-transform: uppercase; white-space: nowrap;">
-                                    KARYAWAN
-                                </span>
-                                <span class="text-muted font-weight-400 text-nowrap" style="font-size: 11.5px; white-space: nowrap;">
-                                    {{ $matrixEmployees->total() }} Orang
-                                </span>
-                            </div>
-                        </th>
-
-                        <!-- Kolom Tanggal (1 s/d 31) -->
-                        @foreach ($matrixDates as $d)
-                            <th class="text-center !py-1.5 !px-1" style="min-width: 76px; background-color: {{ $d['is_holiday'] ? '#fff7ed' : ($d['is_sunday'] ? '#fff1f2' : '#ffffff') }}; border-bottom: 2px solid {{ $d['is_holiday'] ? '#fed7aa' : ($d['is_sunday'] ? '#fecdd3' : '#e2e8f0') }} !important;" @if ($d['is_holiday']) title="Hari Libur: {{ $d['holiday_name'] }}" @endif>
-                                <div class="d-flex flex-column align-items-center">
-                                    <span class="font-weight-600" style="font-size: 13.5px; line-height: 1.1; color: {{ $d['is_holiday'] ? '#c2410c' : ($d['is_sunday'] ? '#e11d48' : '#0f172a') }};">
-                                        {{ $d['day'] }}
-                                    </span>
-                                    <span class="text-uppercase font-weight-500 mt-0.5" style="font-size: 10.5px; line-height: 1; color: {{ $d['is_holiday'] ? '#ea580c' : ($d['is_sunday'] ? '#f43f5e' : '#64748b') }};">
-                                        {{ $d['dow_name'] }}
-                                    </span>
-                                </div>
+    <!-- Table Roster Grid (Style Jadwal: Sticky 2-Tier Header, 3 Sticky Columns, Clean White Grid) -->
+    <div class="card border-0 mb-3" style="background: #ffffff; border-radius: 12px; box-shadow: 0 2px 14px -2px rgba(0, 0, 0, 0.06); overflow: hidden;">
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 760px; overflow-x: auto;">
+                <table class="table mb-0 text-center attendance-roster-table modern-attendance-matrix" style="border-collapse: collapse; background: #ffffff;">
+                    <thead class="sticky-top" style="z-index: 10;">
+                        <!-- Baris 1: Kolom Tetap Kiri, Nama Hari (Clean White & Merah Kontras Hari Minggu/Libur), dan Rekap -->
+                        <tr style="background: #ffffff;">
+                            <th class="sticky-col first-col align-middle text-center" rowspan="2" style="width: 36px; min-width: 36px; max-width: 36px; z-index: 20; color: #0f172a !important; font-weight: 700; font-size: 10px; border-bottom: 2px solid #cbd5e1; background: #ffffff !important;">
+                                NO
                             </th>
-                        @endforeach
+                            <th class="sticky-col second-col align-middle text-left" rowspan="2" style="width: 160px; min-width: 160px; max-width: 160px; z-index: 20; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; border-bottom: 2px solid #cbd5e1; background: #ffffff !important; color: #0f172a !important; padding-left: 8px !important;">
+                                NAMA KARYAWAN
+                            </th>
+                            <th class="sticky-col third-col align-middle text-left" rowspan="2" style="width: 100px; min-width: 100px; max-width: 100px; z-index: 20; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; border-bottom: 2px solid #cbd5e1; background: #ffffff !important; color: #0f172a !important; padding-left: 8px !important;">
+                                JOBDESK
+                            </th>
 
-                        <!-- Kolom Rekapitulasi (Clean Solid Anchor) -->
-                        <th class="text-left !px-3.5 !py-2" style="min-width: 190px; background-color: #f8fafc; border-left: 2px solid #e2e8f0; border-bottom: 2px solid #e2e8f0 !important;">
-                            <div class="font-weight-600 text-dark" style="font-size: 12.5px; letter-spacing: 0.3px; text-transform: uppercase;">
-                                REKAP KEHADIRAN
-                            </div>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody style="font-size: 12.5px;">
-                    @forelse ($groupedMatrixEmployees as $statusKey => $groupEmployees)
-                        @php
-                            $statusMeta = $employmentStatusMeta[$statusKey] ?? ['label' => ucfirst($statusKey), 'icon' => 'fas fa-users'];
-                        @endphp
-                        <!-- Baris Sub-Header Group Status Kerja -->
-                        <tr class="table-group-header" style="border-top: 1px solid #e2e8f0;">
-                            <td class="sticky-emp-col text-nowrap !py-2 !px-3.5" style="background-color: #ffffff !important; white-space: nowrap !important;">
-                                <div class="d-flex align-items-center justify-content-between text-nowrap" style="white-space: nowrap; gap: 10px;">
-                                    <div class="d-flex align-items-center text-nowrap" style="white-space: nowrap;">
-                                        <span class="d-inline-flex align-items-center justify-content-center mr-2 flex-shrink-0" style="width: 22px; height: 22px; border-radius: 6px; background-color: #eff6ff; font-size: 10.5px; flex-shrink: 0;">
-                                            <i class="{{ $statusMeta['icon'] }}" style="color: #0b52aa;"></i>
-                                        </span>
-                                        <span class="font-weight-600 text-nowrap" style="font-size: 12.5px; letter-spacing: 0.3px; color: #334155; text-transform: uppercase; white-space: nowrap;">
-                                            STATUS: {{ $statusMeta['label'] }}
-                                        </span>
-                                    </div>
-                                    <span class="badge font-weight-600 text-nowrap flex-shrink-0" style="font-size: 10.5px; padding: 2.5px 10px; border-radius: 9999px; background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; white-space: nowrap;">
-                                        {{ $groupEmployees->count() }} Orang
-                                    </span>
-                                </div>
-                            </td>
-                            <td colspan="{{ count($matrixDates) + 1 }}" style="background-color: #ffffff;"></td>
-                        </tr>
-
-                        @foreach ($groupEmployees as $emp)
-                            @php
-                                $empRow = $matrixRowData[$emp->id];
-                                $empSummary = $matrixSummary[$emp->id];
-                            @endphp
-                        <tr wire:key="matrix-row-{{ $emp->id }}">
-                            <!-- Karyawan: Avatar, Nama, Department & Jabatan (Sticky Left) -->
-                            <td class="sticky-emp-col align-middle !px-3.5 !py-2 text-nowrap">
-                                <div class="d-flex align-items-center text-nowrap">
-                                    <img src="{{ $emp->photo_url }}" alt="{{ $emp->full_name }}" class="rounded-circle mr-2.5 flex-shrink-0" style="width: 32px; height: 32px; object-fit: cover; border: 1.5px solid #e2e8f0;">
-                                    <div class="text-nowrap" style="line-height: 1.25;">
-                                        <div class="font-weight-600 text-dark" style="font-size: 13.5px; color: #0f172a;">{{ $emp->full_name }}</div>
-                                        <div class="mt-0.5 text-nowrap" style="font-size: 11.5px; color: #64748b; font-weight: 400;">
-                                            {{ $empRow['label'] }}
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-
-                            <!-- Sel Tanggal 1 s/d 31 -->
                             @foreach ($matrixDates as $d)
-                                @php
-                                    $att = $empRow['att']->get($d['date']);
-                                    $status = $att ? strtolower($att->status) : null;
-                                @endphp
-                                <td class="text-center p-1 align-middle" style="background-color: {{ $d['is_holiday'] ? '#fff7ed80' : ($d['is_sunday'] ? '#fff1f220' : 'transparent') }};">
-                                    @if ($att !== null && in_array($status, ['hadir', 'terlambat', 'pulang_cepat'], true) && $att->clock_in)
-                                        <div class="att-chip {{ $att?->source === 'manual' ? 'att-chip-manual' : 'att-chip-present' }}"
-                                             wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
-                                             title="{{ $emp->full_name }} ({{ $d['date'] }}): Masuk {{ substr($att->clock_in, 0, 5) }} s/d Pulang {{ $att->clock_out ? substr($att->clock_out, 0, 5) : '--:--' }}{{ $att->overtime_in ? ' | Lembur Masuk ' . substr($att->overtime_in, 0, 5) . ' s/d Lembur Pulang ' . ($att->overtime_out ? substr($att->overtime_out, 0, 5) : '--:--') : '' }}{{ $att?->source === 'manual' ? ' [Koreksi Manual Admin]' : ' [Mesin Fingerprint]' }} (Klik untuk ubah)">
-                                            <div class="d-flex align-items-center justify-content-center text-nowrap" style="gap: 3px; font-variant-numeric: tabular-nums;">
-                                                <span class="att-time-in" style="font-size: 11px; font-weight: 600;">{{ substr($att->clock_in, 0, 5) }}</span>
-                                                <span style="color: #64748b; font-size: 9.5px; font-weight: 500;">s/d</span>
-                                                <span class="att-time-out" style="font-size: 11px; font-weight: 600;">{{ $att->clock_out ? substr($att->clock_out, 0, 5) : '--:--' }}</span>
-                                            </div>
-                                            @if ($att->overtime_in)
-                                                <div class="d-flex align-items-center justify-content-center text-nowrap mt-0.5" style="gap: 3px; font-variant-numeric: tabular-nums; font-size: 11px; color: #b45309;">
-                                                    <span style="font-weight: 600; font-size: 11px; color: #b45309;">{{ substr($att->overtime_in, 0, 5) }}</span>
-                                                    <span style="color: #64748b; font-size: 9.5px; font-weight: 500;">s/d</span>
-                                                    <span style="font-weight: 600; font-size: 11px; color: #b45309;">{{ $att->overtime_out ? substr($att->overtime_out, 0, 5) : '--:--' }}</span>
-                                                </div>
-                                            @endif
-                                        </div>
-                                    @elseif ($att && $att->overtime_in)
-                                        <div class="att-chip att-chip-ot"
-                                             wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
-                                             title="{{ $emp->full_name }} ({{ $d['date'] }}): Lembur Masuk {{ substr($att->overtime_in, 0, 5) }} s/d Lembur Pulang {{ $att->overtime_out ? substr($att->overtime_out, 0, 5) : '--:--' }} (Klik untuk ubah)">
-                                            <div class="d-flex align-items-center justify-content-center text-nowrap" style="gap: 3px; font-variant-numeric: tabular-nums; font-size: 11px; color: #b45309;">
-                                                <span style="font-weight: 600; font-size: 11px; color: #b45309;">{{ substr($att->overtime_in, 0, 5) }}</span>
-                                                <span style="color: #64748b; font-size: 9.5px; font-weight: 500;">s/d</span>
-                                                <span style="font-weight: 600; font-size: 11px; color: #b45309;">{{ $att->overtime_out ? substr($att->overtime_out, 0, 5) : '--:--' }}</span>
-                                            </div>
-                                        </div>
-                                    @elseif ($status === 'cuti')
-                                        <span class="badge badge-primary font-weight-500" style="font-size: 11px; padding: 3px 6px; border-radius: 4px; cursor: pointer;" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')">Cuti</span>
-                                    @elseif ($status === 'sakit')
-                                        <span class="badge badge-warning font-weight-500" style="font-size: 11px; padding: 3px 6px; border-radius: 4px; cursor: pointer;" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')">Sakit</span>
-                                    @elseif ($status === 'izin')
-                                        <span class="badge badge-info font-weight-500" style="font-size: 11px; padding: 3px 6px; border-radius: 4px; cursor: pointer;" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')">Izin</span>
-                                    @elseif ($d['is_holiday'])
-                                        <span class="att-chip-holiday" style="background-color: #fff7ed; border-color: #fed7aa; color: #c2410c;" title="Hari Libur: {{ $d['holiday_name'] }}">Libur</span>
-                                    @elseif ($d['is_sunday'])
-                                        <span class="att-chip-holiday" title="Hari Libur / Minggu">Libur</span>
-                                    @else
-                                        <span class="att-chip-empty" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="Belum ada presensi (Klik untuk input jam)">&ndash;</span>
-                                    @endif
-                                </td>
+                                @if ($d['is_sunday'])
+                                    <th class="p-0 font-weight-bold text-nowrap align-middle date-col"
+                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 9.5px; background: #dc2626 !important; color: #ffffff !important; border: 1px solid #b91c1c; height: 20px;"
+                                        title="Hari Minggu">
+                                        {{ $d['dow_name'] }}
+                                    </th>
+                                @elseif ($d['is_holiday'])
+                                    <th class="p-0 font-weight-bold text-nowrap align-middle date-col"
+                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 9.5px; background: #ef4444 !important; color: #ffffff !important; border: 1px solid #dc2626; height: 20px;"
+                                        title="{{ $d['holiday_name'] }}">
+                                        {{ $d['dow_name'] }}
+                                    </th>
+                                @else
+                                    <th class="p-0 font-weight-bold text-nowrap align-middle date-col"
+                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 9.5px; background: #ffffff !important; color: #0f172a !important; border: 1px solid #cbd5e1; height: 20px;">
+                                        {{ $d['dow_name'] }}
+                                    </th>
+                                @endif
                             @endforeach
 
-                            <!-- Rekapitulasi Akhir (Modern Badges) -->
-                            <td class="align-middle !px-3 !py-1.5" style="background-color: #f8fafc; border-left: 2px solid #e2e8f0;">
-                                <div class="d-flex align-items-center flex-wrap" style="gap: 5px;">
-                                    <span class="summary-badge-hadir" title="Total Hari Masuk Kerja">
-                                        <i class="fas fa-check-circle mr-1" style="font-size: 11px;"></i>{{ $empSummary['hadir'] }} Hari
-                                    </span>
-                                    @if ($empSummary['cuti'] > 0)
-                                        <span class="badge font-weight-500" style="background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11px; padding: 3px 7px;">
-                                            {{ $empSummary['cuti'] }} Cuti
-                                        </span>
-                                    @endif
-                                    @if ($empSummary['sakit'] > 0)
-                                        <span class="badge font-weight-500" style="background-color: #fffbeb; color: #92400e; border: 1px solid #fde68a; border-radius: 6px; font-size: 11px; padding: 3px 7px;">
-                                            {{ $empSummary['sakit'] }} Sakit
-                                        </span>
-                                    @endif
-                                    @if ($empSummary['izin'] > 0)
-                                        <span class="badge font-weight-500" style="background-color: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 11px; padding: 3px 7px;">
-                                            {{ $empSummary['izin'] }} Izin
-                                        </span>
-                                    @endif
-                                </div>
-                            </td>
+                            <th colspan="2" class="align-middle text-center p-0" style="border-left: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; font-weight: 700; font-size: 10px; background: #ffffff !important; color: #334155; height: 20px;">
+                                REKAP KEHADIRAN
+                            </th>
                         </tr>
-                        @endforeach
-                    @empty
-                        <tr>
-                            <td colspan="{{ count($matrixDates) + 2 }}" class="p-0 border-0">
-                                <x-empty-state
-                                    icon="fas fa-user-clock"
-                                    title="Tidak Ada Data Presensi"
-                                    subtitle="Tidak ditemukan catatan log presensi karyawan yang cocok pada periode atau filter yang dipilih."
-                                />
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
 
-        <!-- Footer: Info & Pagination -->
-        @if ($matrixEmployees && $matrixEmployees->total() > 0)
-            <div class="dt-footer-wrapper">
-                <div class="dt-info">
-                    Showing {{ $matrixEmployees->firstItem() ?? 0 }} to {{ $matrixEmployees->lastItem() ?? 0 }} of {{ $matrixEmployees->total() }} entries
-                </div>
-                <div class="dt-pagination">
-                    {{ $matrixEmployees->links('livewire.custom-pagination') }}
-                </div>
+                        <!-- Baris 2: Angka Tanggal (Biru Muda untuk Hari Biasa, Merah untuk Hari Minggu / Libur) dan Sub-Header Rekap -->
+                        <tr style="background: #ffffff;">
+                            @foreach ($matrixDates as $d)
+                                @if ($d['is_sunday'])
+                                    <th class="p-0 font-weight-bold align-middle date-col"
+                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 10.5px; background: #b91c1c !important; color: #ffffff !important; border: 1px solid #991b1b; height: 20px;"
+                                        title="Hari Minggu (Tgl {{ $d['day'] }})">
+                                        {{ $d['day'] }}
+                                    </th>
+                                @elseif ($d['is_holiday'])
+                                    <th class="p-0 font-weight-bold align-middle date-col"
+                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 10.5px; background: #dc2626 !important; color: #ffffff !important; border: 1px solid #b91c1c; height: 20px;"
+                                        title="{{ $d['holiday_name'] }} (Tgl {{ $d['day'] }})">
+                                        {{ $d['day'] }}
+                                    </th>
+                                @else
+                                    <th class="p-0 font-weight-bold align-middle date-col"
+                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 10.5px; background: #e0f2fe !important; color: #0369a1 !important; border: 1px solid #bae6fd; height: 20px;"
+                                        title="Tanggal {{ $d['day'] }}">
+                                        {{ $d['day'] }}
+                                    </th>
+                                @endif
+                            @endforeach
+
+                            <th class="align-middle text-center p-0 font-weight-bold" style="width: 44px; min-width: 44px; max-width: 44px; color: #047857; font-size: 9.5px; border-left: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; background: #ffffff !important; height: 20px;" title="Total Hari Masuk Kerja">HADIR</th>
+                            <th class="align-middle text-center p-0 font-weight-bold" style="width: 44px; min-width: 44px; max-width: 44px; color: #be123c; font-size: 9.5px; border-bottom: 2px solid #cbd5e1; background: #ffffff !important; height: 20px;" title="Total Hari Libur">LIBUR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @php
+                            $rowNumber = ($matrixEmployees->firstItem() ?? 1);
+                        @endphp
+                        @forelse ($groupedMatrixEmployees as $statusKey => $groupEmployees)
+                            @php
+                                $statusMeta = $employmentStatusMeta[$statusKey] ?? [
+                                    'label' => ucfirst($statusKey),
+                                    'icon' => 'fas fa-users',
+                                ];
+                            @endphp
+                            @if ($statusKey !== 'all')
+                                <!-- Sub-Header Group Status Kerja -->
+                                <tr class="table-group-header" style="background: #ffffff; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">
+                                    <td class="sticky-col first-col text-center p-0 align-middle" style="background: #f1f5f9 !important; width: 36px; min-width: 36px;">
+                                        <i class="{{ $statusMeta['icon'] }}" style="color: #0b52aa; font-size: 11px;"></i>
+                                    </td>
+                                    <td colspan="2" class="sticky-col second-col text-left align-middle" style="background: #f1f5f9 !important; padding: 5px 8px !important; z-index: 6; box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.06); font-weight: 700; font-size: 11px; color: #0f172a; text-transform: uppercase;">
+                                        <span>STATUS: {{ $statusMeta['label'] }}</span>
+                                        <span class="badge ml-2 px-2 py-0.5" style="background: #cbd5e1; color: #0f172a; font-weight: 700; font-size: 10.5px; border-radius: 9999px;">
+                                            {{ $groupEmployees->count() }} Orang
+                                        </span>
+                                    </td>
+                                    <td colspan="{{ count($matrixDates) + 2 }}" style="background: #ffffff;"></td>
+                                </tr>
+                            @endif
+
+                            @foreach ($groupEmployees as $emp)
+                                @php
+                                    $empRow = $matrixRowData[$emp->id];
+                                    $empSummary = $matrixSummary[$emp->id];
+                                @endphp
+                                <tr wire:key="matrix-row-{{ $emp->id }}">
+                                    <!-- Kolom 1: NO -->
+                                    <td class="sticky-col first-col align-middle text-center p-0" style="background: #ffffff; width: 36px; min-width: 36px; max-width: 36px;">
+                                        <span class="row-num font-weight-bold" style="color: #0f172a; font-size: 11px;">{{ $rowNumber++ }}</span>
+                                    </td>
+
+                                    <!-- Kolom 2: NAMA KARYAWAN -->
+                                    <td class="sticky-col second-col align-middle text-left" style="background: #ffffff; padding: 0 6px 0 8px !important; width: 160px; min-width: 160px; max-width: 160px;">
+                                        <div class="d-flex align-items-center">
+                                            <img src="{{ $emp->photo_url }}" alt="{{ $emp->full_name }}" class="rounded-circle mr-1.5 flex-shrink-0" style="width: 22px; height: 22px; object-fit: cover; border: 1px solid #cbd5e1;">
+                                            <div class="text-truncate" style="line-height: 1.25;">
+                                                <span class="font-weight-bold text-truncate d-block" style="font-size: 11px; color: #0f172a;" title="{{ $emp->full_name }}">
+                                                    {{ $emp->full_name }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <!-- Kolom 3: JOBDESK -->
+                                    <td class="sticky-col third-col align-middle text-left" style="background: #ffffff; padding: 0 6px !important; width: 100px; min-width: 100px; max-width: 100px;">
+                                        <div class="text-truncate font-weight-500" style="font-size: 10.5px; line-height: 1.2; color: #334155;" title="{{ $emp->position?->name ?: ($emp->department?->name ?: '-') }}">
+                                            {{ $emp->position?->name ?: ($emp->department?->name ?: '-') }}
+                                        </div>
+                                    </td>
+
+                                    <!-- Kolom Tanggal (1 s/d 31) -->
+                                    @foreach ($matrixDates as $d)
+                                        @php
+                                            $att = $empRow['att']->get($d['date']);
+                                            $sch = $empRow['schedules']->get($d['date']);
+                                            $isOff = $sch ? ($sch->status === \App\Models\EmployeeSchedule::STATUS_OFF) : ($d['is_sunday'] || $d['is_holiday']);
+                                            $status = $att ? strtolower($att->status) : null;
+                                            $hasOt = $att && ($att->overtime_in || ($att->overtime_duration_minutes ?? 0) > 0);
+                                            $hasWorkHours = $att && (!empty($att->clock_in) || !empty($att->clock_out));
+                                            $isRegularWork = $att !== null && in_array($status, ['hadir', 'terlambat', 'pulang_cepat'], true) && $hasWorkHours;
+                                        @endphp
+                                        <td class="text-center p-0 align-middle date-col {{ $isOff ? 'cell-roster-off' : '' }}" style="width: 30px; min-width: 28px; max-width: 32px;">
+                                            @if ($isRegularWork)
+                                                @php
+                                                    $tooltipText = "{$emp->full_name} ({$d['date']}): " . ucfirst($status) . ($att->clock_in ? ' Masuk ' . substr($att->clock_in, 0, 5) : '') . ($att->clock_out ? ' s/d Pulang ' . substr($att->clock_out, 0, 5) : '') . ($hasOt ? ' | Lembur ' . substr($att->overtime_in, 0, 5) . ($att->overtime_out ? '-' . substr($att->overtime_out, 0, 5) : '') : '') . ($att->source === 'manual' ? ' [Manual]' : ' [Fingerprint]');
+                                                @endphp
+                                                @if ($status === 'hadir')
+                                                    <div class="att-cell-wrap att-cell-present att-chip-present {{ $att?->source === 'manual' ? 'att-chip-manual' : '' }}"
+                                                         wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
+                                                         title="{{ $tooltipText }} (Klik untuk ubah)">
+                                                        <i class="fas fa-check att-cell-check"></i>
+                                                        @if ($hasOt)
+                                                            <span class="att-ot-ribbon" title="Ada Lembur">OT</span>
+                                                        @endif
+                                                    </div>
+                                                @elseif ($status === 'terlambat')
+                                                    <div class="att-cell-wrap att-cell-late"
+                                                         wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
+                                                         title="{{ $tooltipText }} (Klik untuk ubah)">
+                                                        <span class="att-cell-letter">T</span>
+                                                        @if ($hasOt)
+                                                            <span class="att-ot-ribbon" title="Ada Lembur">OT</span>
+                                                        @endif
+                                                    </div>
+                                                @elseif ($status === 'pulang_cepat')
+                                                    <div class="att-cell-wrap att-cell-early"
+                                                         wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
+                                                         title="{{ $tooltipText }} (Klik untuk ubah)">
+                                                        <span class="att-cell-letter" style="font-size: 9.5px;">PC</span>
+                                                        @if ($hasOt)
+                                                            <span class="att-ot-ribbon" title="Ada Lembur">OT</span>
+                                                        @endif
+                                                    </div>
+                                                @endif
+                                            @elseif ($status === 'libur' && $hasWorkHours)
+                                                @php
+                                                    $holidayTooltip = "{$emp->full_name} ({$d['date']}): Lembur Hari Libur" . ($att->clock_in ? ' Masuk ' . substr($att->clock_in, 0, 5) : '') . ($att->clock_out ? ' s/d Pulang ' . substr($att->clock_out, 0, 5) : '') . ($hasOt ? ' | Lembur ' . substr($att->overtime_in, 0, 5) . ($att->overtime_out ? '-' . substr($att->overtime_out, 0, 5) : '') : '') . ($att->source === 'manual' ? ' [Manual]' : ' [Fingerprint]');
+                                                @endphp
+                                                <div class="att-cell-wrap {{ $att?->source === 'manual' ? 'att-chip-manual' : '' }}"
+                                                     wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
+                                                     title="{{ $holidayTooltip }} (Klik untuk ubah)">
+                                                    <i class="fas fa-check att-cell-check text-white"></i>
+                                                    @if ($hasOt)
+                                                        <span class="att-ot-ribbon" title="Ada Lembur">OT</span>
+                                                    @endif
+                                                </div>
+                                            @elseif ($hasOt)
+                                                <div class="att-cell-wrap {{ ! $isOff ? 'att-cell-ot-solo' : '' }}"
+                                                     wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
+                                                     title="{{ $emp->full_name }} ({{ $d['date'] }}): Lembur {{ substr($att->overtime_in, 0, 5) }}{{ $att->overtime_out ? ' - ' . substr($att->overtime_out, 0, 5) : '' }} (Klik untuk ubah)">
+                                                    @if ($isOff)
+                                                        <span class="att-cell-letter text-white" style="font-size: 10.5px; font-weight: 800;">OT</span>
+                                                    @else
+                                                        <span class="att-cell-letter" style="color: #b45309; font-size: 10px;">OT</span>
+                                                    @endif
+                                                </div>
+                                            @elseif ($status === 'cuti')
+                                                <div class="att-cell-wrap att-cell-cuti" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Cuti (Klik untuk ubah)">
+                                                    <span class="att-cell-letter">C</span>
+                                                </div>
+                                            @elseif ($status === 'sakit')
+                                                <div class="att-cell-wrap att-cell-sakit" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Sakit (Klik untuk ubah)">
+                                                    <span class="att-cell-letter">S</span>
+                                                </div>
+                                            @elseif ($status === 'izin')
+                                                <div class="att-cell-wrap att-cell-izin" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Izin (Klik untuk ubah)">
+                                                    <span class="att-cell-letter">I</span>
+                                                </div>
+                                            @elseif ($status === 'absen')
+                                                <div class="att-cell-wrap att-cell-alpa" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Alpa / Mangkir (Klik untuk ubah)">
+                                                    <span class="att-cell-letter">A</span>
+                                                </div>
+                                            @elseif ($isOff)
+                                                <div class="att-cell-wrap" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Jadwal Libur / Off (Klik untuk input jam)">
+                                                    &nbsp;
+                                                </div>
+                                            @else
+                                                <div class="att-cell-wrap text-muted" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Belum ada presensi (Klik untuk input jam)">
+                                                    <span style="color: #cbd5e1; font-size: 13px;">&ndash;</span>
+                                                </div>
+                                            @endif
+                                        </td>
+                                    @endforeach
+
+                                    <!-- Kolom Rekapitulasi Kehadiran -->
+                                    <td class="align-middle p-0 font-weight-bold text-success text-center" style="background: #ffffff; border-left: 2px solid #e2e8f0; font-size: 11px; width: 44px; min-width: 44px; max-width: 44px;" title="Total Hadir: {{ $empSummary['hadir'] }} hari">
+                                        {{ $empSummary['hadir'] }} hr
+                                    </td>
+                                    <td class="align-middle p-0 font-weight-bold text-danger text-center" style="background: #ffffff; font-size: 11px; width: 44px; min-width: 44px; max-width: 44px;" title="Total Libur: {{ $empSummary['libur'] }} hari">
+                                        {{ $empSummary['libur'] }} hr
+                                    </td>
+                                </tr>
+                            @endforeach
+                        @empty
+                            <tr>
+                                <td colspan="{{ count($matrixDates) + 4 }}" class="p-0 border-0">
+                                    <x-empty-state
+                                        icon="fas fa-user-clock"
+                                        title="Tidak Ada Data Presensi"
+                                        subtitle="Tidak ditemukan catatan log presensi karyawan yang cocok pada periode atau filter yang dipilih."
+                                    />
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
-        @endif
+
+            <!-- Footer: Petunjuk Interaksi, Legenda Simbol & Paginasi -->
+            @if ($matrixEmployees && $matrixEmployees->total() > 0)
+                <div class="card-footer bg-white border-top py-2 px-3 d-flex flex-column flex-lg-row justify-content-between align-items-center" style="gap: 10px;">
+                    <div class="d-flex align-items-center flex-wrap" style="color: #334155; font-size: 11.5px; gap: 14px;">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-hand-pointer mr-1.5 text-primary"></i>
+                            <span>Klik tanda sel untuk ubah data / koreksi presensi.</span>
+                        </div>
+                        <!-- Mini Legenda Full-Cell -->
+                        <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
+                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
+                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 20px; height: 18px; background: #dcfce7; color: #15803d; border-radius: 3px; font-size: 9px;"><i class="fas fa-check"></i></span> Hadir
+                            </span>
+                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
+                                <span class="d-inline-flex align-items-center justify-content-center position-relative" style="width: 24px; height: 18px; background: #dcfce7; color: #15803d; border-radius: 3px; font-size: 9px;"><i class="fas fa-check"></i><span style="position: absolute; top: 0; right: 0; background: #f59e0b; color: #fff; font-size: 6px; font-weight: 800; line-height: 1; padding: 1px 1.5px; border-bottom-left-radius: 2px;">OT</span></span> Hadir + Lembur
+                            </span>
+                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
+                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 20px; height: 18px; background: #fffbeb; color: #b45309; border: 1px solid #f59e0b; border-radius: 3px; font-size: 8px; font-weight: 800;">OT</span> Lembur
+                            </span>
+                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
+                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 18px; height: 18px; background: #fef3c7; color: #b45309; border-radius: 3px; font-size: 9px; font-weight: 800;">T</span> Terlambat
+                            </span>
+                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
+                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 18px; height: 18px; background: #e0e7ff; color: #3730a3; border-radius: 3px; font-size: 9px; font-weight: 800;">C</span> Cuti
+                            </span>
+                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
+                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 18px; height: 18px; background: #fef9c3; color: #854d0e; border-radius: 3px; font-size: 9px; font-weight: 800;">S</span> Sakit
+                            </span>
+                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
+                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 18px; height: 18px; background: #e0f2fe; color: #0369a1; border-radius: 3px; font-size: 9px; font-weight: 800;">I</span> Izin
+                            </span>
+                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
+                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 18px; height: 18px; background: #fee2e2; color: #b91c1c; border-radius: 3px; font-size: 9px; font-weight: 800;">A</span> Alpa
+                            </span>
+                        </div>
+                    </div>
+                    @if ($matrixEmployees->hasPages())
+                        <div>
+                            {{ $matrixEmployees->links('livewire.custom-pagination') }}
+                        </div>
+                    @endif
+                </div>
+            @endif
+        </div>
     </div>
+
+    <!-- Styles: Modal, Callouts, Roster Toolbar & Table Grid -->
+    <style>
+        /* Bootstrap Callout (.bd-callout) Component */
+        .bd-callout {
+            padding: 1rem 1.35rem !important;
+            margin-top: 0;
+            margin-bottom: 1.25rem !important;
+            background-color: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-left-width: 4px !important;
+            border-radius: 9px !important;
+            box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04) !important;
+            transition: all 0.2s ease-in-out !important;
+        }
+        .bd-callout-info {
+            border-left-color: #0b52aa !important;
+            background: linear-gradient(90deg, rgba(11, 82, 170, 0.04) 0%, rgba(255, 255, 255, 0.98) 20%, #ffffff 100%) !important;
+        }
+        .bd-callout-success {
+            border-left-color: #10b981 !important;
+            background: linear-gradient(90deg, rgba(16, 185, 129, 0.04) 0%, rgba(255, 255, 255, 0.98) 20%, #ffffff 100%) !important;
+        }
+        .bd-callout .bd-callout-icon {
+            font-size: 20px !important;
+            line-height: 1 !important;
+            flex-shrink: 0 !important;
+        }
+        .bd-callout-info .bd-callout-icon {
+            color: #0b52aa !important;
+        }
+        .bd-callout .bd-callout-title {
+            font-size: 14.5px !important;
+            font-weight: 600 !important;
+            line-height: 1.3 !important;
+            color: #0b52aa !important;
+        }
+        .bd-callout .bd-callout-desc {
+            font-size: 12.5px !important;
+            color: #334155 !important;
+            line-height: 1.5 !important;
+        }
+
+        /* High-Contrast Crisp Labels & Disabled Form Controls in Modals */
+        .modal .form-control:disabled,
+        .modal select:disabled,
+        .modal input:disabled {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+            font-weight: 500 !important;
+            opacity: 1 !important;
+            border-color: #cbd5e1 !important;
+            cursor: not-allowed !important;
+        }
+        .modal .form-group label {
+            color: #1e293b !important;
+            font-weight: 500 !important;
+            font-size: 13px !important;
+        }
+
+        /* Select2 Clean Form Control Match (Sesuai Standar Stisla & Modal HRM) */
+        .select2-container--default .select2-selection--single {
+            height: 42px !important;
+            border: 1px solid #e4e6fc !important;
+            border-radius: 4px !important;
+            background-color: #fdfdff !important;
+            transition: all 0.2s ease-in-out !important;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: #495057 !important;
+            font-size: 13.5px !important;
+            line-height: 40px !important;
+            padding-left: 15px !important;
+            padding-right: 35px !important;
+            font-weight: 400 !important;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 40px !important;
+            right: 10px !important;
+            top: 1px !important;
+        }
+        .select2-container--default.select2-container--focus .select2-selection--single,
+        .select2-container--default.select2-container--open .select2-selection--single {
+            border-color: #0b52aa !important;
+            background-color: #ffffff !important;
+            box-shadow: 0 0 0 0.2rem rgba(11, 82, 170, 0.15) !important;
+        }
+        .select2-container--default.select2-container--disabled .select2-selection--single {
+            background-color: #e9ecef !important;
+            border-color: #e4e6fc !important;
+            cursor: not-allowed !important;
+            opacity: 1 !important;
+        }
+        .select2-container--default.select2-container--disabled .select2-selection--single .select2-selection__rendered {
+            color: #495057 !important;
+        }
+        .select2-dropdown {
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+            font-size: 13px !important;
+            z-index: 1060 !important;
+        }
+        .select2-container--default .select2-results__group {
+            background-color: #f8fafc !important;
+            color: #0b52aa !important;
+            font-weight: 600 !important;
+            font-size: 11.5px !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.5px !important;
+            padding: 6px 12px !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            border-top: 1px solid #e2e8f0 !important;
+        }
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background-color: #0b52aa !important;
+            color: #ffffff !important;
+        }
+
+        /* Toolbar Styling (Persis Jadwal: Anti-Clipping, Perfect Height 36px) */
+        .roster-toolbar-card {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            border: 1px solid #f1f5f9;
+        }
+        .roster-toolbar-month {
+            display: inline-flex;
+            align-items: center;
+            height: 36px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 2px;
+        }
+        .roster-toolbar-month-btn {
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 6px;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 11px;
+            padding: 0;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .roster-toolbar-month-btn:hover {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+        .roster-toolbar-month-text {
+            padding: 0 14px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 155px;
+            line-height: normal;
+            user-select: none;
+        }
+        .roster-toolbar-btn-current {
+            height: 36px !important;
+            background: #eff6ff !important;
+            color: #2563eb !important;
+            border: 1px solid #bfdbfe !important;
+            border-radius: 8px !important;
+            padding: 0 14px !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            line-height: normal !important;
+            box-shadow: none !important;
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+        .roster-toolbar-btn-current:hover {
+            background: #dbeafe !important;
+            color: #1d4ed8 !important;
+            border-color: #93c5fd !important;
+        }
+        select.roster-toolbar-select,
+        .roster-toolbar-select {
+            height: 36px !important;
+            min-height: 36px !important;
+            max-height: 36px !important;
+            padding: 0 28px 0 10px !important;
+            font-size: 12px !important;
+            font-weight: 500 !important;
+            line-height: normal !important;
+            color: #334155 !important;
+            background-color: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        select.roster-toolbar-select:focus,
+        .roster-toolbar-select:focus {
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15) !important;
+            outline: none !important;
+        }
+        .roster-toolbar-search {
+            height: 36px !important;
+        }
+        .roster-toolbar-search-icon {
+            height: 36px !important;
+            padding: 0 12px !important;
+            font-size: 11px !important;
+            color: #94a3b8 !important;
+            background-color: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-right: none !important;
+            border-radius: 8px 0 0 8px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        .roster-toolbar-search-input {
+            height: 36px !important;
+            padding: 0 12px !important;
+            font-size: 12px !important;
+            line-height: normal !important;
+            color: #334155 !important;
+            background-color: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-left: none !important;
+            border-radius: 0 8px 8px 0 !important;
+            box-shadow: none !important;
+        }
+        .roster-toolbar-search-input:focus {
+            border-color: #3b82f6 !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        .roster-toolbar-search:focus-within .roster-toolbar-search-icon,
+        .roster-toolbar-search:focus-within .roster-toolbar-search-input {
+            border-color: #3b82f6 !important;
+        }
+
+        /* Attendance Table (Excel Grid Roster Style) */
+        .attendance-roster-table {
+            border-collapse: collapse !important;
+            border-spacing: 0;
+            background: #ffffff;
+            font-size: 11px;
+            width: 100%;
+        }
+        .attendance-roster-table th,
+        .attendance-roster-table td {
+            border: 1px solid #e2e8f0;
+            height: 32px !important;
+            padding: 0 !important;
+            vertical-align: middle;
+        }
+        .attendance-roster-table tbody tr {
+            transition: background-color 0.15s ease;
+        }
+        .attendance-roster-table tbody tr:hover {
+            background-color: #f8fafc;
+        }
+        .attendance-roster-table tbody tr:hover .sticky-col {
+            background-color: #f8fafc !important;
+        }
+        .attendance-roster-table td.cell-roster-off {
+            background-color: #ef4444 !important;
+            border-color: #dc2626 !important;
+        }
+        .attendance-roster-table tbody tr:hover td.cell-roster-off {
+            background-color: #dc2626 !important;
+        }
+
+        /* 3 Sticky Left Columns */
+        .sticky-col {
+            position: sticky;
+            z-index: 5;
+        }
+        .first-col {
+            left: 0;
+            z-index: 5;
+            background-color: #ffffff !important;
+            width: 36px;
+            min-width: 36px;
+            max-width: 36px;
+        }
+        .second-col {
+            left: 36px;
+            z-index: 5;
+            background-color: #ffffff !important;
+            width: 160px;
+            min-width: 160px;
+            max-width: 160px;
+        }
+        .third-col {
+            left: 196px; /* 36px + 160px */
+            z-index: 5;
+            background-color: #ffffff !important;
+            width: 100px;
+            min-width: 100px;
+            max-width: 100px;
+            box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.06);
+        }
+        thead th.first-col,
+        thead th.second-col,
+        thead th.third-col {
+            z-index: 25 !important;
+        }
+
+        /* Date Column Compact Width */
+        .attendance-roster-table th.date-col,
+        .attendance-roster-table td.date-col {
+            width: 30px !important;
+            min-width: 28px !important;
+            max-width: 32px !important;
+            padding: 0 !important;
+        }
+
+        /* Seamless Full-Cell Attendance Matrix (No Inner Cramped Badges) */
+        .att-cell-wrap {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            min-height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            transition: filter 0.1s ease;
+        }
+        .att-cell-wrap:hover {
+            filter: brightness(0.93);
+            z-index: 2;
+        }
+        .att-cell-present {
+            background-color: #dcfce7 !important;
+            color: #15803d !important;
+        }
+        .att-cell-present-manual {
+            background-color: #dbeafe !important;
+            color: #1d4ed8 !important;
+        }
+        .att-cell-late {
+            background-color: #fef3c7 !important;
+            color: #b45309 !important;
+        }
+        .att-cell-early {
+            background-color: #fef3c7 !important;
+            color: #b45309 !important;
+        }
+        .att-cell-cuti {
+            background-color: #e0e7ff !important;
+            color: #3730a3 !important;
+        }
+        .att-cell-sakit {
+            background-color: #fef9c3 !important;
+            color: #854d0e !important;
+        }
+        .att-cell-izin {
+            background-color: #e0f2fe !important;
+            color: #0369a1 !important;
+        }
+        .att-cell-alpa {
+            background-color: #fee2e2 !important;
+            color: #b91c1c !important;
+        }
+        .att-cell-ot-solo {
+            background-color: #fffbeb !important;
+            color: #b45309 !important;
+        }
+
+        /* Top-Right Overtime Ribbon Tag (Seamless in cell) */
+        .att-ot-ribbon {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background-color: #f59e0b;
+            color: #ffffff;
+            font-size: 7.5px;
+            font-weight: 800;
+            line-height: 1;
+            padding: 2px 2.5px;
+            border-bottom-left-radius: 3px;
+            letter-spacing: -0.2px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+        }
+        .cell-roster-off .att-ot-ribbon {
+            border-left: 1px solid rgba(255, 255, 255, 0.4);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .att-cell-letter {
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1;
+        }
+        .att-cell-check {
+            font-size: 12px;
+            line-height: 1;
+        }
+        .att-chip-holiday {
+            background-color: #fff1f2;
+            border: 1px solid #fecdd3;
+            color: #be123c;
+            font-weight: 700;
+            font-size: 10.5px;
+            padding: 2.5px 6px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        .summary-badge-hadir {
+            background-color: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+            border-radius: 5px;
+            padding: 2.5px 7px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        /* Custom HTML Fieldset & Legend untuk Modal Presensi */
+        fieldset.custom-modal-fieldset {
+            border: 1px solid #e4e6fc !important;
+            border-radius: 8px !important;
+            padding: 12px 14px 14px 14px !important;
+            margin-bottom: 16px !important;
+            background-color: #ffffff !important;
+        }
+        legend.custom-modal-legend {
+            width: auto !important;
+            max-width: none !important;
+            padding: 0 8px !important;
+            margin-bottom: 0 !important;
+            font-size: 13px !important;
+            font-weight: 700 !important;
+            color: #0f172a !important;
+            border-bottom: none !important;
+            float: none !important;
+            line-height: 1 !important;
+        }
+
+        /* Seamless Input Group Clear Buttons matching standard #e4e6fc border */
+        #manualAttendanceModal .input-group-append .btn {
+            border: 1px solid #e4e6fc !important;
+            background-color: #ffffff !important;
+            transition: all 0.15s ease-in-out;
+        }
+        #manualAttendanceModal .input-group-append .btn:hover {
+            border-color: #fca5a5 !important;
+            background-color: #fef2f2 !important;
+        }
+    </style>
 
     <!-- MODAL 1: IMPORT EXCEL FINGERPRINT -->
     <div wire:ignore.self class="modal fade" id="importAttendanceModal" tabindex="-1" role="dialog" aria-labelledby="importAttendanceModalLabel" aria-hidden="true" data-backdrop="static">
@@ -872,41 +1173,13 @@
 
                 <form wire:submit.prevent="saveManualAttendance">
                     <div class="modal-body py-3 px-4 bg-white">
-                        @if ($editingAttendanceId)
-                            <div class="bd-callout {{ $editingAttendanceSource === 'manual' ? 'bd-callout-info' : 'bd-callout-success' }} mb-3" style="padding: 12px 16px !important; margin-bottom: 16px !important; border-radius: 9px;">
-                                <div class="d-flex align-items-center justify-content-between flex-nowrap" style="gap: 14px;">
-                                    <div class="d-flex align-items-center text-nowrap" style="gap: 12px;">
-                                        <div class="bd-callout-icon {{ $editingAttendanceSource === 'manual' ? 'text-primary' : 'text-success' }}" style="font-size: 20px;">
-                                            <i class="fas {{ $editingAttendanceSource === 'manual' ? 'fa-user-edit' : 'fa-fingerprint' }}"></i>
-                                        </div>
-                                        <div style="line-height: 1.4;">
-                                            <div class="text-nowrap" style="font-size: 13.5px; color: #1e293b;">
-                                                <span style="font-weight: 500; color: #334155;">Sumber:</span>
-                                                <strong class="{{ $editingAttendanceSource === 'manual' ? 'text-primary' : 'text-success' }} font-weight-600">
-                                                    {{ $editingAttendanceSource === 'manual' ? 'Koreksi Manual Admin' : 'Mesin Fingerprint' }}
-                                                </strong>
-                                            </div>
-                                            @if ($editingAttendanceRawLog)
-                                                <div class="text-nowrap mt-1" style="font-size: 12px; color: #334155; font-weight: 500;">
-                                                    Log Mesin Asli: <code style="color: #0b52aa; background: #eff6ff; border: 1px solid #bfdbfe; padding: 2px 8px; border-radius: 5px; font-weight: 600; font-size: 12px; margin-left: 4px;">{{ $editingAttendanceRawLog }}</code>
-                                                </div>
-                                            @endif
-                                        </div>
-                                    </div>
-                                    @if ($editingAttendanceRawLog && $editingAttendanceSource === 'manual')
-                                        <button type="button" wire:click="resetToFingerprint({{ $editingAttendanceId }})" wire:loading.attr="disabled" class="btn btn-sm btn-primary text-nowrap font-weight-500 flex-shrink-0" style="background-color: #0b52aa; border-color: #0b52aa; font-size: 12px; padding: 5px 14px; border-radius: 6px; box-shadow: 0 1px 3px rgba(11, 82, 170, 0.25);" title="Kembalikan jam masuk & pulang ke rekaman mesin fingerprint asli">
-                                            <i class="fas fa-undo mr-1.5"></i> Pulihkan Log Mesin
-                                        </button>
-                                    @endif
-                                </div>
-                            </div>
-                        @endif
+
 
                         <!-- Pilih Karyawan (Select2 Searchable dengan optgroup status kerja) -->
                         <div class="form-group mb-3">
                             <label for="manualEmployeeId" class="font-weight-normal">Karyawan <span class="text-danger">*</span></label>
                             <div wire:ignore>
-                                <select id="manualEmployeeId" class="form-control select2 @error('manualEmployeeId') is-invalid @enderror" style="width: 100%;" {{ $editingAttendanceId ? 'disabled' : '' }}>
+                                <select id="manualEmployeeId" class="form-control select2 @error('manualEmployeeId') is-invalid @enderror" style="width: 100%;" {{ $lockDateAndEmployee ? 'disabled' : '' }}>
                                     <option value="">-- Pilih Karyawan --</option>
                                     @foreach ($allEmployees->groupBy(fn($e) => $e->employment_status instanceof \App\Enums\EmploymentStatus ? $e->employment_status->label() : (\App\Enums\EmploymentStatus::tryFrom((string) $e->employment_status)?->label() ?? 'Lainnya')) as $statusLabel => $groupEmps)
                                         <optgroup label="{{ $statusLabel }}">
@@ -926,78 +1199,330 @@
 
                         <!-- Tanggal -->
                         <div class="form-group mb-3">
-                            <label for="manualDate" class="font-weight-normal">Tanggal Presensi <span class="text-danger">*</span></label>
-                            <input type="date" id="manualDate" wire:model="manualDate" class="form-control @error('manualDate') is-invalid @enderror" {{ $editingAttendanceId ? 'disabled' : '' }}>
+                            <label for="manualDate" class="font-weight-bold" style="font-size: 13px; color: #0f172a;">Tanggal Presensi <span class="text-danger">*</span></label>
+                            <input type="date" id="manualDate" wire:model.live="manualDate" class="form-control @error('manualDate') is-invalid @enderror" {{ $lockDateAndEmployee ? 'disabled' : '' }}>
                             @error('manualDate')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>
 
-                        <!-- Jam Masuk & Jam Pulang -->
-                        <div class="row">
-                            <div class="col-6">
-                                <div class="form-group mb-3">
-                                    <label for="manualClockIn" class="font-weight-normal">Jam Masuk</label>
-                                    <input type="time" id="manualClockIn" wire:model="manualClockIn" class="form-control @error('manualClockIn') is-invalid @enderror">
-                                    @error('manualClockIn')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
+                        @if ($manualStatus === 'libur')
+                            <!-- 1. BD Callout: Informasi Hari Libur / Off (Kontras Tinggi) -->
+                            <div class="bd-callout bd-callout-info py-2.5 px-3 mb-3" style="border-left: 4px solid #0b52aa; background-color: #f0f7ff; border-radius: 8px;">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-calendar-day mr-2" style="font-size: 16px; color: #0b52aa;"></i>
+                                    <span style="font-size: 13.5px; font-weight: 700; color: #0f172a;">Jadwal Hari Libur / Off</span>
+                                </div>
+                                <div class="mt-1" style="font-size: 12.5px; color: #1e293b; font-weight: 500; line-height: 1.4;">
+                                    Tanggal ini merupakan hari libur. Secara default karyawan libur. Centang checklist di bawah jika ada penugasan lembur.
                                 </div>
                             </div>
-                            <div class="col-6">
-                                <div class="form-group mb-3">
-                                    <label for="manualClockOut" class="font-weight-normal">Jam Pulang</label>
-                                    <input type="time" id="manualClockOut" wire:model="manualClockOut" class="form-control @error('manualClockOut') is-invalid @enderror">
-                                    @error('manualClockOut')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                            </div>
-                        </div>
 
-                        <!-- Jam Lembur Masuk & Lembur Keluar -->
-                        <div class="row">
-                            <div class="col-6">
-                                <div class="form-group mb-3">
-                                    <label for="manualOvertimeIn" class="font-weight-normal">Lembur Masuk <span class="text-muted text-xs font-weight-normal">(Opsional)</span></label>
-                                    <input type="time" id="manualOvertimeIn" wire:model="manualOvertimeIn" class="form-control @error('manualOvertimeIn') is-invalid @enderror">
-                                    @error('manualOvertimeIn')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="form-group mb-3">
-                                    <label for="manualOvertimeOut" class="font-weight-normal">Lembur Keluar <span class="text-muted text-xs font-weight-normal">(Opsional)</span></label>
-                                    <input type="time" id="manualOvertimeOut" wire:model="manualOvertimeOut" class="form-control @error('manualOvertimeOut') is-invalid @enderror">
-                                    @error('manualOvertimeOut')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                            </div>
-                        </div>
+                            <!-- 2. Fieldset Checklist: Apakah Lembur Seharian? -->
+                            <fieldset class="custom-modal-fieldset">
+                                <legend class="custom-modal-legend">
+                                    <div class="custom-control custom-checkbox d-inline-block">
+                                        <input type="checkbox" class="custom-control-input" id="hasFullDayOvertimeCheck" wire:model.live="hasFullDayOvertime">
+                                        <label class="custom-control-label font-weight-bold mb-0" for="hasFullDayOvertimeCheck" style="cursor: pointer; font-size: 13px; color: #0f172a;">
+                                            Apakah Lembur Seharian?
+                                        </label>
+                                    </div>
+                                </legend>
 
-                        <!-- Status Kehadiran -->
-                        <div class="form-group mb-3">
-                            <label for="manualStatus" class="font-weight-normal">Status Kehadiran <span class="text-danger">*</span></label>
-                            <select id="manualStatus" wire:model="manualStatus" class="form-control @error('manualStatus') is-invalid @enderror">
-                                <option value="hadir">Hadir (H)</option>
-                                <option value="terlambat">Terlambat</option>
-                                <option value="pulang_cepat">Pulang Cepat</option>
-                                <option value="cuti">Cuti (C)</option>
-                                <option value="sakit">Sakit (S)</option>
-                                <option value="izin">Izin (I)</option>
-                                <option value="absen">Alpa / Mangkir (A)</option>
-                                <option value="libur">Hari Libur</option>
-                            </select>
-                            @error('manualStatus')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
+                                @if ($hasFullDayOvertime)
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <div class="form-group mb-0">
+                                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                                    <label for="manualClockIn" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Jam Masuk</label>
+                                                    @if ($manualClockIn)
+                                                        <a href="javascript:void(0)" wire:click="clearClockIn" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam masuk">
+                                                            Hapus Jam
+                                                        </a>
+                                                    @endif
+                                                </div>
+                                                <div class="input-group">
+                                                    <input type="time" id="manualClockIn" wire:model.live="manualClockIn" class="form-control @error('manualClockIn') is-invalid @enderror">
+                                                    @if ($manualClockIn)
+                                                        <div class="input-group-append">
+                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearClockIn" title="Hapus jam masuk">
+                                                                <i class="fas fa-times text-danger"></i>
+                                                            </button>
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                                @error('manualClockIn')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="form-group mb-0">
+                                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                                    <label for="manualClockOut" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Jam Keluar</label>
+                                                    @if ($manualClockOut)
+                                                        <a href="javascript:void(0)" wire:click="clearClockOut" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam keluar">
+                                                            Hapus Jam
+                                                        </a>
+                                                    @endif
+                                                </div>
+                                                <div class="input-group">
+                                                    <input type="time" id="manualClockOut" wire:model.live="manualClockOut" class="form-control @error('manualClockOut') is-invalid @enderror">
+                                                    @if ($manualClockOut)
+                                                        <div class="input-group-append">
+                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearClockOut" title="Hapus jam keluar">
+                                                                <i class="fas fa-times text-danger"></i>
+                                                            </button>
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                                @error('manualClockOut')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="py-1" style="font-size: 12.5px; color: #1e293b; font-weight: 500;">
+                                        <i class="fas fa-info-circle text-primary mr-1"></i> Centang checklist <strong>Apakah Lembur Seharian?</strong> jika karyawan bekerja penuh satu hari libur.
+                                    </div>
+                                @endif
+                            </fieldset>
+
+                            <!-- 3. Fieldset Checklist: Apakah Lembur Per Jam? -->
+                            <fieldset class="custom-modal-fieldset">
+                                <legend class="custom-modal-legend">
+                                    <div class="custom-control custom-checkbox d-inline-block">
+                                        <input type="checkbox" class="custom-control-input" id="hasOvertimeCheck" wire:model.live="hasOvertime">
+                                        <label class="custom-control-label font-weight-bold mb-0" for="hasOvertimeCheck" style="cursor: pointer; font-size: 13px; color: #0f172a;">
+                                            Apakah Lembur Per Jam?
+                                        </label>
+                                    </div>
+                                </legend>
+
+                                @if ($hasOvertime)
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <div class="form-group mb-0">
+                                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                                    <label for="manualOvertimeIn" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Lembur Mulai</label>
+                                                    @if ($manualOvertimeIn)
+                                                        <a href="javascript:void(0)" wire:click="clearOvertimeIn" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam lembur mulai">
+                                                            Hapus Jam
+                                                        </a>
+                                                    @endif
+                                                </div>
+                                                <div class="input-group">
+                                                    <input type="time" id="manualOvertimeIn" wire:model.live="manualOvertimeIn" class="form-control @error('manualOvertimeIn') is-invalid @enderror">
+                                                    @if ($manualOvertimeIn)
+                                                        <div class="input-group-append">
+                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeIn" title="Hapus lembur mulai">
+                                                                <i class="fas fa-times text-danger"></i>
+                                                            </button>
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                                @error('manualOvertimeIn')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="form-group mb-0">
+                                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                                    <label for="manualOvertimeOut" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Lembur Selesai</label>
+                                                    @if ($manualOvertimeOut)
+                                                        <a href="javascript:void(0)" wire:click="clearOvertimeOut" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam lembur selesai">
+                                                            Hapus Jam
+                                                        </a>
+                                                    @endif
+                                                </div>
+                                                <div class="input-group">
+                                                    <input type="time" id="manualOvertimeOut" wire:model.live="manualOvertimeOut" class="form-control @error('manualOvertimeOut') is-invalid @enderror">
+                                                    @if ($manualOvertimeOut)
+                                                        <div class="input-group-append">
+                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeOut" title="Hapus lembur selesai">
+                                                                <i class="fas fa-times text-danger"></i>
+                                                            </button>
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                                @error('manualOvertimeOut')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="py-1" style="font-size: 12.5px; color: #1e293b; font-weight: 500;">
+                                        <i class="fas fa-info-circle text-primary mr-1"></i> Centang checklist <strong>Apakah Lembur Per Jam?</strong> jika ada perhitungan jam lembur.
+                                    </div>
+                                @endif
+                            </fieldset>
+
+                        @else
+                            <!-- TAMPILAN HARI KERJA BIASA -->
+                            <!-- 1. Fieldset Status Kehadiran (Meliputi Select Option dan Jam Masuk / Jam Keluar) -->
+                            <fieldset class="custom-modal-fieldset">
+                                <legend class="custom-modal-legend">
+                                    Status Kehadiran <span class="text-danger">*</span>
+                                </legend>
+
+                                <!-- Select Option Status Kehadiran -->
+                                <div class="form-group mb-2.5">
+                                    <select id="manualStatus" wire:model.live="manualStatus" class="form-control @error('manualStatus') is-invalid @enderror">
+                                        <option value="hadir">Hadir (H)</option>
+                                        <option value="cuti">Cuti (C)</option>
+                                        <option value="sakit">Sakit (S)</option>
+                                        <option value="izin">Izin (I)</option>
+                                        <option value="absen">Alpa / Mangkir (A)</option>
+                                        <option value="libur">Hari Libur</option>
+                                    </select>
+                                    @error('manualStatus')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <!-- Input Jam Masuk & Jam Keluar -->
+                                @if ($manualStatus === 'hadir')
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <div class="form-group mb-0">
+                                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                                    <label for="manualClockIn" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">
+                                                        Jam Masuk <span class="text-danger">*</span>
+                                                    </label>
+                                                    @if ($manualClockIn)
+                                                        <a href="javascript:void(0)" wire:click="clearClockIn" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam masuk">
+                                                            Hapus Jam
+                                                        </a>
+                                                    @endif
+                                                </div>
+                                                <div class="input-group">
+                                                    <input type="time" id="manualClockIn" wire:model.live="manualClockIn" class="form-control @error('manualClockIn') is-invalid @enderror">
+                                                    @if ($manualClockIn)
+                                                        <div class="input-group-append">
+                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearClockIn" title="Hapus jam masuk">
+                                                                <i class="fas fa-times text-danger"></i>
+                                                            </button>
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                                @error('manualClockIn')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="form-group mb-0">
+                                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                                    <label for="manualClockOut" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">
+                                                        Jam Keluar
+                                                    </label>
+                                                    @if ($manualClockOut)
+                                                        <a href="javascript:void(0)" wire:click="clearClockOut" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam keluar">
+                                                            Hapus Jam
+                                                        </a>
+                                                    @endif
+                                                </div>
+                                                <div class="input-group">
+                                                    <input type="time" id="manualClockOut" wire:model.live="manualClockOut" class="form-control @error('manualClockOut') is-invalid @enderror">
+                                                    @if ($manualClockOut)
+                                                        <div class="input-group-append">
+                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearClockOut" title="Hapus jam keluar">
+                                                                <i class="fas fa-times text-danger"></i>
+                                                            </button>
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                                @error('manualClockOut')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="py-1" style="font-size: 12.5px; color: #1e293b; font-weight: 500;">
+                                        <i class="fas fa-info-circle text-primary mr-1"></i> Status <strong>{{ ucfirst($manualStatus) }}</strong> tidak memerlukan input jam masuk & jam keluar.
+                                    </div>
+                                @endif
+                            </fieldset>
+
+                            <!-- 2. Fieldset Lembur (Meliputi Input Lembur Mulai dan Lembur Selesai) -->
+                            <fieldset class="custom-modal-fieldset">
+                                <legend class="custom-modal-legend">
+                                    <div class="custom-control custom-checkbox d-inline-block">
+                                        <input type="checkbox" class="custom-control-input" id="hasOvertimeCheck" wire:model.live="hasOvertime">
+                                        <label class="custom-control-label font-weight-bold mb-0" for="hasOvertimeCheck" style="cursor: pointer; font-size: 13px; color: #0f172a;">
+                                            Apakah Karyawan Lembur?
+                                        </label>
+                                    </div>
+                                </legend>
+
+                                @if ($hasOvertime)
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <div class="form-group mb-0">
+                                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                                    <label for="manualOvertimeIn" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Lembur Mulai</label>
+                                                    @if ($manualOvertimeIn)
+                                                        <a href="javascript:void(0)" wire:click="clearOvertimeIn" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam lembur mulai">
+                                                            Hapus Jam
+                                                        </a>
+                                                    @endif
+                                                </div>
+                                                <div class="input-group">
+                                                    <input type="time" id="manualOvertimeIn" wire:model.live="manualOvertimeIn" class="form-control @error('manualOvertimeIn') is-invalid @enderror">
+                                                    @if ($manualOvertimeIn)
+                                                        <div class="input-group-append">
+                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeIn" title="Hapus lembur mulai">
+                                                                <i class="fas fa-times text-danger"></i>
+                                                            </button>
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                                @error('manualOvertimeIn')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="form-group mb-0">
+                                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                                    <label for="manualOvertimeOut" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Lembur Selesai</label>
+                                                    @if ($manualOvertimeOut)
+                                                        <a href="javascript:void(0)" wire:click="clearOvertimeOut" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam lembur selesai">
+                                                            Hapus Jam
+                                                        </a>
+                                                    @endif
+                                                </div>
+                                                <div class="input-group">
+                                                    <input type="time" id="manualOvertimeOut" wire:model.live="manualOvertimeOut" class="form-control @error('manualOvertimeOut') is-invalid @enderror">
+                                                    @if ($manualOvertimeOut)
+                                                        <div class="input-group-append">
+                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeOut" title="Hapus lembur selesai">
+                                                                <i class="fas fa-times text-danger"></i>
+                                                            </button>
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                                @error('manualOvertimeOut')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="py-1" style="font-size: 12.5px; color: #1e293b; font-weight: 500;">
+                                        <i class="fas fa-info-circle text-primary mr-1"></i> Centang checklist <strong>Apakah Karyawan Lembur?</strong> di atas untuk mengaktifkan input jam lembur.
+                                    </div>
+                                @endif
+                            </fieldset>
+                        @endif
 
                         <!-- Catatan -->
                         <div class="form-group mb-2">
-                            <label for="manualNotes" class="font-weight-normal">Catatan / Keterangan</label>
+                            <label for="manualNotes" class="font-weight-bold" style="font-size: 12.5px; color: #0f172a;">Catatan / Keterangan</label>
                             <textarea id="manualNotes" wire:model="manualNotes" class="form-control" rows="2" placeholder="Alasan koreksi manual..."></textarea>
                         </div>
                     </div>
@@ -1071,9 +1596,9 @@
                     setTimeout(() => {
                         initSelect2();
                         const empVal = @this.get('manualEmployeeId');
-                        const isEditing = @this.get('editingAttendanceId') !== null;
+                        const isLocked = Boolean(@this.get('lockDateAndEmployee') || @this.get('editingAttendanceId'));
                         $('#manualEmployeeId').val(empVal || '').trigger('change.select2');
-                        $('#manualEmployeeId').prop('disabled', isEditing);
+                        $('#manualEmployeeId').prop('disabled', isLocked);
                     }, 50);
                 }
             });

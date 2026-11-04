@@ -140,6 +140,10 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->middleware('role:admin|direktur|karyawan')
         ->name('attendances.index');
 
+    Route::get('schedules', App\Livewire\Schedules\Index::class)
+        ->middleware('role:admin|direktur|karyawan')
+        ->name('schedules.index');
+
     Route::get('notifications', App\Livewire\Notifications\Index::class)
         ->middleware('role:admin|direktur|karyawan|developer')
         ->name('notifications.index');

@@ -89,7 +89,7 @@ class AttendanceTest extends TestCase
             ->assertSee('REKAP KEHADIRAN', false)
             ->assertSee('modern-attendance-matrix', false)
             ->assertSee('bd-callout-info', false)
-            ->assertSee('table-group-header', false);
+            ->assertSee('attendance-roster-table', false);
     }
 
     public function test_karyawan_can_access_attendances_index_page(): void
@@ -142,7 +142,28 @@ class AttendanceTest extends TestCase
 
         // Test service directly and component import
         $service = app(AttendanceService::class);
-        $result = $service->importFingerprintReport($realFilePath, $this->adminUser);
+        $preview = $service->importFingerprintReport($realFilePath, $this->adminUser);
+        if ($preview['status'] === 'unregistered_fingerprint') {
+            $dept = Department::first();
+            $pos = Position::first();
+            foreach ($preview['unregistered_list'] as $unreg) {
+                Employee::firstOrCreate(
+                    ['fingerprint_id' => $unreg['fingerprint_id']],
+                    [
+                        'department_id' => $dept?->id,
+                        'position_id' => $pos?->id,
+                        'full_name' => $unreg['name'],
+                        'join_date' => '2024-01-01',
+                        'employment_status' => EmploymentStatus::HARIAN,
+                        'status' => 'active',
+                        'daily_rate' => 100000,
+                    ]
+                );
+            }
+            $result = $service->importFingerprintReport($realFilePath, $this->adminUser);
+        } else {
+            $result = $preview;
+        }
 
         $this->assertGreaterThan(0, $result['records_saved']);
         $this->assertEquals(64, $result['total_parsed']);
@@ -289,9 +310,8 @@ class AttendanceTest extends TestCase
             ->test(Index::class)
             ->set('startDate', '2026-10-01')
             ->set('endDate', '2026-10-31')
-            ->assertSee('Petunjuk Presensi &amp; Keterangan Warna', false)
-            ->assertSee('Hadir (Mesin Fingerprint)')
-            ->assertSee('Koreksi / Input Manual')
+            ->assertSee('Hadir + Lembur')
+            ->assertSee('Terlambat')
             ->assertSeeHtml('att-chip-manual')
             ->assertSeeHtml('att-chip-present')
             ->assertSeeHtml('<optgroup label=')
@@ -880,5 +900,129 @@ class AttendanceTest extends TestCase
         } finally {
             @unlink($tmpFile);
         }
+    }
+
+    public function test_admin_can_save_overtime_on_holiday_without_regular_attendance(): void
+    {
+        Livewire::actingAs($this->adminUser)
+            ->test(Index::class)
+            ->set('manualEmployeeId', $this->employee->id)
+            ->set('manualDate', '2026-11-08') // Hari Minggu
+            ->set('manualStatus', 'libur')
+            ->set('hasOvertime', true)
+            ->set('manualOvertimeIn', '11:00')
+            ->set('manualOvertimeOut', '15:00')
+            ->call('saveManualAttendance')
+            ->assertDispatched('close-modal', id: 'manualAttendanceModal')
+            ->assertDispatched('swal:alert');
+
+        $att = Attendance::where('employee_id', $this->employee->id)->where('date', '2026-11-08')->firstOrFail();
+        $this->assertEquals('libur', $att->status);
+        $this->assertNull($att->clock_in);
+        $this->assertNull($att->clock_out);
+        $this->assertEquals('11:00:00', $att->overtime_in);
+        $this->assertEquals('15:00:00', $att->overtime_out);
+        $this->assertEquals(240, $att->overtime_minutes);
+
+        // Pastikan di matrixSummary kehadiran reguler tidak dihitung sebagai 'hadir'
+        $component = Livewire::actingAs($this->adminUser)
+            ->test(Index::class)
+            ->set('startDate', '2026-11-01')
+            ->set('endDate', '2026-11-30');
+
+        $summary = $component->get('matrixSummary');
+        $this->assertEquals(0, $summary[$this->employee->id]['hadir']);
+        $this->assertGreaterThanOrEqual(1, $summary[$this->employee->id]['libur']);
+    }
+
+    public function test_admin_can_save_holiday_full_day_and_per_hour_overtime_together(): void
+    {
+        Livewire::actingAs($this->adminUser)
+            ->test(Index::class)
+            ->set('manualEmployeeId', $this->employee->id)
+            ->set('manualDate', '2026-11-15') // Hari Minggu
+            ->set('manualStatus', 'libur')
+            ->set('manualClockIn', '08:00')
+            ->set('manualClockOut', '17:00')
+            ->set('hasOvertime', true)
+            ->set('manualOvertimeIn', '17:00')
+            ->set('manualOvertimeOut', '20:00')
+            ->call('saveManualAttendance')
+            ->assertDispatched('close-modal', id: 'manualAttendanceModal')
+            ->assertDispatched('swal:alert');
+
+        $att = Attendance::where('employee_id', $this->employee->id)->where('date', '2026-11-15')->firstOrFail();
+        $this->assertEquals('libur', $att->status);
+        $this->assertEquals('08:00:00', $att->clock_in);
+        $this->assertEquals('17:00:00', $att->clock_out);
+        $this->assertEquals(540, $att->duration_minutes);
+        $this->assertEquals('17:00:00', $att->overtime_in);
+        $this->assertEquals('20:00:00', $att->overtime_out);
+        $this->assertEquals(180, $att->overtime_minutes);
+
+        // Rekapitulasi: HADIR reguler tetap 0 karena berstatus libur
+        $component = Livewire::actingAs($this->adminUser)
+            ->test(Index::class)
+            ->set('startDate', '2026-11-01')
+            ->set('endDate', '2026-11-30');
+
+        $summary = $component->get('matrixSummary');
+        $this->assertEquals(0, $summary[$this->employee->id]['hadir']);
+        $this->assertGreaterThanOrEqual(1, $summary[$this->employee->id]['libur']);
+    }
+
+    public function test_manual_attendance_hadir_requires_clock_in(): void
+    {
+        Livewire::actingAs($this->adminUser)
+            ->test(Index::class)
+            ->set('manualEmployeeId', $this->employee->id)
+            ->set('manualDate', '2026-11-04')
+            ->set('manualStatus', 'hadir')
+            ->set('manualClockIn', '')
+            ->set('manualClockOut', '')
+            ->call('saveManualAttendance')
+            ->assertHasErrors(['manualClockIn' => 'required_if']);
+    }
+
+    public function test_manual_attendance_modal_does_not_contain_terlambat_or_pulang_cepat_options(): void
+    {
+        Livewire::actingAs($this->adminUser)
+            ->test(Index::class)
+            ->assertDontSeeHtml('<option value="terlambat">Terlambat</option>')
+            ->assertDontSeeHtml('<option value="pulang_cepat">Pulang Cepat</option>')
+            ->assertSeeHtml('<option value="hadir">Hadir (H)</option>')
+            ->assertSeeHtml('<option value="libur">Hari Libur</option>');
+    }
+
+    public function test_holiday_attendance_modal_shows_bd_callout_and_checklists(): void
+    {
+        Livewire::actingAs($this->adminUser)
+            ->test(Index::class)
+            ->set('manualEmployeeId', $this->employee->id)
+            ->set('manualDate', '2026-11-08') // Hari Minggu
+            ->set('manualStatus', 'libur')
+            ->assertSeeHtml('Jadwal Hari Libur / Off')
+            ->assertSeeHtml('Apakah Lembur Seharian?')
+            ->assertSeeHtml('Apakah Lembur Per Jam?')
+            ->assertDontSeeHtml('Status:')
+            ->set('hasFullDayOvertime', true)
+            ->assertSet('manualClockIn', '08:00')
+            ->assertSet('manualClockOut', '17:00')
+            ->set('hasFullDayOvertime', false)
+            ->assertSet('manualClockIn', '')
+            ->assertSet('manualClockOut', '');
+    }
+
+    public function test_open_cell_modal_locks_date_and_employee(): void
+    {
+        Livewire::actingAs($this->adminUser)
+            ->test(Index::class)
+            ->call('openCellModal', $this->employee->id, '2026-11-08')
+            ->assertSet('lockDateAndEmployee', true)
+            ->assertSet('manualEmployeeId', $this->employee->id)
+            ->assertSet('manualDate', '2026-11-08')
+            ->assertSet('manualStatus', 'libur')
+            ->call('openCreateModal')
+            ->assertSet('lockDateAndEmployee', false);
     }
 }

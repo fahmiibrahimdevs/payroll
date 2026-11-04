@@ -5,6 +5,7 @@ namespace App\Livewire\Attendances;
 use App\Enums\EmploymentStatus;
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\EmployeeSchedule;
 use App\Models\Holiday;
 use App\Services\ActivityLogService;
 use App\Services\AttendanceService;
@@ -42,7 +43,9 @@ class Index extends Component
 
     public string $statusFilter = '';
 
-    public int $perPage = 25;
+    public int $perPage = 0; // 0 = Tampilkan Semua Karyawan
+
+    public string $sortBy = 'custom';
 
     // Excel Import
     public mixed $excelFile = null;
@@ -64,6 +67,10 @@ class Index extends Component
 
     public string $manualClockOut = '';
 
+    public bool $hasOvertime = false;
+
+    public bool $hasFullDayOvertime = false;
+
     public string $manualOvertimeIn = '';
 
     public string $manualOvertimeOut = '';
@@ -71,6 +78,8 @@ class Index extends Component
     public string $manualStatus = 'hadir';
 
     public string $manualNotes = '';
+
+    public bool $lockDateAndEmployee = false;
 
     public function mount(): void
     {
@@ -147,6 +156,11 @@ class Index extends Component
     }
 
     public function updatingPerPage(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingSortBy(): void
     {
         $this->resetPage();
     }
@@ -292,16 +306,36 @@ class Index extends Component
             $this->openEditModal($attendance->id);
         } else {
             $this->resetValidation();
+            $this->lockDateAndEmployee = true;
             $this->editingAttendanceId = null;
             $this->editingAttendanceSource = 'manual';
             $this->editingAttendanceRawLog = null;
             $this->manualEmployeeId = $employeeId;
             $this->manualDate = $dateString;
-            $this->manualClockIn = '08:00';
-            $this->manualClockOut = '17:00';
-            $this->manualOvertimeIn = '';
-            $this->manualOvertimeOut = '';
-            $this->manualStatus = 'hadir';
+
+            // Cek apakah tanggal sel ini adalah hari libur (Minggu atau OFF Roster)
+            $isSunday = Carbon::parse($dateString)->isSunday();
+            $schedule = EmployeeSchedule::where('employee_id', $employeeId)->where('date', $dateString)->first();
+            $isOff = $schedule ? ($schedule->status === EmployeeSchedule::STATUS_OFF) : $isSunday;
+
+            if ($isOff) {
+                $this->manualStatus = 'libur';
+                $this->manualClockIn = '';
+                $this->manualClockOut = '';
+                $this->hasFullDayOvertime = false;
+                $this->hasOvertime = false;
+                $this->manualOvertimeIn = '';
+                $this->manualOvertimeOut = '';
+            } else {
+                $this->manualStatus = 'hadir';
+                $this->manualClockIn = '08:00';
+                $this->manualClockOut = '17:00';
+                $this->hasFullDayOvertime = false;
+                $this->hasOvertime = false;
+                $this->manualOvertimeIn = '';
+                $this->manualOvertimeOut = '';
+            }
+
             $this->manualNotes = '';
             $this->dispatch('open-modal', id: 'manualAttendanceModal');
         }
@@ -315,6 +349,7 @@ class Index extends Component
         abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
 
         $this->resetValidation();
+        $this->lockDateAndEmployee = false;
         $this->editingAttendanceId = null;
         $this->editingAttendanceSource = 'manual';
         $this->editingAttendanceRawLog = null;
@@ -322,6 +357,8 @@ class Index extends Component
         $this->manualDate = Carbon::today()->toDateString();
         $this->manualClockIn = '08:00';
         $this->manualClockOut = '17:00';
+        $this->hasFullDayOvertime = false;
+        $this->hasOvertime = false;
         $this->manualOvertimeIn = '';
         $this->manualOvertimeOut = '';
         $this->manualStatus = 'hadir';
@@ -338,6 +375,7 @@ class Index extends Component
         abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
 
         $this->resetValidation();
+        $this->lockDateAndEmployee = true;
         $attendance = Attendance::findOrFail($id);
 
         $this->editingAttendanceId = $attendance->id;
@@ -347,12 +385,126 @@ class Index extends Component
         $this->manualDate = $attendance->date ? $attendance->date->toDateString() : '';
         $this->manualClockIn = $attendance->clock_in ? substr($attendance->clock_in, 0, 5) : '';
         $this->manualClockOut = $attendance->clock_out ? substr($attendance->clock_out, 0, 5) : '';
+        $this->hasFullDayOvertime = ! empty($attendance->clock_in) || ! empty($attendance->clock_out);
         $this->manualOvertimeIn = $attendance->overtime_in ? substr($attendance->overtime_in, 0, 5) : '';
         $this->manualOvertimeOut = $attendance->overtime_out ? substr($attendance->overtime_out, 0, 5) : '';
-        $this->manualStatus = $attendance->status ?? 'hadir';
+        $this->hasOvertime = ! empty($attendance->overtime_in) || ! empty($attendance->overtime_out);
+        $status = $attendance->status ?? 'hadir';
+        $this->manualStatus = in_array($status, ['terlambat', 'pulang_cepat'], true) ? 'hadir' : $status;
         $this->manualNotes = $attendance->notes ?? '';
 
         $this->dispatch('open-modal', id: 'manualAttendanceModal');
+    }
+
+    public function updatedManualDate(string $value): void
+    {
+        if (! $this->lockDateAndEmployee) {
+            $this->syncScheduleStatus();
+        }
+    }
+
+    public function updatedManualEmployeeId($value): void
+    {
+        if (! $this->lockDateAndEmployee) {
+            $this->syncScheduleStatus();
+        }
+    }
+
+    protected function syncScheduleStatus(): void
+    {
+        if (empty($this->manualDate)) {
+            return;
+        }
+
+        try {
+            $isSunday = Carbon::parse($this->manualDate)->isSunday();
+        } catch (\Exception $e) {
+            return;
+        }
+
+        $schedule = null;
+        if (! empty($this->manualEmployeeId)) {
+            $schedule = EmployeeSchedule::where('employee_id', $this->manualEmployeeId)
+                ->where('date', $this->manualDate)
+                ->first();
+        }
+        $isOff = $schedule ? ($schedule->status === EmployeeSchedule::STATUS_OFF) : $isSunday;
+
+        if ($isOff) {
+            $this->manualStatus = 'libur';
+            if (! $this->hasFullDayOvertime) {
+                $this->manualClockIn = '';
+                $this->manualClockOut = '';
+            }
+        } elseif ($this->manualStatus === 'libur') {
+            $this->manualStatus = 'hadir';
+            if (empty($this->manualClockIn) && empty($this->manualClockOut)) {
+                $this->manualClockIn = '08:00';
+                $this->manualClockOut = '17:00';
+            }
+        }
+    }
+
+    public function updatedManualStatus(string $value): void
+    {
+        if ($value === 'libur') {
+            $this->hasFullDayOvertime = ! empty($this->manualClockIn) || ! empty($this->manualClockOut);
+        } elseif ($value === 'hadir') {
+            if (empty($this->manualClockIn) && empty($this->manualClockOut)) {
+                $this->manualClockIn = '08:00';
+                $this->manualClockOut = '17:00';
+            }
+        } else {
+            $this->manualClockIn = '';
+            $this->manualClockOut = '';
+            $this->hasFullDayOvertime = false;
+            $this->hasOvertime = false;
+            $this->manualOvertimeIn = '';
+            $this->manualOvertimeOut = '';
+        }
+    }
+
+    public function updatedHasFullDayOvertime(bool $value): void
+    {
+        if ($value) {
+            if (empty($this->manualClockIn)) {
+                $this->manualClockIn = '08:00';
+            }
+            if (empty($this->manualClockOut)) {
+                $this->manualClockOut = '17:00';
+            }
+        } else {
+            $this->manualClockIn = '';
+            $this->manualClockOut = '';
+        }
+    }
+
+    public function updatedHasOvertime(bool $value): void
+    {
+        if (! $value) {
+            $this->manualOvertimeIn = '';
+            $this->manualOvertimeOut = '';
+        }
+    }
+
+    public function clearClockIn(): void
+    {
+        $this->manualClockIn = '';
+    }
+
+    public function clearClockOut(): void
+    {
+        $this->manualClockOut = '';
+    }
+
+    public function clearOvertimeIn(): void
+    {
+        $this->manualOvertimeIn = '';
+    }
+
+    public function clearOvertimeOut(): void
+    {
+        $this->manualOvertimeOut = '';
     }
 
     /**
@@ -365,7 +517,7 @@ class Index extends Component
         $this->validate([
             'manualEmployeeId' => ['required', 'exists:employees,id'],
             'manualDate' => ['required', 'date'],
-            'manualClockIn' => ['nullable', 'date_format:H:i'],
+            'manualClockIn' => ['required_if:manualStatus,hadir', 'nullable', 'date_format:H:i'],
             'manualClockOut' => ['nullable', 'date_format:H:i'],
             'manualOvertimeIn' => ['nullable', 'date_format:H:i'],
             'manualOvertimeOut' => ['nullable', 'date_format:H:i'],
@@ -374,14 +526,33 @@ class Index extends Component
         ], [
             'manualEmployeeId.required' => 'Pilih karyawan terlebih dahulu.',
             'manualDate.required' => 'Tanggal presensi wajib diisi.',
+            'manualClockIn.required_if' => 'Jam masuk wajib diisi jika status kehadiran Hadir.',
+            'manualClockIn.date_format' => 'Format jam masuk tidak valid (HH:MM).',
+            'manualClockOut.date_format' => 'Format jam keluar tidak valid (HH:MM).',
+            'manualOvertimeIn.date_format' => 'Format jam lembur mulai tidak valid (HH:MM).',
+            'manualOvertimeOut.date_format' => 'Format jam lembur selesai tidak valid (HH:MM).',
             'manualStatus.required' => 'Status kehadiran wajib dipilih.',
         ]);
+
+        $isWorkStatus = in_array($this->manualStatus, ['hadir', 'terlambat', 'pulang_cepat'], true);
+        $allowHours = $isWorkStatus || $this->manualStatus === 'libur';
+        $hasOt = $allowHours && ($this->hasOvertime || ! empty($this->manualOvertimeIn) || ! empty($this->manualOvertimeOut));
 
         $durationMins = 0;
         $lateMins = 0;
         $overtimeMins = 0;
 
-        if ($this->manualClockIn) {
+        if (! $allowHours) {
+            $this->manualClockIn = '';
+            $this->manualClockOut = '';
+        }
+
+        if (! $hasOt) {
+            $this->manualOvertimeIn = '';
+            $this->manualOvertimeOut = '';
+        }
+
+        if ($isWorkStatus && $this->manualClockIn) {
             [$inH, $inM] = explode(':', $this->manualClockIn);
             $inMinutes = ((int) $inH * 60) + (int) $inM;
             if ($inMinutes > 480 && $inMinutes < 720) { // Masuk shift pagi lewat 08:00
@@ -391,7 +562,7 @@ class Index extends Component
             }
         }
 
-        if ($this->manualClockIn && $this->manualClockOut) {
+        if ($allowHours && $this->manualClockIn && $this->manualClockOut) {
             [$inH, $inM] = explode(':', $this->manualClockIn);
             [$outH, $outM] = explode(':', $this->manualClockOut);
             $inMinutes = ((int) $inH * 60) + (int) $inM;
@@ -404,7 +575,7 @@ class Index extends Component
             }
         }
 
-        if ($this->manualOvertimeIn && $this->manualOvertimeOut) {
+        if ($hasOt && $this->manualOvertimeIn && $this->manualOvertimeOut) {
             [$otInH, $otInM] = explode(':', $this->manualOvertimeIn);
             [$otOutH, $otOutM] = explode(':', $this->manualOvertimeOut);
             $otInMinutes = ((int) $otInH * 60) + (int) $otInM;
@@ -415,6 +586,9 @@ class Index extends Component
             } else {
                 $overtimeMins = $otOutMinutes - $otInMinutes;
             }
+        } elseif (! $hasOt) {
+            $this->manualOvertimeIn = '';
+            $this->manualOvertimeOut = '';
         }
 
         $existing = Attendance::where('employee_id', $this->manualEmployeeId)->where('date', $this->manualDate)->first();
@@ -756,8 +930,22 @@ class Index extends Component
             default => 'CAST(fingerprint_id AS UNSIGNED) ASC',
         };
 
-        return $empQuery
-            ->orderByRaw("CASE
+        if ($this->sortBy === 'name_asc') {
+            $empQuery->orderBy('full_name', 'asc');
+        } elseif ($this->sortBy === 'name_desc') {
+            $empQuery->orderBy('full_name', 'desc');
+        } elseif ($this->sortBy === 'position_asc') {
+            $empQuery->leftJoin('positions', 'employees.position_id', '=', 'positions.id')
+                ->orderBy('positions.name', 'asc')
+                ->orderBy('employees.full_name', 'asc')
+                ->select('employees.*');
+        } elseif ($this->sortBy === 'department_asc') {
+            $empQuery->leftJoin('departments', 'employees.department_id', '=', 'departments.id')
+                ->orderBy('departments.name', 'asc')
+                ->orderBy('employees.full_name', 'asc')
+                ->select('employees.*');
+        } elseif ($this->sortBy === 'status_asc') {
+            $empQuery->orderByRaw("CASE
                 WHEN employment_status = 'tetap' THEN 1
                 WHEN employment_status = 'kontrak' THEN 2
                 WHEN employment_status = 'harian' THEN 3
@@ -765,8 +953,25 @@ class Index extends Component
                 ELSE 5
             END")
             ->orderByRaw($fingerprintOrder)
-            ->orderBy('full_name')
-            ->paginate($this->perPage);
+            ->orderBy('full_name');
+        } else {
+            // Urutan kustom dari roster jadwal kerja (atau fallback nama A-Z)
+            $customOrder = cache()->get('roster_employee_order', []);
+            if (! empty($customOrder)) {
+                $cases = [];
+                foreach ($customOrder as $idx => $id) {
+                    $cases[] = 'WHEN '.(int) $id.' THEN '.($idx + 1);
+                }
+                $caseSql = 'CASE employees.id '.implode(' ', $cases).' ELSE 999999 END';
+                $empQuery->orderByRaw($caseSql)->orderBy('full_name');
+            } else {
+                $empQuery->orderBy('full_name', 'asc');
+            }
+        }
+
+        $pageSize = $this->perPage > 0 ? $this->perPage : 9999;
+
+        return $empQuery->paginate($pageSize);
     }
 
     /**
@@ -796,11 +1001,17 @@ class Index extends Component
     #[Computed]
     public function groupedMatrixEmployees(): Collection
     {
-        return $this->matrixEmployees->getCollection()->groupBy(function ($emp) {
-            return $emp->employment_status instanceof EmploymentStatus
-                ? $emp->employment_status->value
-                : (string) ($emp->employment_status ?: 'lainnya');
-        });
+        if ($this->sortBy === 'status_asc') {
+            return $this->matrixEmployees->getCollection()->groupBy(function ($emp) {
+                return $emp->employment_status instanceof EmploymentStatus
+                    ? $emp->employment_status->value
+                    : (string) ($emp->employment_status ?: 'lainnya');
+            });
+        }
+
+        return collect([
+            'all' => $this->matrixEmployees->getCollection(),
+        ]);
     }
 
     /**
@@ -821,22 +1032,40 @@ class Index extends Component
     }
 
     /**
-     * Data per baris karyawan matriks: presensi yang sudah di-keyBy tanggal
-     * (Y-m-d) dan label "departemen • posisi".
+     * Jadwal kerja roster karyawan dalam rentang matriks.
      *
-     * @return array<int, array{att: Collection, label: string}>
+     * @return Collection<int, Collection<string, EmployeeSchedule>>
+     */
+    #[Computed]
+    public function employeeSchedules(): Collection
+    {
+        [$start, $end] = $this->matrixRange;
+        $employeeIds = $this->matrixEmployees->pluck('id')->all();
+
+        return EmployeeSchedule::schedulesForEmployees($employeeIds, $start->toDateString(), $end->toDateString());
+    }
+
+    /**
+     * Data per baris karyawan matriks: presensi yang sudah di-keyBy tanggal
+     * (Y-m-d), jadwal roster, dan label "departemen • posisi".
+     *
+     * @return array<int, array{att: Collection, schedules: Collection, label: string}>
      */
     #[Computed]
     public function matrixRowData(): array
     {
         $rows = [];
+        $schedules = $this->employeeSchedules;
+
         foreach ($this->matrixEmployees->getCollection() as $emp) {
             $empAttCollection = $this->attendancesInRange->get($emp->id, collect())->keyBy(
                 fn ($a) => is_string($a->date) ? substr($a->date, 0, 10) : ($a->date ? $a->date->toDateString() : '')
             );
+            $empSchedules = $schedules->get($emp->id, collect());
             $deptPosParts = array_filter([$emp->department?->name, $emp->position?->name]);
             $rows[$emp->id] = [
                 'att' => $empAttCollection,
+                'schedules' => $empSchedules,
                 'label' => ! empty($deptPosParts) ? implode(' • ', $deptPosParts) : '-',
             ];
         }
@@ -856,13 +1085,22 @@ class Index extends Component
     {
         $summary = [];
         foreach ($this->matrixEmployees->getCollection() as $emp) {
-            $counters = ['hadir' => 0, 'manual' => 0, 'cuti' => 0, 'sakit' => 0, 'izin' => 0, 'absen' => 0];
-            $empAttCollection = $this->matrixRowData[$emp->id]['att'];
+            $counters = ['hadir' => 0, 'manual' => 0, 'cuti' => 0, 'sakit' => 0, 'izin' => 0, 'absen' => 0, 'libur' => 0];
+            $empRow = $this->matrixRowData[$emp->id];
+            $empAttCollection = $empRow['att'];
+            $empSchedules = $empRow['schedules'];
 
             foreach ($this->matrixDates as $d) {
                 $att = $empAttCollection->get($d['date']);
+                $sch = $empSchedules->get($d['date']);
+                $isOff = $sch ? ($sch->status === EmployeeSchedule::STATUS_OFF) : ($d['is_sunday'] || $d['is_holiday']);
+
+                if ($isOff) {
+                    $counters['libur']++;
+                }
+
                 $status = $att ? strtolower($att->status) : null;
-                $hasAttendance = $att !== null && in_array($status, ['hadir', 'terlambat', 'pulang_cepat'], true);
+                $hasAttendance = $att !== null && in_array($status, ['hadir', 'terlambat', 'pulang_cepat'], true) && (! empty($att->clock_in) || ! empty($att->clock_out));
 
                 if ($hasAttendance) {
                     $counters['hadir']++;
@@ -875,7 +1113,7 @@ class Index extends Component
                     $counters['sakit']++;
                 } elseif ($status === 'izin') {
                     $counters['izin']++;
-                } elseif ($status === 'absen' || (! $d['is_sunday'] && ! $d['is_holiday'] && ! $att)) {
+                } elseif ($status === 'absen' || (! $isOff && ! $att)) {
                     $counters['absen']++;
                 }
             }

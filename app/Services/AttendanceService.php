@@ -273,6 +273,12 @@ class AttendanceService
                     ->get()
                     ->keyBy(fn ($a) => $a->employee_id.'_'.$a->date->toDateString());
 
+                $company = CompanyProfile::getProfile();
+                $isRoster = $company->isRosterMode();
+                $schedulesMap = $isRoster
+                    ? \App\Models\EmployeeSchedule::schedulesForEmployees($matchedEmployeeIds, $startDate->toDateString(), $endDate->toDateString())
+                    : collect();
+
                 $upsertRows = [];
                 $now = now()->toDateTimeString();
 
@@ -328,23 +334,26 @@ class AttendanceService
                         $overtimeIn = $timeFormatter($lemburInRaw);
                         $overtimeOut = $timeFormatter($lemburOutRaw);
 
-                        // Proteksi Hari Minggu untuk Karyawan Tetap & Kontrak
-                        if ($dateObj->isSunday() && ! $isHarian) {
+                        $empSched = $isRoster ? $schedulesMap->get($employee->id)?->get($dateString) : null;
+                        $isScheduledOff = $empSched ? $empSched->isOff() : $dateObj->isSunday();
+
+                        // Proteksi Hari Minggu untuk Karyawan Tetap & Kontrak (Hanya pada mode Fixed standar)
+                        if (! $isRoster && $dateObj->isSunday() && ! $isHarian) {
                             $clockIn = null;
                             $clockOut = null;
                         }
 
                         // Jika tidak ada tap reguler dan tidak ada tap lembur:
                         if ($clockIn === null && $overtimeIn === null) {
-                            if (strtolower($regInRaw) === 'absen' || $dateObj->isSunday()) {
-                                $status = $dateObj->isSunday() ? 'libur' : 'absen';
+                            if (strtolower($regInRaw) === 'absen' || $isScheduledOff) {
+                                $status = $isScheduledOff ? 'libur' : 'absen';
                             } else {
                                 continue;
                             }
                         } elseif ($clockIn !== null) {
                             $status = 'hadir';
                         } else {
-                            $status = $dateObj->isSunday() ? 'libur' : 'absen';
+                            $status = $isScheduledOff ? 'libur' : 'absen';
                         }
 
                         // Durasi jam kerja reguler jika clock_in dan clock_out ada
@@ -612,6 +621,12 @@ class AttendanceService
                 ->get()
                 ->keyBy(fn ($a) => $a->employee_id.'_'.$a->date->toDateString());
 
+            $company = CompanyProfile::getProfile();
+            $isRoster = $company->isRosterMode();
+            $schedulesMap = $isRoster
+                ? \App\Models\EmployeeSchedule::schedulesForEmployees($matchedEmployeeIds, $startDate->toDateString(), $endDate->toDateString())
+                : collect();
+
             $upsertRows = [];
             $now = now()->toDateTimeString();
 
@@ -623,10 +638,14 @@ class AttendanceService
                 $matched[$employee->id] = $employee->full_name;
 
                 foreach ($dateCols as $col => $dateString) {
-                    $isSunday = Carbon::parse($dateString)->isSunday();
+                    $dateObj = Carbon::parse($dateString);
+                    $isSunday = $dateObj->isSunday();
                     $isHarian = $employee->employment_status === EmploymentStatus::HARIAN;
 
-                    if ($isSunday && ! $isHarian) {
+                    $empSched = $isRoster ? $schedulesMap->get($employee->id)?->get($dateString) : null;
+                    $isScheduledOff = $empSched ? $empSched->isOff() : ($isSunday && ! $isHarian);
+
+                    if (! $isRoster && $isSunday && ! $isHarian) {
                         continue;
                     }
 
@@ -816,7 +835,9 @@ class AttendanceService
         // hari libur/akhir pekan tetap tersimpan di absensi sebagai data jam,
         // tetapi TIDAK dihitung sebagai hari hadir berbayar — pembayarannya
         // hanya lewat pengajuan lembur yang di-approve Direktur.
-        $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?: 6);
+        $company = CompanyProfile::getProfile();
+        $isRoster = $company->isRosterMode();
+        $workDaysPerWeek = (int) ($company->work_days_per_week ?: 6);
         $validWorkDays = WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
 
         // Get all attendances in this date range
@@ -856,11 +877,15 @@ class AttendanceService
 
         $syncedCount = 0;
 
-        DB::transaction(function () use ($period, $candidateEmployees, $linkedOvertimeEmpIds, $attendances, $validWorkDays, &$syncedCount) {
+        DB::transaction(function () use ($period, $candidateEmployees, $linkedOvertimeEmpIds, $attendances, $validWorkDays, $company, $isRoster, $startDate, $endDate, &$syncedCount) {
             $paidEmployeeIds = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
                 ->where('payment_status', 'paid')
                 ->pluck('employee_id')
                 ->all();
+
+            $rosterSchedules = $isRoster
+                ? \App\Models\EmployeeSchedule::schedulesForEmployees($candidateEmployees->pluck('id')->all(), $startDate, $endDate)
+                : collect();
 
             foreach ($candidateEmployees as $emp) {
                 // STRICT LOCK: Karyawan yang sudah dibayar tidak boleh diubah
@@ -871,11 +896,13 @@ class AttendanceService
 
                 $empAttendances = $attendances->get($emp->id);
 
-                // Hanya hari kerja valid (bukan Minggu/Sabtu-jadwal-5-hari/
-                // libur nasional) yang dihitung sebagai hari hadir berbayar.
-                // Bila rentang tidak punya hari kerja valid sama sekali
-                // (kasus ekstrem), hasilnya memang 0 — bukan minimal 1.
-                $attendedDaysKeys = $this->attendedWorkDayKeys($empAttendances ?? collect(), $validWorkDays);
+                // Hari kerja valid menurut jadwal: pada mode Roster mengikuti jadwal shift masing-masing,
+                // pada mode Fixed mengikuti hari kerja reguler perusahaan.
+                $empValidWorkDays = $isRoster
+                    ? WorkingDays::employeeWorkDays($emp->id, $startDate, $endDate, $company, $rosterSchedules->get($emp->id))
+                    : $validWorkDays;
+
+                $attendedDaysKeys = $this->attendedWorkDayKeys($empAttendances ?? collect(), $empValidWorkDays);
                 $attendedCount = count($attendedDaysKeys);
                 $hasOvertime = in_array($emp->id, $linkedOvertimeEmpIds, true);
                 $isHarian = $emp->employment_status === EmploymentStatus::HARIAN;

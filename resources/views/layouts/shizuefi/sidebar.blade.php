@@ -47,6 +47,11 @@
                         <i class="fas fa-user-clock"></i> <span>Absensi Saya</span>
                     </a>
                 </li>
+                <li class="{{ request()->routeIs('schedules.*') ? 'active' : '' }}">
+                    <a class="nav-link" href="{{ route('schedules.index') }}">
+                        <i class="fas fa-calendar-alt"></i> <span>Jadwal Kerja</span>
+                    </a>
+                </li>
             @else
                 <li class="menu-header">Main Menu</li>
                 {{-- <li class="{{ request()->routeIs('posts.*') ? 'active' : '' }}">
@@ -89,6 +94,12 @@
                 <li class="{{ request()->routeIs('attendances.*') ? 'active' : '' }}">
                     <a class="nav-link" href="{{ route('attendances.index') }}">
                         <i class="fas fa-user-clock"></i> <span>Absensi</span>
+                    </a>
+                </li>
+
+                <li class="{{ request()->routeIs('schedules.*') ? 'active' : '' }}">
+                    <a class="nav-link" href="{{ route('schedules.index') }}">
+                        <i class="fas fa-calendar-alt"></i> <span>Jadwal Kerja (Roster)</span>
                     </a>
                 </li>
 

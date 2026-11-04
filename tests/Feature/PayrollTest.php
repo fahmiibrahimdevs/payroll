@@ -2924,6 +2924,8 @@ class PayrollTest extends TestCase
 
         $emp = Employee::factory()->create([
             'status' => EmployeeStatus::ACTIVE,
+            'employment_status' => EmploymentStatus::TETAP,
+            'join_date' => '2026-01-01',
             'basic_salary' => 5_000_000,
         ]);
         $emp->detail()->create([
@@ -3000,7 +3002,6 @@ class PayrollTest extends TestCase
         $lw->call('save')->assertHasNoErrors();
 
         $item->refresh();
-        dump($item->lines()->whereNotNull('cash_advance_installment_id')->get(['id', 'name', 'amount', 'notes'])->toArray());
         $caLine = $item->lines()->where('cash_advance_installment_id', $inst1->id)->first();
         $this->assertNotNull($caLine);
         $this->assertEquals(0.0, (float) $caLine->amount);

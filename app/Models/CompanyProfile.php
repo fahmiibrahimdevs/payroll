@@ -28,6 +28,7 @@ class CompanyProfile extends Model
         'logo_path',
         'tax_identification_number',
         'work_days_per_week',
+        'work_schedule_mode',
         'default_meal_allowance_per_day',
         'overtime_rounding_mode',
         'overtime_rounding_threshold_minutes',
@@ -280,6 +281,22 @@ class CompanyProfile extends Model
             ->implode('');
 
         return $initials !== '' ? $initials : 'HRM';
+    }
+
+    /**
+     * Apakah perusahaan menerapkan jadwal bergilir / roster per karyawan (misal: operasional toko).
+     */
+    public function isRosterMode(): bool
+    {
+        return ($this->work_schedule_mode ?? 'fixed') === 'roster';
+    }
+
+    /**
+     * Apakah perusahaan menerapkan jadwal kantor tetap (libur akhir pekan reguler).
+     */
+    public function isFixedSchedule(): bool
+    {
+        return ! $this->isRosterMode();
     }
 
     protected function formattedDefaultMealAllowancePerDay(): Attribute

@@ -41,6 +41,8 @@ class Index extends Component
 
     public int $work_days_per_week = 6;
 
+    public string $work_schedule_mode = 'roster';
+
     public bool $is_uniform_meal_allowance = true;
 
     public mixed $default_meal_allowance_per_day = 25000;
@@ -116,6 +118,7 @@ class Index extends Component
         $this->postal_code = $profile->postal_code;
         $this->tax_identification_number = $profile->tax_identification_number;
         $this->work_days_per_week = (int) ($profile->work_days_per_week ?? 6);
+        $this->work_schedule_mode = (string) ($profile->work_schedule_mode ?? 'roster');
         $this->is_uniform_meal_allowance = (bool) ($profile->is_uniform_meal_allowance ?? true);
         $this->default_meal_allowance_per_day = (float) ($profile->default_meal_allowance_per_day ?? 25000);
         $this->overtime_rounding_mode = (string) ($profile->overtime_rounding_mode ?? 'round_60_min');
@@ -157,6 +160,7 @@ class Index extends Component
             'postal_code' => 'nullable|string|max:20',
             'tax_identification_number' => 'nullable|string|max:50',
             'work_days_per_week' => 'required|integer|in:5,6',
+            'work_schedule_mode' => 'required|string|in:fixed,roster',
             'is_uniform_meal_allowance' => 'boolean',
             'default_meal_allowance_per_day' => 'required|numeric|min:0',
             'overtime_rounding_mode' => 'required|string|in:round_30_min,round_60_min,floor_hour,exact',
@@ -209,7 +213,7 @@ class Index extends Component
             $failedKeys = array_keys($e->validator->failed());
             if (array_intersect($failedKeys, ['name', 'code', 'email', 'phone', 'website', 'email_domain', 'address', 'city', 'province', 'postal_code', 'tax_identification_number', 'logo'])) {
                 $this->activeTab = 'identitas';
-            } elseif (array_intersect($failedKeys, ['work_days_per_week', 'payroll_cutoff_day', 'payroll_pay_day', 'default_meal_allowance_per_day', 'overtime_rounding_mode', 'overtime_rounding_threshold_minutes', 'overtime_meal_threshold_hours', 'overtime_meal_allowance'])) {
+            } elseif (array_intersect($failedKeys, ['work_days_per_week', 'work_schedule_mode', 'payroll_cutoff_day', 'payroll_pay_day', 'default_meal_allowance_per_day', 'overtime_rounding_mode', 'overtime_rounding_threshold_minutes', 'overtime_meal_threshold_hours', 'overtime_meal_allowance'])) {
                 $this->activeTab = 'penggajian';
             } elseif (array_intersect($failedKeys, ['bpjs_jkk_risk_rate', 'bpjs_jkm_rate', 'bpjs_kes_emp_rate', 'bpjs_kes_comp_rate', 'bpjs_jht_emp_rate', 'bpjs_jht_comp_rate', 'bpjs_jp_emp_rate', 'bpjs_jp_comp_rate', 'bpjs_kes_cap', 'bpjs_jp_cap'])) {
                 $this->activeTab = 'pajak';
@@ -233,6 +237,7 @@ class Index extends Component
                 'postal_code' => $this->postal_code,
                 'tax_identification_number' => $this->tax_identification_number,
                 'work_days_per_week' => (int) $this->work_days_per_week,
+                'work_schedule_mode' => $this->work_schedule_mode,
                 'is_uniform_meal_allowance' => (bool) $this->is_uniform_meal_allowance,
                 'default_meal_allowance_per_day' => (float) $this->default_meal_allowance_per_day,
                 'overtime_rounding_mode' => $this->overtime_rounding_mode,

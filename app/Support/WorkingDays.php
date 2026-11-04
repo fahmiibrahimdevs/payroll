@@ -2,9 +2,11 @@
 
 namespace App\Support;
 
+use App\Models\CompanyProfile;
 use App\Models\Holiday;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 
 /**
  * Sumber tunggal definisi hari kerja aplikasi — dipakai payroll (prorata),
@@ -57,6 +59,56 @@ class WorkingDays
             $dateString = $curr->toDateString();
             if (! self::isWeekend($curr, $workDaysPerWeek) && ! $holidays->has($dateString)) {
                 $workDays[$dateString] = self::dayKey($curr);
+            }
+            $curr->addDay();
+        }
+
+        return $workDays;
+    }
+
+    /**
+     * Hari kerja aktual untuk seorang karyawan dalam rentang tanggal:
+     * - Jika mode Roster: memeriksa EmployeeSchedule untuk karyawan tersebut.
+     *   Jika status 'work', maka tanggal tersebut adalah hari kerja karyawan (termasuk Minggu jika dijadwalkan kerja).
+     *   Jika status 'off', maka tanggal tersebut adalah libur sah karyawan.
+     *   Jika belum dijadwalkan, fallback ke default workDays.
+     * - Jika mode Fixed: mengikuti workDays standar.
+     *
+     * @return array<string, string> tanggal (Y-m-d) => key hari ('mon'..'sun')
+     */
+    public static function employeeWorkDays(int $employeeId, string $startDate, string $endDate, ?CompanyProfile $company = null, ?Collection $employeeSchedules = null): array
+    {
+        $company ??= CompanyProfile::getProfile();
+        $workDaysPerWeek = (int) ($company->work_days_per_week ?: 6);
+
+        if (! $company->isRosterMode()) {
+            return self::workDays($startDate, $endDate, $workDaysPerWeek);
+        }
+
+        $holidays = Holiday::datesBetween($startDate, $endDate);
+        $schedules = $employeeSchedules ?? \App\Models\EmployeeSchedule::query()
+            ->where('employee_id', $employeeId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->keyBy(fn ($s) => $s->date->toDateString());
+
+        $workDays = [];
+        $curr = Carbon::parse($startDate)->startOfDay();
+        $end = Carbon::parse($endDate)->endOfDay();
+
+        while ($curr->lte($end)) {
+            $dateString = $curr->toDateString();
+            $sch = $schedules->get($dateString);
+
+            if ($sch) {
+                if ($sch->isWork()) {
+                    $workDays[$dateString] = self::dayKey($curr);
+                }
+            } else {
+                // Fallback jika belum dijadwalkan secara spesifik:
+                if (! self::isWeekend($curr, $workDaysPerWeek) && ! $holidays->has($dateString)) {
+                    $workDays[$dateString] = self::dayKey($curr);
+                }
             }
             $curr->addDay();
         }

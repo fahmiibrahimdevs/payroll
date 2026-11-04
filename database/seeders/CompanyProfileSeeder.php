@@ -27,6 +27,7 @@ class CompanyProfileSeeder extends Seeder
                 'postal_code' => '12190',
                 'tax_identification_number' => '01.234.567.8-901.000',
                 'work_days_per_week' => 6,
+                'work_schedule_mode' => 'roster',
                 'default_meal_allowance_per_day' => 25000.00,
                 'overtime_rounding_mode' => 'round_60_min',
                 'overtime_rounding_threshold_minutes' => 10,

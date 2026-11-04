@@ -51,6 +51,7 @@ class CompanyProfileService
             'postal_code' => ! empty($data['postal_code']) ? trim((string) $data['postal_code']) : null,
             'tax_identification_number' => ! empty($data['tax_identification_number']) ? trim((string) $data['tax_identification_number']) : null,
             'work_days_per_week' => isset($data['work_days_per_week']) ? (int) $data['work_days_per_week'] : ($profile->work_days_per_week ?? 6),
+            'work_schedule_mode' => in_array($data['work_schedule_mode'] ?? '', ['fixed', 'roster'], true) ? $data['work_schedule_mode'] : ($profile->work_schedule_mode ?? 'fixed'),
             'default_meal_allowance_per_day' => isset($data['default_meal_allowance_per_day']) ? (float) $data['default_meal_allowance_per_day'] : ($profile->default_meal_allowance_per_day ?? 25000),
             'overtime_rounding_mode' => $data['overtime_rounding_mode'] ?? $profile->overtime_rounding_mode ?? 'round_60_min',
             'overtime_rounding_threshold_minutes' => isset($data['overtime_rounding_threshold_minutes']) ? (int) $data['overtime_rounding_threshold_minutes'] : ($profile->overtime_rounding_threshold_minutes ?? 10),

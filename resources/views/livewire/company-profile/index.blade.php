@@ -102,7 +102,7 @@
                                    wire:click="setTab('penggajian')"
                                    role="tab">
                                     <i class="fas fa-calendar-alt mr-1.5"></i> Penggajian &amp; Uang Makan
-                                    @if ($errors->hasAny(['work_days_per_week', 'payroll_cutoff_day', 'payroll_pay_day', 'default_meal_allowance_per_day', 'overtime_rounding_mode', 'overtime_meal_threshold_hours', 'overtime_meal_allowance']))
+                                    @if ($errors->hasAny(['work_days_per_week', 'work_schedule_mode', 'payroll_cutoff_day', 'payroll_pay_day', 'default_meal_allowance_per_day', 'overtime_rounding_mode', 'overtime_meal_threshold_hours', 'overtime_meal_allowance']))
                                         <span class="badge badge-danger ml-1 px-1.5 py-0.5" style="font-size: 10px;">!</span>
                                     @endif
                                 </a>
@@ -256,22 +256,42 @@
                             <!-- TAB 2: PENGGAJIAN & UANG MAKAN -->
                             <div class="tab-pane fade {{ $activeTab === 'penggajian' ? 'show active' : 'd-none' }}" id="tab-penggajian" role="tabpanel">
                                 <div class="row">
-                                    <div class="col-md-4 mb-3">
+                                    <div class="col-md-3 mb-3">
+                                        <div class="form-group mb-0">
+                                            <label for="work_schedule_mode">
+                                                Mode Penjadwalan
+                                                <i class="fas fa-info-circle text-muted ml-1" data-toggle="tooltip" data-placement="top" title="Standar Kantor: libur akhir pekan tetap. Roster Toko: libur bergilir per karyawan sesuai tabel jadwal."></i>
+                                            </label>
+                                            <select id="work_schedule_mode" wire:model.live="work_schedule_mode" class="form-control @error('work_schedule_mode') is-invalid @enderror">
+                                                <option value="roster">Roster Toko (Libur Bergilir)</option>
+                                                <option value="fixed">Standar Kantor (Libur Tetap)</option>
+                                            </select>
+                                            @error('work_schedule_mode')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
                                         <div class="form-group mb-0">
                                             <label for="work_days_per_week">
                                                 Skema Hari Kerja
                                                 <i class="fas fa-info-circle text-muted ml-1" data-toggle="tooltip" data-placement="top" title="Standar hari kerja per minggu untuk pembagi perhitungan gaji prorata."></i>
                                             </label>
                                             <select id="work_days_per_week" wire:model="work_days_per_week" class="form-control @error('work_days_per_week') is-invalid @enderror">
-                                                <option value="5">5 Hari Kerja (Senin - Jumat)</option>
-                                                <option value="6">6 Hari Kerja (Senin - Sabtu)</option>
+                                                @if($work_schedule_mode === 'roster')
+                                                    <option value="6">6 Hari Kerja / Minggu (1 Hari Libur Bergilir)</option>
+                                                    <option value="5">5 Hari Kerja / Minggu (2 Hari Libur Bergilir)</option>
+                                                @else
+                                                    <option value="6">6 Hari Kerja (Senin - Sabtu)</option>
+                                                    <option value="5">5 Hari Kerja (Senin - Jumat)</option>
+                                                @endif
                                             </select>
                                             @error('work_days_per_week')
                                                 <div class="invalid-feedback">{{ $message }}</div>
                                             @enderror
                                         </div>
                                     </div>
-                                    <div class="col-md-4 mb-3">
+                                    <div class="col-md-3 mb-3">
                                         <div class="form-group mb-0">
                                             <label for="payroll_cutoff_day">
                                                 Tanggal Cut-Off
@@ -288,7 +308,7 @@
                                             @enderror
                                         </div>
                                     </div>
-                                    <div class="col-md-4 mb-3">
+                                    <div class="col-md-3 mb-3">
                                         <div class="form-group mb-0">
                                             <label for="payroll_pay_day">
                                                 Tanggal Gajian Default
