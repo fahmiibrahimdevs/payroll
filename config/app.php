@@ -15,7 +15,7 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
-    'navbar_bg' => env('NAVBAR_BG_COLOR'),
+    'navbar_bg' => env('NAVBAR_BG_COLOR', env('NAVBAR_BG')),
 
     /*
     |--------------------------------------------------------------------------

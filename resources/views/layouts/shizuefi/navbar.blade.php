@@ -1,5 +1,5 @@
 @php
-    $navbarBg = config('app.navbar_bg') ?: (str_contains((string) config('app.url'), 'test-') ? '#c2410c' : null);
+    $navbarBg = config('app.navbar_bg') ?: (str_contains((string) config('app.url'), 'test-') ? '#3abaf4' : null);
 @endphp
 @if ($navbarBg)
     <style>
