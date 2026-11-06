@@ -82,6 +82,17 @@ class Index extends Component
 
     public bool $lockDateAndEmployee = false;
 
+    public ?Attendance $editingAttendance = null;
+
+    // Audit Modal (Camera Selfie & GPS Map)
+    public ?int $auditAttendanceId = null;
+
+    public ?Attendance $auditAttendance = null;
+
+    public string $auditTab = 'clock_in'; // 'clock_in' or 'clock_out'
+
+    public string $auditReviewNotes = '';
+
     public function mount(): void
     {
         $user = auth()->user();
@@ -377,8 +388,11 @@ class Index extends Component
 
         $this->resetValidation();
         $this->lockDateAndEmployee = true;
-        $attendance = Attendance::findOrFail($id);
+        $attendance = Attendance::query()
+            ->with(['employee.department', 'employee.position', 'employee.workLocation', 'clockInLocation', 'clockOutLocation', 'overtimeInLocation', 'overtimeOutLocation', 'overtimeSubmission', 'reviewer'])
+            ->findOrFail($id);
 
+        $this->editingAttendance = $attendance;
         $this->editingAttendanceId = $attendance->id;
         $this->editingAttendanceSource = $attendance->source;
         $this->editingAttendanceRawLog = $attendance->raw_log;
@@ -394,7 +408,154 @@ class Index extends Component
         $this->manualStatus = in_array($status, ['terlambat', 'pulang_cepat'], true) ? 'hadir' : $status;
         $this->manualNotes = $attendance->notes ?? '';
 
+        // Otomatis siapkan panel audit kanan (Side-by-side view)
+        $this->auditAttendance = $attendance;
+        $this->auditAttendanceId = $attendance->id;
+        $this->auditTab = 'clock_in';
+        $this->auditReviewNotes = $attendance->review_notes ?? '';
+
         $this->dispatch('open-modal', id: 'manualAttendanceModal');
+        $this->dispatchMapAuditPayload();
+    }
+
+    /**
+     * Buka modal audit visual: selfie & Leaflet map interactive.
+     * Mengarahkan ke openEditModal agar terbuka dalam tampilan 2 panel berdampingan.
+     */
+    public function openAuditModal(int $id): void
+    {
+        $this->openEditModal($id);
+    }
+
+    /**
+     * Ganti tab lokasi masuk / pulang / lembur pada peta audit.
+     */
+    public function setAuditTab(string $tab): void
+    {
+        $this->auditTab = in_array($tab, ['clock_in', 'clock_out', 'overtime'], true) ? $tab : 'clock_in';
+        $this->dispatchMapAuditPayload();
+    }
+
+    /**
+     * Kirim data koordinat GPS ke script Leaflet browser.
+     */
+    protected function dispatchMapAuditPayload(): void
+    {
+        if (! $this->auditAttendance) {
+            return;
+        }
+
+        $att = $this->auditAttendance;
+
+        if ($this->auditTab === 'overtime') {
+            $location = $att->overtimeInLocation ?: ($att->overtimeOutLocation ?: ($att->employee?->workLocation ?: $att->clockInLocation));
+            $empLat = (float) ($att->overtime_in_latitude ?: $att->overtime_out_latitude ?: 0);
+            $empLng = (float) ($att->overtime_in_longitude ?: $att->overtime_out_longitude ?: 0);
+            $distance = (int) ($att->overtime_in_distance_meters ?: $att->overtime_out_distance_meters ?: 0);
+        } elseif ($this->auditTab === 'clock_out') {
+            $location = $att->clockOutLocation ?: ($att->employee?->workLocation ?: $att->clockInLocation);
+            $empLat = (float) ($att->clock_out_latitude ?: 0);
+            $empLng = (float) ($att->clock_out_longitude ?: 0);
+            $distance = (int) ($att->clock_out_distance_meters ?: 0);
+        } else {
+            $location = $att->clockInLocation ?: $att->employee?->workLocation;
+            $empLat = (float) ($att->clock_in_latitude ?: 0);
+            $empLng = (float) ($att->clock_in_longitude ?: 0);
+            $distance = (int) ($att->clock_in_distance_meters ?: 0);
+        }
+
+        $officeLat = $location ? (float) $location->latitude : -6.5715000;
+        $officeLng = $location ? (float) $location->longitude : 107.7587000;
+        $radiusMeters = $location ? (int) $location->radius_meters : 50;
+        $locationName = $location ? $location->name : 'Kantor Pusat - Percetakan Subang';
+
+        $hasEmpGps = ($empLat != 0.0 && $empLng != 0.0);
+
+        $this->dispatch('init-audit-map', [
+            'tab' => $this->auditTab,
+            'officeLat' => $officeLat,
+            'officeLng' => $officeLng,
+            'radiusMeters' => $radiusMeters,
+            'locationName' => $locationName,
+            'empLat' => $hasEmpGps ? $empLat : null,
+            'empLng' => $hasEmpGps ? $empLng : null,
+            'distanceMeters' => $distance,
+            'isInsideRadius' => $hasEmpGps ? ($distance <= $radiusMeters) : false,
+        ]);
+    }
+
+    /**
+     * Setujui presensi yang pending review.
+     */
+    public function approveAudit(AttendanceService $service): void
+    {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+
+        if (! $this->auditAttendance) {
+            return;
+        }
+
+        try {
+            $service->reviewAttendance(
+                attendance: $this->auditAttendance,
+                status: 'approved',
+                reviewNotes: $this->auditReviewNotes,
+                actor: auth()->user()
+            );
+
+            $this->auditAttendance->refresh();
+
+            $this->dispatch('swal:alert', [
+                'type' => 'success',
+                'title' => 'Presensi Disetujui!',
+                'message' => 'Status presensi '.$this->auditAttendance->employee?->full_name.' berhasil disetujui.',
+            ]);
+
+            $this->dispatch('close-modal', id: 'attendanceAuditModal');
+        } catch (\Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Memproses Review',
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Tolak presensi yang pending review (tandai absen/mangkir).
+     */
+    public function rejectAudit(AttendanceService $service): void
+    {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+
+        if (! $this->auditAttendance) {
+            return;
+        }
+
+        try {
+            $service->reviewAttendance(
+                attendance: $this->auditAttendance,
+                status: 'rejected',
+                reviewNotes: $this->auditReviewNotes ?: 'Ditolak karena di luar radius kantor tanpa alasan yang valid.',
+                actor: auth()->user()
+            );
+
+            $this->auditAttendance->refresh();
+
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Presensi Ditolak',
+                'message' => 'Status presensi '.$this->auditAttendance->employee?->full_name.' ditandai sebagai Mangkir (Absen).',
+            ]);
+
+            $this->dispatch('close-modal', id: 'attendanceAuditModal');
+        } catch (\Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Memproses Review',
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function updatedManualDate(string $value): void
@@ -877,12 +1038,14 @@ class Index extends Component
         $holidayDates = Holiday::datesBetween($start->toDateString(), $end->toDateString());
         $matrixDates = [];
         $cur = $start->copy();
+        static $dowNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
         while ($cur->lte($end)) {
             $dateString = $cur->toDateString();
             $matrixDates[] = [
                 'date' => $dateString,
                 'day' => $cur->day,
-                'dow_name' => $cur->locale('id')->isoFormat('ddd'),
+                'dow_name' => $dowNames[$cur->dayOfWeek],
                 'is_sunday' => $cur->isSunday(),
                 'is_weekend' => $cur->isWeekend(),
                 'is_holiday' => $holidayDates->has($dateString),
@@ -901,7 +1064,7 @@ class Index extends Component
     #[Computed]
     public function matrixEmployees(): LengthAwarePaginator
     {
-        $empQuery = Employee::where('status', 'active')->with(['department', 'position', 'detail']);
+        $empQuery = Employee::where('status', 'active')->with(['department', 'position']);
 
         if (! empty($this->departmentFilter)) {
             $empQuery->where('department_id', (int) $this->departmentFilter);
@@ -961,8 +1124,8 @@ class Index extends Component
                 WHEN employment_status = 'magang' THEN 4
                 ELSE 5
             END")
-            ->orderByRaw($fingerprintOrder)
-            ->orderBy('full_name');
+                ->orderByRaw($fingerprintOrder)
+                ->orderBy('full_name');
         } else {
             // Urutan kustom dari roster jadwal kerja (atau fallback nama A-Z)
             $customOrder = cache()->get('roster_employee_order', []);
@@ -996,6 +1159,7 @@ class Index extends Component
             ->select([
                 'id', 'employee_id', 'date', 'clock_in', 'clock_out',
                 'overtime_in', 'overtime_out', 'status', 'source',
+                'review_status', 'clock_in_distance_meters',
             ])
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->whereIn('employee_id', $this->matrixEmployees->pluck('id'))
@@ -1056,52 +1220,33 @@ class Index extends Component
 
     /**
      * Data per baris karyawan matriks: presensi yang sudah di-keyBy tanggal
-     * (Y-m-d), jadwal roster, dan label "departemen • posisi".
+     * (Y-m-d), jadwal roster, label "departemen • posisi", representasi sel HTML terkompilasi,
+     * serta ringkasan counter kehadiran dalam satu kali iterasi.
      *
-     * @return array<int, array{att: Collection, schedules: Collection, label: string}>
+     * @return array<int, array{att: Collection, schedules: Collection, label: string, cells: array, summary: array}>
      */
     #[Computed]
     public function matrixRowData(): array
     {
         $rows = [];
         $schedules = $this->employeeSchedules;
+        $matrixDates = $this->matrixDates;
+        $attendancesInRange = $this->attendancesInRange;
 
         foreach ($this->matrixEmployees->getCollection() as $emp) {
-            $empAttCollection = $this->attendancesInRange->get($emp->id, collect())->keyBy(
+            $empAttCollection = $attendancesInRange->get($emp->id, collect())->keyBy(
                 fn ($a) => is_string($a->date) ? substr($a->date, 0, 10) : ($a->date ? $a->date->toDateString() : '')
             );
             $empSchedules = $schedules->get($emp->id, collect());
             $deptPosParts = array_filter([$emp->department?->name, $emp->position?->name]);
-            $rows[$emp->id] = [
-                'att' => $empAttCollection,
-                'schedules' => $empSchedules,
-                'label' => ! empty($deptPosParts) ? implode(' • ', $deptPosParts) : '-',
-            ];
-        }
 
-        return $rows;
-    }
-
-    /**
-     * Rekapitulasi kehadiran per karyawan pada matriks: counter akhir
-     * hadir/manual/cuti/sakit/izin/absen (absen dihitung pada hari kerja
-     * tanpa catatan presensi).
-     *
-     * @return array<int, array{hadir: int, manual: int, cuti: int, sakit: int, izin: int, absen: int}>
-     */
-    #[Computed]
-    public function matrixSummary(): array
-    {
-        $summary = [];
-        foreach ($this->matrixEmployees->getCollection() as $emp) {
+            $cells = [];
             $counters = ['hadir' => 0, 'manual' => 0, 'cuti' => 0, 'sakit' => 0, 'izin' => 0, 'absen' => 0, 'libur' => 0];
-            $empRow = $this->matrixRowData[$emp->id];
-            $empAttCollection = $empRow['att'];
-            $empSchedules = $empRow['schedules'];
 
-            foreach ($this->matrixDates as $d) {
-                $att = $empAttCollection->get($d['date']);
-                $sch = $empSchedules->get($d['date']);
+            foreach ($matrixDates as $d) {
+                $date = $d['date'];
+                $att = $empAttCollection->get($date);
+                $sch = $empSchedules->get($date);
                 $isOff = $sch ? ($sch->status === EmployeeSchedule::STATUS_OFF) : ($d['is_sunday'] || $d['is_holiday']);
 
                 if ($isOff) {
@@ -1109,25 +1254,118 @@ class Index extends Component
                 }
 
                 $status = $att ? strtolower($att->status) : null;
-                $hasAttendance = $att !== null && in_array($status, ['hadir', 'terlambat', 'pulang_cepat'], true) && (! empty($att->clock_in) || ! empty($att->clock_out));
+                $hasOt = $att && (! empty($att->overtime_in) || ($att->overtime_duration_minutes ?? 0) > 0);
+                $hasWorkHours = $att && (! empty($att->clock_in) || ! empty($att->clock_out));
+                $isRegularWork = $att !== null && in_array($status, ['hadir', 'terlambat', 'pulang_cepat'], true) && $hasWorkHours;
 
-                if ($hasAttendance) {
+                $cls = '';
+                $content = '&nbsp;';
+                $title = $emp->full_name." ({$date})";
+
+                if ($isRegularWork) {
                     $counters['hadir']++;
                     if (($att->source ?? '') === 'manual') {
                         $counters['manual']++;
                     }
+
+                    $sourceLabel = match ($att->source) {
+                        'web_gps' => ' [Web GPS'.(! empty($att->clock_in_distance_meters) ? ' '.$att->clock_in_distance_meters.'m' : '').']',
+                        'manual' => ' [Manual]',
+                        default => ' [Fingerprint]',
+                    };
+                    $reviewLabel = (($att->review_status ?? null) === 'pending_review') ? ' (Perlu Review Geofence)' : '';
+                    $title .= ': '.ucfirst($status).($att->clock_in ? ' Masuk '.substr($att->clock_in, 0, 5) : '').($att->clock_out ? ' s/d Pulang '.substr($att->clock_out, 0, 5) : '').($hasOt ? ' | Lembur '.substr($att->overtime_in, 0, 5).($att->overtime_out ? '-'.substr($att->overtime_out, 0, 5) : '') : '').$sourceLabel.$reviewLabel.' (Klik untuk ubah)';
+
+                    $reviewBadge = (($att->review_status ?? null) === 'pending_review')
+                        ? '<span class="position-absolute" style="top:1px;right:1px;width:6px;height:6px;background-color:#f59e0b;border-radius:50%;box-shadow:0 0 0 1px #fff" title="Perlu review geofence"></span>'
+                        : '';
+                    $otBadge = $hasOt ? '<span class="att-ot-ribbon" title="Ada Lembur">OT</span>' : '';
+
+                    if ($status === 'hadir') {
+                        $manualClass = ($att->source ?? '') === 'manual' ? ' att-chip-manual' : '';
+                        $cls = 'att-cell-present att-chip-present position-relative'.$manualClass;
+                        $content = '<i class="fas fa-check att-cell-check"></i>'.$reviewBadge.$otBadge;
+                    } elseif ($status === 'terlambat') {
+                        $cls = 'att-cell-late position-relative';
+                        $content = '<span class="att-cell-letter">T</span>'.$reviewBadge.$otBadge;
+                    } else { // pulang_cepat
+                        $cls = 'att-cell-early position-relative';
+                        $content = '<span class="att-cell-letter" style="font-size:9.5px">PC</span>'.$reviewBadge.$otBadge;
+                    }
+                } elseif ($status === 'libur' && $hasWorkHours) {
+                    $title .= ': Lembur Hari Libur'.($att->clock_in ? ' Masuk '.substr($att->clock_in, 0, 5) : '').($att->clock_out ? ' s/d Pulang '.substr($att->clock_out, 0, 5) : '').($hasOt ? ' | Lembur '.substr($att->overtime_in, 0, 5).($att->overtime_out ? '-'.substr($att->overtime_out, 0, 5) : '') : '').(($att->source ?? '') === 'manual' ? ' [Manual]' : ' [Fingerprint]').' (Klik untuk ubah)';
+                    $manualClass = ($att->source ?? '') === 'manual' ? ' att-chip-manual' : '';
+                    $cls = 'position-relative'.$manualClass;
+                    $otBadge = $hasOt ? '<span class="att-ot-ribbon" title="Ada Lembur">OT</span>' : '';
+                    $content = '<i class="fas fa-check att-cell-check text-white"></i>'.$otBadge;
+                } elseif ($hasOt) {
+                    $title .= ': Lembur '.substr($att->overtime_in, 0, 5).($att->overtime_out ? ' - '.substr($att->overtime_out, 0, 5) : '').' (Klik untuk ubah)';
+                    $cls = ! $isOff ? 'att-cell-ot-solo' : '';
+                    $content = $isOff
+                        ? '<span class="att-cell-letter text-white" style="font-size:10.5px;font-weight:800">OT</span>'
+                        : '<span class="att-cell-letter" style="color:#b45309;font-size:10px">OT</span>';
                 } elseif ($status === 'cuti') {
                     $counters['cuti']++;
+                    $title .= ': Cuti (Klik untuk ubah)';
+                    $cls = 'att-cell-cuti';
+                    $content = '<span class="att-cell-letter">C</span>';
                 } elseif ($status === 'sakit') {
                     $counters['sakit']++;
+                    $title .= ': Sakit (Klik untuk ubah)';
+                    $cls = 'att-cell-sakit';
+                    $content = '<span class="att-cell-letter">S</span>';
                 } elseif ($status === 'izin') {
                     $counters['izin']++;
+                    $title .= ': Izin (Klik untuk ubah)';
+                    $cls = 'att-cell-izin';
+                    $content = '<span class="att-cell-letter">I</span>';
                 } elseif ($status === 'absen' || (! $isOff && ! $att)) {
                     $counters['absen']++;
+                    $title .= $status === 'absen' ? ': Alpa / Mangkir (Klik untuk ubah)' : ': Belum ada presensi (Klik untuk input jam)';
+                    if ($status === 'absen') {
+                        $cls = 'att-cell-alpa';
+                        $content = '<span class="att-cell-letter">A</span>';
+                    } else {
+                        $cls = 'text-muted';
+                        $content = '<span style="color:#cbd5e1;font-size:13px">&ndash;</span>';
+                    }
+                } elseif ($isOff) {
+                    $title .= ': Jadwal Libur / Off (Klik untuk input jam)';
+                    $content = '&nbsp;';
                 }
+
+                $cells[$date] = [
+                    'is_off' => $isOff,
+                    'class' => $cls,
+                    'content' => $content,
+                    'title' => $title,
+                ];
             }
 
-            $summary[$emp->id] = $counters;
+            $rows[$emp->id] = [
+                'att' => $empAttCollection,
+                'schedules' => $empSchedules,
+                'label' => ! empty($deptPosParts) ? implode(' • ', $deptPosParts) : '-',
+                'cells' => $cells,
+                'summary' => $counters,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Rekapitulasi kehadiran per karyawan pada matriks.
+     * Menggunakan hasil ringkasan yang telah dihitung bersamaan di matrixRowData.
+     *
+     * @return array<int, array{hadir: int, manual: int, cuti: int, sakit: int, izin: int, absen: int, libur: int}>
+     */
+    #[Computed]
+    public function matrixSummary(): array
+    {
+        $summary = [];
+        foreach ($this->matrixRowData as $empId => $row) {
+            $summary[$empId] = $row['summary'];
         }
 
         return $summary;
@@ -1173,7 +1411,8 @@ class Index extends Component
                 COUNT(*) as total_logs,
                 COUNT(CASE WHEN attendances.status IN ('hadir', 'terlambat', 'pulang_cepat') THEN 1 END) as total_hadir,
                 COUNT(DISTINCT CASE WHEN attendances.status IN ('hadir', 'terlambat', 'pulang_cepat') THEN attendances.employee_id END) as total_karyawan_hadir,
-                COUNT(CASE WHEN employees.employment_status = ? THEN 1 END) as total_harian
+                COUNT(CASE WHEN employees.employment_status = ? THEN 1 END) as total_harian,
+                COUNT(CASE WHEN attendances.review_status = 'pending_review' THEN 1 END) as total_pending_review
             ", [EmploymentStatus::HARIAN->value])
             ->first();
 
@@ -1182,6 +1421,7 @@ class Index extends Component
             'total_hadir' => (int) ($metricRow?->total_hadir ?? 0),
             'total_karyawan_hadir' => (int) ($metricRow?->total_karyawan_hadir ?? 0),
             'total_harian' => (int) ($metricRow?->total_harian ?? 0),
+            'total_pending_review' => (int) ($metricRow?->total_pending_review ?? 0),
         ];
 
         $departments = DB::table('departments')->orderBy('name')->get(['id', 'name']);

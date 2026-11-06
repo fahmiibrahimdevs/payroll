@@ -4,12 +4,18 @@ namespace App\Services;
 
 use App\Enums\EmploymentStatus;
 use App\Enums\OvertimePeriodStatus;
+use App\Enums\OvertimeStatus;
+use App\Enums\OvertimeSubmissionSource;
+use App\Enums\OvertimeType;
 use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
+use App\Models\EmployeeSchedule;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
+use App\Models\OvertimeSubmission;
 use App\Models\User;
+use App\Models\WorkLocation;
 use App\Support\WorkingDays;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -17,6 +23,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -276,7 +283,7 @@ class AttendanceService
                 $company = CompanyProfile::getProfile();
                 $isRoster = $company->isRosterMode();
                 $schedulesMap = $isRoster
-                    ? \App\Models\EmployeeSchedule::schedulesForEmployees($matchedEmployeeIds, $startDate->toDateString(), $endDate->toDateString())
+                    ? EmployeeSchedule::schedulesForEmployees($matchedEmployeeIds, $startDate->toDateString(), $endDate->toDateString())
                     : collect();
 
                 $upsertRows = [];
@@ -624,7 +631,7 @@ class AttendanceService
             $company = CompanyProfile::getProfile();
             $isRoster = $company->isRosterMode();
             $schedulesMap = $isRoster
-                ? \App\Models\EmployeeSchedule::schedulesForEmployees($matchedEmployeeIds, $startDate->toDateString(), $endDate->toDateString())
+                ? EmployeeSchedule::schedulesForEmployees($matchedEmployeeIds, $startDate->toDateString(), $endDate->toDateString())
                 : collect();
 
             $upsertRows = [];
@@ -884,13 +891,14 @@ class AttendanceService
                 ->all();
 
             $rosterSchedules = $isRoster
-                ? \App\Models\EmployeeSchedule::schedulesForEmployees($candidateEmployees->pluck('id')->all(), $startDate, $endDate)
+                ? EmployeeSchedule::schedulesForEmployees($candidateEmployees->pluck('id')->all(), $startDate, $endDate)
                 : collect();
 
             foreach ($candidateEmployees as $emp) {
                 // STRICT LOCK: Karyawan yang sudah dibayar tidak boleh diubah
                 if (in_array($emp->id, $paidEmployeeIds, true)) {
                     $syncedCount++;
+
                     continue;
                 }
 
@@ -1004,5 +1012,444 @@ class AttendanceService
         usort($keys, fn (string $a, string $b) => array_search($a, WorkingDays::DAY_KEYS, true) <=> array_search($b, WorkingDays::DAY_KEYS, true));
 
         return $keys;
+    }
+
+    /**
+     * Hitung jarak Haversine antara dua koordinat GPS dalam satuan meter.
+     */
+    public function calculateHaversineDistance(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $earthRadius = 6371000; // radius bumi dalam meter
+
+        $latDelta = deg2rad($lat2 - $lat1);
+        $lonDelta = deg2rad($lon2 - $lon1);
+
+        $a = sin($latDelta / 2) * sin($latDelta / 2) +
+            cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+            sin($lonDelta / 2) * sin($lonDelta / 2);
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadius * $c;
+    }
+
+    /**
+     * Catat presensi masuk / pulang melalui web camera & GPS geofencing.
+     *
+     * @param  Employee  $employee  Karyawan yang melakukan absen
+     * @param  string  $type  'clock_in' atau 'clock_out'
+     * @param  string|null  $photoBase64  Gambar selfie format base64
+     * @param  float  $latitude  Koordinat lintang perangkat
+     * @param  float  $longitude  Koordinat bujur perangkat
+     * @param  string|null  $notes  Catatan / alasan jika di luar radius
+     * @param  string|null  $deviceInfo  Info browser / user agent
+     * @param  User|null  $actor  User yang sedang login
+     */
+    public function recordWebClock(
+        Employee $employee,
+        string $type,
+        ?string $photoBase64,
+        float $latitude,
+        float $longitude,
+        ?string $notes = null,
+        ?string $deviceInfo = null,
+        ?User $actor = null
+    ): Attendance {
+        $today = now()->toDateString();
+        $timeNow = now()->format('H:i:s');
+        $photoPath = null;
+
+        // 1. Simpan foto selfie jika ada
+        if (! empty($photoBase64)) {
+            if (str_contains($photoBase64, ';base64,')) {
+                [, $photoBase64] = explode(';base64,', $photoBase64, 2);
+            }
+            $binaryData = base64_decode($photoBase64);
+            if ($binaryData !== false) {
+                $dir = 'attendances/'.now()->format('Y-m');
+                $filename = 'emp_'.$employee->id.'_'.$type.'_'.now()->format('His').'_'.substr(md5(uniqid('', true)), 0, 6).'.jpg';
+                $photoPath = $dir.'/'.$filename;
+                Storage::disk('public')->put($photoPath, $binaryData);
+            }
+        }
+
+        // 2. Evaluasi Geofencing terhadap lokasi yang diizinkan untuk karyawan
+        $allowedLocations = $employee->getValidWorkLocationsOnDate($today);
+        $matchedLocation = null;
+        $distanceMeters = null;
+        $isInsideRadius = false;
+
+        if ($allowedLocations === null) {
+            // Bebas lokasi: tidak terikat geofence kantor manapun
+            $isInsideRadius = true;
+            $distanceMeters = 0;
+            $allActive = WorkLocation::query()->active()->get();
+            if ($allActive->isNotEmpty()) {
+                $nearest = null;
+                $minD = INF;
+                foreach ($allActive as $loc) {
+                    $d = $this->calculateHaversineDistance($latitude, $longitude, (float) $loc->latitude, (float) $loc->longitude);
+                    if ($d < $minD) {
+                        $minD = $d;
+                        $nearest = $loc;
+                    }
+                }
+                $matchedLocation = $nearest;
+            }
+        } else {
+            // Hitung jarak ke setiap lokasi yang diizinkan
+            if ($allowedLocations->isEmpty()) {
+                // Fallback ke semua lokasi aktif bila belum di-assign spesifik
+                $allowedLocations = WorkLocation::query()->active()->get();
+            }
+
+            $minDistance = INF;
+            $bestLocation = null;
+
+            foreach ($allowedLocations as $location) {
+                $dist = $this->calculateHaversineDistance(
+                    $latitude,
+                    $longitude,
+                    (float) $location->latitude,
+                    (float) $location->longitude
+                );
+
+                if ($dist < $minDistance) {
+                    $minDistance = $dist;
+                    $bestLocation = $location;
+                }
+            }
+
+            $matchedLocation = $bestLocation;
+            $distanceMeters = is_finite($minDistance) ? (int) round($minDistance) : null;
+
+            if ($matchedLocation && $distanceMeters !== null && $distanceMeters <= (int) $matchedLocation->radius_meters) {
+                $isInsideRadius = true;
+            } else {
+                $isInsideRadius = false;
+            }
+        }
+
+        // Tentukan review_status:
+        // Jika di dalam radius: langsung 'approved'
+        // Jika di luar radius: 'pending_review' (admin/atasan perlu review catatan)
+        $reviewStatus = $isInsideRadius ? 'approved' : 'pending_review';
+
+        // 3. Ambil atau inisialisasi record presensi hari ini
+        $attendance = Attendance::firstOrNew([
+            'employee_id' => $employee->id,
+            'date' => $today,
+        ]);
+
+        if ($type === 'clock_in') {
+            $attendance->clock_in = $timeNow;
+            $attendance->clock_in_photo_path = $photoPath ?? $attendance->clock_in_photo_path;
+            $attendance->clock_in_latitude = $latitude;
+            $attendance->clock_in_longitude = $longitude;
+            $attendance->clock_in_distance_meters = $distanceMeters;
+            $attendance->clock_in_location_id = $matchedLocation?->id;
+            $attendance->source = 'web_gps';
+
+            // Status kehadiran dasar
+            if (empty($attendance->status) || $attendance->status === 'absen') {
+                $attendance->status = 'hadir';
+            }
+        } elseif ($type === 'clock_out') {
+            $attendance->clock_out = $timeNow;
+            $attendance->clock_out_photo_path = $photoPath ?? $attendance->clock_out_photo_path;
+            $attendance->clock_out_latitude = $latitude;
+            $attendance->clock_out_longitude = $longitude;
+            $attendance->clock_out_distance_meters = $distanceMeters;
+            $attendance->clock_out_location_id = $matchedLocation?->id;
+        } elseif ($type === 'overtime_in') {
+            $attendance->is_overtime = true;
+            $attendance->overtime_status = 'in_progress';
+            $attendance->overtime_in = $timeNow;
+            $attendance->overtime_in_photo_path = $photoPath ?? $attendance->overtime_in_photo_path;
+            $attendance->overtime_in_latitude = $latitude;
+            $attendance->overtime_in_longitude = $longitude;
+            $attendance->overtime_in_distance_meters = $distanceMeters;
+            $attendance->overtime_in_location_id = $matchedLocation?->id;
+            if (empty($attendance->source)) {
+                $attendance->source = 'web_gps';
+            }
+            if (empty($attendance->status)) {
+                $attendance->status = 'hadir';
+            }
+        } elseif ($type === 'overtime_out') {
+            $attendance->overtime_status = 'completed';
+            $attendance->overtime_out = $timeNow;
+            $attendance->overtime_out_photo_path = $photoPath ?? $attendance->overtime_out_photo_path;
+            $attendance->overtime_out_latitude = $latitude;
+            $attendance->overtime_out_longitude = $longitude;
+            $attendance->overtime_out_distance_meters = $distanceMeters;
+            $attendance->overtime_out_location_id = $matchedLocation?->id;
+
+            if ($attendance->overtime_in && $attendance->overtime_out) {
+                try {
+                    $in = Carbon::parse($today.' '.$attendance->overtime_in);
+                    $out = Carbon::parse($today.' '.$attendance->overtime_out);
+                    if ($out->lt($in)) {
+                        $out->addDay();
+                    }
+                    $attendance->overtime_minutes = (int) $in->diffInMinutes($out);
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        // Hitung durasi kerja jika jam masuk dan pulang sudah terisi
+        if ($attendance->clock_in && $attendance->clock_out) {
+            try {
+                $in = Carbon::parse($today.' '.$attendance->clock_in);
+                $out = Carbon::parse($today.' '.$attendance->clock_out);
+                if ($out->gte($in)) {
+                    $attendance->duration_minutes = (int) $in->diffInMinutes($out);
+                }
+            } catch (\Throwable) {
+                // Ignore parse errors on duration
+            }
+        }
+
+        // Catat alasan / review status
+        if ($reviewStatus === 'pending_review') {
+            $attendance->review_status = 'pending_review';
+            if ($notes) {
+                $prefix = match ($type) {
+                    'clock_in' => '[Masuk] ',
+                    'clock_out' => '[Pulang] ',
+                    'overtime_in' => '[Mulai Lembur] ',
+                    'overtime_out' => '[Selesai Lembur] ',
+                    default => "[{$type}] ",
+                };
+                $attendance->notes = trim(($attendance->notes ? $attendance->notes.' | ' : '').$prefix.$notes);
+            }
+        } elseif (! $attendance->review_status || $attendance->review_status === 'approved') {
+            $attendance->review_status = 'approved';
+        }
+
+        if ($deviceInfo) {
+            $attendance->device_info = substr($deviceInfo, 0, 255);
+        }
+
+        $attendance->save();
+
+        if ($type === 'overtime_out') {
+            $this->syncOvertimeSubmissionForAttendance($attendance, $employee, $actor);
+        }
+
+        $this->logger->log(
+            action: 'record_web_attendance',
+            module: 'attendance',
+            level: 'info',
+            message: "Presensi {$type} via web kamera & GPS: {$employee->full_name}",
+            context: [
+                'type' => $type,
+                'employee_id' => $employee->id,
+                'employee_name' => $employee->full_name,
+                'time' => $timeNow,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'distance_meters' => $distanceMeters,
+                'location_name' => $matchedLocation?->name,
+                'is_inside_radius' => $isInsideRadius,
+                'review_status' => $attendance->review_status,
+                'has_photo' => ! empty($photoPath),
+            ],
+            userId: $actor?->id ?? auth()->id()
+        );
+
+        return $attendance;
+    }
+
+    /**
+     * Review presensi karyawan oleh Admin / Atasan (Approve / Reject).
+     */
+    public function reviewAttendance(
+        Attendance $attendance,
+        string $status,
+        ?string $reviewNotes = null,
+        ?User $actor = null
+    ): Attendance {
+        $validStatuses = ['approved', 'rejected'];
+        if (! in_array($status, $validStatuses, true)) {
+            throw new InvalidArgumentException("Status review tidak valid: {$status}");
+        }
+
+        $attendance->review_status = $status;
+        $attendance->review_notes = $reviewNotes;
+        $attendance->reviewed_by = $actor?->id ?? auth()->id();
+        $attendance->reviewed_at = now();
+
+        if ($status === 'rejected') {
+            $attendance->status = 'absen';
+        } elseif ($status === 'approved' && $attendance->status === 'absen') {
+            $attendance->status = 'hadir';
+        }
+
+        $attendance->save();
+
+        $this->logger->log(
+            action: 'review_attendance',
+            module: 'attendance',
+            level: 'info',
+            message: "Review presensi {$attendance->employee?->full_name}: {$status}",
+            context: [
+                'review_status' => $status,
+                'review_notes' => $reviewNotes,
+                'employee_name' => $attendance->employee?->full_name,
+                'date' => $attendance->date?->toDateString(),
+            ],
+            userId: $actor?->id ?? auth()->id()
+        );
+
+        return $attendance;
+    }
+
+    /**
+     * Sinkronisasi data presensi lembur ke tabel overtime_submissions untuk approval & payroll.
+     */
+    public function syncOvertimeSubmissionForAttendance(
+        Attendance $attendance,
+        Employee $employee,
+        ?User $actor = null,
+        bool $isAutoCutoff = false
+    ): ?OvertimeSubmission {
+        if (empty($attendance->overtime_in) || empty($attendance->overtime_out)) {
+            return null;
+        }
+
+        $attDate = $attendance->date instanceof Carbon ? $attendance->date : Carbon::parse($attendance->date);
+        $in = Carbon::parse($attDate->toDateString().' '.$attendance->overtime_in);
+        $out = Carbon::parse($attDate->toDateString().' '.$attendance->overtime_out);
+        if ($out->lt($in)) {
+            $out->addDay();
+        }
+
+        $durationHours = app(OvertimeService::class)->calculateOvertimeDuration($in, $out);
+        if ($durationHours <= 0) {
+            $durationHours = round(($attendance->overtime_minutes ?? 0) / 60, 2);
+        }
+
+        $hourlyRate = (float) ($employee->overtime_rate_per_hour ?? 0);
+        if ($hourlyRate <= 0) {
+            $hourlyRate = (float) ($employee->basic_salary > 0 ? round($employee->basic_salary / 173, 2) : 0);
+        }
+
+        $company = CompanyProfile::getProfile();
+        $mealThreshold = (float) ($company->overtime_meal_threshold_hours ?? 3.0);
+        $defaultMealAmount = (float) ($company->overtime_meal_allowance ?? 15000.0);
+        $mealAllowance = $durationHours >= $mealThreshold ? $defaultMealAmount : 0.0;
+        $totalAmount = ($durationHours * $hourlyRate) + $mealAllowance;
+
+        $submission = OvertimeSubmission::where('attendance_id', $attendance->id)->first();
+        if (! $submission) {
+            $referenceNumber = app(OvertimeService::class)->generateSubmissionReference($attDate);
+            $submission = new OvertimeSubmission;
+            $submission->reference_number = $referenceNumber;
+            $submission->attendance_id = $attendance->id;
+            $submission->employee_id = $employee->id;
+            $submission->overtime_type = OvertimeType::HOURLY;
+            $submission->date = $attDate->toDateString();
+            $submission->submission_source = OvertimeSubmissionSource::KARYAWAN;
+            $submission->status = OvertimeStatus::PENDING_ADMIN;
+            $submission->submitted_by = $actor?->id ?? auth()->id() ?? $employee->user_id;
+        }
+
+        $submission->start_time = $attendance->overtime_in;
+        $submission->end_time = $attendance->overtime_out;
+        $submission->duration_hours = $durationHours;
+        $submission->hourly_rate = $hourlyRate;
+        $submission->meal_allowance = $mealAllowance;
+        $submission->total_amount = $totalAmount;
+        $submission->reason = $isAutoCutoff
+            ? 'Presensi Lembur Mandiri (Auto Cut-off 06:00 - Karyawan lupa tap selesai lembur)'
+            : 'Presensi Lembur Mandiri Web Clock';
+
+        if ($isAutoCutoff) {
+            $submission->admin_notes = '[Auto Cut-off 06:00] Karyawan tidak melakukan tap selesai lembur. Mohon verifikasi jam lembur aktual sebelum approval.';
+        }
+
+        $submission->save();
+
+        return $submission;
+    }
+
+    /**
+     * Auto cut-off lembur karyawan yang lupa tap selesai hingga pukul 06:00 pagi keesokan harinya.
+     */
+    public function processEmployeeOvertimeAutoCutoff(Employee $employee): void
+    {
+        $now = now();
+        $pendingOvertime = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->where('is_overtime', true)
+            ->where('overtime_status', 'in_progress')
+            ->whereNotNull('overtime_in')
+            ->whereNull('overtime_out')
+            ->get();
+
+        foreach ($pendingOvertime as $att) {
+            $attDate = $att->date instanceof Carbon ? $att->date : Carbon::parse($att->date);
+            $isBeforeToday = $attDate->lt($now->copy()->startOfDay());
+            $isPastCutoffToday = $attDate->isToday() && $now->format('H:i:s') >= '06:00:00' && $att->overtime_in < '06:00:00';
+
+            if ($isBeforeToday || $isPastCutoffToday) {
+                $att->overtime_out = '06:00:00';
+                $att->overtime_status = 'auto_cutoff';
+
+                $in = Carbon::parse($attDate->toDateString().' '.$att->overtime_in);
+                $out = Carbon::parse($attDate->toDateString().' 06:00:00')->addDay();
+                $att->overtime_minutes = max(0, (int) $in->diffInMinutes($out));
+
+                $cutoffNote = '[Auto Cut-off 06:00] Karyawan tidak tap selesai lembur. Menunggu verifikasi admin.';
+                $att->notes = trim(($att->notes ? $att->notes.' | ' : '').$cutoffNote);
+                $att->save();
+
+                $this->syncOvertimeSubmissionForAttendance($att, $employee, null, true);
+            }
+        }
+    }
+
+    /**
+     * Proses auto cut-off untuk seluruh karyawan sekaligus.
+     */
+    public function processAllOvertimeAutoCutoff(): int
+    {
+        $now = now();
+        $cutoffCount = 0;
+        $pendingRecords = Attendance::query()
+            ->with('employee')
+            ->where('is_overtime', true)
+            ->where('overtime_status', 'in_progress')
+            ->whereNotNull('overtime_in')
+            ->whereNull('overtime_out')
+            ->get();
+
+        foreach ($pendingRecords as $att) {
+            $attDate = $att->date instanceof Carbon ? $att->date : Carbon::parse($att->date);
+            $isBeforeToday = $attDate->lt($now->copy()->startOfDay());
+            $isPastCutoffToday = $attDate->isToday() && $now->format('H:i:s') >= '06:00:00' && $att->overtime_in < '06:00:00';
+
+            if ($isBeforeToday || $isPastCutoffToday) {
+                $att->overtime_out = '06:00:00';
+                $att->overtime_status = 'auto_cutoff';
+
+                $in = Carbon::parse($attDate->toDateString().' '.$att->overtime_in);
+                $out = Carbon::parse($attDate->toDateString().' 06:00:00')->addDay();
+                $att->overtime_minutes = max(0, (int) $in->diffInMinutes($out));
+
+                $cutoffNote = '[Auto Cut-off 06:00] Karyawan tidak tap selesai lembur. Menunggu verifikasi admin.';
+                $att->notes = trim(($att->notes ? $att->notes.' | ' : '').$cutoffNote);
+                $att->save();
+
+                if ($att->employee) {
+                    $this->syncOvertimeSubmissionForAttendance($att, $att->employee, null, true);
+                }
+                $cutoffCount++;
+            }
+        }
+
+        return $cutoffCount;
     }
 }

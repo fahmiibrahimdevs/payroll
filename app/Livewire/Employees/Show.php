@@ -20,6 +20,8 @@ class Show extends Component
 {
     public Employee $employee;
 
+    public bool $isDashboard = false;
+
     #[Url(as: 'tab')]
     public string $activeTab = 'kepegawaian';
 
@@ -36,8 +38,10 @@ class Show extends Component
 
     public string $adj_reason = '';
 
-    public function mount(Employee $employee): void
+    public function mount(Employee $employee, bool $isDashboard = false): void
     {
+        $this->isDashboard = $isDashboard || request()->routeIs('dashboard');
+
         $user = auth()->user();
         if ($user?->hasRole('karyawan')) {
             $empRecord = $user->getEmployeeRecord();

@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             LaratrustSeeder::class,
             CompanyProfileSeeder::class,
             SalaryComponentSeeder::class,
+            WorkLocationSeeder::class,
         ];
 
         /*

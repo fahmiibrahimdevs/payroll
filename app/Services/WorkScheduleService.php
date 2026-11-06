@@ -10,10 +10,12 @@ use App\Models\User;
 use App\Support\WorkingDays;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -208,7 +210,7 @@ class WorkScheduleService
                         'created_by' => $actor?->id,
                         'updated_by' => $actor?->id,
                     ]);
-                } catch (\Illuminate\Database\QueryException $e) {
+                } catch (QueryException $e) {
                     // Jika ada toggle konkuren yang baru saja dibuat, kunci dan update
                     $schedule = EmployeeSchedule::where('employee_id', $employeeId)
                         ->where('date', $dateStr)
@@ -373,7 +375,7 @@ class WorkScheduleService
 
             $highestRow = (int) $sheet->getHighestRow();
             $highestColumn = $sheet->getHighestColumn();
-            $highestColIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumn);
+            $highestColIndex = Coordinate::columnIndexFromString($highestColumn);
 
             for ($row = 1; $row <= min(15, $highestRow); $row++) {
                 $numericCount = 0;
@@ -601,6 +603,7 @@ class WorkScheduleService
 
                     if (! $employee) {
                         $unmatchedNames[] = $rawName;
+
                         continue;
                     }
 
@@ -620,7 +623,8 @@ class WorkScheduleService
                             if ($fill->getFillType() !== Fill::FILL_NONE) {
                                 $fillColor = strtoupper(trim((string) $fill->getStartColor()->getRGB()));
                             }
-                        } catch (\Throwable) {}
+                        } catch (\Throwable) {
+                        }
 
                         // Cek apakah merah (Off / Libur)
                         $isRedColor = in_array($fillColor, ['FF0000', 'C00000', 'F44336', 'EF4444', 'DC2626', 'E11D48', 'B91C1C', '991B1B'], true)
@@ -703,7 +707,7 @@ class WorkScheduleService
         $dates = $roster['dates'];
         $employees = $roster['employees'];
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $monthName = Carbon::createFromDate($year, $month, 1)->locale('id')->translatedFormat('F Y');
         $sheet->setTitle(substr("Jadwal {$monthName}", 0, 31));
@@ -722,7 +726,7 @@ class WorkScheduleService
 
         $colIdx = 4;
         foreach ($dates as $day => $meta) {
-            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIdx);
+            $colLetter = Coordinate::stringFromColumnIndex($colIdx);
             $sheet->setCellValue("{$colLetter}3", $meta['day_name']);
             $sheet->setCellValue("{$colLetter}4", $day);
 
@@ -738,7 +742,7 @@ class WorkScheduleService
         }
 
         // Styling header
-        $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIdx - 1);
+        $lastColLetter = Coordinate::stringFromColumnIndex($colIdx - 1);
         $sheet->getStyle("A3:{$lastColLetter}4")->getFont()->setBold(true);
         $sheet->getStyle("A3:{$lastColLetter}4")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
 
@@ -778,7 +782,7 @@ class WorkScheduleService
 
                 $colIdx = 4;
                 foreach ($dates as $day => $meta) {
-                    $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIdx);
+                    $colLetter = Coordinate::stringFromColumnIndex($colIdx);
                     $sch = $emp['schedules'][$meta['date']] ?? null;
                     $isOff = $sch && $sch['status'] === EmployeeSchedule::STATUS_OFF;
 
@@ -809,7 +813,7 @@ class WorkScheduleService
         $sheet->getColumnDimension('C')->setWidth(18);
 
         for ($c = 4; $c < $colIdx; $c++) {
-            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+            $colLetter = Coordinate::stringFromColumnIndex($c);
             $sheet->getColumnDimension($colLetter)->setWidth(5);
         }
 

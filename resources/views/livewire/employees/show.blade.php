@@ -1,25 +1,27 @@
 <div>
-    <x-slot name="header">
-        @if (auth()->user()->hasRole('karyawan'))
-            <h1>Profil Saya</h1>
-            <div class="section-header-breadcrumb">
-                <div class="breadcrumb-item active"><a href="{{ route('dashboard') }}">Dashboard</a></div>
-                <div class="breadcrumb-item">Profil Saya</div>
-            </div>
-        @else
-            <div class="section-header-back">
-                <a href="{{ route('employees.index') }}" class="btn btn-icon" title="Kembali ke Daftar Karyawan">
-                    <i class="fas fa-arrow-left"></i>
-                </a>
-            </div>
-            <h1>Detail Profil Karyawan</h1>
-            <div class="section-header-breadcrumb">
-                <div class="breadcrumb-item active"><a href="{{ route('dashboard') }}">Dashboard</a></div>
-                <div class="breadcrumb-item"><a href="{{ route('employees.index') }}">Karyawan</a></div>
-                <div class="breadcrumb-item">{{ $employee->full_name }}</div>
-            </div>
-        @endif
-    </x-slot>
+    @if (! request()->routeIs('dashboard'))
+        <x-slot name="header">
+            @if (auth()->user()->hasRole('karyawan'))
+                <h1>Profil Saya</h1>
+                <div class="section-header-breadcrumb">
+                    <div class="breadcrumb-item active"><a href="{{ route('dashboard') }}">Dashboard</a></div>
+                    <div class="breadcrumb-item">Profil Saya</div>
+                </div>
+            @else
+                <div class="section-header-back">
+                    <a href="{{ route('employees.index') }}" class="btn btn-icon" title="Kembali ke Daftar Karyawan">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                </div>
+                <h1>Detail Profil Karyawan</h1>
+                <div class="section-header-breadcrumb">
+                    <div class="breadcrumb-item active"><a href="{{ route('dashboard') }}">Dashboard</a></div>
+                    <div class="breadcrumb-item"><a href="{{ route('employees.index') }}">Karyawan</a></div>
+                    <div class="breadcrumb-item">{{ $employee->full_name }}</div>
+                </div>
+            @endif
+        </x-slot>
+    @endif
 
     @if (auth()->user()->hasRole('karyawan'))
         <h2 class="section-title">Profil & Data Kepegawaian Saya</h2>
@@ -35,18 +37,41 @@
 
     {{-- Banner Callout Penyesuaian Gaji (.bd-callout) - Khusus Admin & Direktur --}}
     @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur'))
-        <div class="bd-callout {{ $this->progressionCallout['class'] }} mb-3" role="alert">
+        @php
+            $calloutClass = match ($progressionStatus['status']) {
+                'stagnant' => 'bd-callout-warning',
+                'recently_raised' => 'bd-callout-success',
+                default => 'bd-callout-info',
+            };
+            $calloutIcon = match ($progressionStatus['status']) {
+                'stagnant' => 'fa-exclamation-triangle',
+                'recently_raised' => 'fa-check-circle',
+                default => 'fa-info-circle',
+            };
+            $calloutTitle = match ($progressionStatus['status']) {
+                'stagnant' => 'Perhatian: Karyawan Mengalami Stagnasi Gaji',
+                'recently_raised' => 'Status Gaji Terkini: Penyesuaian Baru Tercatat',
+                default => 'Status Riwayat & Evaluasi Gaji Karyawan',
+            };
+            $calloutDesc = match ($progressionStatus['status']) {
+                'stagnant' => $progressionStatus['note'] . '. Pertimbangkan evaluasi berkala kompensasi untuk karyawan ini.',
+                'recently_raised' => $progressionStatus['note'] . '. Gaji pokok karyawan telah diperbarui dalam sistem payroll.',
+                default => $progressionStatus['note'] . '. Pantau perkembangan kompensasi dan catat penyesuaian gaji berkala karyawan bila diperlukan.',
+            };
+        @endphp
+
+        <div class="bd-callout {{ $calloutClass }} mb-3" role="alert">
             <div class="callout-inner-flex">
                 <div class="callout-content-group">
                     <div class="bd-callout-icon mr-3">
-                        <i class="fas {{ $this->progressionCallout['icon'] }}"></i>
+                        <i class="fas {{ $calloutIcon }}"></i>
                     </div>
                     <div class="callout-text-body">
                         <div class="bd-callout-title">
-                            {{ $this->progressionCallout['title'] }}
+                            {{ $calloutTitle }}
                         </div>
                         <div class="bd-callout-desc">
-                            {{ $this->progressionCallout['desc'] }}
+                            {{ $calloutDesc }}
                         </div>
                     </div>
                 </div>
@@ -95,7 +120,7 @@
                         <div class="emp-tile-group">
                             <div class="emp-tile-row">
                                 <div class="emp-tile-left">
-                                    <div class="emp-tile-icon"><i class="fas fa-id-badge"></i></div>
+                                    <div class="emp-tile-icon"><i class="fas fa-id-badge text-primary"></i></div>
                                     <span>ID / NIP</span>
                                 </div>
                                 <div class="emp-tile-right">
@@ -104,7 +129,7 @@
                             </div>
                             <div class="emp-tile-row">
                                 <div class="emp-tile-left">
-                                    <div class="emp-tile-icon"><i class="fas fa-user-clock"></i></div>
+                                    <div class="emp-tile-icon"><i class="fas fa-user-clock text-info"></i></div>
                                     <span>Masa Kerja</span>
                                 </div>
                                 <div class="emp-tile-right">
@@ -114,41 +139,18 @@
                             @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur') || auth()->user()->hasRole('karyawan'))
                                 <div class="emp-tile-row">
                                     <div class="emp-tile-left">
-                                        <div class="emp-tile-icon"><i class="fas fa-money-bill-wave"></i></div>
-                                        <span>{{ $employee->employment_status === \App\Enums\EmploymentStatus::HARIAN ? 'Upah Harian' : 'Gaji Pokok' }}</span>
+                                        <div class="emp-tile-icon"><i class="fas fa-money-bill-wave text-success"></i></div>
+                                        <span>Gaji Pokok</span>
                                     </div>
                                     <div class="emp-tile-right text-primary font-weight-500">
-                                        {{ $employee->employment_status === \App\Enums\EmploymentStatus::HARIAN ? $employee->formatted_daily_rate . ' / hari' : $employee->formatted_basic_salary }}
-                                    </div>
-                                </div>
-                                <div class="emp-tile-row">
-                                    <div class="emp-tile-left">
-                                        <div class="emp-tile-icon"><i class="fas fa-business-time"></i></div>
-                                        <span>Nominal Lembur</span>
-                                    </div>
-                                    <div class="emp-tile-right text-primary font-weight-500">
-                                        {{ $employee->formatted_overtime_rate_per_hour }} / jam
-                                        <span class="text-muted small">&bull;</span>
-                                        {{ $employee->formatted_overtime_rate_per_day }} / hari
-                                    </div>
-                                </div>
-                                <div class="emp-tile-row">
-                                    <div class="emp-tile-left">
-                                        <div class="emp-tile-icon"><i class="fas fa-utensils"></i></div>
-                                        <span>Uang Makan Harian</span>
-                                    </div>
-                                    <div class="emp-tile-right text-primary font-weight-500">
-                                        {{ $employee->formatted_meal_allowance_per_day }} / hari
-                                        <span class="badge {{ $employee->meal_allowance_type === 'khusus' ? 'badge-info' : 'badge-light border' }} text-xs ml-1">
-                                            {{ $employee->meal_allowance_type === 'khusus' ? 'Khusus' : 'Standar' }}
-                                        </span>
+                                        {{ $employee->formatted_basic_salary }}
                                     </div>
                                 </div>
                             @endif
                             @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur'))
                                 <div class="emp-tile-row">
                                     <div class="emp-tile-left">
-                                        <div class="emp-tile-icon"><i class="fas fa-chart-line"></i></div>
+                                        <div class="emp-tile-icon"><i class="fas fa-chart-line text-warning"></i></div>
                                         <span>Status Gaji</span>
                                     </div>
                                     <div class="emp-tile-right">
@@ -185,7 +187,7 @@
                                 <div class="emp-tile-group">
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-calendar-check"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-calendar-check text-primary"></i></div>
                                             <span>Tanggal Bergabung</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -194,7 +196,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-calendar-times"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-calendar-times text-warning"></i></div>
                                             <span>Akhir Kontrak</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -204,7 +206,7 @@
                                     @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur') || auth()->user()->hasRole('karyawan'))
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-hand-holding-usd"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-hand-holding-usd text-danger"></i></div>
                                                 <span>Total Kasbon</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -216,7 +218,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-university"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-university text-info"></i></div>
                                                 <span>Nama Bank</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -225,7 +227,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-credit-card"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-credit-card text-info"></i></div>
                                                 <span>Nomor Rekening</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -234,7 +236,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-user-check"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-user-check text-info"></i></div>
                                                 <span>Atas Nama</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -250,7 +252,7 @@
                                 <div class="emp-tile-group">
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-venus-mars"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-venus-mars text-primary"></i></div>
                                             <span>Jenis Kelamin</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -259,7 +261,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-birthday-cake"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-birthday-cake text-warning"></i></div>
                                             <span>Tempat & Tgl Lahir</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -268,7 +270,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-phone"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-phone text-success"></i></div>
                                             <span>No. Telepon / WhatsApp</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -277,7 +279,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-envelope"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-envelope text-info"></i></div>
                                             <span>Alamat Email</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -286,7 +288,7 @@
                                     </div>
                                     <div class="emp-tile-row">
                                         <div class="emp-tile-left">
-                                            <div class="emp-tile-icon"><i class="fas fa-map-marker-alt"></i></div>
+                                            <div class="emp-tile-icon"><i class="fas fa-map-marker-alt text-danger"></i></div>
                                             <span>Alamat Domisili</span>
                                         </div>
                                         <div class="emp-tile-right">
@@ -296,7 +298,7 @@
                                     @if (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur') || auth()->user()->hasRole('karyawan'))
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-file-pdf"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-file-pdf text-danger"></i></div>
                                                 <span>Berkas CV</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -322,7 +324,7 @@
                                     <div class="emp-tile-group">
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-users"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-users text-primary"></i></div>
                                                 <span>Status PTKP</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -331,7 +333,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-calculator"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-calculator text-primary"></i></div>
                                                 <span>Metode PPh 21</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -342,7 +344,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-file-invoice-dollar text-primary"></i></div>
                                                 <span>Jenis Pajak Pegawai</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -351,7 +353,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-id-card"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-id-card text-primary"></i></div>
                                                 <span>NIK KTP</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -360,7 +362,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-file-invoice"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-file-invoice text-primary"></i></div>
                                                 <span>Nomor NPWP</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -369,7 +371,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-heartbeat"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-heartbeat text-success"></i></div>
                                                 <span>BPJS Kesehatan</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -378,7 +380,7 @@
                                         </div>
                                         <div class="emp-tile-row">
                                             <div class="emp-tile-left">
-                                                <div class="emp-tile-icon"><i class="fas fa-shield-alt"></i></div>
+                                                <div class="emp-tile-icon"><i class="fas fa-shield-alt text-info"></i></div>
                                                 <span>BPJS Ketenagakerjaan</span>
                                             </div>
                                             <div class="emp-tile-right">
@@ -467,68 +469,108 @@
             <!-- Sisi Kanan: Grafik Bar Gaji Bersih & Analitik Penggajian -->
             <div class="col-lg-9 col-md-8 col-12 mb-3">
                 <!-- 1. Header Tren & Analisis Gaji Bersih (Section Title & Lead) -->
-                <h2 class="section-title emp-pane-first-title">Tren & Analisis Gaji Bersih</h2>
+                <h2 class="section-title">Tren & Analisis Gaji Bersih</h2>
                 <p class="section-lead">Distribusi penerimaan gaji bersih per bulan serta rekap slip resmi tahun {{ $chartYear }}.</p>
 
-                <!-- 2. Empat Card Statistik (UI Flutter Style - 2x2 di Mobile, 1x4 di Desktop) -->
-                <div class="row flutter-kpi-row mb-3">
-                    <div class="col-lg-3 col-6 mb-2">
-                        <div class="flutter-stat-card card-blue">
-                            <div class="stat-main-icon icon-bg-blue">
+                <!-- 2. Empat Card Statistik (Modern KPI Style - 2x2 di Mobile, 1x4 di Desktop) -->
+                <div class="salary-kpi-grid mb-3">
+                    <!-- 1. Total Diterima -->
+                    <div class="card cash-advance-stat-card flutter-stat-card mb-0 shadow-sm">
+                        <div class="card-body cash-advance-stat-body">
+                            <div class="cash-advance-stat-icon cash-advance-stat-icon-blue">
                                 <i class="fas fa-wallet"></i>
                             </div>
-                            <div class="stat-content-group">
-                                <span class="stat-title">Total Diterima ({{ $chartYear }})</span>
-                                <div class="stat-number text-blue">{{ $this->monthlySalaryData['formatted_total_net'] }}</div>
-                                <span class="stat-caption">{{ $this->monthlySalaryData['count'] }} slip dibayarkan</span>
-                            </div>
-                            <div class="stat-accent-badge badge-blue">
-                                <i class="fas fa-coins"></i>
+                            <div class="cash-advance-stat-content">
+                                <div class="cash-advance-stat-title" title="Total Diterima ({{ $chartYear }})">
+                                    Total Diterima ({{ $chartYear }})
+                                </div>
+                                <div class="cash-advance-stat-value-row">
+                                    <div class="cash-advance-stat-value" title="{{ $this->monthlySalaryData['formatted_total_net'] }}">
+                                        <span>{{ $this->monthlySalaryData['formatted_total_net'] }}</span>
+                                    </div>
+                                    <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
+                                        <i class="fas fa-coins"></i>
+                                    </span>
+                                </div>
+                                <div class="cash-advance-stat-subtext" title="{{ $this->monthlySalaryData['count'] }} slip dibayarkan">
+                                    {{ $this->monthlySalaryData['count'] }} slip dibayarkan
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-3 col-6 mb-2">
-                        <div class="flutter-stat-card card-amber">
-                            <div class="stat-main-icon icon-bg-amber">
+
+                    <!-- 2. Rata-Rata / Bulan -->
+                    <div class="card cash-advance-stat-card flutter-stat-card mb-0 shadow-sm">
+                        <div class="card-body cash-advance-stat-body">
+                            <div class="cash-advance-stat-icon cash-advance-stat-icon-amber">
                                 <i class="fas fa-calculator"></i>
                             </div>
-                            <div class="stat-content-group">
-                                <span class="stat-title">Rata-Rata / Bulan</span>
-                                <div class="stat-number text-amber">{{ $this->monthlySalaryData['formatted_avg_net'] }}</div>
-                                <span class="stat-caption">Per bulan aktif</span>
-                            </div>
-                            <div class="stat-accent-badge badge-amber">
-                                <i class="fas fa-chart-pie"></i>
+                            <div class="cash-advance-stat-content">
+                                <div class="cash-advance-stat-title" title="Rata-Rata / Bulan">
+                                    Rata-Rata / Bulan
+                                </div>
+                                <div class="cash-advance-stat-value-row">
+                                    <div class="cash-advance-stat-value" title="{{ $this->monthlySalaryData['formatted_avg_net'] }}">
+                                        <span>{{ $this->monthlySalaryData['formatted_avg_net'] }}</span>
+                                    </div>
+                                    <span class="cash-advance-stat-badge cash-advance-stat-badge-amber">
+                                        <i class="fas fa-chart-pie"></i>
+                                    </span>
+                                </div>
+                                <div class="cash-advance-stat-subtext" title="Per bulan aktif">
+                                    Per bulan aktif
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-3 col-6 mb-2">
-                        <div class="flutter-stat-card card-rose">
-                            <div class="stat-main-icon icon-bg-rose">
+
+                    <!-- 3. Gaji Tertinggi -->
+                    <div class="card cash-advance-stat-card flutter-stat-card mb-0 shadow-sm">
+                        <div class="card-body cash-advance-stat-body">
+                            <div class="cash-advance-stat-icon cash-advance-stat-icon-red">
                                 <i class="fas fa-chart-line"></i>
                             </div>
-                            <div class="stat-content-group">
-                                <span class="stat-title">Gaji Tertinggi</span>
-                                <div class="stat-number text-rose">{{ $this->monthlySalaryData['formatted_max_net'] }}</div>
-                                <span class="stat-caption">Bulan: {{ $this->monthlySalaryData['max_month'] }}</span>
-                            </div>
-                            <div class="stat-accent-badge badge-rose">
-                                <i class="fas fa-award"></i>
+                            <div class="cash-advance-stat-content">
+                                <div class="cash-advance-stat-title" title="Gaji Tertinggi">
+                                    Gaji Tertinggi
+                                </div>
+                                <div class="cash-advance-stat-value-row">
+                                    <div class="cash-advance-stat-value" title="{{ $this->monthlySalaryData['formatted_max_net'] }}">
+                                        <span>{{ $this->monthlySalaryData['formatted_max_net'] }}</span>
+                                    </div>
+                                    <span class="cash-advance-stat-badge cash-advance-stat-badge-red">
+                                        <i class="fas fa-award"></i>
+                                    </span>
+                                </div>
+                                <div class="cash-advance-stat-subtext" title="Bulan: {{ $this->monthlySalaryData['max_month'] }}">
+                                    Bulan: {{ $this->monthlySalaryData['max_month'] }}
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-3 col-6 mb-2">
-                        <div class="flutter-stat-card card-emerald">
-                            <div class="stat-main-icon icon-bg-emerald">
+
+                    <!-- 4. Slip Gaji Terbit -->
+                    <div class="card cash-advance-stat-card flutter-stat-card mb-0 shadow-sm">
+                        <div class="card-body cash-advance-stat-body">
+                            <div class="cash-advance-stat-icon cash-advance-stat-icon-green">
                                 <i class="fas fa-file-invoice"></i>
                             </div>
-                            <div class="stat-content-group">
-                                <span class="stat-title">Slip Gaji Terbit</span>
-                                <div class="stat-number text-emerald">{{ $this->monthlySalaryData['count'] }} Slip</div>
-                                <span class="stat-caption">Tahun {{ $chartYear }}</span>
-                            </div>
-                            <div class="stat-accent-badge badge-emerald">
-                                <i class="fas fa-check-circle"></i>
+                            <div class="cash-advance-stat-content">
+                                <div class="cash-advance-stat-title" title="Slip Gaji Terbit">
+                                    Slip Gaji Terbit
+                                </div>
+                                <div class="cash-advance-stat-value-row">
+                                    <div class="cash-advance-stat-value" title="{{ $this->monthlySalaryData['count'] }} Slip">
+                                        <span>{{ $this->monthlySalaryData['count'] }}</span>
+                                        <span class="cash-advance-stat-unit">Slip</span>
+                                    </div>
+                                    <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
+                                        <i class="fas fa-check-circle"></i>
+                                    </span>
+                                </div>
+                                <div class="cash-advance-stat-subtext" title="Tahun {{ $chartYear }}">
+                                    Tahun {{ $chartYear }}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -542,7 +584,7 @@
                         </div>
                     </div>
                     @if ($this->monthlySalaryData['has_unapproved_items'] && (auth()->user()->hasRole('admin') || auth()->user()->hasRole('direktur')))
-                        <div class="alert alert-light border d-flex align-items-center py-2 px-3 mb-2.5 text-muted" style="font-size: 12px; border-radius: 12px; background-color: #ffffff; border-color: #e2e8f0 !important; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
+                        <div class="alert alert-light border d-flex align-items-center py-2 px-3 mb-2.5 text-muted" style="font-size: 12px; border-radius: 8px; background-color: #f8fafc; border-color: #e2e8f0 !important;">
                             <i class="fas fa-info-circle text-warning mr-2" style="font-size: 14px;"></i>
                             <span>Penggajian yang masih berstatus <strong>Draf</strong> atau <strong>Menunggu Approval</strong> belum dimasukkan ke grafik penerimaan hingga disetujui Direktur.</span>
                         </div>
@@ -598,14 +640,10 @@
                                                 </span>
                                             </td>
                                             <td class="text-nowrap text-center">
-                                                @if ($this->isApprovedItem($item) && $item->isPaid() && $item->payment_proof_path)
+                                                @if ($this->isApprovedItem($item))
                                                     <a href="{{ route('payrolls.items.print', ['period' => $item->payroll_period_id, 'item' => $item->id]) }}" target="_blank" class="btn btn-sm btn-primary px-3 py-1 font-weight-600 shadow-sm" style="border-radius: 6px; font-size: 12px; background-color: #0b52aa; border-color: #0b52aa;" title="Buka / Cetak Slip Gaji Resmi">
                                                         <i class="fas fa-print mr-1"></i> Cetak Slip
                                                     </a>
-                                                @elseif ($this->isApprovedItem($item))
-                                                    <button type="button" class="btn btn-sm btn-secondary px-3 py-1 text-nowrap" disabled style="border-radius: 6px; font-size: 12px; opacity: 0.6; cursor: not-allowed;" title="Slip gaji belum dapat dicetak (menunggu pembayaran dan bukti transfer/kwitansi)">
-                                                        <i class="fas fa-hourglass-half mr-1"></i> Menunggu Bayar
-                                                    </button>
                                                 @else
                                                     <button type="button" class="btn btn-sm btn-secondary px-3 py-1 text-nowrap" disabled style="border-radius: 6px; font-size: 12px; opacity: 0.6; cursor: not-allowed;" title="Slip gaji menunggu persetujuan Direktur">
                                                         <i class="fas fa-clock mr-1"></i> Menunggu ACC
@@ -645,8 +683,8 @@
                         </div>
 
                         <div class="modal-body p-3 p-md-4">
-                            <!-- Info Singkat Karyawan (Clean White Card) -->
-                            <div class="p-2.5 d-flex align-items-center mb-3" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
+                            <!-- Info Singkat Karyawan -->
+                            <div class="p-2.5 d-flex align-items-center mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">
                                 <div class="mr-2.5">
                                     <img src="{{ $employee->photo_url }}" alt="{{ $employee->full_name }}" class="rounded-circle" style="width: 42px; height: 42px; object-fit: cover; border: 2px solid #e2e8f0;">
                                 </div>
@@ -661,28 +699,17 @@
                             <!-- Input Gaji Baru -->
                             <div class="form-group mb-3">
                                 <label for="adj_new_salary" class="font-weight-500 text-dark">Nominal Gaji Baru (Rp) <span class="text-danger">*</span></label>
-                                <div class="input-group"
-                                     x-data="{
-                                         amount: @entangle('adj_new_salary'),
-                                         format(val) {
-                                             if (val === null || val === undefined || val === '') return '';
-                                             let clean = String(val).replace(/\D/g, '');
-                                             let num = parseInt(clean, 10);
-                                             return isNaN(num) ? '' : new Intl.NumberFormat('id-ID').format(num);
-                                         }
-                                     }"
-                                     x-effect="$refs.input && ($refs.input.value = format(amount))">
+                                <div class="input-group" x-data>
                                     <div class="input-group-prepend">
                                         <span class="input-group-text font-weight-500">Rp</span>
                                     </div>
                                     <input type="text"
-                                           x-ref="input"
                                            id="adj_new_salary"
                                            inputmode="numeric"
                                            x-on:input="
                                                let raw = $el.value.replace(/\D/g, '');
                                                $el.value = raw ? new Intl.NumberFormat('id-ID').format(raw) : '';
-                                               amount = raw ? parseFloat(raw) : null;
+                                               $wire.$set('adj_new_salary', raw ? parseFloat(raw) : '', false);
                                            "
                                            value="{{ !empty($adj_new_salary) ? number_format((float) preg_replace('/[^0-9]/', '', (string) $adj_new_salary), 0, ',', '.') : '' }}"
                                            class="form-control text-right @error('adj_new_salary') is-invalid @enderror"
@@ -908,45 +935,6 @@
         display: block;
     }
 
-    /* Section Title & Lead di Kolom Kanan (Tren & Analisis Gaji Bersih, Rekapitulasi Slip Gaji Karyawan)
-       Identik dengan Section Title & Lead Profil & Data Kepegawaian Saya di Bagian Atas */
-    .detail-page-wrapper .col-lg-9 > .section-title {
-        font-size: 18px !important;
-        font-weight: 600 !important;
-        color: #191d21 !important;
-        position: relative;
-        display: block;
-        margin-top: 30px !important;
-        margin-bottom: 5px !important;
-        line-height: 1.3 !important;
-    }
-    .detail-page-wrapper .col-lg-9 > .emp-pane-first-title,
-    .detail-page-wrapper .col-lg-9 > .section-title:first-of-type {
-        margin-top: 0 !important;
-    }
-    .detail-page-wrapper .col-lg-9 > .section-title:before {
-        content: " ";
-        border-radius: 5px !important;
-        height: 8px !important;
-        width: 30px !important;
-        background-color: #0b52aa !important;
-        display: inline-block !important;
-        float: left !important;
-        margin-top: 6px !important;
-        margin-right: 15px !important;
-    }
-    .detail-page-wrapper .col-lg-9 > .section-title + .section-lead,
-    .detail-page-wrapper .col-lg-9 > .section-lead {
-        margin-top: 0 !important;
-        margin-left: 45px !important;
-        font-size: 14px !important;
-        color: #6c757d !important;
-        line-height: 1.5 !important;
-        margin-bottom: 20px !important;
-        font-weight: 400 !important;
-        display: block;
-    }
-
     /* Segmented Control 2 Tab di Kolom Kiri */
     .emp-tab-nav {
         background: #f1f5f9;
@@ -1047,9 +1035,9 @@
         height: 26px !important;
         font-size: 11px !important;
         margin-right: 9px !important;
-        border-radius: 7px;
-        background-color: #eff6ff;
-        color: #0b52aa;
+        border-radius: 6px;
+        background-color: #f1f5f9;
+        color: #475569;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1119,182 +1107,211 @@
         border-color: #cbd5e1;
     }
 
-    /* Flutter UI Style KPI Cards in Right Column */
-    .flutter-kpi-row {
-        margin-left: -6px;
-        margin-right: -6px;
-        margin-bottom: 14px;
+    /* Salary KPI Grid (4 Cards: Total Diterima, Rata-Rata, Tertinggi, Slip Terbit) */
+    .salary-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        height: auto;
     }
-    .flutter-kpi-row > [class*="col-"] {
-        padding-left: 6px;
-        padding-right: 6px;
+    .salary-kpi-grid .card {
+        border: 1px solid #eaedf2 !important;
+        border-radius: 14px !important;
+        background: #ffffff !important;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.02) !important;
+        height: auto !important;
+        margin: 0 !important;
+        margin-bottom: 0 !important;
+        transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+    }
+    .salary-kpi-grid .card:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07) !important;
+    }
+    .salary-kpi-grid .card-body {
+        padding: 13px 12px !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        min-height: 82px !important;
+        height: auto !important;
+        text-align: left !important;
+    }
+    .salary-kpi-grid .cash-advance-stat-icon {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 18px !important;
+        color: #ffffff !important;
+        flex-shrink: 0 !important;
+        margin: 0 !important;
+    }
+    .salary-kpi-grid .cash-advance-stat-content {
+        margin-left: 8px !important;
+        min-width: 0 !important;
+        flex-grow: 1 !important;
+    }
+    .salary-kpi-grid .cash-advance-stat-title {
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        color: #475569 !important;
+        line-height: 1.35 !important;
+        margin-bottom: 2px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .salary-kpi-grid .cash-advance-stat-value-row {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        margin: 3px 0 !important;
+    }
+    .salary-kpi-grid .cash-advance-stat-value {
+        font-size: 16.5px !important;
+        font-weight: 700 !important;
+        line-height: 1.2 !important;
+        color: #0f172a !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .salary-kpi-grid .cash-advance-stat-unit {
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        color: #64748b !important;
+        margin-left: 3px !important;
+    }
+    .salary-kpi-grid .cash-advance-stat-badge {
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px !important;
+        border-radius: 6px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 9.5px !important;
+        margin-left: 6px !important;
+        flex-shrink: 0 !important;
+    }
+    .salary-kpi-grid .cash-advance-stat-subtext {
+        font-size: 11px !important;
+        font-weight: 500 !important;
+        color: #64748b !important;
+        line-height: 1.35 !important;
+        margin-top: 2px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
     }
 
-    .flutter-stat-card {
-        background: #ffffff;
-        border: 1px solid #e9edf2 !important;
-        border-radius: 12px;
-        padding: 12px 14px;
-        display: flex;
-        align-items: center;
-        position: relative;
-        overflow: hidden;
-        box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04) !important;
-        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-        height: 100%;
-        min-height: 78px;
-    }
-    .flutter-stat-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.08), 0 2px 4px 0 rgba(0, 0, 0, 0.04) !important;
-        border-color: #cbd5e1 !important;
-    }
-
-    .stat-main-icon {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #ffffff;
-        font-size: 17px;
-        flex-shrink: 0;
-        margin-right: 12px;
-    }
-    .icon-bg-blue {
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-        box-shadow: 0 3px 8px rgba(37, 99, 235, 0.32);
-    }
-    .icon-bg-amber {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        box-shadow: 0 3px 8px rgba(217, 119, 6, 0.32);
-    }
-    .icon-bg-rose {
-        background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
-        box-shadow: 0 3px 8px rgba(225, 29, 72, 0.32);
-    }
-    .icon-bg-emerald {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        box-shadow: 0 3px 8px rgba(5, 150, 105, 0.32);
-    }
-
-    .stat-content-group {
-        flex: 1 1 auto;
-        min-width: 0;
-        padding-right: 18px;
-    }
-    .stat-title {
-        font-size: 12px;
-        font-weight: 500;
-        color: #64748b;
-        line-height: 1.3;
-        display: block;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .stat-number {
-        font-size: 17.5px;
-        font-weight: 700;
-        line-height: 1.3;
-        margin: 2px 0 1px 0;
-        letter-spacing: -0.3px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .text-blue { color: #1d4ed8 !important; }
-    .text-amber { color: #d97706 !important; }
-    .text-rose { color: #e11d48 !important; }
-    .text-emerald { color: #059669 !important; }
-
-    .stat-caption {
-        font-size: 11.5px;
-        color: #94a3b8;
-        line-height: 1.25;
-        display: block;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .stat-accent-badge {
-        position: absolute;
-        right: 12px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 22px;
-        height: 22px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 10.5px;
-    }
-    .badge-blue { background: #eff6ff; color: #3b82f6; }
-    .badge-amber { background: #fffbeb; color: #f59e0b; }
-    .badge-rose { background: #fff1f2; color: #f43f5e; }
-    .badge-emerald { background: #ecfdf5; color: #10b981; }
-
-    /* Mobile Style untuk KPI Card (2x2 Grid, Iconless, Ringkas Sesuai Halaman Kasbon) */
     @media (max-width: 991.98px) {
-        .flutter-kpi-row {
-            margin-left: -4px !important;
-            margin-right: -4px !important;
-            margin-bottom: 12px !important;
+        .salary-kpi-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            grid-template-rows: auto !important;
+            gap: 10px !important;
         }
-        .flutter-kpi-row > [class*="col-"] {
-            padding-left: 4px !important;
-            padding-right: 4px !important;
-            margin-bottom: 8px !important;
-        }
-        .flutter-stat-card {
-            padding: 10px 12px !important;
-            flex-direction: column !important;
-            align-items: flex-start !important;
-            justify-content: center !important;
-            min-height: auto !important;
+        .salary-kpi-grid .card {
+            margin: 0 !important;
+            margin-bottom: 0 !important;
             border-radius: 12px !important;
         }
-        .flutter-stat-card .stat-main-icon {
-            display: none !important;
+        .salary-kpi-grid .card-body {
+            padding: 9px 8px !important;
+            min-height: auto !important;
         }
-        .flutter-stat-card .stat-accent-badge {
-            display: none !important;
+        .salary-kpi-grid .cash-advance-stat-icon {
+            width: 36px !important;
+            height: 36px !important;
+            min-width: 36px !important;
+            font-size: 15px !important;
+            border-radius: 9px !important;
         }
-        .flutter-stat-card .stat-content-group {
-            padding-right: 0 !important;
-            width: 100% !important;
-            min-width: 0 !important;
+        .salary-kpi-grid .cash-advance-stat-content {
+            margin-left: 8px !important;
         }
-        .flutter-stat-card .stat-title {
+        .salary-kpi-grid .cash-advance-stat-title {
             font-size: 11.5px !important;
-            font-weight: 600 !important;
-            color: #475569 !important;
-            margin-bottom: 2px !important;
-            line-height: 1.3 !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
+            margin-bottom: 1px !important;
         }
-        .flutter-stat-card .stat-number {
-            font-size: 16px !important;
-            font-weight: 700 !important;
-            line-height: 1.25 !important;
-            margin: 0 0 2px 0 !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
+        .salary-kpi-grid .cash-advance-stat-badge {
+            display: none !important;
         }
-        .flutter-stat-card .stat-caption {
-            font-size: 11px !important;
-            color: #94a3b8 !important;
+        .salary-kpi-grid .cash-advance-stat-value-row {
+            margin: 1px 0 !important;
+            justify-content: flex-start !important;
+        }
+        .salary-kpi-grid .cash-advance-stat-value {
+            font-size: 14.5px !important;
             line-height: 1.2 !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
         }
+        .salary-kpi-grid .cash-advance-stat-unit {
+            font-size: 10.5px !important;
+            margin-left: 2px !important;
+        }
+        .salary-kpi-grid .cash-advance-stat-subtext {
+            font-size: 10.5px !important;
+            margin-top: 1px !important;
+        }
+    }
+
+    .cash-advance-stat-icon-blue {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        box-shadow: 0 4px 10px rgba(59, 130, 246, 0.28) !important;
+        color: #ffffff !important;
+    }
+    .cash-advance-stat-icon-purple {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important;
+        box-shadow: 0 4px 10px rgba(139, 92, 246, 0.28) !important;
+        color: #ffffff !important;
+    }
+    .cash-advance-stat-icon-cyan {
+        background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%) !important;
+        box-shadow: 0 4px 10px rgba(6, 182, 212, 0.28) !important;
+        color: #ffffff !important;
+    }
+    .cash-advance-stat-icon-green {
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+        box-shadow: 0 4px 10px rgba(34, 197, 94, 0.28) !important;
+        color: #ffffff !important;
+    }
+    .cash-advance-stat-icon-amber {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.28) !important;
+        color: #ffffff !important;
+    }
+    .cash-advance-stat-icon-red {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+        box-shadow: 0 4px 10px rgba(220, 38, 38, 0.28) !important;
+        color: #ffffff !important;
+    }
+    .cash-advance-stat-badge-blue {
+        background-color: #eff6ff !important;
+        color: #3b82f6 !important;
+    }
+    .cash-advance-stat-badge-green {
+        background-color: #f0fdf4 !important;
+        color: #16a34a !important;
+    }
+    .cash-advance-stat-badge-amber {
+        background-color: #fffbeb !important;
+        color: #d97706 !important;
+    }
+    .cash-advance-stat-badge-purple {
+        background-color: #f5f3ff !important;
+        color: #7c3aed !important;
+    }
+    .cash-advance-stat-badge-cyan {
+        background-color: #ecfeff !important;
+        color: #0891b2 !important;
+    }
+    .cash-advance-stat-badge-red {
+        background-color: #fef2f2 !important;
+        color: #dc2626 !important;
     }
 
     /* Chart Box Clean (Sesuai Shadow Card Halaman Lain) */

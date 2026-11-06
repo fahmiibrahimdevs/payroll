@@ -1,13 +1,235 @@
 <div>
-    <!-- Top Bar: Title & Clean Filter Controls -->
-    <div class="d-flex justify-content-between align-items-center flex-wrap mb-4" style="gap: 14px;">
+    <!-- Top Row: 8 Metric Cards (Kiri 4x2) + Widget Presensi Mandiri (Kanan) | Pada Mobile Presensi Mandiri Tampil Paling Atas -->
+    <div class="row align-items-start mb-4">
+        <!-- Sisi Kiri (col-xl-9 col-lg-8): 8 Stat Cards dalam Grid 4x2 (Desktop order-lg-1, Mobile order-2) -->
+        <div class="col-xl-9 col-lg-8 order-2 order-lg-1">
+            <!-- Section Lead & Title untuk Ringkasan & Presensi Karyawan -->
+            <div class="mb-3">
+                <h2 class="section-title mt-0 mb-1">Ringkasan & Presensi Karyawan</h2>
+                <p class="section-lead mb-0">Informasi kehadiran hari ini, status cuti, dan metrik operasional karyawan secara real-time.</p>
+            </div>
+
+            <div class="dashboard-8kpi-grid">
+                <!-- 1. Karyawan Aktif -->
+                <div class="card cash-advance-stat-card mb-0 shadow-sm">
+                    <div class="card-body cash-advance-stat-body">
+                        <div class="cash-advance-stat-icon cash-advance-stat-icon-blue">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="cash-advance-stat-content">
+                            <div class="cash-advance-stat-title" title="Karyawan Aktif">
+                                Karyawan Aktif
+                            </div>
+                            <div class="cash-advance-stat-value-row">
+                                <div class="cash-advance-stat-value" title="{{ number_format($stats['active_employees_count']) }} Orang">
+                                    <span>{{ number_format($stats['active_employees_count']) }}</span>
+                                    <span class="cash-advance-stat-unit">Orang</span>
+                                </div>
+                                <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
+                                    <i class="fas fa-user-check"></i>
+                                </span>
+                            </div>
+                            <div class="cash-advance-stat-subtext" title="{{ $stats['permanent_count'] }} Tetap • {{ $stats['contract_count'] }} Kontrak">
+                                {{ $stats['permanent_count'] }} Tetap • {{ $stats['contract_count'] }} Kontrak
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Departemen -->
+                <div class="card cash-advance-stat-card mb-0 shadow-sm">
+                    <div class="card-body cash-advance-stat-body">
+                        <div class="cash-advance-stat-icon cash-advance-stat-icon-purple">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <div class="cash-advance-stat-content">
+                            <div class="cash-advance-stat-title" title="Departemen">
+                                Departemen
+                            </div>
+                            <div class="cash-advance-stat-value-row">
+                                <div class="cash-advance-stat-value" title="{{ $stats['departments_count'] }} Divisi">
+                                    <span>{{ $stats['departments_count'] }}</span>
+                                    <span class="cash-advance-stat-unit">Divisi</span>
+                                </div>
+                                <span class="cash-advance-stat-badge cash-advance-stat-badge-purple">
+                                    <i class="fas fa-sitemap"></i>
+                                </span>
+                            </div>
+                            <div class="cash-advance-stat-subtext" title="Struktur unit kerja">
+                                Struktur unit kerja
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Hari Libur -->
+                <div class="card cash-advance-stat-card mb-0 shadow-sm">
+                    <div class="card-body cash-advance-stat-body">
+                        <div class="cash-advance-stat-icon cash-advance-stat-icon-cyan">
+                            <i class="fas fa-umbrella"></i>
+                        </div>
+                        <div class="cash-advance-stat-content">
+                            <div class="cash-advance-stat-title" title="Hari Libur">
+                                Hari Libur
+                            </div>
+                            <div class="cash-advance-stat-value-row">
+                                <div class="cash-advance-stat-value" title="{{ $stats['holidays_count'] }} Hari">
+                                    <span>{{ $stats['holidays_count'] }}</span>
+                                    <span class="cash-advance-stat-unit">Hari</span>
+                                </div>
+                                <span class="cash-advance-stat-badge cash-advance-stat-badge-cyan">
+                                    <i class="fas fa-calendar-alt"></i>
+                                </span>
+                            </div>
+                            <div class="cash-advance-stat-subtext" title="Kalender tahun {{ $selectedYear }}">
+                                Kalender tahun {{ $selectedYear }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Biaya Gaji Mingguan -->
+                <div class="card cash-advance-stat-card mb-0 shadow-sm">
+                    <div class="card-body cash-advance-stat-body">
+                        <div class="cash-advance-stat-icon cash-advance-stat-icon-green">
+                            <i class="fas fa-money-check-alt"></i>
+                        </div>
+                        <div class="cash-advance-stat-content">
+                            <div class="cash-advance-stat-title" title="Biaya Gaji Mingguan">
+                                Biaya Gaji Mingguan
+                            </div>
+                            <div class="cash-advance-stat-value-row">
+                                <div class="cash-advance-stat-value" title="{{ $stats['formatted_weekly_payroll_cost'] }}">
+                                    <span>{{ $stats['formatted_weekly_payroll_cost'] }}</span>
+                                </div>
+                                <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
+                                    <i class="fas fa-calendar-week"></i>
+                                </span>
+                            </div>
+                            <div class="cash-advance-stat-subtext" title="Periode: {{ $stats['weekly_period_label'] }}">
+                                {{ $stats['weekly_period_label'] }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Lembur Minggu Ini -->
+                <div class="card cash-advance-stat-card mb-0 shadow-sm" style="cursor: pointer;" data-toggle="modal" data-target="#weeklyOvertimeModal" title="Klik untuk meninjau daftar karyawan lembur minggu ini">
+                    <div class="card-body cash-advance-stat-body">
+                        <div class="cash-advance-stat-icon cash-advance-stat-icon-purple">
+                            <i class="fas fa-business-time"></i>
+                        </div>
+                        <div class="cash-advance-stat-content">
+                            <div class="cash-advance-stat-title" title="Lembur Minggu Ini">
+                                Lembur Minggu Ini
+                            </div>
+                            <div class="cash-advance-stat-value-row">
+                                <div class="cash-advance-stat-value" title="{{ $stats['weekly_overtime_employees_count'] }} Orang">
+                                    <span>{{ $stats['weekly_overtime_employees_count'] }}</span>
+                                    <span class="cash-advance-stat-unit">Orang</span>
+                                </div>
+                                <span class="cash-advance-stat-badge cash-advance-stat-badge-purple">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </span>
+                            </div>
+                            <div class="cash-advance-stat-subtext text-primary" title="Tinjau daftar lembur">
+                                <i class="fas fa-list-ul mr-1"></i> Tinjau daftar lembur
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. Lembur Hari Ini -->
+                <div class="card cash-advance-stat-card mb-0 shadow-sm">
+                    <div class="card-body cash-advance-stat-body">
+                        <div class="cash-advance-stat-icon cash-advance-stat-icon-blue">
+                            <i class="fas fa-user-clock"></i>
+                        </div>
+                        <div class="cash-advance-stat-content">
+                            <div class="cash-advance-stat-title" title="Lembur Hari Ini">
+                                Lembur Hari Ini
+                            </div>
+                            <div class="cash-advance-stat-value-row">
+                                <div class="cash-advance-stat-value" title="{{ $stats['today_overtime_count'] }} Orang">
+                                    <span>{{ $stats['today_overtime_count'] }}</span>
+                                    <span class="cash-advance-stat-unit">Orang</span>
+                                </div>
+                                <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
+                                    <i class="fas fa-clock"></i>
+                                </span>
+                            </div>
+                            <div class="cash-advance-stat-subtext" title="Karyawan lembur hari ini">
+                                Karyawan lembur hari ini
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. Sudah Masuk -->
+                <div class="card cash-advance-stat-card mb-0 shadow-sm">
+                    <div class="card-body cash-advance-stat-body">
+                        <div class="cash-advance-stat-icon cash-advance-stat-icon-green">
+                            <i class="fas fa-sign-in-alt"></i>
+                        </div>
+                        <div class="cash-advance-stat-content">
+                            <div class="cash-advance-stat-title" title="Sudah Masuk">
+                                Sudah Masuk
+                            </div>
+                            <div class="cash-advance-stat-value-row">
+                                <div class="cash-advance-stat-value" title="{{ $stats['today_check_in_count'] }} / {{ $stats['today_scheduled_work_count'] }} Orang">
+                                    <span>{{ $stats['today_check_in_count'] }} / {{ $stats['today_scheduled_work_count'] }}</span>
+                                    <span class="cash-advance-stat-unit">Orang</span>
+                                </div>
+                                <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
+                                    <i class="fas fa-check"></i>
+                                </span>
+                            </div>
+                            <div class="cash-advance-stat-subtext" title="Presensi masuk hari ini">
+                                Presensi masuk hari ini
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 8. Sudah Pulang -->
+                <div class="card cash-advance-stat-card mb-0 shadow-sm">
+                    <div class="card-body cash-advance-stat-body">
+                        <div class="cash-advance-stat-icon cash-advance-stat-icon-cyan">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </div>
+                        <div class="cash-advance-stat-content">
+                            <div class="cash-advance-stat-title" title="Sudah Pulang">
+                                Sudah Pulang
+                            </div>
+                            <div class="cash-advance-stat-value-row">
+                                <div class="cash-advance-stat-value" title="{{ $stats['today_check_out_count'] }} / {{ $stats['today_scheduled_work_count'] }} Orang">
+                                    <span>{{ $stats['today_check_out_count'] }} / {{ $stats['today_scheduled_work_count'] }}</span>
+                                    <span class="cash-advance-stat-unit">Orang</span>
+                                </div>
+                                <span class="cash-advance-stat-badge cash-advance-stat-badge-cyan">
+                                    <i class="fas fa-door-open"></i>
+                                </span>
+                            </div>
+                            <div class="cash-advance-stat-subtext" title="Presensi pulang selesai">
+                                Presensi pulang selesai
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sisi Kanan (col-xl-3 col-lg-4): Widget Presensi Mandiri (Desktop order-lg-2, Mobile order-1 berada di paling atas) -->
+        <div class="col-xl-3 col-lg-4 order-1 order-lg-2 mb-3 mb-lg-0">
+            <livewire:attendances.dashboard-clock wire:key="admin-attendance-clock-widget" />
+        </div>
+    </div>
+
+    <!-- Section Title & Filter: Dashboard Utama / Analitik Tren Penggajian & PPh 21 -->
+    <div class="d-flex justify-content-between align-items-center flex-wrap mb-3 mt-2" style="gap: 14px;">
         <div>
-            <h2 class="section-title my-0" style="font-size: 19px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px;">
-                Dashboard Utama
-            </h2>
-            <p class="section-lead mb-0 text-muted" style="font-size: 13px; margin-top: 2px;">
-                Pantau metrik karyawan, operasional penggajian, dan kasbon secara real-time.
-            </p>
+            <h2 class="section-title my-0">Dashboard Utama</h2>
+            <p class="section-lead mb-0">Pantau metrik karyawan, operasional penggajian, dan kasbon secara real-time.</p>
         </div>
 
         <!-- Filter Periode (Clean Styled Dropdown Pill) -->
@@ -28,110 +250,6 @@
                         <option value="{{ $year }}">{{ $year }}</option>
                     @endforeach
                 </select>
-            </div>
-        </div>
-    </div>
-
-    <!-- 4 Modern Stat Cards (Desain Clean & Identik Gambar ke-1) -->
-    <div class="cash-advance-stat-grid mb-4">
-        <!-- 1. Total Karyawan Aktif -->
-        <div class="card cash-advance-stat-card">
-            <div class="card-body cash-advance-stat-body">
-                <div class="cash-advance-stat-icon cash-advance-stat-icon-blue">
-                    <i class="fas fa-users"></i>
-                </div>
-                <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Total Karyawan Aktif">Total Karyawan Aktif</div>
-                    <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $stats['active_employees_count'] }} Orang">
-                            <span>{{ number_format($stats['active_employees_count']) }}</span>
-                            <span class="cash-advance-stat-unit text-gray-800" style="color: #1f2937;">Orang</span>
-                        </div>
-                        <span class="cash-advance-stat-badge cash-advance-stat-badge-blue">
-                            <i class="fas fa-user-check text-[10px]"></i>
-                        </span>
-                    </div>
-                    <div class="cash-advance-stat-subtext">
-                        {{ $stats['permanent_count'] }} Tetap &bull; {{ $stats['contract_count'] }} Kontrak &bull; {{ $stats['intern_count'] }} Magang
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 2. Total Gaji Bersih (THP) -->
-        <div class="card cash-advance-stat-card">
-            <div class="card-body cash-advance-stat-body">
-                <div class="cash-advance-stat-icon cash-advance-stat-icon-green">
-                    <i class="fas fa-wallet"></i>
-                </div>
-                <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Total Gaji Bersih">Total Gaji Bersih</div>
-                    <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $stats['formatted_net_salary'] }}">
-                            {{ $stats['formatted_net_salary'] }}
-                        </div>
-                        <span class="cash-advance-stat-badge cash-advance-stat-badge-green">
-                            <i class="fas fa-money-bill-wave text-[10px]"></i>
-                        </span>
-                    </div>
-                    <div class="cash-advance-stat-subtext">
-                        @if ($stats['current_payroll_period'])
-                            {{ $monthsList[$selectedMonth] }} {{ $selectedYear }} &bull; {{ $stats['current_payroll_period']->status->label() }} ({{ $stats['payroll_verified_count'] }}/{{ $stats['payroll_total_items_count'] }} Verif)
-                        @else
-                            {{ $monthsList[$selectedMonth] }} {{ $selectedYear }} &bull; Belum ada periode
-                        @endif
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 3. Total PPh 21 pada payroll -->
-        <div class="card cash-advance-stat-card">
-            <div class="card-body cash-advance-stat-body">
-                <div class="cash-advance-stat-icon cash-advance-stat-icon-red">
-                    <i class="fas fa-landmark"></i>
-                </div>
-                <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Total PPh 21 yang tercatat pada slip payroll">PPh 21 Tercatat</div>
-                    <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $stats['formatted_pph21'] }}">
-                            {{ $stats['formatted_pph21'] }}
-                        </div>
-                        <span class="cash-advance-stat-badge cash-advance-stat-badge-red">
-                            <i class="fas fa-file-invoice-dollar text-[10px]"></i>
-                        </span>
-                    </div>
-                    <div class="cash-advance-stat-subtext">
-                        @if ($stats['current_payroll_period'])
-                            Tercatat pada {{ $stats['payroll_total_items_count'] }} slip payroll
-                        @else
-                            Belum ada payroll bulan {{ $monthsList[$selectedMonth] }}
-                        @endif
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 4. Sisa Kasbon -->
-        <div class="card cash-advance-stat-card">
-            <div class="card-body cash-advance-stat-body">
-                <div class="cash-advance-stat-icon cash-advance-stat-icon-amber">
-                    <i class="fas fa-hand-holding-usd"></i>
-                </div>
-                <div class="cash-advance-stat-content">
-                    <div class="cash-advance-stat-title" title="Sisa Kasbon Belum Lunas">Sisa Kasbon Aktif</div>
-                    <div class="cash-advance-stat-value-row">
-                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;" title="{{ $stats['formatted_remaining_cash_advance'] }}">
-                            {{ $stats['formatted_remaining_cash_advance'] }}
-                        </div>
-                        <span class="cash-advance-stat-badge cash-advance-stat-badge-amber">
-                            <i class="fas fa-receipt text-[10px]"></i>
-                        </span>
-                    </div>
-                    <div class="cash-advance-stat-subtext">
-                        Belum lunas &bull; {{ $stats['active_cash_advance_borrowers_count'] }} orang peminjam
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -609,9 +727,7 @@
                         <h4 class="mb-0" style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.35;">
                             Pengajuan Kasbon Terkini
                         </h4>
-                        <div style="font-size: 11.5px; font-weight: 500; color: #64748b; margin-top: 2px;">
-                            Catatan pengajuan pinjaman karyawan
-                        </div>
+                        <div style="font-size: 11.5px; font-weight: 500; color: #64748b; margin-top: 2px;">Sisa Kasbon Aktif: {{ $stats['formatted_remaining_cash_advance'] }} &bull; {{ $stats['active_cash_advance_borrowers_count'] }} peminjam</div>
                     </div>
                     <a href="{{ route('cash-advances.index') }}" class="text-primary font-weight-600 text-decoration-none" style="font-size: 11.5px;">
                         Lihat Semua <i class="fas fa-chevron-right ml-0.5" style="font-size: 9px;"></i>
@@ -663,13 +779,335 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal List Karyawan Lembur Periode Minggu Ini (Sabtu s/d Jumat) -->
+    <div wire:ignore.self class="modal fade" id="weeklyOvertimeModal" tabindex="-1" role="dialog" aria-labelledby="weeklyOvertimeModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content bg-white" style="border: 1px solid #eaedf2; border-radius: 8px;">
+                <div class="modal-header bg-white border-bottom py-3">
+                    <div class="d-flex align-items-center">
+                        <div class="mr-2.5 text-center" style="width: 34px; height: 34px; border-radius: 8px; background-color: #f5f3ff; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                            <i class="fas fa-business-time"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title text-dark mb-0" id="weeklyOvertimeModalLabel" style="font-weight: 500; font-size: 15px;">
+                                Daftar Lembur Karyawan (Periode Minggu Ini)
+                            </h5>
+                            <span class="text-muted" style="font-size: 11.5px;">
+                                Siklus Sabtu s/d Jumat: {{ $stats['weekly_period_label'] }}
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body py-3 px-4 bg-white" style="max-height: 70vh; overflow-y: auto;">
+                    @if ($stats['weekly_overtime_grouped_by_date']->isNotEmpty())
+                        @foreach ($stats['weekly_overtime_grouped_by_date'] as $dateLabel => $submissions)
+                            <div class="mb-4">
+                                <div class="d-flex align-items-center justify-content-between pb-2 mb-2 border-bottom">
+                                    <div class="d-flex align-items-center">
+                                        <i class="far fa-calendar-alt text-primary mr-2" style="font-size: 13px;"></i>
+                                        <span class="text-dark" style="font-weight: 600; font-size: 13px;">{{ $dateLabel }}</span>
+                                    </div>
+                                    <span class="badge badge-light border text-dark" style="font-size: 11px; font-weight: 500;">
+                                        {{ $submissions->count() }} Data Lembur ({{ $submissions->pluck('employee_id')->unique()->count() }} Orang)
+                                    </span>
+                                </div>
+                                <div class="table-responsive mb-2">
+                                    <table class="table table-sm table-hover mb-0" style="font-size: 12px;">
+                                        <thead>
+                                            <tr style="color: #475569; background-color: #f8fafc;">
+                                                <th class="py-2 px-3 border-top-0">Karyawan</th>
+                                                <th class="py-2 px-3 border-top-0">Jam Lembur</th>
+                                                <th class="py-2 px-3 border-top-0">Durasi</th>
+                                                <th class="py-2 px-3 border-top-0">Alasan / Tugas</th>
+                                                <th class="py-2 px-3 border-top-0 text-center">Status</th>
+                                                <th class="py-2 px-3 border-top-0 text-right">Upah Lembur</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach ($submissions as $sub)
+                                                <tr>
+                                                    <td class="py-2.5 px-3 align-middle">
+                                                        <div class="text-dark" style="font-weight: 600;">{{ $sub->employee?->full_name ?? 'Karyawan' }}</div>
+                                                        <div class="text-muted" style="font-size: 10.5px;">
+                                                            {{ $sub->employee?->position?->name ?? 'Staff' }} &bull; {{ $sub->employee?->department?->name ?? 'Umum' }}
+                                                        </div>
+                                                    </td>
+                                                    <td class="py-2.5 px-3 align-middle text-muted">
+                                                        @if ($sub->start_time && $sub->end_time)
+                                                            <i class="far fa-clock mr-1"></i> {{ substr($sub->start_time, 0, 5) }} - {{ substr($sub->end_time, 0, 5) }}
+                                                        @else
+                                                            <span class="text-muted">-</span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="py-2.5 px-3 align-middle text-dark" style="font-weight: 500;">
+                                                        {{ number_format((float) $sub->duration_hours, 1) }} Jam
+                                                    </td>
+                                                    <td class="py-2.5 px-3 align-middle text-dark" style="max-width: 200px;">
+                                                        <span class="text-truncate d-inline-block" style="max-width: 200px;" title="{{ $sub->reason ?? '-' }}">
+                                                            {{ $sub->reason ?? '-' }}
+                                                        </span>
+                                                    </td>
+                                                    <td class="py-2.5 px-3 align-middle text-center">
+                                                        @if ($sub->status->value === 'approved')
+                                                            <span class="badge badge-success" style="font-size: 10px; font-weight: 500;">Disetujui</span>
+                                                        @elseif ($sub->status->value === 'pending_admin')
+                                                            <span class="badge badge-warning" style="font-size: 10px; font-weight: 500;">Review Admin</span>
+                                                        @elseif ($sub->status->value === 'pending_direktur')
+                                                            <span class="badge badge-info" style="font-size: 10px; font-weight: 500;">Review Direktur</span>
+                                                        @else
+                                                            <span class="badge badge-secondary" style="font-size: 10px; font-weight: 500;">{{ $sub->status->value }}</span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="py-2.5 px-3 align-middle text-right text-dark" style="font-weight: 600;">
+                                                        Rp {{ number_format((float) $sub->total_amount, 0, ',', '.') }}
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endforeach
+                    @else
+                        <div class="text-center py-5">
+                            <div class="d-inline-flex align-items-center justify-content-center mb-2" style="width: 48px; height: 48px; border-radius: 12px; background-color: #f8fafc; color: #94a3b8;">
+                                <i class="fas fa-business-time" style="font-size: 22px;"></i>
+                            </div>
+                            <h6 class="font-weight-bold text-dark mb-1" style="font-size: 13.5px;">Tidak Ada Catatan Lembur</h6>
+                            <p class="text-muted mb-0" style="font-size: 12px;">Belum ada karyawan yang lembur pada periode minggu ini ({{ $stats['weekly_period_label'] }}).</p>
+                        </div>
+                    @endif
+                </div>
+                <div class="modal-footer bg-white border-top px-4 py-2.5 d-flex justify-content-between align-items-center">
+                    <div class="text-muted" style="font-size: 11.5px;">
+                        Total Karyawan Lembur: <strong class="text-dark">{{ $stats['weekly_overtime_employees_count'] }} Orang</strong>
+                    </div>
+                    <button type="button" class="btn btn-secondary shadow-none btn-sm px-3" data-dismiss="modal" style="font-weight: 500;">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 @push('styles')
 <style>
+    /* Standard Stisla Section Title & Lead Alignment (No Overlap) */
+    .section .section-title {
+        margin-top: 0 !important;
+        margin-bottom: 4px !important;
+    }
+    .section .section-title + .section-lead,
+    .section .section-lead {
+        margin-top: 0 !important;
+        margin-bottom: 12px !important;
+        margin-left: 45px !important;
+        font-size: 13px !important;
+        color: #475569 !important;
+    }
+
+    .dashboard-8kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: auto auto;
+        gap: 12px;
+        height: auto;
+    }
+    .dashboard-8kpi-grid .card {
+        border: 1px solid #eaedf2 !important;
+        border-radius: 14px !important;
+        background: #ffffff !important;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.02) !important;
+        height: auto !important;
+        margin: 0 !important;
+        margin-bottom: 0 !important;
+        transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+    }
+    .dashboard-8kpi-grid .card:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07) !important;
+    }
+    .dashboard-8kpi-grid .card-body {
+        padding: 12px 14px !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        height: auto !important;
+        text-align: left !important;
+    }
+    .dashboard-8kpi-grid .cash-advance-stat-icon {
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 19px !important;
+        color: #ffffff !important;
+        flex-shrink: 0 !important;
+        margin: 0 !important;
+    }
+    .dashboard-8kpi-grid .cash-advance-stat-content {
+        margin-left: 10px !important;
+        min-width: 0 !important;
+        flex-grow: 1 !important;
+    }
+    .dashboard-8kpi-grid .cash-advance-stat-title {
+        font-size: 12.5px !important;
+        font-weight: 600 !important;
+        color: #475569 !important;
+        line-height: 1.35 !important;
+        margin-bottom: 2px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .dashboard-8kpi-grid .cash-advance-stat-value-row {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        margin: 4px 0 !important;
+    }
+    .dashboard-8kpi-grid .cash-advance-stat-value {
+        font-size: 18.5px !important;
+        font-weight: 700 !important;
+        line-height: 1.2 !important;
+        color: #0f172a !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .dashboard-8kpi-grid .cash-advance-stat-unit {
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        color: #64748b !important;
+        margin-left: 3px !important;
+    }
+    .dashboard-8kpi-grid .cash-advance-stat-badge {
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px !important;
+        border-radius: 6px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 9.5px !important;
+        margin-left: 6px !important;
+        flex-shrink: 0 !important;
+    }
+    .dashboard-8kpi-grid .cash-advance-stat-subtext {
+        font-size: 11.5px !important;
+        font-weight: 500 !important;
+        color: #64748b !important;
+        line-height: 1.35 !important;
+        margin-top: 2px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    @media (max-width: 991.98px) {
+        .dashboard-8kpi-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            grid-template-rows: auto !important;
+            gap: 10px !important;
+        }
+        .dashboard-8kpi-grid .card {
+            margin: 0 !important;
+            margin-bottom: 0 !important;
+            border-radius: 12px !important;
+        }
+        .dashboard-8kpi-grid .card-body {
+            padding: 9px 8px !important;
+        }
+        .dashboard-8kpi-grid .cash-advance-stat-icon {
+            width: 36px !important;
+            height: 36px !important;
+            min-width: 36px !important;
+            font-size: 15px !important;
+            border-radius: 9px !important;
+        }
+        .dashboard-8kpi-grid .cash-advance-stat-content {
+            margin-left: 8px !important;
+        }
+        .dashboard-8kpi-grid .cash-advance-stat-title {
+            font-size: 11.5px !important;
+            margin-bottom: 1px !important;
+        }
+        .dashboard-8kpi-grid .cash-advance-stat-badge {
+            display: none !important;
+        }
+        .dashboard-8kpi-grid .cash-advance-stat-value-row {
+            margin: 1px 0 !important;
+            justify-content: flex-start !important;
+        }
+        .dashboard-8kpi-grid .cash-advance-stat-value {
+            font-size: 14.5px !important;
+            line-height: 1.2 !important;
+        }
+        .dashboard-8kpi-grid .cash-advance-stat-unit {
+            font-size: 10.5px !important;
+            margin-left: 2px !important;
+        }
+        .dashboard-8kpi-grid .cash-advance-stat-subtext {
+            font-size: 10.5px !important;
+            margin-top: 1px !important;
+        }
+    }
+
+    .cash-advance-stat-icon-blue {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        box-shadow: 0 4px 10px rgba(59, 130, 246, 0.28) !important;
+        color: #ffffff !important;
+    }
+    .cash-advance-stat-icon-purple {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important;
+        box-shadow: 0 4px 10px rgba(139, 92, 246, 0.28) !important;
+        color: #ffffff !important;
+    }
+    .cash-advance-stat-icon-cyan {
+        background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%) !important;
+        box-shadow: 0 4px 10px rgba(6, 182, 212, 0.28) !important;
+        color: #ffffff !important;
+    }
+    .cash-advance-stat-icon-green {
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+        box-shadow: 0 4px 10px rgba(34, 197, 94, 0.28) !important;
+        color: #ffffff !important;
+    }
+    .cash-advance-stat-icon-amber {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.28) !important;
+        color: #ffffff !important;
+    }
     .cash-advance-stat-icon-red {
         background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
         box-shadow: 0 4px 10px rgba(220, 38, 38, 0.28) !important;
+        color: #ffffff !important;
+    }
+    .cash-advance-stat-badge-blue {
+        background-color: #eff6ff !important;
+        color: #3b82f6 !important;
+    }
+    .cash-advance-stat-badge-green {
+        background-color: #f0fdf4 !important;
+        color: #16a34a !important;
+    }
+    .cash-advance-stat-badge-amber {
+        background-color: #fffbeb !important;
+        color: #d97706 !important;
+    }
+    .cash-advance-stat-badge-purple {
+        background-color: #f5f3ff !important;
+        color: #7c3aed !important;
+    }
+    .cash-advance-stat-badge-cyan {
+        background-color: #ecfeff !important;
+        color: #0891b2 !important;
     }
     .cash-advance-stat-badge-red {
         background-color: #fef2f2 !important;

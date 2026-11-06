@@ -19,6 +19,7 @@ class OvertimeSubmission extends Model
 
     protected $fillable = [
         'reference_number',
+        'attendance_id',
         'overtime_period_id',
         'employee_id',
         'overtime_type',
@@ -63,6 +64,11 @@ class OvertimeSubmission extends Model
         // withTrashed: karyawan terarsip tidak kehilangan nama/upah saat
         // pengajuan lama diedit atau dicetak (pola sama dengan PayrollItem).
         return $this->belongsTo(Employee::class)->withTrashed();
+    }
+
+    public function attendance(): BelongsTo
+    {
+        return $this->belongsTo(Attendance::class);
     }
 
     public function overtimePeriod(): BelongsTo

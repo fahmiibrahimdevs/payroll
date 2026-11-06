@@ -15,7 +15,7 @@ return new class extends Migration
         $local = Storage::disk('local');
 
         foreach (['payroll_items', 'overtime_period_attendances'] as $table) {
-            $rows = \DB::table($table)
+            $rows = DB::table($table)
                 ->whereNotNull('payment_proof_path')
                 ->pluck('payment_proof_path');
 

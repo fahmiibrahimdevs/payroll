@@ -60,7 +60,7 @@
                     </a>
                 </li> --}}
 
-                <li class="nav-item dropdown {{ request()->routeIs(['departments.*', 'positions.*', 'employees.*', 'salary-components.*', 'holidays.*']) ? 'active' : '' }}">
+                <li class="nav-item dropdown {{ request()->routeIs(['departments.*', 'positions.*', 'work-locations.*', 'employees.*', 'salary-components.*', 'holidays.*']) ? 'active' : '' }}">
                     <a href="#" class="nav-link has-dropdown"><i class="fas fa-database"></i><span>Master Data</span></a>
                     <ul class="dropdown-menu">
                         @if (auth()->user()?->hasRole(['admin', 'direktur']))
@@ -69,6 +69,9 @@
                             </li>
                             <li class="{{ request()->routeIs('positions.*') ? 'active' : '' }}">
                                 <a class="nav-link" href="{{ route('positions.index') }}">Jabatan</a>
+                            </li>
+                            <li class="{{ request()->routeIs('work-locations.*') ? 'active' : '' }}">
+                                <a class="nav-link" href="{{ route('work-locations.index') }}">Lokasi Kerja</a>
                             </li>
                             <li class="{{ request()->routeIs('holidays.*') ? 'active' : '' }}">
                                 <a class="nav-link" href="{{ route('holidays.index') }}">Hari Libur</a>

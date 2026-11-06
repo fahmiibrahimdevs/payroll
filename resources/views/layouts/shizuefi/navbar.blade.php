@@ -31,8 +31,13 @@
                     <div class="dropdown-title">
                         Role: {{ auth()->user()->roles->pluck('name')->join(', ') ?: 'User' }}
                     </div>
+                    @if (auth()->user()->hasRole('karyawan') && auth()->user()->getEmployeeRecord())
+                        <a href="{{ route('employees.show', auth()->user()->getEmployeeRecord()->id) }}" class="dropdown-item has-icon">
+                            <i class="fas fa-id-card"></i> Profil Kepegawaian
+                        </a>
+                    @endif
                     <a href="{{ route('profile') }}" class="dropdown-item has-icon">
-                        <i class="far fa-user"></i> Profil Saya
+                        <i class="far fa-user"></i> Pengaturan Akun
                     </a>
                     @if (auth()->user()->hasRole('admin'))
                         <a href="{{ route('admin.users') }}" class="dropdown-item has-icon">

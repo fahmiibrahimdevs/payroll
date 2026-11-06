@@ -11,7 +11,9 @@ class EmptyDatabasePageAccessTest extends TestCase
     use DatabaseTransactions;
 
     protected ?User $admin = null;
+
     protected ?User $direktur = null;
+
     protected ?User $karyawan = null;
 
     protected function setUp(): void

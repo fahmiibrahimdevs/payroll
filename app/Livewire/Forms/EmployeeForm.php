@@ -400,7 +400,7 @@ class EmployeeForm extends Form
         $validated = $this->validate();
         $validated['role'] = in_array($this->role, ['karyawan', 'admin'], true) ? $this->role : 'karyawan';
         // Akun baru tanpa password eksplisit mendapat password acak yang kuat, bukan default yang mudah ditebak.
-        $validated['password'] = $this->password ?: \Illuminate\Support\Str::password(10, symbols: false);
+        $validated['password'] = $this->password ?: Str::password(10, symbols: false);
         $this->generatedPassword = $validated['password'];
 
         $companyProfile = CompanyProfile::getProfile();

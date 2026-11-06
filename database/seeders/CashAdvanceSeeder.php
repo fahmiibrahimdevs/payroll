@@ -16,6 +16,7 @@ use App\Models\Employee;
 use App\Models\EmployeeDetail;
 use App\Models\Position;
 use App\Models\User;
+use App\Services\UserService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
@@ -117,9 +118,9 @@ class CashAdvanceSeeder extends Seeder
             ]
         );
 
-        $admin = User::whereNotIn('email', \App\Services\UserService::HIDDEN_DUMMY_EMAILS)
+        $admin = User::whereNotIn('email', UserService::HIDDEN_DUMMY_EMAILS)
             ->whereHas('roles', fn ($q) => $q->where('name', 'admin'))->first() ?? User::first();
-        $direktur = User::whereNotIn('email', \App\Services\UserService::HIDDEN_DUMMY_EMAILS)
+        $direktur = User::whereNotIn('email', UserService::HIDDEN_DUMMY_EMAILS)
             ->whereHas('roles', fn ($q) => $q->where('name', 'direktur'))->first() ?? $admin;
 
         if (! $admin) {

@@ -30,6 +30,25 @@
         @endif
     </div>
 
+    @if (! empty($metrics['total_pending_review']) && $metrics['total_pending_review'] > 0)
+        <div class="alert alert-warning d-flex align-items-center justify-content-between p-3 mb-4 rounded-lg shadow-sm" style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; color: #92400e;">
+            <div class="d-flex align-items-center">
+                <div class="mr-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 38px; height: 38px; border-radius: 8px; background: rgba(245, 158, 11, 0.15); color: #d97706;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 16px;"></i>
+                </div>
+                <div>
+                    <strong style="font-size: 13.5px; font-weight: 600;">Menunggu Review Presensi ({{ $metrics['total_pending_review'] }} Catatan)</strong>
+                    <div style="font-size: 12px; color: #78350f;">
+                        Terdapat presensi selfie yang dilakukan di luar radius kantor resmi dan memerlukan verifikasi Admin. Klik pada sel bertanda kuning untuk mengaudit.
+                    </div>
+                </div>
+            </div>
+            <span class="badge badge-warning flex-shrink-0" style="background: #f59e0b; color: #fff; font-size: 12px; padding: 6px 12px; border-radius: 6px;">
+                Perlu Review
+            </span>
+        </div>
+    @endif
+
     <!-- 4 Top Metric Cards (Grid Baku Eksekutif) -->
     <div class="cash-advance-stat-grid mb-4">
         <!-- 1. Total Log Presensi (Blue) -->
@@ -250,26 +269,7 @@
                                 JOBDESK
                             </th>
 
-                            @foreach ($matrixDates as $d)
-                                @if ($d['is_sunday'])
-                                    <th class="p-0 font-weight-bold text-nowrap align-middle date-col"
-                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 9.5px; background: #dc2626 !important; color: #ffffff !important; border: 1px solid #b91c1c; height: 20px;"
-                                        title="Hari Minggu">
-                                        {{ $d['dow_name'] }}
-                                    </th>
-                                @elseif ($d['is_holiday'])
-                                    <th class="p-0 font-weight-bold text-nowrap align-middle date-col"
-                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 9.5px; background: #ef4444 !important; color: #ffffff !important; border: 1px solid #dc2626; height: 20px;"
-                                        title="{{ $d['holiday_name'] }}">
-                                        {{ $d['dow_name'] }}
-                                    </th>
-                                @else
-                                    <th class="p-0 font-weight-bold text-nowrap align-middle date-col"
-                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 9.5px; background: #ffffff !important; color: #0f172a !important; border: 1px solid #cbd5e1; height: 20px;">
-                                        {{ $d['dow_name'] }}
-                                    </th>
-                                @endif
-                            @endforeach
+                            @foreach ($matrixDates as $d)@if ($d['is_sunday'])<th class="p-0 font-weight-bold text-nowrap align-middle date-col" style="font-size: 9.5px; background: #dc2626 !important; color: #ffffff !important; border: 1px solid #b91c1c; height: 20px;" title="Hari Minggu">{{ $d['dow_name'] }}</th>@elseif ($d['is_holiday'])<th class="p-0 font-weight-bold text-nowrap align-middle date-col" style="font-size: 9.5px; background: #ef4444 !important; color: #ffffff !important; border: 1px solid #dc2626; height: 20px;" title="{{ $d['holiday_name'] }}">{{ $d['dow_name'] }}</th>@else<th class="p-0 font-weight-bold text-nowrap align-middle date-col" style="font-size: 9.5px; background: #ffffff !important; color: #0f172a !important; border: 1px solid #cbd5e1; height: 20px;">{{ $d['dow_name'] }}</th>@endif @endforeach
 
                             <th colspan="2" class="align-middle text-center p-0" style="border-left: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; font-weight: 700; font-size: 10px; background: #ffffff !important; color: #334155; height: 20px;">
                                 REKAP KEHADIRAN
@@ -278,33 +278,13 @@
 
                         <!-- Baris 2: Angka Tanggal (Biru Muda untuk Hari Biasa, Merah untuk Hari Minggu / Libur) dan Sub-Header Rekap -->
                         <tr style="background: #ffffff;">
-                            @foreach ($matrixDates as $d)
-                                @if ($d['is_sunday'])
-                                    <th class="p-0 font-weight-bold align-middle date-col"
-                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 10.5px; background: #b91c1c !important; color: #ffffff !important; border: 1px solid #991b1b; height: 20px;"
-                                        title="Hari Minggu (Tgl {{ $d['day'] }})">
-                                        {{ $d['day'] }}
-                                    </th>
-                                @elseif ($d['is_holiday'])
-                                    <th class="p-0 font-weight-bold align-middle date-col"
-                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 10.5px; background: #dc2626 !important; color: #ffffff !important; border: 1px solid #b91c1c; height: 20px;"
-                                        title="{{ $d['holiday_name'] }} (Tgl {{ $d['day'] }})">
-                                        {{ $d['day'] }}
-                                    </th>
-                                @else
-                                    <th class="p-0 font-weight-bold align-middle date-col"
-                                        style="width: 30px; min-width: 28px; max-width: 32px; font-size: 10.5px; background: #e0f2fe !important; color: #0369a1 !important; border: 1px solid #bae6fd; height: 20px;"
-                                        title="Tanggal {{ $d['day'] }}">
-                                        {{ $d['day'] }}
-                                    </th>
-                                @endif
-                            @endforeach
+                            @foreach ($matrixDates as $d)@if ($d['is_sunday'])<th class="p-0 font-weight-bold align-middle date-col" style="font-size: 10.5px; background: #b91c1c !important; color: #ffffff !important; border: 1px solid #991b1b; height: 20px;" title="Hari Minggu (Tgl {{ $d['day'] }})">{{ $d['day'] }}</th>@elseif ($d['is_holiday'])<th class="p-0 font-weight-bold align-middle date-col" style="font-size: 10.5px; background: #dc2626 !important; color: #ffffff !important; border: 1px solid #b91c1c; height: 20px;" title="{{ $d['holiday_name'] }} (Tgl {{ $d['day'] }})">{{ $d['day'] }}</th>@else<th class="p-0 font-weight-bold align-middle date-col" style="font-size: 10.5px; background: #e0f2fe !important; color: #0369a1 !important; border: 1px solid #bae6fd; height: 20px;" title="Tanggal {{ $d['day'] }}">{{ $d['day'] }}</th>@endif @endforeach
 
                             <th class="align-middle text-center p-0 font-weight-bold" style="width: 44px; min-width: 44px; max-width: 44px; color: #047857; font-size: 9.5px; border-left: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; background: #ffffff !important; height: 20px;" title="Total Hari Masuk Kerja">HADIR</th>
                             <th class="align-middle text-center p-0 font-weight-bold" style="width: 44px; min-width: 44px; max-width: 44px; color: #be123c; font-size: 9.5px; border-bottom: 2px solid #cbd5e1; background: #ffffff !important; height: 20px;" title="Total Hari Libur">LIBUR</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody x-on:click="const cell = $event.target.closest('.att-cell-clickable'); if (cell) { $wire.openCellModal(cell.dataset.emp, cell.dataset.date); }">
                         @php
                             $rowNumber = ($matrixEmployees->firstItem() ?? 1);
                         @endphp
@@ -362,98 +342,7 @@
                                     </td>
 
                                     <!-- Kolom Tanggal (1 s/d 31) -->
-                                    @foreach ($matrixDates as $d)
-                                        @php
-                                            $att = $empRow['att']->get($d['date']);
-                                            $sch = $empRow['schedules']->get($d['date']);
-                                            $isOff = $sch ? ($sch->status === \App\Models\EmployeeSchedule::STATUS_OFF) : ($d['is_sunday'] || $d['is_holiday']);
-                                            $status = $att ? strtolower($att->status) : null;
-                                            $hasOt = $att && ($att->overtime_in || ($att->overtime_duration_minutes ?? 0) > 0);
-                                            $hasWorkHours = $att && (!empty($att->clock_in) || !empty($att->clock_out));
-                                            $isRegularWork = $att !== null && in_array($status, ['hadir', 'terlambat', 'pulang_cepat'], true) && $hasWorkHours;
-                                        @endphp
-                                        <td class="text-center p-0 align-middle date-col {{ $isOff ? 'cell-roster-off' : '' }}" style="width: 30px; min-width: 28px; max-width: 32px;">
-                                            @if ($isRegularWork)
-                                                @php
-                                                    $tooltipText = "{$emp->full_name} ({$d['date']}): " . ucfirst($status) . ($att->clock_in ? ' Masuk ' . substr($att->clock_in, 0, 5) : '') . ($att->clock_out ? ' s/d Pulang ' . substr($att->clock_out, 0, 5) : '') . ($hasOt ? ' | Lembur ' . substr($att->overtime_in, 0, 5) . ($att->overtime_out ? '-' . substr($att->overtime_out, 0, 5) : '') : '') . ($att->source === 'manual' ? ' [Manual]' : ' [Fingerprint]');
-                                                @endphp
-                                                @if ($status === 'hadir')
-                                                    <div class="att-cell-wrap att-cell-present att-chip-present {{ $att?->source === 'manual' ? 'att-chip-manual' : '' }}"
-                                                         wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
-                                                         title="{{ $tooltipText }} (Klik untuk ubah)">
-                                                        <i class="fas fa-check att-cell-check"></i>
-                                                        @if ($hasOt)
-                                                            <span class="att-ot-ribbon" title="Ada Lembur">OT</span>
-                                                        @endif
-                                                    </div>
-                                                @elseif ($status === 'terlambat')
-                                                    <div class="att-cell-wrap att-cell-late"
-                                                         wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
-                                                         title="{{ $tooltipText }} (Klik untuk ubah)">
-                                                        <span class="att-cell-letter">T</span>
-                                                        @if ($hasOt)
-                                                            <span class="att-ot-ribbon" title="Ada Lembur">OT</span>
-                                                        @endif
-                                                    </div>
-                                                @elseif ($status === 'pulang_cepat')
-                                                    <div class="att-cell-wrap att-cell-early"
-                                                         wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
-                                                         title="{{ $tooltipText }} (Klik untuk ubah)">
-                                                        <span class="att-cell-letter" style="font-size: 9.5px;">PC</span>
-                                                        @if ($hasOt)
-                                                            <span class="att-ot-ribbon" title="Ada Lembur">OT</span>
-                                                        @endif
-                                                    </div>
-                                                @endif
-                                            @elseif ($status === 'libur' && $hasWorkHours)
-                                                @php
-                                                    $holidayTooltip = "{$emp->full_name} ({$d['date']}): Lembur Hari Libur" . ($att->clock_in ? ' Masuk ' . substr($att->clock_in, 0, 5) : '') . ($att->clock_out ? ' s/d Pulang ' . substr($att->clock_out, 0, 5) : '') . ($hasOt ? ' | Lembur ' . substr($att->overtime_in, 0, 5) . ($att->overtime_out ? '-' . substr($att->overtime_out, 0, 5) : '') : '') . ($att->source === 'manual' ? ' [Manual]' : ' [Fingerprint]');
-                                                @endphp
-                                                <div class="att-cell-wrap {{ $att?->source === 'manual' ? 'att-chip-manual' : '' }}"
-                                                     wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
-                                                     title="{{ $holidayTooltip }} (Klik untuk ubah)">
-                                                    <i class="fas fa-check att-cell-check text-white"></i>
-                                                    @if ($hasOt)
-                                                        <span class="att-ot-ribbon" title="Ada Lembur">OT</span>
-                                                    @endif
-                                                </div>
-                                            @elseif ($hasOt)
-                                                <div class="att-cell-wrap {{ ! $isOff ? 'att-cell-ot-solo' : '' }}"
-                                                     wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')"
-                                                     title="{{ $emp->full_name }} ({{ $d['date'] }}): Lembur {{ substr($att->overtime_in, 0, 5) }}{{ $att->overtime_out ? ' - ' . substr($att->overtime_out, 0, 5) : '' }} (Klik untuk ubah)">
-                                                    @if ($isOff)
-                                                        <span class="att-cell-letter text-white" style="font-size: 10.5px; font-weight: 800;">OT</span>
-                                                    @else
-                                                        <span class="att-cell-letter" style="color: #b45309; font-size: 10px;">OT</span>
-                                                    @endif
-                                                </div>
-                                            @elseif ($status === 'cuti')
-                                                <div class="att-cell-wrap att-cell-cuti" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Cuti (Klik untuk ubah)">
-                                                    <span class="att-cell-letter">C</span>
-                                                </div>
-                                            @elseif ($status === 'sakit')
-                                                <div class="att-cell-wrap att-cell-sakit" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Sakit (Klik untuk ubah)">
-                                                    <span class="att-cell-letter">S</span>
-                                                </div>
-                                            @elseif ($status === 'izin')
-                                                <div class="att-cell-wrap att-cell-izin" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Izin (Klik untuk ubah)">
-                                                    <span class="att-cell-letter">I</span>
-                                                </div>
-                                            @elseif ($status === 'absen')
-                                                <div class="att-cell-wrap att-cell-alpa" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Alpa / Mangkir (Klik untuk ubah)">
-                                                    <span class="att-cell-letter">A</span>
-                                                </div>
-                                            @elseif ($isOff)
-                                                <div class="att-cell-wrap" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Jadwal Libur / Off (Klik untuk input jam)">
-                                                    &nbsp;
-                                                </div>
-                                            @else
-                                                <div class="att-cell-wrap text-muted" wire:click="openCellModal({{ $emp->id }}, '{{ $d['date'] }}')" title="{{ $emp->full_name }} ({{ $d['date'] }}): Belum ada presensi (Klik untuk input jam)">
-                                                    <span style="color: #cbd5e1; font-size: 13px;">&ndash;</span>
-                                                </div>
-                                            @endif
-                                        </td>
-                                    @endforeach
+                                    @foreach ($matrixDates as $d)@php $cell = $empRow['cells'][$d['date']]; @endphp<td class="text-center p-0 align-middle date-col {{ $cell['is_off'] ? 'cell-roster-off' : '' }}"><div class="att-cell-wrap att-cell-clickable {{ $cell['class'] }}" data-emp="{{ $emp->id }}" data-date="{{ $d['date'] }}" title="{{ $cell['title'] }}">{!! $cell['content'] !!}</div></td>@endforeach
 
                                     <!-- Kolom Rekapitulasi Kehadiran -->
                                     <td class="align-middle p-0 font-weight-bold text-success text-center" style="background: #ffffff; border-left: 2px solid #e2e8f0; font-size: 11px; width: 44px; min-width: 44px; max-width: 44px;" title="Total Hadir: {{ $empSummary['hadir'] }} hari">
@@ -1158,570 +1047,587 @@
         </div>
     </div>
 
-    <!-- MODAL 2: MANUAL ATTENDANCE (CREATE & EDIT) -->
+    <!-- MODAL 2: EDIT PRESENSI & AUDIT FOTO / GPS (DUAL FLOATING CARDS SIDE-BY-SIDE) -->
     <div wire:ignore.self class="modal fade" id="manualAttendanceModal" tabindex="-1" role="dialog" aria-labelledby="manualAttendanceModalLabel" aria-hidden="true" data-backdrop="static">
-        <div class="modal-dialog modal-dialog-centered" style="max-width: 560px;" role="document">
-            <div class="modal-content bg-white" style="border: 1px solid #eaedf2; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
-                <div class="modal-header bg-white border-bottom py-3 px-4">
-                    <h5 class="modal-title text-dark font-weight-normal" id="manualAttendanceModalLabel" style="font-size: 16px;">
-                        {{ $editingAttendanceId ? 'Edit Catatan Presensi' : 'Input Presensi Manual' }}
-                    </h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 1200px; width: 95%; margin: 1.5rem auto;" role="document">
+            <div class="modal-content border-0 bg-transparent shadow-none" style="border: none !important; background: transparent !important; box-shadow: none !important;">
+                <div class="row align-items-stretch" style="margin: 0 -8px;">
+
+                    <!-- PANEL KIRI (col-lg-7): Form Edit Catatan Presensi -->
+                    <div class="col-lg-7 col-12 px-2 mb-3 mb-lg-0">
+                        <div class="card shadow-lg bg-white h-100 d-flex flex-column" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.08), 0 10px 10px -5px rgba(0,0,0,0.04);">
+                            <div class="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center min-width-0">
+                                    <div class="mr-2.5 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 32px; height: 32px; border-radius: 8px; background: #0b52aa; color: #ffffff;">
+                                        <i class="fas fa-edit" style="font-size: 14px;"></i>
+                                    </div>
+                                    <div class="min-width-0">
+                                        <h5 class="card-title text-dark m-0 font-weight-700" id="manualAttendanceModalLabel" style="font-size: 15px; letter-spacing: -0.2px;">
+                                            {{ $editingAttendanceId ? 'Edit Catatan Presensi' : 'Input Presensi Manual' }}
+                                        </h5>
+                                    </div>
+                                </div>
+                                <button type="button" class="close text-muted" data-dismiss="modal" aria-label="Close" style="font-size: 20px; line-height: 1;">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+
+                            <form wire:submit.prevent="saveManualAttendance" class="d-flex flex-column flex-grow-1">
+                                <div class="card-body py-3 px-4 bg-white flex-grow-1" style="overflow-y: auto; max-height: calc(85vh - 140px);">
+
+                                    @if ($editingAttendance)
+                                        <!-- Ringkasan Karyawan (Pure White Card) -->
+                                        <div class="d-flex align-items-center p-3 mb-3 bg-white" style="border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);">
+                                            <div class="mr-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 42px; height: 42px; border-radius: 10px; background: #0b52aa; color: #ffffff; font-weight: 700; font-size: 15px;">
+                                                {{ $editingAttendance->employee?->initials ?? 'K' }}
+                                            </div>
+                                            <div class="min-width-0 flex-grow-1">
+                                                <div class="text-truncate font-weight-700 text-dark" style="font-size: 13.5px; color: #0f172a;">
+                                                    {{ $editingAttendance->employee?->full_name }}
+                                                </div>
+                                                <div class="text-truncate" style="font-size: 11.5px; color: #475569;">
+                                                    {{ $editingAttendance->employee?->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $editingAttendance->employee?->position?->name ?? 'Staff' }}
+                                                </div>
+                                                <div style="font-size: 11px; color: #64748b;">
+                                                    ID Finger: {{ $editingAttendance->employee?->fingerprint_id ?? '-' }} &bull; Tanggal: {{ $editingAttendance->date?->format('d M Y') }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endif
+
+                                    <!-- Pilih Karyawan (Select2 Searchable dengan optgroup status kerja) -->
+                                    <div class="form-group mb-3">
+                                        <label for="manualEmployeeId" class="font-weight-bold" style="font-size: 12.5px; color: #0f172a;">Karyawan <span class="text-danger">*</span></label>
+                                        <div wire:ignore>
+                                            <select id="manualEmployeeId" class="form-control select2 @error('manualEmployeeId') is-invalid @enderror" style="width: 100%;" {{ $lockDateAndEmployee ? 'disabled' : '' }}>
+                                                <option value="">-- Pilih Karyawan --</option>
+                                                @foreach ($allEmployees->groupBy(fn($e) => $e->employment_status instanceof \App\Enums\EmploymentStatus ? $e->employment_status->label() : (\App\Enums\EmploymentStatus::tryFrom((string) $e->employment_status)?->label() ?? 'Lainnya')) as $statusLabel => $groupEmps)
+                                                    <optgroup label="{{ $statusLabel }}">
+                                                        @foreach ($groupEmps as $emp)
+                                                            <option value="{{ $emp->id }}">
+                                                                {{ $emp->full_name }} - ID Finger: {{ $emp->fingerprint_id ?? '-' }}
+                                                            </option>
+                                                        @endforeach
+                                                    </optgroup>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        @error('manualEmployeeId')
+                                            <div class="text-danger text-xs mt-1">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <!-- Tanggal Presensi -->
+                                    <div class="form-group mb-3">
+                                        <label for="manualDate" class="font-weight-bold" style="font-size: 12.5px; color: #0f172a;">Tanggal Presensi <span class="text-danger">*</span></label>
+                                        <input type="date" id="manualDate" wire:model.live="manualDate" class="form-control @error('manualDate') is-invalid @enderror" {{ $lockDateAndEmployee ? 'disabled' : '' }} style="border-radius: 8px; border-color: #e2e8f0;">
+                                        @error('manualDate')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    @if ($manualStatus === 'libur')
+                                        <!-- Informasi Hari Libur / Off (Pure White) -->
+                                        <div class="p-3 mb-3 bg-white border" style="border-left: 4px solid #0b52aa !important; border-color: #e2e8f0; border-radius: 8px;">
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-calendar-day mr-2 text-primary" style="font-size: 15px;"></i>
+                                                <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Jadwal Hari Libur / Off</span>
+                                            </div>
+                                            <div class="mt-1" style="font-size: 12px; color: #475569; line-height: 1.4;">
+                                                Tanggal ini merupakan hari libur. Secara default karyawan libur. Centang checklist di bawah jika ada penugasan lembur.
+                                            </div>
+                                        </div>
+
+                                        <!-- Fieldset Checklist: Apakah Lembur Seharian? -->
+                                        <fieldset class="custom-modal-fieldset bg-white mb-3" style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;">
+                                            <legend class="custom-modal-legend" style="background: #ffffff; padding: 0 8px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
+                                                <div class="custom-control custom-checkbox d-inline-block">
+                                                    <input type="checkbox" class="custom-control-input" id="hasFullDayOvertimeCheck" wire:model.live="hasFullDayOvertime">
+                                                    <label class="custom-control-label font-weight-bold mb-0" for="hasFullDayOvertimeCheck" style="cursor: pointer; font-size: 12.5px; color: #0f172a;">
+                                                        Apakah Lembur Seharian?
+                                                    </label>
+                                                </div>
+                                            </legend>
+
+                                            @if ($hasFullDayOvertime)
+                                                <div class="row">
+                                                    <div class="col-6">
+                                                        <div class="form-group mb-0">
+                                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                                <label for="manualClockIn" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Jam Masuk</label>
+                                                                @if ($manualClockIn)
+                                                                    <a href="javascript:void(0)" wire:click="clearClockIn" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                @endif
+                                                            </div>
+                                                            <div class="input-group">
+                                                                <input type="text" id="manualClockIn" wire:model="manualClockIn" placeholder="00:00" class="form-control timepicker-24 @error('manualClockIn') is-invalid @enderror" style="border-radius: 8px 0 0 8px; border-color: #e2e8f0;">
+                                                                <div class="input-group-append">
+                                                                    <span class="input-group-text bg-white" style="border-color: #e2e8f0; cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                                        <i class="far fa-clock text-primary"></i>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="form-group mb-0">
+                                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                                <label for="manualClockOut" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Jam Keluar</label>
+                                                                @if ($manualClockOut)
+                                                                    <a href="javascript:void(0)" wire:click="clearClockOut" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                @endif
+                                                            </div>
+                                                            <div class="input-group">
+                                                                <input type="text" id="manualClockOut" wire:model="manualClockOut" placeholder="00:00" class="form-control timepicker-24 @error('manualClockOut') is-invalid @enderror" style="border-radius: 8px 0 0 8px; border-color: #e2e8f0;">
+                                                                <div class="input-group-append">
+                                                                    <span class="input-group-text bg-white" style="border-color: #e2e8f0; cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                                        <i class="far fa-clock text-primary"></i>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        </fieldset>
+
+                                        <!-- Fieldset Checklist: Apakah Lembur Per Jam? -->
+                                        <fieldset class="custom-modal-fieldset bg-white mb-3" style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;">
+                                            <legend class="custom-modal-legend" style="background: #ffffff; padding: 0 8px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
+                                                <div class="custom-control custom-checkbox d-inline-block">
+                                                    <input type="checkbox" class="custom-control-input" id="hasOvertimeCheck" wire:model.live="hasOvertime">
+                                                    <label class="custom-control-label font-weight-bold mb-0" for="hasOvertimeCheck" style="cursor: pointer; font-size: 12.5px; color: #0f172a;">
+                                                        Apakah Lembur Per Jam?
+                                                    </label>
+                                                </div>
+                                            </legend>
+
+                                            @if ($hasOvertime)
+                                                <div class="row">
+                                                    <div class="col-6">
+                                                        <div class="form-group mb-0">
+                                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                                <label for="manualOvertimeIn" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Lembur Mulai</label>
+                                                                @if ($manualOvertimeIn)
+                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeIn" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                @endif
+                                                            </div>
+                                                            <div class="input-group">
+                                                                <input type="text" id="manualOvertimeIn" wire:model="manualOvertimeIn" placeholder="00:00" class="form-control timepicker-24 @error('manualOvertimeIn') is-invalid @enderror" style="border-radius: 8px 0 0 8px; border-color: #e2e8f0;">
+                                                                <div class="input-group-append">
+                                                                    <span class="input-group-text bg-white" style="border-color: #e2e8f0; cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                                        <i class="far fa-clock text-primary"></i>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="form-group mb-0">
+                                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                                <label for="manualOvertimeOut" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Lembur Selesai</label>
+                                                                @if ($manualOvertimeOut)
+                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeOut" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                @endif
+                                                            </div>
+                                                            <div class="input-group">
+                                                                <input type="text" id="manualOvertimeOut" wire:model="manualOvertimeOut" placeholder="00:00" class="form-control timepicker-24 @error('manualOvertimeOut') is-invalid @enderror" style="border-radius: 8px 0 0 8px; border-color: #e2e8f0;">
+                                                                <div class="input-group-append">
+                                                                    <span class="input-group-text bg-white" style="border-color: #e2e8f0; cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                                        <i class="far fa-clock text-primary"></i>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        </fieldset>
+
+                                    @else
+                                        <!-- TAMPILAN HARI KERJA BIASA -->
+                                        <!-- Fieldset Status Kehadiran -->
+                                        <fieldset class="custom-modal-fieldset bg-white mb-3" style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;">
+                                            <legend class="custom-modal-legend" style="background: #ffffff; padding: 0 8px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
+                                                Status Kehadiran <span class="text-danger">*</span>
+                                            </legend>
+
+                                            <!-- Select Option Status Kehadiran -->
+                                            <div class="form-group mb-2.5">
+                                                <select id="manualStatus" wire:model.live="manualStatus" class="form-control @error('manualStatus') is-invalid @enderror" style="border-radius: 8px; border-color: #e2e8f0;">
+                                                    <option value="hadir">Hadir (H)</option>
+                                                    <option value="cuti">Cuti (C)</option>
+                                                    <option value="sakit">Sakit (S)</option>
+                                                    <option value="izin">Izin (I)</option>
+                                                    <option value="absen">Alpa / Mangkir (A)</option>
+                                                    <option value="libur">Hari Libur</option>
+                                                </select>
+                                                @error('manualStatus')
+                                                    <div class="invalid-feedback">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+
+                                            <!-- Input Jam Masuk & Jam Keluar -->
+                                            @if ($manualStatus === 'hadir')
+                                                <div class="row">
+                                                    <div class="col-6">
+                                                        <div class="form-group mb-0">
+                                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                                <label for="manualClockIn" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">
+                                                                    Jam Masuk <span class="text-danger">*</span>
+                                                                </label>
+                                                                @if ($manualClockIn)
+                                                                    <a href="javascript:void(0)" wire:click="clearClockIn" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                @endif
+                                                            </div>
+                                                            <div class="input-group">
+                                                                <input type="text" id="manualClockIn" wire:model="manualClockIn" placeholder="00:00" class="form-control timepicker-24 @error('manualClockIn') is-invalid @enderror" style="border-radius: 8px 0 0 8px; border-color: #e2e8f0;">
+                                                                <div class="input-group-append">
+                                                                    <span class="input-group-text bg-white" style="border-color: #e2e8f0; cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                                        <i class="far fa-clock text-primary"></i>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="form-group mb-0">
+                                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                                <label for="manualClockOut" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Jam Keluar</label>
+                                                                @if ($manualClockOut)
+                                                                    <a href="javascript:void(0)" wire:click="clearClockOut" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                @endif
+                                                            </div>
+                                                            <div class="input-group">
+                                                                <input type="text" id="manualClockOut" wire:model="manualClockOut" placeholder="00:00" class="form-control timepicker-24 @error('manualClockOut') is-invalid @enderror" style="border-radius: 8px 0 0 8px; border-color: #e2e8f0;">
+                                                                <div class="input-group-append">
+                                                                    <span class="input-group-text bg-white" style="border-color: #e2e8f0; cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                                        <i class="far fa-clock text-primary"></i>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        </fieldset>
+
+                                        <!-- Fieldset Lembur -->
+                                        <fieldset class="custom-modal-fieldset bg-white mb-3" style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;">
+                                            <legend class="custom-modal-legend" style="background: #ffffff; padding: 0 8px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
+                                                <div class="custom-control custom-checkbox d-inline-block">
+                                                    <input type="checkbox" class="custom-control-input" id="hasOvertimeCheck" wire:model.live="hasOvertime">
+                                                    <label class="custom-control-label font-weight-bold mb-0" for="hasOvertimeCheck" style="cursor: pointer; font-size: 12.5px; color: #0f172a;">
+                                                        Apakah Karyawan Lembur?
+                                                    </label>
+                                                </div>
+                                            </legend>
+
+                                            @if ($hasOvertime)
+                                                <div class="row">
+                                                    <div class="col-6">
+                                                        <div class="form-group mb-0">
+                                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                                <label for="manualOvertimeIn" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Lembur Mulai</label>
+                                                                @if ($manualOvertimeIn)
+                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeIn" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                @endif
+                                                            </div>
+                                                            <div class="input-group">
+                                                                <input type="text" id="manualOvertimeIn" wire:model="manualOvertimeIn" placeholder="00:00" class="form-control timepicker-24 @error('manualOvertimeIn') is-invalid @enderror" style="border-radius: 8px 0 0 8px; border-color: #e2e8f0;">
+                                                                <div class="input-group-append">
+                                                                    <span class="input-group-text bg-white" style="border-color: #e2e8f0; cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                                        <i class="far fa-clock text-primary"></i>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="form-group mb-0">
+                                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                                <label for="manualOvertimeOut" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Lembur Selesai</label>
+                                                                @if ($manualOvertimeOut)
+                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeOut" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                @endif
+                                                            </div>
+                                                            <div class="input-group">
+                                                                <input type="text" id="manualOvertimeOut" wire:model="manualOvertimeOut" placeholder="00:00" class="form-control timepicker-24 @error('manualOvertimeOut') is-invalid @enderror" style="border-radius: 8px 0 0 8px; border-color: #e2e8f0;">
+                                                                <div class="input-group-append">
+                                                                    <span class="input-group-text bg-white" style="border-color: #e2e8f0; cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
+                                                                        <i class="far fa-clock text-primary"></i>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        </fieldset>
+                                    @endif
+
+                                    <!-- Catatan / Keterangan -->
+                                    <div class="form-group mb-2">
+                                        <label for="manualNotes" class="font-weight-bold" style="font-size: 12px; color: #0f172a;">Catatan / Keterangan</label>
+                                        <textarea id="manualNotes" wire:model="manualNotes" class="form-control" rows="2" placeholder="Alasan koreksi presensi..." style="border-radius: 8px; border-color: #e2e8f0;"></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="card-footer bg-white border-top py-3 px-4">
+                                    @if ($editingAttendanceId)
+                                        <div class="row w-100 mx-0">
+                                            <div class="col-6 pr-1 pl-0">
+                                                <button type="button" wire:click="confirmDeleteAttendance({{ $editingAttendanceId }})" wire:loading.attr="disabled" class="btn btn-outline-danger btn-block font-weight-600" style="border-radius: 8px; font-size: 13px; padding: 9px 12px;">
+                                                    <i class="fas fa-trash-alt mr-1"></i> Hapus Presensi
+                                                </button>
+                                            </div>
+                                            <div class="col-6 pl-1 pr-0">
+                                                <button type="submit" class="btn btn-primary btn-block font-weight-600 text-white" style="background: linear-gradient(135deg, #0b52aa 0%, #1e40af 100%); border: none; border-radius: 8px; font-size: 13px; padding: 9px 12px;">
+                                                    <i class="fas fa-save mr-1"></i> Simpan Perubahan
+                                                </button>
+                                            </div>
+                                        </div>
+                                    @else
+                                        <button type="submit" class="btn btn-primary btn-block font-weight-600 text-white" style="background: linear-gradient(135deg, #0b52aa 0%, #1e40af 100%); border: none; border-radius: 8px; font-size: 13px; padding: 9px 14px;">
+                                            <i class="fas fa-save mr-1"></i> Simpan Presensi
+                                        </button>
+                                    @endif
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- PANEL KANAN (col-lg-5): Floating Bukti Foto & Lokasi GPS -->
+                    <div class="col-lg-5 col-12 px-2">
+                        <div class="card shadow-lg bg-white h-100 d-flex flex-column" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.08), 0 10px 10px -5px rgba(0,0,0,0.04);">
+                            <div class="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center min-width-0">
+                                    <div class="mr-2.5 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 32px; height: 32px; border-radius: 8px; background: #eff6ff; color: #0b52aa;">
+                                        <i class="fas fa-map-marked-alt" style="font-size: 14px;"></i>
+                                    </div>
+                                    <div class="min-width-0">
+                                        <h5 class="card-title text-dark m-0 font-weight-700" style="font-size: 15px; letter-spacing: -0.2px;">
+                                            Bukti Foto & Lokasi GPS
+                                        </h5>
+                                        <div class="text-truncate" style="font-size: 11px; color: #64748b;">
+                                            Audit visual kehadiran & koordinat
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" class="close text-muted" data-dismiss="modal" aria-label="Close" style="font-size: 20px; line-height: 1;">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+
+                            <div class="card-body p-3.5 bg-white flex-grow-1 d-flex flex-column" style="overflow-y: auto; max-height: calc(85vh - 140px);">
+                                @if ($auditAttendance)
+                                    <!-- Nav Tab Pills (Masuk, Pulang, Lembur) -->
+                                    <div class="d-flex align-items-center mb-3 p-1 bg-white border" style="border-radius: 12px; border-color: #e2e8f0 !important; gap: 4px;">
+                                        <button type="button" wire:click="setAuditTab('clock_in')" class="btn btn-sm flex-fill font-weight-600" style="border-radius: 8px; font-size: 12px; padding: 7px 10px; transition: all 0.15s ease; {{ $auditTab === 'clock_in' ? 'background: #0b52aa; color: #ffffff;' : 'background: #ffffff; color: #475569; border: 1px solid #e2e8f0;' }}">
+                                            <i class="fas fa-camera mr-1"></i> Masuk
+                                        </button>
+                                        <button type="button" wire:click="setAuditTab('clock_out')" class="btn btn-sm flex-fill font-weight-600" style="border-radius: 8px; font-size: 12px; padding: 7px 10px; transition: all 0.15s ease; {{ $auditTab === 'clock_out' ? 'background: #0b52aa; color: #ffffff;' : 'background: #ffffff; color: #475569; border: 1px solid #e2e8f0;' }}">
+                                            <i class="fas fa-door-open mr-1"></i> Pulang
+                                        </button>
+                                        <button type="button" wire:click="setAuditTab('overtime')" class="btn btn-sm flex-fill font-weight-600" style="border-radius: 8px; font-size: 12px; padding: 7px 10px; transition: all 0.15s ease; {{ $auditTab === 'overtime' ? 'background: #0b52aa; color: #ffffff;' : 'background: #ffffff; color: #475569; border: 1px solid #e2e8f0;' }}">
+                                            <i class="fas fa-stopwatch mr-1"></i> Lembur
+                                        </button>
+                                    </div>
+
+                                    @if ($auditAttendance->isPendingReview())
+                                        <!-- Review Alert Box (Pure White) -->
+                                        <div class="p-3 mb-3 bg-white border" style="border-radius: 12px; border-color: #fde68a !important; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                                            <div class="d-flex align-items-center mb-1 font-weight-700" style="font-size: 12px; color: #b45309;">
+                                                <i class="fas fa-exclamation-triangle mr-1.5"></i> Perlu Review (Di Luar Radius Kantor)
+                                            </div>
+                                            @if ($auditAttendance->notes)
+                                                <div class="mb-2" style="font-size: 11.5px; color: #1e293b; line-height: 1.4;">
+                                                    <strong>Keterangan Karyawan:</strong> {{ $auditAttendance->notes }}
+                                                </div>
+                                            @endif
+                                            <div class="d-flex" style="gap: 8px;">
+                                                <button type="button" wire:click="approveAudit" class="btn btn-sm btn-success flex-fill font-weight-600" style="border-radius: 6px; font-size: 11.5px; padding: 6px;">
+                                                    <i class="fas fa-check mr-1"></i> Setujui Valid
+                                                </button>
+                                                <button type="button" wire:click="rejectAudit" class="btn btn-sm btn-outline-danger flex-fill font-weight-600" style="border-radius: 6px; font-size: 11.5px; padding: 6px;">
+                                                    <i class="fas fa-times mr-1"></i> Tolak (Alpa)
+                                                </button>
+                                            </div>
+                                        </div>
+                                    @endif
+
+                                    @if ($auditTab === 'clock_in')
+                                        <!-- TAB 1: MASUK -->
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-1.5">
+                                                <span style="font-size: 12px; font-weight: 700; color: #0f172a;">Foto Selfie Masuk</span>
+                                                <span style="font-size: 11px; color: #64748b; font-weight: 600;">{{ $auditAttendance->clock_in ? substr($auditAttendance->clock_in, 0, 5) . ' WIB' : '-' }}</span>
+                                            </div>
+                                            <div class="position-relative border text-center mx-auto" style="width: 100%; max-width: 280px; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden; background: #0f172a; border-color: #e2e8f0 !important;">
+                                                @if ($auditAttendance->clock_in_photo_url)
+                                                    <a href="{{ $auditAttendance->clock_in_photo_url }}" target="_blank" title="Klik untuk memperbesar" class="d-block w-100 h-100">
+                                                        <img src="{{ $auditAttendance->clock_in_photo_url }}" alt="Selfie Masuk" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
+                                                    </a>
+                                                    <div class="position-absolute" style="top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); padding: 3px 8px; border-radius: 6px; font-size: 10px; color: #ffffff; z-index: 2;">
+                                                        <i class="fas fa-map-marker-alt text-warning mr-1"></i> {{ $auditAttendance->clock_in_distance_meters ?? 0 }}m dari kantor
+                                                    </div>
+                                                    <div class="photo-error-fallback flex-column align-items-center justify-content-center h-100 text-muted" style="display: none; font-size: 11.5px;">
+                                                        <i class="fas fa-image mb-1.5" style="font-size: 24px; color: #94a3b8;"></i>
+                                                        <span style="color: #cbd5e1;">File foto tidak ditemukan di server</span>
+                                                    </div>
+                                                @else
+                                                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style="font-size: 12px;">
+                                                        <i class="fas fa-camera-slash mb-1.5" style="font-size: 24px; color: #94a3b8;"></i>
+                                                        <span style="color: #cbd5e1;">Tanpa Foto Masuk (Manual / Finger)</span>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        </div>
+
+                                    @elseif ($auditTab === 'clock_out')
+                                        <!-- TAB 2: PULANG -->
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-1.5">
+                                                <span style="font-size: 12px; font-weight: 700; color: #0f172a;">Foto Selfie Pulang</span>
+                                                <span style="font-size: 11px; color: #64748b; font-weight: 600;">{{ $auditAttendance->clock_out ? substr($auditAttendance->clock_out, 0, 5) . ' WIB' : '-' }}</span>
+                                            </div>
+                                            <div class="position-relative border text-center mx-auto" style="width: 100%; max-width: 280px; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden; background: #0f172a; border-color: #e2e8f0 !important;">
+                                                @if ($auditAttendance->clock_out_photo_url)
+                                                    <a href="{{ $auditAttendance->clock_out_photo_url }}" target="_blank" title="Klik untuk memperbesar" class="d-block w-100 h-100">
+                                                        <img src="{{ $auditAttendance->clock_out_photo_url }}" alt="Selfie Pulang" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
+                                                    </a>
+                                                    <div class="position-absolute" style="top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); padding: 3px 8px; border-radius: 6px; font-size: 10px; color: #ffffff; z-index: 2;">
+                                                        <i class="fas fa-map-marker-alt text-warning mr-1"></i> {{ $auditAttendance->clock_out_distance_meters ?? 0 }}m dari kantor
+                                                    </div>
+                                                    <div class="photo-error-fallback flex-column align-items-center justify-content-center h-100 text-muted" style="display: none; font-size: 11.5px;">
+                                                        <i class="fas fa-image mb-1.5" style="font-size: 24px; color: #94a3b8;"></i>
+                                                        <span style="color: #cbd5e1;">File foto tidak ditemukan di server</span>
+                                                    </div>
+                                                @else
+                                                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style="font-size: 12px;">
+                                                        <i class="fas fa-camera-slash mb-1.5" style="font-size: 24px; color: #94a3b8;"></i>
+                                                        <span style="color: #cbd5e1;">Tanpa Foto Pulang</span>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        </div>
+
+                                    @else
+                                        <!-- TAB 3: LEMBUR -->
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-2 p-2.5 bg-white border" style="border-radius: 10px; border-color: #e2e8f0 !important;">
+                                                <div>
+                                                    <div style="font-size: 11px; color: #64748b;">Jam Lembur:</div>
+                                                    <div style="font-size: 12.5px; font-weight: 700; color: #0b52aa;">
+                                                        {{ $auditAttendance->overtime_in ? substr($auditAttendance->overtime_in, 0, 5) : '-' }} WIB &mdash; {{ $auditAttendance->overtime_out ? substr($auditAttendance->overtime_out, 0, 5) : '-' }} WIB
+                                                    </div>
+                                                </div>
+                                                <div class="text-right">
+                                                    <div style="font-size: 11px; color: #64748b;">Total Durasi:</div>
+                                                    <div style="font-size: 12.5px; font-weight: 700; color: #059669;">
+                                                        {{ $auditAttendance->overtime_minutes ? intdiv($auditAttendance->overtime_minutes, 60).'j '.($auditAttendance->overtime_minutes % 60).'m' : '-' }}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="row mb-2">
+                                                <div class="col-6 pr-1">
+                                                    <div style="font-size: 11px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">Mulai Lembur</div>
+                                                    <div class="position-relative border text-center" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; background: #0f172a; border-color: #e2e8f0 !important;">
+                                                        @if ($auditAttendance->overtime_in_photo_url)
+                                                            <a href="{{ $auditAttendance->overtime_in_photo_url }}" target="_blank" class="d-block w-100 h-100">
+                                                                <img src="{{ $auditAttendance->overtime_in_photo_url }}" alt="Mulai Lembur" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
+                                                            </a>
+                                                            <div class="photo-error-fallback flex-column align-items-center justify-content-center h-100 text-muted" style="display: none; font-size: 10.5px;">
+                                                                <i class="fas fa-image mb-1" style="font-size: 18px; color: #94a3b8;"></i>
+                                                                <span style="color: #cbd5e1;">Foto tidak ada</span>
+                                                            </div>
+                                                        @else
+                                                            <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style="font-size: 11px;">
+                                                                <i class="fas fa-camera-slash mb-1" style="font-size: 18px; color: #94a3b8;"></i>
+                                                                <span style="color: #cbd5e1;">Tanpa Foto</span>
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                                <div class="col-6 pl-1">
+                                                    <div style="font-size: 11px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">Selesai Lembur</div>
+                                                    <div class="position-relative border text-center" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; background: #0f172a; border-color: #e2e8f0 !important;">
+                                                        @if ($auditAttendance->overtime_out_photo_url)
+                                                            <a href="{{ $auditAttendance->overtime_out_photo_url }}" target="_blank" class="d-block w-100 h-100">
+                                                                <img src="{{ $auditAttendance->overtime_out_photo_url }}" alt="Selesai Lembur" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
+                                                            </a>
+                                                            <div class="photo-error-fallback flex-column align-items-center justify-content-center h-100 text-muted" style="display: none; font-size: 10.5px;">
+                                                                <i class="fas fa-image mb-1" style="font-size: 18px; color: #94a3b8;"></i>
+                                                                <span style="color: #cbd5e1;">Foto tidak ada</span>
+                                                            </div>
+                                                        @else
+                                                            <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style="font-size: 11px;">
+                                                                <i class="fas fa-camera-slash mb-1" style="font-size: 18px; color: #94a3b8;"></i>
+                                                                <span style="color: #cbd5e1;">Tanpa Foto</span>
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endif
+
+                                    <!-- Interactive Leaflet Map -->
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-1.5">
+                                            <span style="font-size: 12px; font-weight: 700; color: #0f172a;">Peta Koordinat GPS</span>
+                                            <span id="auditMapStatusBadge" class="badge badge-light border" style="font-size: 10.5px;">Memuat GPS...</span>
+                                        </div>
+                                        <div id="auditLeafletMap" wire:ignore style="width: 100%; height: 180px; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden;"></div>
+                                    </div>
+
+                                    <!-- Location Info Box (Pure White) -->
+                                    <div class="p-2.5 bg-white border" style="border-radius: 10px; border-color: #e2e8f0 !important; font-size: 11.5px;">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <span style="color: #64748b;">Lokasi Acuan:</span>
+                                            <span id="auditMapOfficeLabel" class="font-weight-600 text-dark">-</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <span style="color: #64748b;">Jarak dari Kantor:</span>
+                                            <span id="auditMapDistanceText" class="font-weight-700 text-primary">-</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span style="color: #64748b;">Koordinat Tap:</span>
+                                            <span id="auditMapCoordinatesText" class="font-weight-500 text-muted text-truncate" style="max-width: 180px;">-</span>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-center py-5">
+                                        <div class="mb-3 d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; border-radius: 50%; background: #eff6ff; color: #0b52aa;">
+                                            <i class="fas fa-map-marked-alt" style="font-size: 22px;"></i>
+                                        </div>
+                                        <div style="font-size: 13.5px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">
+                                            Input Presensi Baru
+                                        </div>
+                                        <div style="font-size: 11.5px; color: #64748b; max-width: 260px;">
+                                            Bukti foto selfie dan koordinat GPS akan tercatat otomatis saat presensi dilakukan via portal mandiri karyawan.
+                                        </div>
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
                 </div>
-
-                <form wire:submit.prevent="saveManualAttendance">
-                    <div class="modal-body py-3 px-4 bg-white">
-
-
-                        <!-- Pilih Karyawan (Select2 Searchable dengan optgroup status kerja) -->
-                        <div class="form-group mb-3">
-                            <label for="manualEmployeeId" class="font-weight-normal">Karyawan <span class="text-danger">*</span></label>
-                            <div wire:ignore>
-                                <select id="manualEmployeeId" class="form-control select2 @error('manualEmployeeId') is-invalid @enderror" style="width: 100%;" {{ $lockDateAndEmployee ? 'disabled' : '' }}>
-                                    <option value="">-- Pilih Karyawan --</option>
-                                    @foreach ($allEmployees->groupBy(fn($e) => $e->employment_status instanceof \App\Enums\EmploymentStatus ? $e->employment_status->label() : (\App\Enums\EmploymentStatus::tryFrom((string) $e->employment_status)?->label() ?? 'Lainnya')) as $statusLabel => $groupEmps)
-                                        <optgroup label="{{ $statusLabel }}">
-                                            @foreach ($groupEmps as $emp)
-                                                <option value="{{ $emp->id }}">
-                                                    {{ $emp->full_name }} - ID Finger: {{ $emp->fingerprint_id ?? '-' }}
-                                                </option>
-                                            @endforeach
-                                        </optgroup>
-                                    @endforeach
-                                </select>
-                            </div>
-                            @error('manualEmployeeId')
-                                <div class="text-danger text-xs mt-1">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        <!-- Tanggal -->
-                        <div class="form-group mb-3">
-                            <label for="manualDate" class="font-weight-bold" style="font-size: 13px; color: #0f172a;">Tanggal Presensi <span class="text-danger">*</span></label>
-                            <input type="date" id="manualDate" wire:model.live="manualDate" class="form-control @error('manualDate') is-invalid @enderror" {{ $lockDateAndEmployee ? 'disabled' : '' }}>
-                            @error('manualDate')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        @if ($manualStatus === 'libur')
-                            <!-- 1. BD Callout: Informasi Hari Libur / Off (Kontras Tinggi) -->
-                            <div class="bd-callout bd-callout-info py-2.5 px-3 mb-3" style="border-left: 4px solid #0b52aa; background-color: #f0f7ff; border-radius: 8px;">
-                                <div class="d-flex align-items-center">
-                                    <i class="fas fa-calendar-day mr-2" style="font-size: 16px; color: #0b52aa;"></i>
-                                    <span style="font-size: 13.5px; font-weight: 700; color: #0f172a;">Jadwal Hari Libur / Off</span>
-                                </div>
-                                <div class="mt-1" style="font-size: 12.5px; color: #1e293b; font-weight: 500; line-height: 1.4;">
-                                    Tanggal ini merupakan hari libur. Secara default karyawan libur. Centang checklist di bawah jika ada penugasan lembur.
-                                </div>
-                            </div>
-
-                            <!-- 2. Fieldset Checklist: Apakah Lembur Seharian? -->
-                            <fieldset class="custom-modal-fieldset">
-                                <legend class="custom-modal-legend">
-                                    <div class="custom-control custom-checkbox d-inline-block">
-                                        <input type="checkbox" class="custom-control-input" id="hasFullDayOvertimeCheck" wire:model.live="hasFullDayOvertime">
-                                        <label class="custom-control-label font-weight-bold mb-0" for="hasFullDayOvertimeCheck" style="cursor: pointer; font-size: 13px; color: #0f172a;">
-                                            Apakah Lembur Seharian?
-                                        </label>
-                                    </div>
-                                </legend>
-
-                                @if ($hasFullDayOvertime)
-                                    <div class="row">
-                                        <div class="col-6">
-                                            <div class="form-group mb-0">
-                                                <div class="d-flex align-items-center justify-content-between mb-1">
-                                                    <label for="manualClockIn" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Jam Masuk</label>
-                                                    @if ($manualClockIn)
-                                                        <a href="javascript:void(0)" wire:click="clearClockIn" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam masuk">
-                                                            Hapus Jam
-                                                        </a>
-                                                    @endif
-                                                </div>
-                                                <div class="input-group">
-                                                    <input type="text"
-                                                        id="manualClockIn"
-                                                        wire:model.live="manualClockIn"
-                                                        placeholder="00:00"
-                                                        autocomplete="off"
-                                                        x-data
-                                                        x-init="flatpickr($el, {
-                                                            enableTime: true,
-                                                            noCalendar: true,
-                                                            dateFormat: 'H:i',
-                                                            time_24hr: true,
-                                                            allowInput: true,
-                                                            minuteIncrement: 1,
-                                                            onChange: (dates, dateStr) => {
-                                                                $el.value = dateStr;
-                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
-                                                            }
-                                                        })"
-                                                        class="form-control timepicker-24 @error('manualClockIn') is-invalid @enderror">
-                                                    <div class="input-group-append">
-                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
-                                                            <i class="far fa-clock text-primary"></i>
-                                                        </span>
-                                                        @if ($manualClockIn)
-                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearClockIn" title="Hapus jam masuk">
-                                                                <i class="fas fa-times text-danger"></i>
-                                                            </button>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                                @error('manualClockIn')
-                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
-                                                @enderror
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="form-group mb-0">
-                                                <div class="d-flex align-items-center justify-content-between mb-1">
-                                                    <label for="manualClockOut" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Jam Keluar</label>
-                                                    @if ($manualClockOut)
-                                                        <a href="javascript:void(0)" wire:click="clearClockOut" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam keluar">
-                                                            Hapus Jam
-                                                        </a>
-                                                    @endif
-                                                </div>
-                                                <div class="input-group">
-                                                    <input type="text"
-                                                        id="manualClockOut"
-                                                        wire:model.live="manualClockOut"
-                                                        placeholder="00:00"
-                                                        autocomplete="off"
-                                                        x-data
-                                                        x-init="flatpickr($el, {
-                                                            enableTime: true,
-                                                            noCalendar: true,
-                                                            dateFormat: 'H:i',
-                                                            time_24hr: true,
-                                                            allowInput: true,
-                                                            minuteIncrement: 1,
-                                                            onChange: (dates, dateStr) => {
-                                                                $el.value = dateStr;
-                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
-                                                            }
-                                                        })"
-                                                        class="form-control timepicker-24 @error('manualClockOut') is-invalid @enderror">
-                                                    <div class="input-group-append">
-                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
-                                                            <i class="far fa-clock text-primary"></i>
-                                                        </span>
-                                                        @if ($manualClockOut)
-                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearClockOut" title="Hapus jam keluar">
-                                                                <i class="fas fa-times text-danger"></i>
-                                                            </button>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                                @error('manualClockOut')
-                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
-                                                @enderror
-                                            </div>
-                                        </div>
-                                    </div>
-                                @else
-                                    <div class="py-1" style="font-size: 12.5px; color: #1e293b; font-weight: 500;">
-                                        <i class="fas fa-info-circle text-primary mr-1"></i> Centang checklist <strong>Apakah Lembur Seharian?</strong> jika karyawan bekerja penuh satu hari libur.
-                                    </div>
-                                @endif
-                            </fieldset>
-
-                            <!-- 3. Fieldset Checklist: Apakah Lembur Per Jam? -->
-                            <fieldset class="custom-modal-fieldset">
-                                <legend class="custom-modal-legend">
-                                    <div class="custom-control custom-checkbox d-inline-block">
-                                        <input type="checkbox" class="custom-control-input" id="hasOvertimeCheck" wire:model.live="hasOvertime">
-                                        <label class="custom-control-label font-weight-bold mb-0" for="hasOvertimeCheck" style="cursor: pointer; font-size: 13px; color: #0f172a;">
-                                            Apakah Lembur Per Jam?
-                                        </label>
-                                    </div>
-                                </legend>
-
-                                @if ($hasOvertime)
-                                    <div class="row">
-                                        <div class="col-6">
-                                            <div class="form-group mb-0">
-                                                <div class="d-flex align-items-center justify-content-between mb-1">
-                                                    <label for="manualOvertimeIn" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Lembur Mulai</label>
-                                                    @if ($manualOvertimeIn)
-                                                        <a href="javascript:void(0)" wire:click="clearOvertimeIn" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam lembur mulai">
-                                                            Hapus Jam
-                                                        </a>
-                                                    @endif
-                                                </div>
-                                                <div class="input-group">
-                                                    <input type="text"
-                                                        id="manualOvertimeIn"
-                                                        wire:model.live="manualOvertimeIn"
-                                                        placeholder="00:00"
-                                                        autocomplete="off"
-                                                        x-data
-                                                        x-init="flatpickr($el, {
-                                                            enableTime: true,
-                                                            noCalendar: true,
-                                                            dateFormat: 'H:i',
-                                                            time_24hr: true,
-                                                            allowInput: true,
-                                                            minuteIncrement: 1,
-                                                            onChange: (dates, dateStr) => {
-                                                                $el.value = dateStr;
-                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
-                                                            }
-                                                        })"
-                                                        class="form-control timepicker-24 @error('manualOvertimeIn') is-invalid @enderror">
-                                                    <div class="input-group-append">
-                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
-                                                            <i class="far fa-clock text-primary"></i>
-                                                        </span>
-                                                        @if ($manualOvertimeIn)
-                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeIn" title="Hapus lembur mulai">
-                                                                <i class="fas fa-times text-danger"></i>
-                                                            </button>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                                @error('manualOvertimeIn')
-                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
-                                                @enderror
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="form-group mb-0">
-                                                <div class="d-flex align-items-center justify-content-between mb-1">
-                                                    <label for="manualOvertimeOut" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Lembur Selesai</label>
-                                                    @if ($manualOvertimeOut)
-                                                        <a href="javascript:void(0)" wire:click="clearOvertimeOut" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam lembur selesai">
-                                                            Hapus Jam
-                                                        </a>
-                                                    @endif
-                                                </div>
-                                                <div class="input-group">
-                                                    <input type="text"
-                                                        id="manualOvertimeOut"
-                                                        wire:model.live="manualOvertimeOut"
-                                                        placeholder="00:00"
-                                                        autocomplete="off"
-                                                        x-data
-                                                        x-init="flatpickr($el, {
-                                                            enableTime: true,
-                                                            noCalendar: true,
-                                                            dateFormat: 'H:i',
-                                                            time_24hr: true,
-                                                            allowInput: true,
-                                                            minuteIncrement: 1,
-                                                            onChange: (dates, dateStr) => {
-                                                                $el.value = dateStr;
-                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
-                                                            }
-                                                        })"
-                                                        class="form-control timepicker-24 @error('manualOvertimeOut') is-invalid @enderror">
-                                                    <div class="input-group-append">
-                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
-                                                            <i class="far fa-clock text-primary"></i>
-                                                        </span>
-                                                        @if ($manualOvertimeOut)
-                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeOut" title="Hapus lembur selesai">
-                                                                <i class="fas fa-times text-danger"></i>
-                                                            </button>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                                @error('manualOvertimeOut')
-                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
-                                                @enderror
-                                            </div>
-                                        </div>
-                                    </div>
-                                @else
-                                    <div class="py-1" style="font-size: 12.5px; color: #1e293b; font-weight: 500;">
-                                        <i class="fas fa-info-circle text-primary mr-1"></i> Centang checklist <strong>Apakah Lembur Per Jam?</strong> jika ada perhitungan jam lembur.
-                                    </div>
-                                @endif
-                            </fieldset>
-
-                        @else
-                            <!-- TAMPILAN HARI KERJA BIASA -->
-                            <!-- 1. Fieldset Status Kehadiran (Meliputi Select Option dan Jam Masuk / Jam Keluar) -->
-                            <fieldset class="custom-modal-fieldset">
-                                <legend class="custom-modal-legend">
-                                    Status Kehadiran <span class="text-danger">*</span>
-                                </legend>
-
-                                <!-- Select Option Status Kehadiran -->
-                                <div class="form-group mb-2.5">
-                                    <select id="manualStatus" wire:model.live="manualStatus" class="form-control @error('manualStatus') is-invalid @enderror">
-                                        <option value="hadir">Hadir (H)</option>
-                                        <option value="cuti">Cuti (C)</option>
-                                        <option value="sakit">Sakit (S)</option>
-                                        <option value="izin">Izin (I)</option>
-                                        <option value="absen">Alpa / Mangkir (A)</option>
-                                        <option value="libur">Hari Libur</option>
-                                    </select>
-                                    @error('manualStatus')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-
-                                <!-- Input Jam Masuk & Jam Keluar -->
-                                @if ($manualStatus === 'hadir')
-                                    <div class="row">
-                                        <div class="col-6">
-                                            <div class="form-group mb-0">
-                                                <div class="d-flex align-items-center justify-content-between mb-1">
-                                                    <label for="manualClockIn" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">
-                                                        Jam Masuk <span class="text-danger">*</span>
-                                                    </label>
-                                                    @if ($manualClockIn)
-                                                        <a href="javascript:void(0)" wire:click="clearClockIn" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam masuk">
-                                                            Hapus Jam
-                                                        </a>
-                                                    @endif
-                                                </div>
-                                                <div class="input-group">
-                                                    <input type="text"
-                                                        id="manualClockIn"
-                                                        wire:model.live="manualClockIn"
-                                                        placeholder="00:00"
-                                                        autocomplete="off"
-                                                        x-data
-                                                        x-init="flatpickr($el, {
-                                                            enableTime: true,
-                                                            noCalendar: true,
-                                                            dateFormat: 'H:i',
-                                                            time_24hr: true,
-                                                            allowInput: true,
-                                                            minuteIncrement: 1,
-                                                            onChange: (dates, dateStr) => {
-                                                                $el.value = dateStr;
-                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
-                                                            }
-                                                        })"
-                                                        class="form-control timepicker-24 @error('manualClockIn') is-invalid @enderror">
-                                                    <div class="input-group-append">
-                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
-                                                            <i class="far fa-clock text-primary"></i>
-                                                        </span>
-                                                        @if ($manualClockIn)
-                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearClockIn" title="Hapus jam masuk">
-                                                                <i class="fas fa-times text-danger"></i>
-                                                            </button>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                                @error('manualClockIn')
-                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
-                                                @enderror
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="form-group mb-0">
-                                                <div class="d-flex align-items-center justify-content-between mb-1">
-                                                    <label for="manualClockOut" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">
-                                                        Jam Keluar
-                                                    </label>
-                                                    @if ($manualClockOut)
-                                                        <a href="javascript:void(0)" wire:click="clearClockOut" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam keluar">
-                                                            Hapus Jam
-                                                        </a>
-                                                    @endif
-                                                </div>
-                                                <div class="input-group">
-                                                    <input type="text"
-                                                        id="manualClockOut"
-                                                        wire:model.live="manualClockOut"
-                                                        placeholder="00:00"
-                                                        autocomplete="off"
-                                                        x-data
-                                                        x-init="flatpickr($el, {
-                                                            enableTime: true,
-                                                            noCalendar: true,
-                                                            dateFormat: 'H:i',
-                                                            time_24hr: true,
-                                                            allowInput: true,
-                                                            minuteIncrement: 1,
-                                                            onChange: (dates, dateStr) => {
-                                                                $el.value = dateStr;
-                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
-                                                            }
-                                                        })"
-                                                        class="form-control timepicker-24 @error('manualClockOut') is-invalid @enderror">
-                                                    <div class="input-group-append">
-                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
-                                                            <i class="far fa-clock text-primary"></i>
-                                                        </span>
-                                                        @if ($manualClockOut)
-                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearClockOut" title="Hapus jam keluar">
-                                                                <i class="fas fa-times text-danger"></i>
-                                                            </button>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                                @error('manualClockOut')
-                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
-                                                @enderror
-                                            </div>
-                                        </div>
-                                    </div>
-                                @else
-                                    <div class="py-1" style="font-size: 12.5px; color: #1e293b; font-weight: 500;">
-                                        <i class="fas fa-info-circle text-primary mr-1"></i> Status <strong>{{ ucfirst($manualStatus) }}</strong> tidak memerlukan input jam masuk & jam keluar.
-                                    </div>
-                                @endif
-                            </fieldset>
-
-                            <!-- 2. Fieldset Lembur (Meliputi Input Lembur Mulai dan Lembur Selesai) -->
-                            <fieldset class="custom-modal-fieldset">
-                                <legend class="custom-modal-legend">
-                                    <div class="custom-control custom-checkbox d-inline-block">
-                                        <input type="checkbox" class="custom-control-input" id="hasOvertimeCheck" wire:model.live="hasOvertime">
-                                        <label class="custom-control-label font-weight-bold mb-0" for="hasOvertimeCheck" style="cursor: pointer; font-size: 13px; color: #0f172a;">
-                                            Apakah Karyawan Lembur?
-                                        </label>
-                                    </div>
-                                </legend>
-
-                                @if ($hasOvertime)
-                                    <div class="row">
-                                        <div class="col-6">
-                                            <div class="form-group mb-0">
-                                                <div class="d-flex align-items-center justify-content-between mb-1">
-                                                    <label for="manualOvertimeIn" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Lembur Mulai</label>
-                                                    @if ($manualOvertimeIn)
-                                                        <a href="javascript:void(0)" wire:click="clearOvertimeIn" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam lembur mulai">
-                                                            Hapus Jam
-                                                        </a>
-                                                    @endif
-                                                </div>
-                                                <div class="input-group">
-                                                    <input type="text"
-                                                        id="manualOvertimeIn"
-                                                        wire:model.live="manualOvertimeIn"
-                                                        placeholder="00:00"
-                                                        autocomplete="off"
-                                                        x-data
-                                                        x-init="flatpickr($el, {
-                                                            enableTime: true,
-                                                            noCalendar: true,
-                                                            dateFormat: 'H:i',
-                                                            time_24hr: true,
-                                                            allowInput: true,
-                                                            minuteIncrement: 1,
-                                                            onChange: (dates, dateStr) => {
-                                                                $el.value = dateStr;
-                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
-                                                            }
-                                                        })"
-                                                        class="form-control timepicker-24 @error('manualOvertimeIn') is-invalid @enderror">
-                                                    <div class="input-group-append">
-                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
-                                                            <i class="far fa-clock text-primary"></i>
-                                                        </span>
-                                                        @if ($manualOvertimeIn)
-                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeIn" title="Hapus lembur mulai">
-                                                                <i class="fas fa-times text-danger"></i>
-                                                            </button>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                                @error('manualOvertimeIn')
-                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
-                                                @enderror
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="form-group mb-0">
-                                                <div class="d-flex align-items-center justify-content-between mb-1">
-                                                    <label for="manualOvertimeOut" class="font-weight-bold mb-0" style="font-size: 12.5px; color: #0f172a;">Lembur Selesai</label>
-                                                    @if ($manualOvertimeOut)
-                                                        <a href="javascript:void(0)" wire:click="clearOvertimeOut" class="text-danger font-weight-bold" style="font-size: 11.5px;" title="Kosongkan jam lembur selesai">
-                                                            Hapus Jam
-                                                        </a>
-                                                    @endif
-                                                </div>
-                                                <div class="input-group">
-                                                    <input type="text"
-                                                        id="manualOvertimeOut"
-                                                        wire:model.live="manualOvertimeOut"
-                                                        placeholder="00:00"
-                                                        autocomplete="off"
-                                                        x-data
-                                                        x-init="flatpickr($el, {
-                                                            enableTime: true,
-                                                            noCalendar: true,
-                                                            dateFormat: 'H:i',
-                                                            time_24hr: true,
-                                                            allowInput: true,
-                                                            minuteIncrement: 1,
-                                                            onChange: (dates, dateStr) => {
-                                                                $el.value = dateStr;
-                                                                $el.dispatchEvent(new Event('input', { bubbles: true }));
-                                                            }
-                                                        })"
-                                                        class="form-control timepicker-24 @error('manualOvertimeOut') is-invalid @enderror">
-                                                    <div class="input-group-append">
-                                                        <span class="input-group-text bg-white" style="cursor: pointer;" onclick="this.closest('.input-group').querySelector('input')._flatpickr?.open()">
-                                                            <i class="far fa-clock text-primary"></i>
-                                                        </span>
-                                                        @if ($manualOvertimeOut)
-                                                            <button type="button" class="btn btn-outline-secondary" wire:click="clearOvertimeOut" title="Hapus lembur selesai">
-                                                                <i class="fas fa-times text-danger"></i>
-                                                            </button>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                                @error('manualOvertimeOut')
-                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
-                                                @enderror
-                                            </div>
-                                        </div>
-                                    </div>
-                                @else
-                                    <div class="py-1" style="font-size: 12.5px; color: #1e293b; font-weight: 500;">
-                                        <i class="fas fa-info-circle text-primary mr-1"></i> Centang checklist <strong>Apakah Karyawan Lembur?</strong> di atas untuk mengaktifkan input jam lembur.
-                                    </div>
-                                @endif
-                            </fieldset>
-                        @endif
-
-                        <!-- Catatan -->
-                        <div class="form-group mb-2">
-                            <label for="manualNotes" class="font-weight-bold" style="font-size: 12.5px; color: #0f172a;">Catatan / Keterangan</label>
-                            <textarea id="manualNotes" wire:model="manualNotes" class="form-control" rows="2" placeholder="Alasan koreksi manual..."></textarea>
-                        </div>
-                    </div>
-
-                    <div class="modal-footer bg-white border-top py-3 px-4">
-                        @if ($editingAttendanceId)
-                            <div class="row w-100 mx-0">
-                                <div class="col-6 pr-1.5 pl-0">
-                                    <button type="button" wire:click="confirmDeleteAttendance({{ $editingAttendanceId }})" wire:loading.attr="disabled" class="btn btn-danger btn-block text-nowrap font-weight-500" style="border-radius: 8px; font-size: 13.5px; padding: 9px 14px;">
-                                        <i class="fas fa-trash-alt mr-1.5"></i> Hapus Presensi
-                                    </button>
-                                </div>
-                                <div class="col-6 pl-1.5 pr-0">
-                                    <button type="submit" class="btn btn-primary btn-block text-nowrap font-weight-500" style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; font-size: 13.5px; padding: 9px 14px;">
-                                        <i class="fas fa-save mr-1.5"></i> Simpan Presensi
-                                    </button>
-                                </div>
-                            </div>
-                        @else
-                            <button type="submit" class="btn btn-primary btn-block text-nowrap font-weight-500" style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; font-size: 13.5px; padding: 9px 14px;">
-                                <i class="fas fa-save mr-1.5"></i> Simpan Presensi
-                            </button>
-                        @endif
-                    </div>
-                </form>
             </div>
         </div>
     </div>
+
+    <!-- MODAL 3: AUDIT PRESENSI (SELFIE & PETA GPS) -->
+    @include('livewire.attendances.audit-modal')
 </div>
 
+@push('styles')
+    <link rel="stylesheet" href="{{ asset('assets/leaflet/leaflet.css') }}">
+@endpush
+
 @push('scripts')
+<script src="{{ asset('assets/leaflet/leaflet.js') }}"></script>
 <script>
     (function () {
         function initAttendanceScripts() {

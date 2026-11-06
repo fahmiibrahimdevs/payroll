@@ -9,6 +9,7 @@ use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
+use App\Models\Holiday;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Models\OvertimeSubmission;
@@ -46,6 +47,8 @@ class PeriodAttendance extends Component
     public string $search = '';
 
     public ?int $departmentFilter = null;
+
+    public string $viewMode = 'matrix';
 
     public array $periodAttendances = [];
 
@@ -228,6 +231,7 @@ class PeriodAttendance extends Component
                 'meal_allowance_type' => $att->meal_allowance_type,
                 'total_meal_allowance' => $totalMealAllowance,
                 'daily_rate' => $dailyRate,
+                'employee_overtime_rate' => (float) ($att->employee?->overtime_rate_per_hour ?: 15000),
                 'total_daily_wage' => $totalDailyWage,
                 'overtime_hours' => $overtimeHours,
                 'overtime_pay' => $overtimePay,
@@ -684,29 +688,215 @@ class PeriodAttendance extends Component
     */
 
     /**
-     * Daftar hari siklus periode (Jum'at s/d Kamis) untuk kolom kehadiran:
-     * key hari, nama pendek, dan tanggal terformat.
+     * Daftar hari siklus periode secara dinamis untuk kolom kehadiran dan matrix:
+     * key hari, nama lengkap hari, nama pendek, dan tanggal terformat.
      *
-     * @return array<int, array{key: string, day_name: string, date_formatted: string}>
+     * @return array<int, array{key: string, date: string, day_name: string, day_short: string, date_formatted: string, is_sunday: bool, is_saturday: bool}>
      */
     #[Computed]
     public function cycleDays(): array
     {
         $cycleDays = [];
-        $currDate = $this->period->start_date->copy();
-        $endDate = $this->period->end_date->copy();
+        $currDate = Carbon::parse($this->period->start_date)->copy();
+        $endDate = Carbon::parse($this->period->end_date)->copy();
+
+        $dayNames = [
+            0 => 'Minggu',
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+        ];
 
         while ($currDate->lte($endDate)) {
             $dKey = WorkingDays::DAY_KEY_MAP[$currDate->dayOfWeek] ?? 'fri';
             $cycleDays[] = [
                 'key' => $dKey,
-                'day_name' => self::DAY_SHORT_NAMES[$dKey] ?? 'Hari',
+                'date' => $currDate->toDateString(),
+                'day_name' => $dayNames[$currDate->dayOfWeek] ?? 'Hari',
+                'day_short' => self::DAY_SHORT_NAMES[$dKey] ?? 'Hari',
                 'date_formatted' => $currDate->locale('id')->translatedFormat('d M'),
+                'is_sunday' => $currDate->dayOfWeek === 0,
+                'is_saturday' => $currDate->dayOfWeek === 6,
             ];
             $currDate->addDay();
         }
 
         return $cycleDays;
+    }
+
+    /**
+     * Data breakdown harian per karyawan (Format Matrix Excel Sintesa Digital Printing).
+     */
+    #[Computed]
+    public function dailyMatrix(): array
+    {
+        $startDate = Carbon::parse($this->period->start_date)->toDateString();
+        $endDate = Carbon::parse($this->period->end_date)->toDateString();
+
+        // 1. Ambil semua pengajuan lembur yang terhubung dalam periode ini
+        $submissions = $this->period->submissions()
+            ->whereBetween('date', [$startDate, $endDate])
+            ->whereNotIn('status', [OvertimeStatus::REJECTED_ADMIN, OvertimeStatus::REJECTED_DIREKTUR])
+            ->get()
+            ->groupBy(['employee_id', fn ($s) => Carbon::parse($s->date)->toDateString()]);
+
+        // 2. Ambil absensi dalam periode ini
+        $attendances = Attendance::whereBetween('date', [$startDate, $endDate])
+            ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+            ->get()
+            ->groupBy(['employee_id', fn ($a) => Carbon::parse($a->date)->toDateString()]);
+
+        // 3. Ambil data libur nasional
+        $holidays = Holiday::whereBetween('date', [$startDate, $endDate])
+            ->pluck('name', 'date')
+            ->all();
+
+        $company = CompanyProfile::getProfile();
+        $defaultMealRate = (float) ($company->default_meal_allowance_per_day ?: 15000.0);
+        $otMealThreshold = (float) ($company->overtime_meal_threshold_hours ?? 3.0);
+        $otMealAmount = (float) ($company->overtime_meal_allowance ?? 15000.0);
+        $workDaysPerWeek = (int) ($company->work_days_per_week ?: 6);
+
+        // 4. Ambil data jadwal kerja (Roster / EmployeeSchedule) karyawan
+        $employeeIds = array_keys($this->periodAttendances);
+        $schedules = EmployeeSchedule::schedulesForEmployees($employeeIds, $startDate, $endDate);
+
+        $matrix = [];
+        $cycleDays = $this->cycleDays;
+
+        foreach ($this->periodAttendances as $empId => $attData) {
+            $daysData = [];
+            $totalOtHours = 0;
+            $totalHolidayOtPay = 0;
+            $totalLunch = 0;
+            $totalDinner = 0;
+            $totalDailyWage = 0;
+
+            $unitPrice = (float) ($attData['employee_overtime_rate'] ?? 15000);
+            if ($unitPrice <= 0) {
+                $unitPrice = 15000;
+            }
+
+            $mealRate = (float) (($attData['meal_allowance_per_day'] ?? 0) > 0 ? $attData['meal_allowance_per_day'] : $defaultMealRate);
+            $dailyRate = (float) ($attData['daily_rate'] ?? 0);
+            $isHarian = (bool) ($attData['is_harian'] ?? false);
+
+            $empSubsByDate = $submissions->get($empId, collect());
+            $empAttsByDate = $attendances->get($empId, collect());
+            $empSchedules = $schedules->get($empId, collect());
+
+            foreach ($cycleDays as $cDay) {
+                $dateStr = $cDay['date'];
+                $dKey = $cDay['key'];
+
+                $daySubs = $empSubsByDate->get($dateStr, collect());
+
+                // Pisahkan pengajuan lembur: Lembur Per Jam (Hourly) vs Lembur Seharian (Daily)
+                $hourlySubs = $daySubs->filter(fn ($s) => $s->isHourly());
+                $dailySubs = $daySubs->filter(fn ($s) => $s->isDaily());
+
+                $otHours = (float) $hourlySubs->sum('duration_hours');
+                $holidayOtPay = (float) $dailySubs->sum(fn ($s) => (float) $s->subtotal_overtime);
+                $otMeal = (float) $daySubs->sum('meal_allowance');
+
+                // Hari Libur (Warna Merah) disesuaikan dengan Jadwal Kerja (Roster) masing-masing karyawan
+                $sch = $empSchedules->get($dateStr);
+                if ($sch) {
+                    $isHoliday = $sch->isOff() || isset($holidays[$dateStr]);
+                } else {
+                    $isHoliday = isset($holidays[$dateStr]);
+                    if (! $company->isRosterMode()) {
+                        $isHoliday = $isHoliday || WorkingDays::isWeekend(Carbon::parse($dateStr), $workDaysPerWeek);
+                    }
+                }
+
+                // Hadir jika ada log absensi atau tercentang di checklist
+                $hasAttLog = $empAttsByDate->has($dateStr);
+                $isInChecklist = in_array($dKey, $attData['attendance_days'] ?? [], true)
+                    || in_array($dateStr, $attData['attendance_days'] ?? [], true);
+                $isAttended = $hasAttLog || $isInChecklist;
+
+                // Uang Makan Siang: Diberikan jika hadir kerja pada hari itu
+                $lunch = $isAttended ? $mealRate : 0.0;
+
+                // Uang Makan Malam: Diberikan jika lembur per jam >= threshold durasi perusahaan (default 3 jam) atau ada uang makan lembur
+                $dinner = ($otHours >= $otMealThreshold || $otMeal > 0) ? ($otMeal > 0 ? $otMeal : $otMealAmount) : 0.0;
+
+                // Upah harian untuk pegawai harian
+                $wage = ($isHarian && $isAttended) ? $dailyRate : 0.0;
+
+                $dailyHourlyOtPay = $otHours * $unitPrice;
+                $dailyTotalOtPay = $dailyHourlyOtPay + $holidayOtPay;
+                $dailyTotal = $dailyTotalOtPay + $lunch + $dinner + $wage;
+
+                $totalOtHours += $otHours;
+                $totalHolidayOtPay += $holidayOtPay;
+                $totalLunch += $lunch;
+                $totalDinner += $dinner;
+                $totalDailyWage += $wage;
+
+                $daysData[] = [
+                    'date' => $dateStr,
+                    'key' => $dKey,
+                    'day_name' => $cDay['day_name'],
+                    'date_formatted' => $cDay['date_formatted'],
+                    'is_holiday' => $isHoliday,
+                    'ot_hours' => $otHours,
+                    'ot_hours_formatted' => $otHours > 0 ? (intval($otHours) == $otHours ? (string) intval($otHours) : number_format($otHours, 1)) : '',
+                    'holiday_ot' => $holidayOtPay,
+                    'holiday_ot_formatted' => $holidayOtPay > 0 ? 'Rp ' . number_format($holidayOtPay, 0, ',', '.') : '-',
+                    'daily_ot_pay' => $dailyTotalOtPay,
+                    'daily_ot_pay_formatted' => $dailyTotalOtPay > 0 ? 'Rp ' . number_format($dailyTotalOtPay, 0, ',', '.') : '-',
+                    'lunch' => $lunch,
+                    'lunch_formatted' => $lunch > 0 ? 'Rp ' . number_format($lunch, 0, ',', '.') : '-',
+                    'dinner' => $dinner,
+                    'dinner_formatted' => $dinner > 0 ? 'Rp ' . number_format($dinner, 0, ',', '.') : '',
+                    'daily_total' => $dailyTotal,
+                    'daily_total_formatted' => $dailyTotal > 0 ? 'Rp ' . number_format($dailyTotal, 0, ',', '.') : '',
+                    'is_attended' => $isAttended,
+                ];
+            }
+
+            $hourlyOtPay = $totalOtHours * $unitPrice;
+            // Total Upah Lembur = (Total Jam Lembur * Tarif/Jam) + Total Upah Lembur Seharian (Hari Libur)
+            $totalOtPay = $hourlyOtPay + $totalHolidayOtPay;
+            $grandTotal = $totalOtPay + $totalLunch + $totalDinner + $totalDailyWage;
+
+            $matrix[$empId] = [
+                'employee_id' => $empId,
+                'employee_hashid' => $attData['employee_hashid'] ?? '',
+                'employee_name' => $attData['employee_name'],
+                'photo_url' => $attData['photo_url'] ?? null,
+                'department_name' => $attData['department_name'],
+                'position_name' => $attData['position_name'],
+                'payment_status' => $attData['payment_status'],
+                'is_harian' => $isHarian,
+                'unit_price' => $unitPrice,
+                'unit_price_formatted' => 'Rp ' . number_format($unitPrice, 0, ',', '.'),
+                'days' => $daysData,
+                'totals' => [
+                    'total_ot_hours' => $totalOtHours,
+                    'total_ot_hours_formatted' => intval($totalOtHours) == $totalOtHours ? (string) intval($totalOtHours) : number_format($totalOtHours, 1),
+                    'total_holiday_ot' => $totalHolidayOtPay,
+                    'total_holiday_ot_formatted' => $totalHolidayOtPay > 0 ? 'Rp ' . number_format($totalHolidayOtPay, 0, ',', '.') : '-',
+                    'hourly_ot_pay' => $hourlyOtPay,
+                    'hourly_ot_pay_formatted' => $hourlyOtPay > 0 ? 'Rp ' . number_format($hourlyOtPay, 0, ',', '.') : '-',
+                    'total_ot_pay' => $totalOtPay,
+                    'total_ot_pay_formatted' => 'Rp ' . number_format($totalOtPay, 0, ',', '.'),
+                    'total_lunch' => $totalLunch,
+                    'total_lunch_formatted' => 'Rp ' . number_format($totalLunch, 0, ',', '.'),
+                    'total_dinner' => $totalDinner,
+                    'total_dinner_formatted' => $totalDinner > 0 ? 'Rp ' . number_format($totalDinner, 0, ',', '.') : '-',
+                    'grand_total' => $grandTotal,
+                    'grand_total_formatted' => 'Rp ' . number_format($grandTotal, 0, ',', '.'),
+                ],
+            ];
+        }
+
+        return $matrix;
     }
 
     /**
@@ -757,6 +947,18 @@ class PeriodAttendance extends Component
             return true;
         })->toArray();
 
+        // Filter daily matrix matching search & department
+        $filteredMatrix = array_intersect_key($this->dailyMatrix, $filteredAttendances);
+
+        // Matrix totals across all displayed employees
+        $matrixTotalOtHours = array_sum(array_map(fn ($m) => (float) $m['totals']['total_ot_hours'], $filteredMatrix));
+        $matrixTotalHolidayOt = array_sum(array_map(fn ($m) => (float) ($m['totals']['total_holiday_ot'] ?? 0), $filteredMatrix));
+        $matrixTotalHourlyOtPay = array_sum(array_map(fn ($m) => (float) ($m['totals']['hourly_ot_pay'] ?? 0), $filteredMatrix));
+        $matrixTotalOtPay = array_sum(array_map(fn ($m) => (float) ($m['totals']['total_ot_pay'] ?? 0), $filteredMatrix));
+        $matrixTotalLunch = array_sum(array_map(fn ($m) => (float) $m['totals']['total_lunch'], $filteredMatrix));
+        $matrixTotalDinner = array_sum(array_map(fn ($m) => (float) $m['totals']['total_dinner'], $filteredMatrix));
+        $matrixGrandTotal = array_sum(array_map(fn ($m) => (float) $m['totals']['grand_total'], $filteredMatrix));
+
         // Calculate live summary stats from all active paid employees in this period
         $activeEmployeesCount = count($filteredAttendances);
         $totalDailyWage = array_sum(array_column($filteredAttendances, 'total_daily_wage'));
@@ -782,6 +984,14 @@ class PeriodAttendance extends Component
         return view('livewire.overtimes.period-attendance', [
             'filteredAttendances' => $filteredAttendances,
             'groupedAttendances' => $groupedAttendances,
+            'filteredMatrix' => $filteredMatrix,
+            'matrixTotalOtHours' => $matrixTotalOtHours,
+            'matrixTotalHolidayOt' => $matrixTotalHolidayOt,
+            'matrixTotalHourlyOtPay' => $matrixTotalHourlyOtPay,
+            'matrixTotalOtPay' => $matrixTotalOtPay,
+            'matrixTotalLunch' => $matrixTotalLunch,
+            'matrixTotalDinner' => $matrixTotalDinner,
+            'matrixGrandTotal' => $matrixGrandTotal,
             'cycleDays' => $this->cycleDays,
             'employmentStatusMeta' => $this->employmentStatusMeta,
             'departments' => $departments,

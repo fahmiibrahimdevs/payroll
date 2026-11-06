@@ -240,7 +240,7 @@ class Index extends Component
                 $this->dispatch('swal:alert', [
                     'type' => 'warning',
                     'title' => 'Tarif Lembur Belum Diset',
-                    'message' => "Karyawan {$targetEmp->full_name} belum memiliki tarif lembur " . ($isDaily ? 'harian' : 'per jam') . ' di profilnya. Silakan atur tarif lembur di Master Karyawan terlebih dahulu.',
+                    'message' => "Karyawan {$targetEmp->full_name} belum memiliki tarif lembur ".($isDaily ? 'harian' : 'per jam').' di profilnya. Silakan atur tarif lembur di Master Karyawan terlebih dahulu.',
                 ]);
 
                 return;
@@ -467,6 +467,7 @@ class Index extends Component
         if (! $this->adjustIsNonWorkDay) {
             $this->adjust_give_meal = false;
             $this->adjust_meal_allowance = 0.0;
+
             return;
         }
 

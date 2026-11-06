@@ -131,7 +131,7 @@ class CompanyProfileService
                     continue;
                 }
 
-                $newEmail = strtolower($username . '@' . $newDomain);
+                $newEmail = strtolower($username.'@'.$newDomain);
                 if (strtolower($email) === $newEmail) {
                     continue;
                 }

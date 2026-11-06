@@ -20,7 +20,6 @@ use InvalidArgumentException;
 
 class TaxCalculationService
 {
-
     /**
      * Prefiks nama baris potongan BPJS yang masuk kategori pensiun (JHT/JP).
      * Nama baris diketik admin sehingga dipakai sebagai kunci logika —
@@ -62,6 +61,7 @@ class TaxCalculationService
 
         return null;
     }
+
     /** @var array<string, array{previous_tax_paid: float, previous_gross: float, months_count: int, pension_deduction: float, has_unpaid_period: bool}> */
     private array $finalPeriodHistoryCache = [];
 

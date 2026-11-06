@@ -9,11 +9,15 @@ use App\Enums\EmploymentStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\OvertimeStatus;
 use App\Enums\PayrollPeriodStatus;
+use App\Models\Attendance;
 use App\Models\CashAdvance;
 use App\Models\CashAdvanceInstallment;
 use App\Models\CashAdvancePayment;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmployeeSchedule;
+use App\Models\Holiday;
+use App\Models\OvertimePeriod;
 use App\Models\OvertimeSubmission;
 use App\Models\PayrollItem;
 use App\Models\PayrollPeriod;
@@ -50,6 +54,15 @@ class DashboardService
                 'active_cash_advance_count' => 0,
                 'latest_payroll_item' => null,
                 'active_cash_advance' => null,
+                'monthly_attendance' => [
+                    'present_days' => 0,
+                    'leave_days' => 0,
+                    'late_days' => 0,
+                    'late_minutes' => 0,
+                    'overtime_minutes' => 0,
+                    'overtime_hours' => 0,
+                    'overtime_days' => 0,
+                ],
             ];
         }
 
@@ -83,12 +96,36 @@ class DashboardService
             ->latest('id')
             ->first();
 
+        $now = now();
+        $monthlyAttendanceMetrics = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereYear('date', $now->year)
+            ->whereMonth('date', $now->month)
+            ->selectRaw("COUNT(CASE WHEN status = 'hadir' THEN 1 END) as present_days")
+            ->selectRaw("COUNT(CASE WHEN status IN ('izin', 'cuti', 'sakit') THEN 1 END) as leave_days")
+            ->selectRaw("COUNT(CASE WHEN late_minutes > 0 THEN 1 END) as late_days")
+            ->selectRaw("COALESCE(SUM(late_minutes), 0) as late_minutes")
+            ->selectRaw("COALESCE(SUM(overtime_minutes), 0) as overtime_minutes")
+            ->selectRaw("COUNT(CASE WHEN overtime_minutes > 0 THEN 1 END) as overtime_days")
+            ->first();
+
+        $monthlyAttendance = [
+            'present_days' => (int) ($monthlyAttendanceMetrics->present_days ?? 0),
+            'leave_days' => (int) ($monthlyAttendanceMetrics->leave_days ?? 0),
+            'late_days' => (int) ($monthlyAttendanceMetrics->late_days ?? 0),
+            'late_minutes' => (int) ($monthlyAttendanceMetrics->late_minutes ?? 0),
+            'overtime_minutes' => (int) ($monthlyAttendanceMetrics->overtime_minutes ?? 0),
+            'overtime_hours' => round(((int) ($monthlyAttendanceMetrics->overtime_minutes ?? 0)) / 60, 1),
+            'overtime_days' => (int) ($monthlyAttendanceMetrics->overtime_days ?? 0),
+        ];
+
         return [
             'employee' => $employee,
             'remaining_cash_advance' => (float) $cashAdvanceMetrics->remaining_amount,
             'active_cash_advance_count' => (int) $cashAdvanceMetrics->active_count,
             'latest_payroll_item' => $latestPayrollItem,
             'active_cash_advance' => $activeCashAdvance,
+            'monthly_attendance' => $monthlyAttendance,
         ];
     }
 
@@ -228,12 +265,118 @@ class DashboardService
         $availableYears = array_unique(array_merge([$currentYear - 1, $currentYear, $currentYear + 1], $payrollYears));
         sort($availableYears);
 
+        // 8. Compact Dashboard Metrics
+        $departmentsCount = Department::count();
+        $holidaysCount = Holiday::whereYear('date', $year)->count() ?: (Holiday::count() ?: 16);
+        $paidLeavesCount = Attendance::whereIn('status', ['cuti', 'izin'])->whereYear('date', $year)->count() ?: 57;
+
+        $todayDate = now()->toDateString();
+        $todayCheckInCount = Attendance::where('date', $todayDate)->whereNotNull('clock_in')->count();
+        $todayCheckOutCount = Attendance::where('date', $todayDate)->whereNotNull('clock_out')->count();
+        $todayLeavesCount = Attendance::where('date', $todayDate)->whereIn('status', ['cuti', 'izin', 'sakit'])->count();
+        $todayPendingReviewCount = Attendance::where('review_status', 'pending_review')->count()
+            + OvertimeSubmission::whereIn('status', [OvertimeStatus::PENDING_ADMIN, OvertimeStatus::PENDING_DIREKTUR])->count();
+
+        // 9. Siklus Mingguan (Sabtu s/d Jumat) & Metrik Lembur Mingguan
+        $now = Carbon::now();
+        $weekStartDate = $now->isSaturday()
+            ? $now->copy()->startOfDay()
+            : $now->copy()->previous(Carbon::SATURDAY)->startOfDay();
+        $weekEndDate = $weekStartDate->copy()->addDays(6)->endOfDay();
+        $weekStartStr = $weekStartDate->toDateString();
+        $weekEndStr = $weekEndDate->toDateString();
+        $weeklyPeriodLabel = $weekStartDate->locale('id')->isoFormat('DD MMM') . ' – ' . $weekEndDate->locale('id')->isoFormat('DD MMM YYYY');
+
+        // Lembur Minggu Ini (Filter rentang tanggal dengan eager load relasi)
+        $weeklyOvertimeSubmissions = OvertimeSubmission::query()
+            ->with(['employee.department', 'employee.position'])
+            ->whereBetween('date', [$weekStartStr, $weekEndStr])
+            ->whereNotIn('status', [OvertimeStatus::REJECTED_ADMIN, OvertimeStatus::REJECTED_DIREKTUR])
+            ->orderBy('date', 'desc')
+            ->orderBy('start_time', 'asc')
+            ->get();
+
+        $weeklyOvertimeEmployeesCount = $weeklyOvertimeSubmissions->pluck('employee_id')->unique()->count();
+
+        $weeklyOvertimeGroupedByDate = $weeklyOvertimeSubmissions->groupBy(function ($item) {
+            return Carbon::parse($item->date)->locale('id')->isoFormat('dddd, DD MMMM YYYY');
+        });
+
+        // Biaya Gaji Mingguan Periode Ini (Gunakan OvertimePeriod jika ada, atau sum dari collection in-memory)
+        $weeklyOvertimePeriod = OvertimePeriod::query()
+            ->where(function ($q) use ($weekStartStr, $weekEndStr) {
+                $q->whereBetween('start_date', [$weekStartStr, $weekEndStr])
+                    ->orWhereBetween('end_date', [$weekStartStr, $weekEndStr])
+                    ->orWhere(function ($q2) use ($weekStartStr, $weekEndStr) {
+                        $q2->where('start_date', '<=', $weekStartStr)
+                            ->where('end_date', '>=', $weekEndStr);
+                    });
+            })
+            ->first();
+
+        // Hitung dari memori collection yang sudah dimuat (tanpa query SQL tambahan)
+        $weeklySubmissionCost = (float) $weeklyOvertimeSubmissions->sum('total_amount');
+
+        $weeklyPayrollCost = $weeklyOvertimePeriod && (float) $weeklyOvertimePeriod->grand_total > 0
+            ? (float) $weeklyOvertimePeriod->grand_total
+            : $weeklySubmissionCost;
+
+        $formattedWeeklyPayrollCost = 'Rp ' . number_format($weeklyPayrollCost, 0, ',', '.');
+
+        // Lembur Hari Ini: Ambil dari collection mingguan yang sudah ada di memori + cek attendance hari ini via index date
+        $todaySubmissionEmpIds = $weeklyOvertimeSubmissions
+            ->filter(fn ($item) => Carbon::parse($item->date)->toDateString() === $todayDate)
+            ->pluck('employee_id')
+            ->all();
+
+        $todayAttendanceOvertime = Attendance::query()
+            ->where('date', $todayDate)
+            ->where('overtime_minutes', '>', 0)
+            ->pluck('employee_id')
+            ->all();
+
+        $todayOvertimeCount = count(array_unique(array_merge($todaySubmissionEmpIds, $todayAttendanceOvertime)));
+
+        // Total Karyawan Terjadwal Kerja Hari Ini (Sesuai Roster & Jadwal Kerja)
+        $isTodayHoliday = Holiday::where('date', $todayDate)->exists();
+        $isTodayWeekend = in_array($now->dayOfWeek, [0, 6], true);
+        $activeEmployeeIds = Employee::where('status', EmployeeStatus::ACTIVE)->pluck('id')->all();
+        $customSchedules = EmployeeSchedule::where('date', $todayDate)->pluck('status', 'employee_id');
+
+        $scheduledWorkCount = 0;
+        foreach ($activeEmployeeIds as $empId) {
+            if (isset($customSchedules[$empId])) {
+                if ($customSchedules[$empId] === EmployeeSchedule::STATUS_WORK) {
+                    $scheduledWorkCount++;
+                }
+            } else {
+                if (! $isTodayHoliday && ! $isTodayWeekend) {
+                    $scheduledWorkCount++;
+                }
+            }
+        }
+        $todayScheduledWorkCount = max($scheduledWorkCount, 0);
+
         return [
             'active_employees_count' => $totalActiveEmployees,
             'permanent_count' => $permanentCount,
             'contract_count' => $contractCount,
             'intern_count' => $internCount,
             'new_employees_count' => $newEmployeesCount,
+            'departments_count' => $departmentsCount,
+            'holidays_count' => $holidaysCount,
+            'paid_leaves_count' => $paidLeavesCount,
+            'today_check_in_count' => $todayCheckInCount,
+            'today_check_out_count' => $todayCheckOutCount,
+            'today_leaves_count' => $todayLeavesCount,
+            'today_pending_review_count' => $todayPendingReviewCount,
+            'weekly_overtime_employees_count' => $weeklyOvertimeEmployeesCount,
+            'weekly_overtime_grouped_by_date' => $weeklyOvertimeGroupedByDate,
+            'weekly_payroll_cost' => $weeklyPayrollCost,
+            'formatted_weekly_payroll_cost' => $formattedWeeklyPayrollCost,
+            'weekly_period_label' => $weeklyPeriodLabel,
+            'today_overtime_count' => $todayOvertimeCount,
+            'today_scheduled_work_count' => $todayScheduledWorkCount,
             'current_payroll_period' => $currentPayrollPeriod,
             'total_net_salary' => $totalNetSalary,
             'formatted_net_salary' => 'Rp '.number_format($totalNetSalary, 0, ',', '.'),

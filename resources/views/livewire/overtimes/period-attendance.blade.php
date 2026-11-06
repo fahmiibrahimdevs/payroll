@@ -122,12 +122,12 @@
             <h4 class="mb-0">Daftar Kehadiran Karyawan</h4>
 
             <div class="d-flex align-items-center" style="gap: 8px;">
-                <!-- Tarik Data dari Mesin Absensi (Solid Primary) -->
+                <!-- Tarik Data dari Mesin Absensi (Solid Primary - Hidden Sementara) -->
                 <button type="button"
                         wire:click="syncFromAttendance"
                         wire:loading.attr="disabled"
                         wire:target="syncFromAttendance"
-                        class="btn btn-primary btn-sm d-inline-flex align-items-center font-weight-bold shadow-sm"
+                        class="btn btn-primary btn-sm d-none align-items-center font-weight-bold shadow-sm"
                         style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; padding: 7px 15px; font-size: 13px;"
                         title="Tarik data kehadiran otomatis dari mesin absensi">
                     <span wire:loading.remove wire:target="syncFromAttendance">
@@ -138,39 +138,21 @@
                     </span>
                 </button>
 
-                <!-- Simpan Perubahan (Solid Success) -->
-                <button type="button"
-                        wire:click="save"
-                        wire:loading.attr="disabled"
-                        wire:target="save"
-                        class="btn btn-success btn-sm d-inline-flex align-items-center font-weight-bold shadow-sm"
-                        style="border-radius: 8px; padding: 7px 15px; font-size: 13px;">
-                    <span wire:loading.remove wire:target="save"><i class="fas fa-save mr-1.5"></i> Simpan Perubahan</span>
-                    <span wire:loading wire:target="save"><i class="fas fa-spinner fa-spin mr-1.5"></i> Menyimpan...</span>
-                </button>
-
                 <!-- Cetak Seluruh Slip Mingguan (Solid Info) -->
                 <a href="{{ route('overtimes.periods.print', $period) }}"
                    target="_blank"
-                   class="btn btn-info btn-sm d-inline-flex align-items-center font-weight-bold shadow-sm"
-                   style="border-radius: 8px; padding: 7px 15px; font-size: 13px;"
+                   class="btn btn-info btn-sm font-weight-bold shadow-sm"
                    title="Cetak Seluruh Slip Mingguan Periode Ini">
-                    <i class="fas fa-print mr-1.5"></i> Cetak Slip
+                    <i class="fas fa-print mr-1"></i> Cetak Slip
                 </a>
             </div>
         </div>
 
-        <!-- Controls: Search Bar (Format Standar dt-control-wrapper Tanpa Filter Departemen) -->
-        <div class="dt-control-wrapper" style="padding: 12px 20px; border-bottom: 1px solid #f1f5f9;">
-            <div class="d-flex align-items-center">
-                <span style="font-size: 12px; font-weight: 500; color: #475569;">
-                    <i class="fas fa-calendar-week mr-1 text-primary"></i> Siklus: {{ $period->start_date->locale('id')->translatedFormat('d M') }} &ndash; {{ $period->end_date->locale('id')->translatedFormat('d M Y') }} (7 Hari)
-                </span>
-            </div>
-
-            <div class="dt-search-wrapper">
-                <span class="mr-1" style="font-size: 12px; color: #475569;">Search:</span>
-                <input type="text" wire:model.live.debounce.300ms="search" class="dt-search-input" placeholder="Cari nama karyawan...">
+        <!-- Controls: Search Bar -->
+        <div class="dt-control-wrapper d-flex justify-content-end align-items-center" style="padding: 12px 20px; border-bottom: 1px solid #f1f5f9;">
+            <div class="dt-search-wrapper d-flex align-items-center">
+                <span class="mr-1.5 font-weight-500" style="font-size: 12px; color: #475569;">Search:</span>
+                <input type="text" wire:model.live.debounce.300ms="search" class="dt-search-input" placeholder="Cari nama karyawan..." style="border-radius: 8px; width: 220px; font-size: 12px; border: 1px solid #cbd5e1; padding: 6px 12px;">
             </div>
         </div>
 
@@ -195,256 +177,235 @@
         @endif
 
         <div class="card-body p-0">
-            <!-- Table Responsive -->
-            <div class="table-responsive">
-                <table class="table table-clean mb-0">
-                    <thead style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+            <!-- Table Responsive: Format Excel Matrix Sintesa Digital Printing -->
+            <div class="table-responsive table-matrix-wrapper">
+                <table class="table-matrix table-auto">
+                    <thead>
                         <tr>
-                            <th class="text-center text-nowrap !px-3.5 !py-3" style="width: 50px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">NO</th>
-                            <th class="text-nowrap !px-3.5 !py-3" style="min-width: 190px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">KARYAWAN</th>
-                            <th class="text-nowrap !px-3.5 !py-3" style="min-width: 320px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">KEHADIRAN (JUM'AT &ndash; KAMIS)</th>
-                            <th class="text-right text-nowrap !px-3.5 !py-3" style="min-width: 130px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">UPAH HARIAN</th>
-                            <th class="text-right text-nowrap !px-3.5 !py-3" style="min-width: 130px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">UANG MAKAN</th>
-                            <th class="text-right text-nowrap !px-3.5 !py-3" style="min-width: 185px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">LEMBUR MINGGUAN</th>
-                            <th class="text-right text-nowrap !px-3.5 !py-3" style="min-width: 140px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">TOTAL DITERIMA</th>
-                            <th class="text-center text-nowrap !px-3.5 !py-3" style="min-width: 115px; color: #475569; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">AKSI</th>
+                            <th rowspan="2" class="text-center" style="width: 50px;">NO</th>
+                            <th rowspan="2" class="text-left" style="width: 250px; max-width: 280px; padding-left: 14px !important;">NAMA KARYAWAN</th>
+                            <th rowspan="2" class="text-left" style="min-width: 110px; width: 115px; padding-left: 12px !important;">HARI</th>
+                            <th rowspan="2" class="text-center" style="width: 65px;">JAM</th>
+                            <th rowspan="2" class="text-center" style="width: 95px;">HARI LIBUR</th>
+                            <th rowspan="2" class="text-right" style="width: 110px; padding-right: 14px !important;">UNIT PRICE</th>
+                            <th colspan="2" class="text-center">UANG MAKAN</th>
+                            <th rowspan="2" class="text-right" style="width: 130px; padding-right: 14px !important;">UPAH DITERIMA</th>
+                            <th rowspan="2" class="text-center" style="min-width: 180px; width: 190px;">AKSI</th>
+                        </tr>
+                        <tr>
+                            <th class="text-right" style="width: 110px; padding-right: 12px !important;">MAKAN SIANG</th>
+                            <th class="text-right" style="width: 110px; padding-right: 12px !important;">MAKAN MALAM</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @php
-                            $globalIdx = 1;
-                        @endphp
-                        @forelse ($groupedAttendances as $statusKey => $groupItems)
+                        @php $matrixIdx = 1; @endphp
+                        @forelse ($filteredMatrix as $empId => $emp)
                             @php
-                                $statusMeta = $employmentStatusMeta[$statusKey] ?? ['label' => strtoupper($statusKey), 'icon' => 'fas fa-users'];
+                                $days = $emp['days'];
+                                $daysCount = count($days);
+                                $firstDay = $days[0] ?? null;
                             @endphp
-
-                            <!-- Baris Sub-Header Group Status Kerja -->
-                            <tr class="table-group-header" style="border-top: 1px solid #e2e8f0;">
-                                <td colspan="8" class="text-nowrap !py-2 !px-3.5" style="background-color: #ffffff !important;">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <div class="d-flex align-items-center">
-                                            <span class="d-inline-flex align-items-center justify-content-center mr-2 flex-shrink-0" style="width: 22px; height: 22px; border-radius: 6px; background-color: #eff6ff; font-size: 10.5px;">
-                                                <i class="{{ $statusMeta['icon'] }}" style="color: #0b52aa;"></i>
-                                            </span>
-                                            <span class="font-weight-600" style="font-size: 12.5px; letter-spacing: 0.3px; color: #334155; text-transform: uppercase;">
-                                                STATUS: {{ $statusMeta['label'] }}
-                                            </span>
-                                        </div>
-                                        <span class="badge font-weight-600" style="font-size: 10.5px; padding: 2.5px 10px; border-radius: 9999px; background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;">
-                                            {{ count($groupItems) }} Orang
-                                        </span>
-                                    </div>
-                                </td>
-                            </tr>
-
-                            @foreach ($groupItems as $itemKey => $attData)
-                                <tr wire:key="att-row-{{ $attData['employee_id'] ?? $itemKey }}" style="border-bottom: 1px solid #f1f5f9;">
-                                    <!-- NO -->
-                                    <td class="text-center align-middle !px-3.5 !py-2.5 text-nowrap" style="color: #475569; font-size: 12.5px; font-weight: 600;">
-                                        {{ $globalIdx++ }}
+                            @if ($firstDay)
+                                <!-- Baris Hari Pertama -->
+                                <tr wire:key="att-row-{{ $empId }}" class="emp-matrix-row emp-matrix-first-row">
+                                    <!-- NO (rowspan) -->
+                                    <td rowspan="{{ $daysCount }}" class="cell-rowspan text-center font-weight-600" style="color: #475569; width: 50px;">
+                                        {{ $matrixIdx++ }}
                                     </td>
-
-                                    <!-- Identitas Karyawan -->
-                                    <td class="align-middle text-nowrap !px-3.5 !py-2.5">
-                                        <div class="d-flex align-items-center text-nowrap">
-                                            @if ($attData['photo_url'])
-                                                <img src="{{ $attData['photo_url'] }}" alt="{{ $attData['employee_name'] }}" class="rounded-circle mr-2.5 flex-shrink-0" style="width: 34px; height: 34px; object-fit: cover; border: 1.5px solid #cbd5e1;">
-                                            @else
-                                                <div class="rounded-circle d-inline-flex align-items-center justify-content-center mr-2.5 flex-shrink-0 font-weight-600"
-                                                     style="width: 34px; height: 34px; background-color: #eff6ff; color: #0284c7; border: 1.5px solid #bae6fd; font-size: 12.5px;">
-                                                    {{ strtoupper(substr($attData['employee_name'], 0, 1)) }}
-                                                </div>
-                                            @endif
-                                            <div>
-                                                <div style="color: #0f172a; font-size: 13px; font-weight: 600; line-height: 1.3;">
-                                                    {{ $attData['employee_name'] }}
-                                                </div>
-                                                <div class="mt-0.5" style="font-size: 11px; color: #64748b; font-weight: 400; line-height: 1.25;">
-                                                    {{ $attData['department_name'] }} &bull; {{ $attData['position_name'] }}
-                                                </div>
-                                            </div>
+                                    <!-- NAMA (rowspan) -->
+                                    <td rowspan="{{ $daysCount }}" class="cell-rowspan text-left px-3" style="width: 250px; max-width: 280px;">
+                                        <div class="font-weight-600 text-dark" style="font-size: 13.5px; line-height: 1.35;">
+                                            {{ strtoupper($emp['employee_name']) }}
                                         </div>
-                                    </td>
-
-                                    <!-- Kehadiran Siklus Jum'at s/d Kamis (Read-Only Tanggal & Hari) -->
-                                    <td class="align-middle !px-3.5 !py-2.5 text-nowrap">
-                                        <div class="d-flex align-items-center flex-wrap" style="gap: 5px;">
-                                            @foreach ($cycleDays as $cDay)
-                                                <div class="d-inline-flex flex-column align-items-center justify-content-center text-center px-2 py-1"
-                                                     style="min-width: 44px; border-radius: 7px; line-height: 1.15; {{ in_array($cDay['key'], $attData['attendance_days'] ?? [], true) ? 'background-color: #0b52aa; border: 1px solid #0b52aa; color: #ffffff;' : 'background-color: #ffffff; border: 1px solid #cbd5e1; color: #475569;' }}"
-                                                     title="{{ $cDay['day_name'] }}, {{ $cDay['date_formatted'] }}: {{ in_array($cDay['key'], $attData['attendance_days'] ?? [], true) ? 'Hadir' : 'Tidak Hadir' }}">
-                                                    <span style="font-size: 10px; font-weight: 500; {{ in_array($cDay['key'], $attData['attendance_days'] ?? [], true) ? 'color: rgba(255, 255, 255, 0.9);' : 'color: #64748b;' }}">
-                                                        {{ $cDay['date_formatted'] }}
-                                                    </span>
-                                                    <span style="font-size: 11.5px; font-weight: 700; margin-top: 2px;">
-                                                        {{ $cDay['day_name'] }}
-                                                    </span>
-                                                </div>
-                                            @endforeach
-
-                                            <span class="badge badge-light border text-dark font-weight-700 ml-1.5 px-2.5 py-1.5" style="border-radius: 8px; font-size: 11px;">
-                                                {{ $attData['attended_days'] ?? 0 }} Hari
-                                            </span>
+                                        <div class="mt-0.5" style="font-size: 11.5px; color: #475569; font-weight: 400; line-height: 1.3;">
+                                            {{ $emp['position_name'] }} &bull; {{ $emp['department_name'] }}
                                         </div>
-                                    </td>
-
-                                    <!-- 1. Upah Harian -->
-                                    <td class="text-right align-middle !px-3.5 !py-2.5 text-nowrap" style="font-variant-numeric: tabular-nums;">
-                                        @if ($attData['is_harian'])
-                                            @if (($attData['total_daily_wage'] ?? 0) > 0)
-                                                <div style="color: #047857; font-size: 12.5px; font-weight: 600;">
-                                                    Rp {{ number_format($attData['total_daily_wage'], 0, ',', '.') }}
-                                                </div>
-                                                <small class="d-block font-weight-normal" style="font-size: 10.5px; color: #475569;" title="{{ $attData['attended_days'] ?? 0 }} Hari &times; Rp {{ number_format($attData['daily_rate'], 0, ',', '.') }}">
-                                                    {{ $attData['attended_days'] ?? 0 }} Hari Kerja
-                                                </small>
-                                            @else
-                                                <div style="color: #64748b; font-size: 12px; font-weight: 500;">
-                                                    Rp 0
-                                                </div>
-                                                <small class="d-block font-weight-normal" style="font-size: 10.5px; color: #64748b;">
-                                                    0 Hari Kerja
-                                                </small>
-                                            @endif
-                                        @else
-                                            <span class="badge badge-light border font-weight-normal" style="font-size: 10px; padding: 2px 6px; color: #475569;">-</span>
-                                            <small class="d-block" style="font-size: 10.5px; color: #475569;">Gaji Bulanan</small>
+                                        @if ($emp['is_harian'])
+                                            <span class="badge mt-1" style="background-color: #eff6ff; color: #0284c7; border: 1px solid #bfdbfe; font-size: 10.5px; padding: 2px 7px; font-weight: 600; border-radius: 4px;">Harian Lepas</span>
                                         @endif
                                     </td>
-
-                                    <!-- 2. Uang Makan (Teks Bersih Berdasarkan Hari Masuk) -->
-                                    <td class="text-right align-middle !px-3.5 !py-2.5 text-nowrap" style="font-variant-numeric: tabular-nums;">
-                                        @if (($attData['total_meal_allowance'] ?? 0) > 0)
-                                            <div style="color: #d97706; font-size: 12.5px; font-weight: 600;">
-                                                Rp {{ number_format($attData['total_meal_allowance'], 0, ',', '.') }}
-                                            </div>
-                                            <small class="d-block font-weight-normal" style="font-size: 10.5px; color: #475569;" title="{{ $attData['attended_days'] ?? 0 }} Hari &times; Rp {{ number_format($attData['meal_allowance_per_day'], 0, ',', '.') }}">
-                                                {{ $attData['attended_days'] ?? 0 }} Hari Masuk
-                                            </small>
+                                    <!-- HARI -->
+                                    <td class="text-left font-weight-500" style="padding-left: 12px !important; {{ $firstDay['is_holiday'] ? 'color: #dc2626; font-weight: 600;' : 'color: #1e293b;' }}">
+                                        {{ $firstDay['day_name'] }}, {{ $firstDay['date_formatted'] }}
+                                    </td>
+                                    <!-- JAM -->
+                                    <td class="text-center font-weight-600" style="color: #0f172a;">
+                                        @if (!empty($firstDay['ot_hours_formatted']))
+                                            <span style="font-weight: 700; color: #0f172a;">{{ $firstDay['ot_hours_formatted'] }}</span>
                                         @else
-                                            <div style="color: #64748b; font-size: 12px; font-weight: 500;">
-                                                Rp 0
-                                            </div>
-                                            <small class="d-block font-weight-normal" style="font-size: 10.5px; color: #64748b;">
-                                                0 Hari Masuk
-                                            </small>
+                                            <span style="color: #cbd5e1;">-</span>
                                         @endif
                                     </td>
-
-                                    <!-- 3. Upah Lembur -->
-                                    <td class="text-right align-middle !px-3.5 !py-2.5 text-nowrap" style="font-variant-numeric: tabular-nums;">
-                                        @if (($attData['overtime_pay'] ?? 0) > 0 || ($attData['overtime_hours'] ?? 0) > 0 || ($attData['overtime_meal'] ?? 0) > 0)
-                                            <div style="color: #0f172a; font-size: 12.5px; font-weight: 600;">
-                                                Rp {{ number_format($attData['overtime_pay'], 0, ',', '.') }}
-                                            </div>
-                                            <div class="d-flex align-items-center justify-content-end flex-nowrap mt-1" style="gap: 5px;">
-                                                <span class="d-inline-flex align-items-center text-nowrap" style="padding: 2.5px 7px; font-size: 10px; font-weight: 600; border-radius: 6px; background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;">
-                                                    <i class="far fa-clock mr-1" style="font-size: 9.5px;"></i>{{ $attData['overtime_hours'] }} Jam
-                                                </span>
-                                                @if (($attData['overtime_meal'] ?? 0) > 0)
-                                                    <span class="d-inline-flex align-items-center text-nowrap" style="padding: 2.5px 7px; font-size: 10px; font-weight: 600; border-radius: 6px; background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;" title="Total Uang Makan Lembur (Harian &amp; Jam &ge; 3 Jam)">
-                                                        <i class="fas fa-utensils mr-1" style="font-size: 9px;"></i>+ Makan Rp {{ number_format($attData['overtime_meal'], 0, ',', '.') }}
-                                                    </span>
-                                                @endif
-                                            </div>
+                                    <!-- HARI LIBUR -->
+                                    <td class="text-right px-2.5 font-weight-500" style="color: #334155; font-variant-numeric: tabular-nums;">
+                                        {{ $firstDay['holiday_ot_formatted'] }}
+                                    </td>
+                                    <!-- UNIT PRICE (rowspan) -->
+                                    <td rowspan="{{ $daysCount }}" class="cell-rowspan text-right px-3 font-weight-600" style="color: #1e293b; font-size: 13px; font-variant-numeric: tabular-nums;">
+                                        {{ $emp['unit_price_formatted'] }}
+                                    </td>
+                                    <!-- MAKAN SIANG -->
+                                    <td class="text-right px-2.5" style="color: #334155; font-variant-numeric: tabular-nums;">
+                                        @if ($firstDay['lunch'] > 0)
+                                            {{ $firstDay['lunch_formatted'] }}
                                         @else
-                                            <div style="color: #64748b; font-size: 12px; font-weight: 500;">
-                                                Rp 0
-                                            </div>
-                                            <small class="d-block" style="font-size: 10.5px; color: #64748b;">0 Jam</small>
+                                            <span style="color: #cbd5e1;">-</span>
                                         @endif
                                     </td>
-
-                                    <!-- 4. Total Diterima (Grand Total) -->
-                                    <td class="text-right align-middle !px-3.5 !py-2.5 text-nowrap" style="font-variant-numeric: tabular-nums;">
-                                        <div style="color: #0b52aa; font-size: 13.5px; font-weight: 700;">
-                                            Rp {{ number_format($attData['grand_total'], 0, ',', '.') }}
-                                        </div>
-                                        @if (($attData['payment_status'] ?? 'unpaid') === 'paid')
-                                            <span class="badge badge-success px-2 py-0.5 mt-0.5" style="font-size: 9.5px; border-radius: 6px; font-weight: 600;">
-                                                <i class="fas fa-check-circle mr-1"></i> Dibayar
-                                            </span>
+                                    <!-- MAKAN MALAM -->
+                                    <td class="text-right px-2.5" style="color: #334155; font-variant-numeric: tabular-nums;">
+                                        @if ($firstDay['dinner'] > 0)
+                                            {{ $firstDay['dinner_formatted'] }}
                                         @else
-                                            <span class="badge badge-light border px-2 py-0.5 mt-0.5 font-weight-normal" style="font-size: 9.5px; border-radius: 6px; color: #475569;">
-                                                Belum Dibayar
-                                            </span>
+                                            <span style="color: #cbd5e1;">-</span>
                                         @endif
                                     </td>
-
-                                    <!-- 5. Tombol Aksi Karyawan (Cetak Slip & Pembayaran) -->
-                                    <td class="text-center align-middle text-nowrap !px-3.5 !py-2.5">
-                                        <div class="d-inline-flex align-items-center" style="gap: 6px;">
-                                            @if (($attData['payment_status'] ?? 'unpaid') === 'paid')
-                                                <!-- Cetak Slip Gaji Karyawan (Hanya Aktif Jika Sudah Dibayar) -->
-                                                <a href="{{ route('overtimes.periods.print', ['period' => $period, 'employee' => $attData['employee_hashid'] ?? '']) }}"
+                                    <!-- UPAH DITERIMA (rowspan) -->
+                                    <td rowspan="{{ $daysCount }}" class="cell-rowspan text-center"></td>
+                                    <!-- AKSI (rowspan) -->
+                                    <td rowspan="{{ $daysCount + 1 }}" class="cell-rowspan text-center px-2" style="vertical-align: middle;">
+                                        @if (($emp['payment_status'] ?? 'unpaid') === 'paid')
+                                            <div class="d-inline-flex align-items-center" style="gap: 6px;">
+                                                <a href="{{ route('overtimes.periods.print', ['period' => $period, 'employee' => $emp['employee_hashid'] ?? '']) }}"
                                                    target="_blank"
-                                                   class="btn btn-warning btn-action"
-                                                   data-toggle="tooltip"
-                                                   title="Cetak Slip Gaji Resmi">
-                                                    <i class="fas fa-print"></i>
+                                                   class="btn btn-warning font-weight-600 shadow-sm d-inline-flex align-items-center"
+                                                   title="Cetak Slip Gaji">
+                                                    <i class="fas fa-print mr-1"></i> Slip
                                                 </a>
-
-                                                <!-- Detail & Bukti Pembayaran -->
                                                 <button type="button"
-                                                        wire:click="openPaymentDetailModal({{ $attData['employee_id'] ?? $itemKey }})"
-                                                        class="btn btn-info btn-action"
-                                                        data-toggle="tooltip"
-                                                        title="Lihat Bukti & Detail Pembayaran">
-                                                    <i class="fas fa-receipt"></i>
+                                                        wire:click="openPaymentDetailModal({{ $empId }})"
+                                                        class="btn btn-info font-weight-600 shadow-sm d-inline-flex align-items-center"
+                                                        title="Bukti Bayar">
+                                                    <i class="fas fa-receipt mr-1"></i> Bukti
                                                 </button>
-                                            @else
-                                                <!-- Tombol Bayar Gaji (Hijau) -->
+                                            </div>
+                                        @else
+                                            <div>
                                                 <button type="button"
-                                                        wire:click="openPayEmployeeModal({{ $attData['employee_id'] ?? $itemKey }})"
-                                                        class="btn btn-success btn-action"
-                                                        data-toggle="tooltip"
+                                                        wire:click="openPayEmployeeModal({{ $empId }})"
+                                                        class="btn btn-success font-weight-600 shadow-sm d-inline-flex align-items-center"
                                                         title="Bayar Gaji Karyawan">
-                                                    <i class="fas fa-money-bill-wave"></i>
+                                                    <i class="fas fa-money-bill-wave mr-1.5"></i> Bayar
                                                 </button>
-
-                                                <!-- Tombol Cetak Disabled (Harus Konfirmasi Pembayaran Dahulu) -->
-                                                <button type="button"
-                                                        class="btn btn-light border text-muted btn-action"
-                                                        style="cursor: not-allowed; opacity: 0.55;"
-                                                        data-toggle="tooltip"
-                                                        title="Slip hanya dapat dicetak setelah konfirmasi pembayaran">
-                                                    <i class="fas fa-print"></i>
-                                                </button>
-                                            @endif
-                                        </div>
+                                            </div>
+                                        @endif
                                     </td>
                                 </tr>
-                            @endforeach
+
+                                <!-- Baris Hari ke-2 sampai ke-N -->
+                                @for ($d = 1; $d < $daysCount; $d++)
+                                    @php $day = $days[$d]; @endphp
+                                    <tr class="emp-matrix-row">
+                                        <!-- HARI -->
+                                        <td class="text-left font-weight-500" style="padding-left: 12px !important; {{ $day['is_holiday'] ? 'color: #dc2626; font-weight: 600;' : 'color: #1e293b;' }}">
+                                            {{ $day['day_name'] }}, {{ $day['date_formatted'] }}
+                                        </td>
+                                        <!-- JAM -->
+                                        <td class="text-center font-weight-600" style="color: #0f172a;">
+                                            @if (!empty($day['ot_hours_formatted']))
+                                                <span style="font-weight: 700; color: #0f172a;">{{ $day['ot_hours_formatted'] }}</span>
+                                            @else
+                                                <span style="color: #cbd5e1;">-</span>
+                                            @endif
+                                        </td>
+                                        <!-- HARI LIBUR -->
+                                        <td class="text-right px-2.5 font-weight-500" style="color: #334155; font-variant-numeric: tabular-nums;">
+                                            {{ $day['holiday_ot_formatted'] }}
+                                        </td>
+                                        <!-- MAKAN SIANG -->
+                                        <td class="text-right px-2.5" style="color: #334155; font-variant-numeric: tabular-nums;">
+                                            @if ($day['lunch'] > 0)
+                                                {{ $day['lunch_formatted'] }}
+                                            @else
+                                                <span style="color: #cbd5e1;">-</span>
+                                            @endif
+                                        </td>
+                                        <!-- MAKAN MALAM -->
+                                        <td class="text-right px-2.5" style="color: #334155; font-variant-numeric: tabular-nums;">
+                                            @if ($day['dinner'] > 0)
+                                                {{ $day['dinner_formatted'] }}
+                                            @else
+                                                <span style="color: #cbd5e1;">-</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endfor
+
+                                <!-- Baris TOTAL LEMBUR Karyawan -->
+                                <tr class="emp-matrix-total">
+                                    <td colspan="3" class="text-center font-weight-700" style="color: #1e293b !important; font-size: 11.5px; letter-spacing: 0.5px; text-transform: uppercase;">
+                                        TOTAL LEMBUR
+                                    </td>
+                                    <td class="text-center font-weight-700" style="color: #0f172a !important;">
+                                        {{ $emp['totals']['total_ot_hours_formatted'] }}
+                                    </td>
+                                    <td class="text-right font-weight-600 px-2.5" style="color: #334155 !important; font-variant-numeric: tabular-nums;">
+                                        {{ $emp['totals']['total_holiday_ot_formatted'] }}
+                                    </td>
+                                    <td class="text-right font-weight-600 px-3" style="color: #1e293b !important; font-size: 13px; font-variant-numeric: tabular-nums;">
+                                        {{ $emp['totals']['hourly_ot_pay_formatted'] }}
+                                    </td>
+                                    <td class="text-right font-weight-600 px-2.5" style="color: #334155 !important; font-variant-numeric: tabular-nums;">
+                                        {{ $emp['totals']['total_lunch_formatted'] }}
+                                    </td>
+                                    <td class="text-right font-weight-600 px-2.5" style="color: #334155 !important; font-variant-numeric: tabular-nums;">
+                                        {{ $emp['totals']['total_dinner_formatted'] }}
+                                    </td>
+                                    <td class="text-right font-weight-800 px-3" style="color: #0b52aa !important; font-size: 13.5px; font-variant-numeric: tabular-nums;">
+                                        {{ $emp['totals']['grand_total_formatted'] }}
+                                    </td>
+                                </tr>
+                            @endif
                         @empty
                             <tr>
-                                <td colspan="8" class="p-0 border-0">
-                                    <x-empty-state
-                                        icon="fas fa-calendar-check"
-                                        title="Tidak Ada Karyawan dengan Kehadiran / Lembur"
-                                        subtitle="Hanya karyawan dengan kehadiran kerja (&gt; 0 hari) atau jam lembur yang ditampilkan pada periode mingguan ini."
-                                        action-label="Tarik dari Absensi Mesin"
-                                        action-wire-click="syncFromAttendance"
-                                        action-icon="fas fa-fingerprint"
-                                    />
+                                <td colspan="10" class="text-center py-5 text-muted">
+                                    Tidak ada data lembur/kehadiran karyawan pada periode ini.
                                 </td>
                             </tr>
                         @endforelse
                     </tbody>
+                    @if (!empty($filteredMatrix))
+                        <tfoot>
+                            <tr>
+                                <td colspan="3" class="text-center font-weight-700 py-2.5" style="letter-spacing: 0.5px; font-size: 12px; color: #0f172a !important;">
+                                    TOTAL KESELURUHAN ({{ count($filteredMatrix) }} KARYAWAN)
+                                </td>
+                                <td class="text-center font-weight-800" style="font-size: 13px; color: #0f172a !important;">
+                                    {{ intval($matrixTotalOtHours) == $matrixTotalOtHours ? (string) intval($matrixTotalOtHours) : number_format($matrixTotalOtHours, 1) }}
+                                </td>
+                                <td class="text-right font-weight-600 px-2.5" style="color: #334155 !important; font-variant-numeric: tabular-nums;">
+                                    {{ $matrixTotalHolidayOt > 0 ? 'Rp ' . number_format($matrixTotalHolidayOt, 0, ',', '.') : '-' }}
+                                </td>
+                                <td class="text-right font-weight-700 px-2.5" style="color: #1e293b !important; font-size: 12.5px; font-variant-numeric: tabular-nums;">
+                                    {{ $matrixTotalHourlyOtPay > 0 ? 'Rp ' . number_format($matrixTotalHourlyOtPay, 0, ',', '.') : '-' }}
+                                </td>
+                                <td class="text-right font-weight-700 px-2.5" style="color: #1e293b !important; font-size: 12.5px; font-variant-numeric: tabular-nums;">
+                                    Rp {{ number_format($matrixTotalLunch, 0, ',', '.') }}
+                                </td>
+                                <td class="text-right font-weight-700 px-2.5" style="color: #1e293b !important; font-size: 12.5px; font-variant-numeric: tabular-nums;">
+                                    Rp {{ number_format($matrixTotalDinner, 0, ',', '.') }}
+                                </td>
+                                <td class="text-right font-weight-800 px-3" style="color: #0b52aa !important; font-size: 14.5px; font-variant-numeric: tabular-nums;">
+                                    Rp {{ number_format($matrixGrandTotal, 0, ',', '.') }}
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    @endif
                 </table>
             </div>
 
-            <!-- Footer: Summary Info Only (Tanpa Tombol Duplikat) -->
-            <div class="dt-footer-wrapper" style="padding: 12px 20px;">
+            <!-- Footer: Summary Info Only -->
+            <div class="dt-footer-wrapper d-flex justify-content-between align-items-center flex-wrap" style="padding: 12px 20px; background-color: #ffffff; border-top: 1px solid #f1f5f9;">
                 <div style="font-size: 12.5px; color: #475569;">
-                    Menampilkan <strong>{{ count($filteredAttendances) }}</strong> karyawan gajian dari <strong>{{ $totalEmployees }}</strong> total karyawan
+                    Menampilkan <strong>{{ count($filteredMatrix) }}</strong> karyawan pada siklus lembur mingguan
                 </div>
                 <div style="font-size: 13px; color: #0f172a;">
-                    Total Biaya Mingguan: <strong style="color: #0b52aa; font-size: 14.5px;">Rp {{ number_format($grandTotal, 0, ',', '.') }}</strong>
+                    Total Tagihan Gaji Mingguan: <strong style="color: #0b52aa; font-size: 15px;">Rp {{ number_format($matrixGrandTotal, 0, ',', '.') }}</strong>
                 </div>
             </div>
-            </div>
         </div>
+    </div>
 
     <!-- ================= MODAL DETAIL PEMBAYARAN GAJI (IMAGE 0) ================= -->
     <div wire:ignore.self class="modal fade" id="paymentDetailModal" role="dialog" aria-labelledby="paymentDetailModalLabel" aria-hidden="true">
@@ -787,6 +748,82 @@
 
 @push('styles')
 <style>
+    /* Modern SaaS Matrix Table (Ultra Compact & Responsive) */
+    .table-matrix-wrapper {
+        border-radius: 0 0 12px 12px;
+        overflow-x: auto;
+        background-color: #ffffff;
+    }
+    .table-matrix {
+        width: 100% !important;
+        table-layout: auto !important;
+        border-collapse: collapse !important;
+        background-color: #ffffff;
+        font-size: 12.5px;
+        color: #1e293b;
+        margin-bottom: 0;
+        border: 1px solid #e2e8f0;
+    }
+    .table-matrix th,
+    .table-matrix td {
+        white-space: nowrap !important;
+        text-wrap: nowrap !important;
+        padding: 5px 10px !important;
+        line-height: 1.35 !important;
+        vertical-align: middle !important;
+        border: 1px solid #e2e8f0;
+    }
+    .table-matrix thead th {
+        background-color: #f1f5f9 !important;
+        color: #1e293b !important;
+        font-size: 11px !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.5px !important;
+        text-transform: uppercase !important;
+        text-align: center !important;
+        padding: 8px 10px !important;
+        border: 1px solid #e2e8f0 !important;
+        border-bottom: 2px solid #cbd5e1 !important;
+    }
+    .table-matrix thead tr:first-child th {
+        border-bottom: 1px solid #e2e8f0 !important;
+    }
+    .table-matrix tbody tr.emp-matrix-row {
+        background-color: #ffffff !important;
+        transition: background-color 0.15s ease;
+    }
+    .table-matrix tbody tr.emp-matrix-row:hover {
+        background-color: #f8fafc !important;
+    }
+    .table-matrix tbody tr.emp-matrix-first-row td {
+        border-top: 2px solid #cbd5e1 !important;
+    }
+    .table-matrix tbody td.cell-rowspan {
+        background-color: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-top: 2px solid #cbd5e1 !important;
+        border-bottom: 2px solid #cbd5e1 !important;
+        vertical-align: middle !important;
+    }
+    .table-matrix tbody tr.emp-matrix-total td {
+        background-color: #f1f5f9 !important;
+        border-top: 2px solid #cbd5e1 !important;
+        border-bottom: 2px solid #cbd5e1 !important;
+        border-right: 1px solid #e2e8f0 !important;
+        font-weight: 700 !important;
+        color: #1e293b !important;
+        padding: 6px 10px !important;
+    }
+    .table-matrix tfoot td {
+        background-color: #eff6ff !important;
+        border-top: 2px solid #bfdbfe !important;
+        border-bottom: 2px solid #bfdbfe !important;
+        border-right: 1px solid #dbeafe !important;
+        font-weight: 700 !important;
+        color: #1e293b !important;
+        padding: 7px 10px !important;
+    }
+
     /* Payment Detail Modal (Mobile / Flutter Receipt Style) */
     @media (min-width: 576px) {
         #paymentDetailModal .modal-dialog {

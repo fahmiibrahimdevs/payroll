@@ -48,7 +48,7 @@ class WeeklyPayrollIndex extends Component
     }
 
     /**
-     * Inisialisasi siklus default: Jum'at s/d Kamis (7 Hari - Bebas Overlap).
+     * Inisialisasi siklus default: Sabtu s/d Sabtu (8 Hari Sesuai Matrix Sintesa).
      */
     public function initDefaultFridayCycle(): void
     {
@@ -57,15 +57,15 @@ class WeeklyPayrollIndex extends Component
         if ($latestPeriod && $latestPeriod->end_date) {
             $lastEnd = Carbon::parse($latestPeriod->end_date);
             $start = $lastEnd->copy()->addDay();
-            if (! $start->isFriday()) {
-                $start = $start->next(Carbon::FRIDAY);
+            if (! $start->isSaturday()) {
+                $start = $start->next(Carbon::SATURDAY);
             }
         } else {
             $now = Carbon::now();
-            $start = $now->isFriday() ? $now->copy() : $now->copy()->previous(Carbon::FRIDAY);
+            $start = $now->isSaturday() ? $now->copy() : $now->copy()->previous(Carbon::SATURDAY);
         }
 
-        $end = $start->copy()->addDays(6); // Kamis
+        $end = $start->copy()->addDays(7); // Sabtu berikutnya (8 Hari)
 
         $this->period_start_date = $start->format('Y-m-d');
         $this->period_end_date = $end->format('Y-m-d');
@@ -73,16 +73,15 @@ class WeeklyPayrollIndex extends Component
     }
 
     /**
-     * Otomatis sesuaikan tanggal akhir (Kamis) ketika tanggal mulai (Jum'at) diubah.
+     * Otomatis sesuaikan tanggal akhir (Sabtu) ketika tanggal mulai diubah.
      */
     public function updatedPeriodStartDate(string $val): void
     {
         if (! empty($val)) {
             try {
                 $picked = Carbon::parse($val);
-                // Smart Friday Snap: jika hari yang dipilih bukan Jum'at, otomatis sesuaikan ke hari Jum'at terdekat
-                $start = $picked->isFriday() ? $picked->copy() : $picked->copy()->previous(Carbon::FRIDAY);
-                $end = $start->copy()->addDays(6); // 7 hari: Jum'at s/d Kamis
+                $start = $picked->copy();
+                $end = $start->copy()->addDays(7); // Default 8 hari: Sabtu s/d Sabtu
 
                 $this->period_start_date = $start->format('Y-m-d');
                 $this->period_end_date = $end->format('Y-m-d');

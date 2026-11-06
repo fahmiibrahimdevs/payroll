@@ -274,13 +274,18 @@ class CompanyProfile extends Model
             return $code;
         }
 
-        $words = array_values(array_filter(preg_split('/\s+/', trim((string) $this->name)) ?: []));
+        $cleanName = preg_replace('/^(pt|cv|ud|koperasi|yayasan)\.?\s+/i', '', trim((string) $this->name));
+        $words = array_values(array_filter(preg_split('/\s+/', (string) $cleanName) ?: []));
         $initials = collect($words)
             ->take(4)
             ->map(fn (string $word): string => Str::upper(Str::substr($word, 0, 1)))
             ->implode('');
 
-        return $initials !== '' ? $initials : 'HRM';
+        if (mb_strlen($initials) === 1 && mb_strlen((string) $cleanName) <= 8 && trim((string) $cleanName) !== '') {
+            $initials = Str::upper((string) $cleanName);
+        }
+
+        return $initials !== '' ? $initials : 'LARASHIZ';
     }
 
     /**
@@ -314,7 +319,9 @@ class CompanyProfile extends Model
         return Attribute::make(
             get: function (): string {
                 if ($this->logo_path && Storage::disk('public')->exists($this->logo_path)) {
-                    return Storage::disk('public')->url($this->logo_path);
+                    $clean = ltrim($this->logo_path, '/');
+
+                    return str_starts_with($clean, 'storage/') ? '/'.$clean : '/storage/'.$clean;
                 }
 
                 return asset('assets/img/larashiz-logo.jpg');

@@ -15,6 +15,7 @@ use App\Livewire\Payrolls\WeeklyPayrollIndex;
 use App\Livewire\Positions\Index as PositionIndex;
 use App\Livewire\Posts\Index;
 use App\Livewire\SalaryComponents\Index as SalaryComponentIndex;
+use App\Livewire\WorkLocations\Index as WorkLocationIndex;
 use App\Models\CashAdvance;
 use App\Models\CashAdvancePayment;
 use App\Models\Employee;
@@ -54,6 +55,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('positions', PositionIndex::class)
         ->middleware('role:admin|direktur')
         ->name('positions.index');
+
+    Route::get('work-locations', WorkLocationIndex::class)
+        ->middleware('role:admin|direktur')
+        ->name('work-locations.index');
 
     Route::get('holidays', App\Livewire\Holidays\Index::class)
         ->middleware('role:admin|direktur')

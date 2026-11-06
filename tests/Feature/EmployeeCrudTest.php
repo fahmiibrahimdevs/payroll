@@ -583,7 +583,7 @@ class EmployeeCrudTest extends TestCase
         $test->call('edit', $empB->id)
             ->assertSet('form.overtime_rate_per_day', 75000)
             ->assertSet('form.overtime_rate_per_hour', 15000)
-            ->assertSeeHtml('wire:key="emp-ot-day-wrap-' . $empB->id . '"');
+            ->assertSeeHtml('wire:key="emp-ot-day-wrap-'.$empB->id.'"');
     }
 
     public function test_admin_can_create_employee_with_custom_role_and_password(): void

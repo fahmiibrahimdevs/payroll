@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
+use App\Enums\TaxRecipientType;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeDetail;
@@ -63,8 +64,8 @@ class EmployeeFactory extends Factory
     {
         return $this->afterCreating(function (Employee $employee) use ($detailAttributes) {
             $defaultTax = $employee->employment_status === EmploymentStatus::MAGANG
-                ? \App\Enums\TaxRecipientType::OutsideScope
-                : \App\Enums\TaxRecipientType::MonthlyEmployee;
+                ? TaxRecipientType::OutsideScope
+                : TaxRecipientType::MonthlyEmployee;
 
             EmployeeDetail::factory()->create(array_merge([
                 'employee_id' => $employee->id,

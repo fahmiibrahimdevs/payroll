@@ -7,6 +7,7 @@ use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
 use App\Support\Initials;
 use App\Traits\HasObfuscatedId;
+use Carbon\CarbonInterface;
 use Database\Factories\EmployeeFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -16,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 
 class Employee extends Model
 {
@@ -31,6 +33,8 @@ class Employee extends Model
         'fingerprint_id',
         'user_id',
         'department_id',
+        'work_location_id',
+        'is_free_location',
         'position_id',
         'full_name',
         'join_date',
@@ -58,6 +62,7 @@ class Employee extends Model
             'contract_end_date' => 'date',
             'employment_status' => EmploymentStatus::class,
             'status' => EmployeeStatus::class,
+            'is_free_location' => 'boolean',
             'basic_salary' => 'decimal:2',
             'daily_rate' => 'decimal:2',
             'overtime_rate_per_hour' => 'decimal:2',
@@ -105,6 +110,54 @@ class Employee extends Model
     public function position(): BelongsTo
     {
         return $this->belongsTo(Position::class);
+    }
+
+    /**
+     * Get the primary work location for the employee.
+     */
+    public function workLocation(): BelongsTo
+    {
+        return $this->belongsTo(WorkLocation::class, 'work_location_id');
+    }
+
+    /**
+     * Get the date-bound location assignments for the employee.
+     */
+    public function locationAssignments(): HasMany
+    {
+        return $this->hasMany(EmployeeLocationAssignment::class);
+    }
+
+    /**
+     * Get all valid work locations for the employee on a specific date.
+     * Returns null if employee has free location privileges (no geofence restriction).
+     *
+     * @return Collection<int, WorkLocation>|null
+     */
+    public function getValidWorkLocationsOnDate(CarbonInterface|string $date): ?Collection
+    {
+        if ($this->is_free_location) {
+            return null;
+        }
+
+        $locations = collect();
+
+        if ($this->work_location_id && $this->workLocation) {
+            $locations->push($this->workLocation);
+        }
+
+        $assignments = $this->locationAssignments()
+            ->activeOnDate($date)
+            ->with('workLocation')
+            ->get();
+
+        foreach ($assignments as $assignment) {
+            if ($assignment->workLocation) {
+                $locations->push($assignment->workLocation);
+            }
+        }
+
+        return $locations->filter(fn ($loc) => (bool) $loc->is_active)->unique('id')->values();
     }
 
     /**

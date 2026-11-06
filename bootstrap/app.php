@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping();
     })
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
         $middleware->append(AssignRequestId::class);
         $middleware->alias([
             'active' => EnsureActiveUser::class,
