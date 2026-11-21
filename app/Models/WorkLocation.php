@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class WorkLocation extends Model
@@ -60,11 +61,29 @@ class WorkLocation extends Model
     }
 
     /**
-     * Employees assigned to this location as their primary location.
+     * Departments associated with this work location.
      */
-    public function employees(): HasMany
+    public function departments(): BelongsToMany
     {
-        return $this->hasMany(Employee::class, 'work_location_id');
+        return $this->belongsToMany(
+            Department::class,
+            'department_work_locations',
+            'work_location_id',
+            'department_id'
+        )->withTimestamps();
+    }
+
+    /**
+     * Employees who include this location in their permanent defaults.
+     */
+    public function employees(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Employee::class,
+            'employee_default_work_locations',
+            'work_location_id',
+            'employee_id'
+        );
     }
 
     /**

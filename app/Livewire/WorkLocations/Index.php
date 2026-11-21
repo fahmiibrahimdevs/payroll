@@ -4,13 +4,16 @@ namespace App\Livewire\WorkLocations;
 
 use App\Livewire\Concerns\HasSimpleCrudModal;
 use App\Livewire\Forms\WorkLocationForm;
+use App\Models\Department;
 use App\Models\Employee;
-use App\Models\EmployeeLocationAssignment;
 use App\Models\WorkLocation;
 use App\Services\WorkLocationService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -24,17 +27,149 @@ class Index extends Component
     use HasSimpleCrudModal;
     use WithPagination;
 
+    private const ASSIGNMENTS_PAGE_NAME = 'assignmentsPage';
+
+    private const DEFAULT_EMPLOYEE_BATCH_SIZE = 10;
+
+    private const DEFAULT_EMPLOYEES_PAGE_NAME = 'defaultEmployeesPage';
+
     protected string $paginationTheme = 'bootstrap';
 
     public WorkLocationForm $form;
 
     public string $search = '';
 
+    public ?int $selectedDepartmentId = null;
+
     public int $perPage = 10;
+
+    public int $assignmentsPerPage = 10;
+
+    public string $assignmentSearch = '';
+
+    public ?int $defaultEmployeeLocationId = null;
+
+    public string $defaultEmployeeLocationName = '';
+
+    /** @var array<int, string|int> */
+    public array $selectedDefaultEmployeeIds = [];
+
+    public string $defaultEmployeeSearch = '';
+
+    #[Locked]
+    public int $defaultEmployeeLimit = self::DEFAULT_EMPLOYEE_BATCH_SIZE;
 
     public bool $isEditMode = false;
 
     public ?int $editingWorkLocationId = null;
+
+    public function updatedSelectedDepartmentId(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedAssignmentsPerPage(): void
+    {
+        $this->resetPage(self::ASSIGNMENTS_PAGE_NAME);
+    }
+
+    public function updatedAssignmentSearch(): void
+    {
+        $this->resetPage(self::ASSIGNMENTS_PAGE_NAME);
+    }
+
+    public function updatedDefaultEmployeeSearch(): void
+    {
+        $this->defaultEmployeeLimit = self::DEFAULT_EMPLOYEE_BATCH_SIZE;
+        $this->resetPage(self::DEFAULT_EMPLOYEES_PAGE_NAME);
+    }
+
+    /**
+     * Open the editor for employees with this permanent default location.
+     */
+    public function openDefaultEmployeeModal(int $workLocationId): void
+    {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+
+        $workLocation = WorkLocation::findOrFail($workLocationId);
+        $this->defaultEmployeeLocationId = $workLocation->id;
+        $this->defaultEmployeeLocationName = $workLocation->name;
+        $this->selectedDefaultEmployeeIds = $workLocation->employees()
+            ->where('status', 'active')
+            ->orderBy('full_name')
+            ->pluck('employees.id')
+            ->map(static fn (int $employeeId): string => (string) $employeeId)
+            ->all();
+        $this->defaultEmployeeSearch = '';
+        $this->defaultEmployeeLimit = self::DEFAULT_EMPLOYEE_BATCH_SIZE;
+        $this->resetValidation();
+
+        $this->dispatch('open-modal', id: 'defaultEmployeesModal');
+    }
+
+    public function loadMoreDefaultEmployees(): void
+    {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+
+        $activeEmployeeCount = Employee::query()
+            ->where('status', 'active')
+            ->count();
+
+        $this->defaultEmployeeLimit = min(
+            $this->defaultEmployeeLimit + self::DEFAULT_EMPLOYEE_BATCH_SIZE,
+            $activeEmployeeCount
+        );
+    }
+
+    /**
+     * Save the selected employees as members of this location's default roster.
+     */
+    public function saveDefaultEmployees(WorkLocationService $workLocationService): void
+    {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+
+        $validated = $this->validate([
+            'defaultEmployeeLocationId' => ['required', 'integer', 'exists:work_locations,id'],
+            'selectedDefaultEmployeeIds' => ['array'],
+            'selectedDefaultEmployeeIds.*' => [
+                'required',
+                'integer',
+                'distinct',
+                Rule::exists('employees', 'id')->where('status', 'active'),
+            ],
+        ], [
+            'selectedDefaultEmployeeIds.*.exists' => 'Pilih karyawan aktif yang valid.',
+        ]);
+
+        try {
+            $workLocationService->syncDefaultEmployees(
+                (int) $validated['defaultEmployeeLocationId'],
+                array_map('intval', $validated['selectedDefaultEmployeeIds'] ?? []),
+                auth()->user()
+            );
+
+            $employeeCount = count($validated['selectedDefaultEmployeeIds'] ?? []);
+            $this->dispatch('close-modal', id: 'defaultEmployeesModal');
+            $this->dispatch('swal:alert', [
+                'type' => 'success',
+                'title' => 'Karyawan Default Diperbarui',
+                'message' => "{$employeeCount} karyawan aktif disimpan untuk {$this->defaultEmployeeLocationName}.",
+            ]);
+            $this->reset([
+                'defaultEmployeeLocationId',
+                'defaultEmployeeLocationName',
+                'selectedDefaultEmployeeIds',
+                'defaultEmployeeSearch',
+                'defaultEmployeeLimit',
+            ]);
+        } catch (Throwable) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Menyimpan',
+                'message' => 'Terjadi kesalahan saat memperbarui karyawan default lokasi kerja.',
+            ]);
+        }
+    }
 
     /**
      * Form state for assigning an employee to a work location (site) with date range.
@@ -222,6 +357,32 @@ class Index extends Component
     }
 
     /**
+     * Update the assignment employee and provide the employee's current default locations to the picker.
+     *
+     * @return array{employeeId: string, locationIds: array<int, int>}
+     */
+    public function selectAssignmentEmployee(?int $employeeId, WorkLocationService $workLocationService): array
+    {
+        abort_unless(auth()->user()?->hasRole(['admin', 'direktur']), 403);
+
+        if ($employeeId === null) {
+            $this->assignmentForm['employee_id'] = '';
+
+            return [
+                'employeeId' => '',
+                'locationIds' => [],
+            ];
+        }
+
+        $this->assignmentForm['employee_id'] = (string) $employeeId;
+
+        return [
+            'employeeId' => (string) $employeeId,
+            'locationIds' => $workLocationService->getDefaultWorkLocationIdsForEmployee($employeeId),
+        ];
+    }
+
+    /**
      * Quickly set the assignment duration preset.
      */
     public function setAssignmentDuration(int $days): void
@@ -257,8 +418,22 @@ class Index extends Component
             'assignmentForm.end_date.after_or_equal' => 'Tanggal selesai tidak boleh sebelum tanggal mulai.',
         ]);
 
+        $assignmentData = $validated['assignmentForm'];
+        if ($workLocationService->isDefaultWorkLocationForEmployee(
+            (int) $assignmentData['employee_id'],
+            (int) $assignmentData['work_location_id']
+        )) {
+            $this->addError(
+                'assignmentForm.work_location_id',
+                'Lokasi default karyawan tidak dapat dipilih sebagai lokasi penugasan sementara.'
+            );
+
+            return;
+        }
+
         try {
-            $assignment = $workLocationService->assignEmployee($validated['assignmentForm'], auth()->user());
+            $assignment = $workLocationService->assignEmployee($assignmentData, auth()->user());
+            $this->resetPage(self::ASSIGNMENTS_PAGE_NAME);
 
             $this->dispatch('close-modal', id: 'locationAssignmentModal');
             $this->dispatch('swal:alert', [
@@ -274,6 +449,12 @@ class Index extends Component
                 'end_date' => '',
                 'notes' => '',
             ];
+        } catch (ValidationException $e) {
+            foreach ($e->errors() as $field => $messages) {
+                foreach ($messages as $message) {
+                    $this->addError($field, $message);
+                }
+            }
         } catch (Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -309,6 +490,7 @@ class Index extends Component
 
         try {
             $workLocationService->deleteAssignment($id, auth()->user());
+            $this->resetPage(self::ASSIGNMENTS_PAGE_NAME);
 
             $this->dispatch('swal:alert', [
                 'type' => 'success',
@@ -331,35 +513,53 @@ class Index extends Component
     {
         $workLocations = $workLocationService->getPaginatedWorkLocations(
             search: $this->search,
-            perPage: $this->perPage
+            perPage: $this->perPage,
+            departmentId: $this->selectedDepartmentId
         );
 
         $totalLocations = WorkLocation::count();
         $activeLocations = WorkLocation::where('is_active', true)->count();
-        $distributedEmployees = Employee::whereNotNull('work_location_id')->count();
+        $distributedEmployees = Employee::query()
+            ->whereHas('defaultWorkLocations')
+            ->orWhereNotNull('work_location_id')
+            ->count();
         $externalSites = WorkLocation::where('name', 'not like', '%Kantor Pusat%')
             ->where('name', 'not like', '%Head Office%')
             ->count();
 
-        $activeAssignments = $workLocationService->getActiveAndUpcomingAssignments();
+        $activeAssignments = $workLocationService->getActiveAndUpcomingAssignments(
+            perPage: $this->assignmentsPerPage,
+            pageName: self::ASSIGNMENTS_PAGE_NAME,
+            search: $this->assignmentSearch
+        );
         $allActiveEmployees = Employee::query()
             ->where('status', 'active')
-            ->with(['department:id,name', 'position:id,name'])
+            ->with(['department:id,name', 'position:id,name', 'defaultWorkLocations:id'])
             ->orderBy('full_name')
             ->get();
+        $defaultLocationEmployees = $workLocationService->getDefaultEmployeeCandidates(
+            search: $this->defaultEmployeeSearch,
+            perPage: $this->defaultEmployeeLimit,
+            pageName: self::DEFAULT_EMPLOYEES_PAGE_NAME
+        );
         $allActiveLocations = WorkLocation::query()
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
+        $departments = Department::getLookup();
 
         return view('livewire.work-locations.index', [
             'workLocations' => $workLocations,
+            'departments' => $departments,
             'totalLocations' => $totalLocations,
             'activeLocations' => $activeLocations,
             'distributedEmployees' => $distributedEmployees,
             'externalSites' => $externalSites,
             'activeAssignments' => $activeAssignments,
             'allActiveEmployees' => $allActiveEmployees,
+            'defaultLocationEmployees' => $defaultLocationEmployees,
+            'defaultLocationEmployeesTotal' => $defaultLocationEmployees->total(),
+            'hasMoreDefaultLocationEmployees' => $defaultLocationEmployees->total() > $defaultLocationEmployees->count(),
             'allActiveLocations' => $allActiveLocations,
         ]);
     }

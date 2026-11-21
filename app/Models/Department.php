@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
 
@@ -43,6 +44,19 @@ class Department extends Model
     public function employees(): HasMany
     {
         return $this->hasMany(Employee::class);
+    }
+
+    /**
+     * Get the work locations assigned to this department.
+     */
+    public function workLocations(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            WorkLocation::class,
+            'department_work_locations',
+            'department_id',
+            'work_location_id'
+        )->withTimestamps();
     }
 
     /**

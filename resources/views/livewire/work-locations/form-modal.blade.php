@@ -81,6 +81,37 @@
                             </div>
                         </div>
 
+                        <!-- Departemen Terkait (Many-to-Many) -->
+                        <div class="col-12">
+                            <div class="form-group mb-3">
+                                <label style="font-weight: 500; color: #1e293b;">
+                                    Departemen Terkait <small class="text-muted">(Karyawan di departemen yang dipilih otomatis berhak absen di lokasi ini)</small>
+                                </label>
+                                <div class="border rounded p-3" style="background-color: #ffffff; border-color: #cbd5e1 !important; max-height: 180px; overflow-y: auto;">
+                                    <div class="row">
+                                        @forelse ($departments as $dept)
+                                            <div class="col-md-6 mb-2">
+                                                <div class="custom-control custom-checkbox">
+                                                    <input type="checkbox" class="custom-control-input" id="dept_{{ $dept->id }}" value="{{ $dept->id }}" wire:model="form.department_ids">
+                                                    <label class="custom-control-label" for="dept_{{ $dept->id }}" style="cursor: pointer; font-weight: 400; color: #1e293b; font-size: 13px;">
+                                                        {{ $dept->name }}
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        @empty
+                                            <div class="col-12 text-muted" style="font-size: 12px;">Belum ada data departemen.</div>
+                                        @endforelse
+                                    </div>
+                                </div>
+                                @error('form.department_ids')
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                @enderror
+                                @error('form.department_ids.*')
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+
                         <!-- 4. Interactive Leaflet Map Picker -->
                         <div class="col-12">
                             <div class="form-group mb-3">

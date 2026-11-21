@@ -25,6 +25,9 @@ class WorkLocationForm extends Form
 
     public bool $is_active = true;
 
+    /** @var array<int, int> */
+    public array $department_ids = [];
+
     /**
      * Define the validation rules.
      *
@@ -64,6 +67,14 @@ class WorkLocationForm extends Form
             'is_active' => [
                 'boolean',
             ],
+            'department_ids' => [
+                'nullable',
+                'array',
+            ],
+            'department_ids.*' => [
+                'integer',
+                'exists:departments,id',
+            ],
         ];
     }
 
@@ -81,6 +92,7 @@ class WorkLocationForm extends Form
             'longitude' => 'Longitude',
             'radius_meters' => 'Radius Toleransi',
             'is_active' => 'Status Aktif',
+            'department_ids' => 'Departemen Terkait',
         ];
     }
 
@@ -96,6 +108,7 @@ class WorkLocationForm extends Form
         $this->longitude = (string) $workLocation->longitude;
         $this->radius_meters = (int) $workLocation->radius_meters;
         $this->is_active = (bool) $workLocation->is_active;
+        $this->department_ids = $workLocation->departments()->pluck('departments.id')->map(fn ($id) => (int) $id)->all();
         $this->resetValidation();
     }
 
@@ -114,7 +127,8 @@ class WorkLocationForm extends Form
      */
     public function resetForm(): void
     {
-        $this->reset(['workLocation', 'name', 'address', 'latitude', 'longitude']);
+        $this->reset(['workLocation', 'name', 'address', 'latitude', 'longitude', 'department_ids']);
+        $this->department_ids = [];
         $this->radius_meters = 50;
         $this->is_active = true;
         $this->resetValidation();

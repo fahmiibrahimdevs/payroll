@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -121,6 +122,19 @@ class Employee extends Model
     }
 
     /**
+     * Get the employee's permanent default work locations.
+     */
+    public function defaultWorkLocations(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            WorkLocation::class,
+            'employee_default_work_locations',
+            'employee_id',
+            'work_location_id'
+        );
+    }
+
+    /**
      * Get the date-bound location assignments for the employee.
      */
     public function locationAssignments(): HasMany
@@ -140,10 +154,17 @@ class Employee extends Model
             return null;
         }
 
-        $locations = collect();
+        $locations = $this->defaultWorkLocations()->get();
 
         if ($this->work_location_id && $this->workLocation) {
             $locations->push($this->workLocation);
+        }
+
+        // Lokasi kerja yang terikat dengan departemen karyawan
+        if ($this->department_id && $this->department) {
+            foreach ($this->department->workLocations()->where('is_active', true)->get() as $deptLoc) {
+                $locations->push($deptLoc);
+            }
         }
 
         $assignments = $this->locationAssignments()
