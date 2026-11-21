@@ -4,6 +4,8 @@ namespace App\Livewire\Schedules;
 
 use App\Models\CompanyProfile;
 use App\Models\Department;
+use App\Models\Employee;
+use App\Services\ActivityLogService;
 use App\Services\WorkScheduleService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
@@ -169,6 +171,66 @@ class Index extends Component
     }
 
     /**
+     * Memindahkan departemen karyawan via drag & drop.
+     */
+    public function changeEmployeeDepartment(int $employeeId, ?int $newDepartmentId = null): void
+    {
+        if (! auth()->user()?->hasRole('admin')) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Akses Ditolak',
+                'message' => 'Hanya Admin yang dapat memindahkan departemen karyawan.',
+            ]);
+
+            return;
+        }
+
+        try {
+            $employee = Employee::findOrFail($employeeId);
+            $oldDeptName = $employee->department?->name ?? 'Tanpa Departemen';
+            $oldDeptId = $employee->department_id;
+
+            $targetDeptId = ($newDepartmentId && $newDepartmentId > 0) ? $newDepartmentId : null;
+            $targetDeptName = 'Tanpa Departemen';
+
+            if ($targetDeptId) {
+                $dept = Department::findOrFail($targetDeptId);
+                $targetDeptName = $dept->name;
+            }
+
+            if ($employee->department_id === $targetDeptId) {
+                return;
+            }
+
+            $employee->update(['department_id' => $targetDeptId]);
+
+            app(ActivityLogService::class)->info(
+                action: 'EMPLOYEE_DEPARTMENT_TRANSFERRED',
+                module: 'schedules',
+                message: "Karyawan {$employee->full_name} dipindahkan dari Departemen {$oldDeptName} ke {$targetDeptName}",
+                context: [
+                    'employee_id' => $employee->id,
+                    'old_department_id' => $oldDeptId,
+                    'new_department_id' => $targetDeptId,
+                ],
+                userId: auth()->id()
+            );
+
+            $this->dispatch('swal:alert', [
+                'type' => 'success',
+                'title' => 'Departemen Diperbarui!',
+                'message' => "Karyawan {$employee->full_name} berhasil dipindahkan ke Departemen {$targetDeptName}.",
+            ]);
+        } catch (\Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Memindahkan Departemen',
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Memindahkan urutan karyawan (geser ke atas / bawah via tombol).
      */
     public function moveEmployee(int $employeeId, string $direction, WorkScheduleService $service): void
@@ -228,6 +290,41 @@ class Index extends Component
             $this->dispatch('swal:alert', [
                 'type' => 'error',
                 'title' => 'Gagal Mengubah Jadwal',
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Save the default statuses currently shown for dates without an explicit roster entry.
+     */
+    public function completeRosterWithDefaults(WorkScheduleService $service): void
+    {
+        if (! auth()->user()?->hasRole('admin')) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Akses Ditolak',
+                'message' => 'Hanya Admin yang dapat melengkapi roster.',
+            ]);
+
+            return;
+        }
+
+        try {
+            $savedCount = $service->completeMonthRosterWithDefaults($this->year, $this->month, auth()->user());
+            $message = $savedCount > 0
+                ? "{$savedCount} jadwal kosong telah disimpan mengikuti jadwal default yang terlihat."
+                : 'Semua jadwal bulan ini sudah tersimpan.';
+
+            $this->dispatch('swal:alert', [
+                'type' => 'success',
+                'title' => 'Roster Lengkap',
+                'message' => $message,
+            ]);
+        } catch (\Throwable $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Gagal Melengkapi Roster',
                 'message' => $e->getMessage(),
             ]);
         }
@@ -431,7 +528,26 @@ class Index extends Component
             return $emp;
         });
 
+        // Kelompokkan karyawan per departemen
+        $groupedEmployees = $roster['employees']->groupBy(function ($emp) {
+            $dept = trim((string) ($emp['department'] ?? ''));
+
+            return ($dept === '' || $dept === '-') ? 'Tanpa Departemen' : $dept;
+        })->sortKeysUsing(function ($a, $b) {
+            if ($a === 'Tanpa Departemen') {
+                return 1;
+            }
+            if ($b === 'Tanpa Departemen') {
+                return -1;
+            }
+
+            return strcasecmp($a, $b);
+        });
+
+        $roster['grouped_employees'] = $groupedEmployees;
+
         $departments = Department::orderBy('name')->get();
+        $deptIdByName = $departments->pluck('id', 'name')->all();
         $company = CompanyProfile::getProfile();
 
         $monthName = Carbon::createFromDate($year, $month, 1)
@@ -440,7 +556,9 @@ class Index extends Component
 
         return view('livewire.schedules.index', [
             'roster' => $roster,
+            'groupedEmployees' => $groupedEmployees,
             'departments' => $departments,
+            'deptIdByName' => $deptIdByName,
             'company' => $company,
             'monthName' => $monthName,
             'showImportModal' => $this->showImportModal,

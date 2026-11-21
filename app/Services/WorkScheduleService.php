@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\EmploymentStatus;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
@@ -86,7 +87,8 @@ class WorkScheduleService
 
         $employeesQuery = Employee::query()
             ->with(['department:id,name', 'position:id,name', 'detail'])
-            ->where('status', 'active');
+            ->where('status', 'active')
+            ->where('employment_status', '!=', EmploymentStatus::HARIAN);
 
         if ($departmentId) {
             $employeesQuery->where('department_id', $departmentId);
@@ -151,6 +153,7 @@ class WorkScheduleService
                 'code' => $emp->detail?->employee_code ?? '-',
                 'jobdesk' => $emp->position?->name ?? '-',
                 'department' => $emp->department?->name ?? '-',
+                'department_id' => $emp->department_id,
                 'fingerprint_id' => $emp->fingerprint_id,
                 'schedules' => $scheduleDays,
                 'total_work_days' => $workCount,
@@ -168,10 +171,95 @@ class WorkScheduleService
     }
 
     /**
+     * Save the roster grid's displayed default status for every missing employee date.
+     */
+    public function completeMonthRosterWithDefaults(int $year, int $month, User $actor): int
+    {
+        if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
+            throw new InvalidArgumentException('Bulan atau tahun roster tidak valid.');
+        }
+
+        $company = CompanyProfile::getProfile();
+        if (! $company->isRosterMode()) {
+            throw new InvalidArgumentException('Lengkapi roster setelah Mode Roster diaktifkan pada Profil Perusahaan.');
+        }
+
+        $monthStart = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+        $monthEnd = $monthStart->copy()->endOfMonth();
+        $employeeIds = Employee::query()
+            ->where('status', 'active')
+            ->where('employment_status', '!=', EmploymentStatus::HARIAN)
+            ->orderBy('id')
+            ->pluck('id');
+
+        if ($employeeIds->isEmpty()) {
+            return 0;
+        }
+
+        $existingSchedules = EmployeeSchedule::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->get(['employee_id', 'date'])
+            ->mapWithKeys(fn (EmployeeSchedule $schedule): array => [
+                $schedule->employee_id.'|'.$schedule->date->toDateString() => true,
+            ]);
+
+        $workDaysPerWeek = (int) ($company->work_days_per_week ?: 6);
+        $holidays = Holiday::datesBetween($monthStart->toDateString(), $monthEnd->toDateString());
+        $now = now();
+        $rows = [];
+
+        for ($date = $monthStart->copy(); $date->lte($monthEnd); $date->addDay()) {
+            $dateString = $date->toDateString();
+            $defaultStatus = WorkingDays::isWeekend($date, $workDaysPerWeek) || $holidays->has($dateString)
+                ? EmployeeSchedule::STATUS_OFF
+                : EmployeeSchedule::STATUS_WORK;
+
+            foreach ($employeeIds as $employeeId) {
+                if ($existingSchedules->has($employeeId.'|'.$dateString)) {
+                    continue;
+                }
+
+                $rows[] = [
+                    'employee_id' => $employeeId,
+                    'date' => $dateString,
+                    'status' => $defaultStatus,
+                    'notes' => null,
+                    'created_by' => $actor->id,
+                    'updated_by' => $actor->id,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+        }
+
+        $recordsSaved = 0;
+        foreach (array_chunk($rows, 500) as $chunk) {
+            $recordsSaved += EmployeeSchedule::query()->insertOrIgnore($chunk);
+        }
+
+        $this->logger->info(
+            action: 'ROSTER_DEFAULTS_SAVED',
+            module: 'schedules',
+            message: 'Default roster dates saved',
+            context: [
+                'year' => $year,
+                'month' => $month,
+                'records_saved' => $recordsSaved,
+            ],
+            userId: $actor->id
+        );
+
+        return $recordsSaved;
+    }
+
+    /**
      * Toggle status jadwal (work <-> off) untuk seorang karyawan pada tanggal tertentu.
      */
     public function toggleSchedule(int $employeeId, string $date, ?User $actor = null): EmployeeSchedule
     {
+        $this->ensureEligibleRosterEmployee($employeeId);
+
         return DB::transaction(function () use ($employeeId, $date, $actor) {
             $carbonDate = Carbon::parse($date);
             $dateStr = $carbonDate->toDateString();
@@ -253,6 +341,8 @@ class WorkScheduleService
      */
     public function setSchedule(int $employeeId, string $date, string $status, ?string $notes = null, ?User $actor = null): EmployeeSchedule
     {
+        $this->ensureEligibleRosterEmployee($employeeId);
+
         if (! in_array($status, [EmployeeSchedule::STATUS_WORK, EmployeeSchedule::STATUS_OFF], true)) {
             throw new InvalidArgumentException('Status jadwal harus work atau off.');
         }
@@ -287,7 +377,10 @@ class WorkScheduleService
 
         // Hanya salin jadwal untuk karyawan aktif (status = 'active')
         $sourceSchedules = EmployeeSchedule::query()
-            ->whereIn('employee_id', Employee::where('status', 'active')->select('id'))
+            ->whereIn('employee_id', Employee::query()
+                ->where('status', 'active')
+                ->where('employment_status', '!=', EmploymentStatus::HARIAN)
+                ->select('id'))
             ->month($sourceYear, $sourceMonth)
             ->get();
 
@@ -449,7 +542,10 @@ class WorkScheduleService
             }
 
             // Cache karyawan untuk pencocokan yang aman dan robust
-            $employees = Employee::with('detail')->where('status', 'active')->get();
+            $employees = Employee::with('detail')
+                ->where('status', 'active')
+                ->where('employment_status', '!=', EmploymentStatus::HARIAN)
+                ->get();
             $byId = [];
             $byFingerprint = [];
             $byCode = [];
@@ -748,11 +844,40 @@ class WorkScheduleService
 
         $rowNum = 5;
         $totalEmployees = count($employees);
-        $lastRow = max(5, $rowNum + $totalEmployees - 1);
 
         if ($totalEmployees > 0) {
-            // Optimasi styling massal: set default hijau untuk seluruh grid tanggal
-            $sheet->getStyle("D5:{$lastColLetter}{$lastRow}")->applyFromArray([
+            $groupedEmployees = $employees->groupBy(function ($emp) {
+                $dept = trim((string) ($emp['department'] ?? ''));
+
+                return ($dept === '' || $dept === '-') ? 'Tanpa Departemen' : $dept;
+            })->sortKeysUsing(function ($a, $b) {
+                if ($a === 'Tanpa Departemen') {
+                    return 1;
+                }
+                if ($b === 'Tanpa Departemen') {
+                    return -1;
+                }
+
+                return strcasecmp($a, $b);
+            });
+
+            $deptHeaderStyle = [
+                'font' => [
+                    'bold' => true,
+                    'color' => ['rgb' => '1E293B'],
+                    'size' => 10,
+                ],
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => 'F1F5F9'],
+                ],
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_LEFT,
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ],
+            ];
+
+            $workStyle = [
                 'fill' => [
                     'fillType' => Fill::FILL_SOLID,
                     'startColor' => ['rgb' => '22C55E'],
@@ -761,7 +886,7 @@ class WorkScheduleService
                     'horizontal' => Alignment::HORIZONTAL_CENTER,
                     'vertical' => Alignment::VERTICAL_CENTER,
                 ],
-            ]);
+            ];
 
             $offStyle = [
                 'fill' => [
@@ -773,31 +898,45 @@ class WorkScheduleService
                     'bold' => true,
                     'size' => 9,
                 ],
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ],
             ];
 
-            foreach ($employees as $idx => $emp) {
-                $sheet->setCellValue("A{$rowNum}", $idx + 1);
-                $sheet->setCellValue("B{$rowNum}", $emp['name']);
-                $sheet->setCellValue("C{$rowNum}", $emp['jobdesk']);
+            foreach ($groupedEmployees as $deptName => $deptEmps) {
+                $sheet->setCellValue("A{$rowNum}", 'DEPARTEMEN: '.strtoupper($deptName).' ('.count($deptEmps).' Karyawan)');
+                $sheet->mergeCells("A{$rowNum}:{$lastColLetter}{$rowNum}");
+                $sheet->getStyle("A{$rowNum}:{$lastColLetter}{$rowNum}")->applyFromArray($deptHeaderStyle);
+                $sheet->getRowDimension($rowNum)->setRowHeight(22);
+                $rowNum++;
 
-                $colIdx = 4;
-                foreach ($dates as $day => $meta) {
-                    $colLetter = Coordinate::stringFromColumnIndex($colIdx);
-                    $sch = $emp['schedules'][$meta['date']] ?? null;
-                    $isOff = $sch && $sch['status'] === EmployeeSchedule::STATUS_OFF;
+                foreach ($deptEmps->values() as $deptIdx => $emp) {
+                    $sheet->setCellValue("A{$rowNum}", $deptIdx + 1);
+                    $sheet->setCellValue("B{$rowNum}", $emp['name']);
+                    $sheet->setCellValue("C{$rowNum}", $emp['jobdesk']);
 
-                    if ($isOff) {
-                        $cellCoord = "{$colLetter}{$rowNum}";
-                        $sheet->setCellValue($cellCoord, 'OFF');
-                        $sheet->getStyle($cellCoord)->applyFromArray($offStyle);
-                    } else {
-                        $sheet->setCellValue("{$colLetter}{$rowNum}", '');
+                    $sheet->getStyle("D{$rowNum}:{$lastColLetter}{$rowNum}")->applyFromArray($workStyle);
+
+                    $colIdx = 4;
+                    foreach ($dates as $day => $meta) {
+                        $colLetter = Coordinate::stringFromColumnIndex($colIdx);
+                        $sch = $emp['schedules'][$meta['date']] ?? null;
+                        $isOff = $sch && $sch['status'] === EmployeeSchedule::STATUS_OFF;
+
+                        if ($isOff) {
+                            $cellCoord = "{$colLetter}{$rowNum}";
+                            $sheet->setCellValue($cellCoord, 'OFF');
+                            $sheet->getStyle($cellCoord)->applyFromArray($offStyle);
+                        } else {
+                            $sheet->setCellValue("{$colLetter}{$rowNum}", '');
+                        }
+
+                        $colIdx++;
                     }
 
-                    $colIdx++;
+                    $rowNum++;
                 }
-
-                $rowNum++;
             }
         }
 
@@ -818,5 +957,18 @@ class WorkScheduleService
         }
 
         return $spreadsheet;
+    }
+
+    private function ensureEligibleRosterEmployee(int $employeeId): void
+    {
+        $isEligible = Employee::query()
+            ->whereKey($employeeId)
+            ->where('status', 'active')
+            ->where('employment_status', '!=', EmploymentStatus::HARIAN)
+            ->exists();
+
+        if (! $isEligible) {
+            throw new InvalidArgumentException('Roster hanya berlaku untuk karyawan aktif selain harian lepas.');
+        }
     }
 }

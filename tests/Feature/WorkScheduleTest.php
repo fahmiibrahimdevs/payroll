@@ -207,6 +207,78 @@ class WorkScheduleTest extends TestCase
         $this->assertArrayNotHasKey('2026-11-10', $workDays);
     }
 
+    public function test_admin_can_save_default_status_for_each_missing_roster_date_without_overwriting_custom_days(): void
+    {
+        $company = CompanyProfile::getProfile();
+        $company->update([
+            'work_days_per_week' => 6,
+            'work_schedule_mode' => 'roster',
+        ]);
+        EmployeeSchedule::create([
+            'employee_id' => $this->employee->id,
+            'date' => '2026-11-02',
+            'status' => EmployeeSchedule::STATUS_OFF,
+        ]);
+
+        Livewire::actingAs($this->adminUser)
+            ->test(SchedulesIndex::class)
+            ->set('year', 2026)
+            ->set('month', 11)
+            ->call('completeRosterWithDefaults')
+            ->assertDispatched('swal:alert');
+
+        $this->assertSame(30, EmployeeSchedule::query()->where('employee_id', $this->employee->id)->whereBetween('date', ['2026-11-01', '2026-11-30'])->count());
+        $this->assertDatabaseHas('employee_schedules', [
+            'employee_id' => $this->employee->id,
+            'date' => '2026-11-01',
+            'status' => EmployeeSchedule::STATUS_OFF,
+        ]);
+        $this->assertDatabaseHas('employee_schedules', [
+            'employee_id' => $this->employee->id,
+            'date' => '2026-11-02',
+            'status' => EmployeeSchedule::STATUS_OFF,
+        ]);
+        $this->assertDatabaseHas('employee_schedules', [
+            'employee_id' => $this->employee->id,
+            'date' => '2026-11-03',
+            'status' => EmployeeSchedule::STATUS_WORK,
+        ]);
+    }
+
+    public function test_missing_roster_dates_are_shown_as_unfilled_white_cells(): void
+    {
+        CompanyProfile::getProfile()->update(['work_schedule_mode' => 'roster']);
+
+        Livewire::actingAs($this->adminUser)
+            ->test(SchedulesIndex::class)
+            ->set('year', 2026)
+            ->set('month', 11)
+            ->assertSee('cell-missing', false)
+            ->assertSee('missing-text', false)
+            ->assertSee('Belum diisi. Klik', false);
+    }
+
+    public function test_roster_excludes_daily_workers_and_does_not_save_default_days_for_them(): void
+    {
+        $company = CompanyProfile::getProfile();
+        $company->update(['work_schedule_mode' => 'roster']);
+        $dailyWorker = Employee::factory()->active()->create([
+            'employment_status' => EmploymentStatus::HARIAN,
+            'full_name' => 'Pekerja Harian Khusus',
+        ]);
+
+        Livewire::actingAs($this->adminUser)
+            ->test(SchedulesIndex::class)
+            ->set('year', 2026)
+            ->set('month', 11)
+            ->assertDontSee('Pekerja Harian Khusus')
+            ->call('toggleDay', $dailyWorker->id, '2026-11-02')
+            ->assertDispatched('swal:alert')
+            ->call('completeRosterWithDefaults');
+
+        $this->assertSame(0, EmployeeSchedule::query()->where('employee_id', $dailyWorker->id)->count());
+    }
+
     public function test_weekly_overtime_sync_calculates_meal_allowance_according_to_roster(): void
     {
         $company = CompanyProfile::getProfile();
@@ -226,6 +298,14 @@ class WorkScheduleTest extends TestCase
             'date' => '2026-11-10',
             'status' => EmployeeSchedule::STATUS_OFF,
         ]);
+
+        foreach (['2026-11-09', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14'] as $date) {
+            EmployeeSchedule::create([
+                'employee_id' => $this->employee->id,
+                'date' => $date,
+                'status' => $date === '2026-11-09' ? EmployeeSchedule::STATUS_WORK : EmployeeSchedule::STATUS_OFF,
+            ]);
+        }
 
         // Catat kehadiran Kelvin di hari Minggu (2026-11-08) dan Senin (2026-11-09)
         Attendance::create([
@@ -331,5 +411,79 @@ class WorkScheduleTest extends TestCase
             ->assertDispatched('swal:alert')
             ->assertDontSee('wire:click="openColorModal')
             ->assertDontSee('class="drag-handle');
+    }
+
+    public function test_roster_groups_employees_by_department(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        $deptFinance = Department::firstOrCreate(['name' => 'Keuangan']);
+
+        $empFinance = Employee::create([
+            'fingerprint_id' => '8881',
+            'department_id' => $deptFinance->id,
+            'full_name' => 'Siti Keuangan',
+            'join_date' => '2024-01-01',
+            'employment_status' => EmploymentStatus::TETAP,
+            'status' => 'active',
+            'basic_salary' => 3500000,
+        ]);
+
+        $test = Livewire::test(SchedulesIndex::class)
+            ->set('year', 2026)
+            ->set('month', 11);
+
+        $grouped = $test->viewData('groupedEmployees');
+        $this->assertTrue($grouped->has('Keuangan'));
+        $this->assertTrue($grouped->has('Produksi'));
+
+        $test->assertSee('DEPARTEMEN: KEUANGAN')
+            ->assertSee('DEPARTEMEN: PRODUKSI');
+    }
+
+    public function test_admin_can_change_employee_department(): void
+    {
+        $this->actingAs($this->adminUser);
+
+        $deptTarget = Department::firstOrCreate(['name' => 'Gudang']);
+
+        $test = Livewire::test(SchedulesIndex::class)
+            ->set('year', 2026)
+            ->set('month', 11)
+            ->call('changeEmployeeDepartment', $this->employee->id, $deptTarget->id)
+            ->assertDispatched('swal:alert', fn ($event, $params) => ($params[0]['type'] ?? '') === 'success');
+
+        $this->assertDatabaseHas('employees', [
+            'id' => $this->employee->id,
+            'department_id' => $deptTarget->id,
+        ]);
+
+        // Test move to null (Tanpa Departemen)
+        $test->call('changeEmployeeDepartment', $this->employee->id, null)
+            ->assertDispatched('swal:alert', fn ($event, $params) => ($params[0]['type'] ?? '') === 'success');
+
+        $this->assertDatabaseHas('employees', [
+            'id' => $this->employee->id,
+            'department_id' => null,
+        ]);
+    }
+
+    public function test_direktur_cannot_change_employee_department(): void
+    {
+        $this->actingAs($this->direkturUser);
+
+        $originalDeptId = $this->employee->department_id;
+        $deptTarget = Department::firstOrCreate(['name' => 'Gudang']);
+
+        Livewire::test(SchedulesIndex::class)
+            ->set('year', 2026)
+            ->set('month', 11)
+            ->call('changeEmployeeDepartment', $this->employee->id, $deptTarget->id)
+            ->assertDispatched('swal:alert', fn ($event, $params) => ($params[0]['type'] ?? '') === 'error');
+
+        $this->assertDatabaseHas('employees', [
+            'id' => $this->employee->id,
+            'department_id' => $originalDeptId,
+        ]);
     }
 }

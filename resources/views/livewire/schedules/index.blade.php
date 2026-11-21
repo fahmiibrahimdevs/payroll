@@ -1,4 +1,4 @@
-<div>
+<div class="schedules-index-page">
     <x-slot name="header">
         <h1>Jadwal Kerja (Roster)</h1>
         <div class="section-header-breadcrumb">
@@ -9,15 +9,16 @@
     </x-slot>
 
     <!-- Header Section (Section Title & Section Lead Standar Stisla) & Action Buttons -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
-        <div>
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 roster-page-header">
+        <div class="roster-page-intro">
             <h2 class="section-title mt-0">Roster Jadwal Kerja &amp; Libur Bergilir</h2>
             <p class="section-lead mb-0">
-                Kelola jadwal masuk dan rotasi hari libur (Off Day) bulanan sesuai jadwal buka toko di hari Minggu.
+                <span class="roster-intro-copy-desktop">Kelola jadwal masuk dan rotasi hari libur (Off Day) bulanan sesuai jadwal buka toko di hari Minggu. Simpan jadwal default yang tampil agar setiap tanggal tercatat jelas untuk perhitungan gaji.</span>
+                <span class="roster-intro-copy-mobile">Atur rotasi jadwal masuk dan libur bulanan untuk perhitungan gaji.</span>
             </p>
         </div>
 
-        <div class="mt-2 mt-md-0 flex-shrink-0 d-flex align-items-center flex-wrap" style="gap: 8px;">
+        <div class="mt-2 mt-md-0 flex-shrink-0 d-flex align-items-center flex-wrap roster-page-actions roster-desktop-actions">
             @if (auth()->user()?->hasRole(['admin', 'direktur']))
                 <button type="button" wire:click="exportExcel" wire:loading.attr="disabled" wire:target="exportExcel" class="btn font-weight-bold d-inline-flex align-items-center text-white" style="background-color: #0b52aa; border: none; border-radius: 8px; padding: 7px 15px; font-size: 12px; box-shadow: 0 2px 6px rgba(11, 82, 170, 0.25); transition: all 0.15s;">
                     <span wire:loading.remove wire:target="exportExcel"><i class="fas fa-file-excel mr-1.5"></i> Export Excel</span>
@@ -26,6 +27,13 @@
             @endif
 
             @if (auth()->user()?->hasRole('admin'))
+                @if ($company->isRosterMode())
+                    <button type="button" wire:click="completeRosterWithDefaults" wire:loading.attr="disabled" wire:target="completeRosterWithDefaults" class="btn font-weight-bold d-inline-flex align-items-center text-white" style="background-color: #0b52aa; border: none; border-radius: 8px; padding: 7px 15px; font-size: 12px; box-shadow: 0 2px 6px rgba(11, 82, 170, 0.25); transition: all 0.15s;">
+                        <span wire:loading.remove wire:target="completeRosterWithDefaults"><i class="fas fa-calendar-check mr-1.5"></i> Lengkapi Roster</span>
+                        <span wire:loading wire:target="completeRosterWithDefaults"><i class="fas fa-spinner fa-spin mr-1.5"></i> Menyimpan Jadwal...</span>
+                    </button>
+                @endif
+
                 <button type="button" wire:click="copyFromPreviousMonth" wire:confirm="Salin pola jadwal libur dari bulan sebelumnya ke bulan ini?" wire:loading.attr="disabled" wire:target="copyFromPreviousMonth" class="btn font-weight-bold d-inline-flex align-items-center text-white" style="background-color: #1e40af; border: none; border-radius: 8px; padding: 7px 15px; font-size: 12px; box-shadow: 0 2px 6px rgba(30, 64, 175, 0.25); transition: all 0.15s;">
                     <span wire:loading.remove wire:target="copyFromPreviousMonth"><i class="fas fa-copy mr-1.5"></i> Salin Bulan Lalu</span>
                     <span wire:loading wire:target="copyFromPreviousMonth"><i class="fas fa-spinner fa-spin mr-1.5"></i> Menyalin Jadwal...</span>
@@ -37,7 +45,62 @@
                 </button>
             @endif
         </div>
+
+        @if (auth()->user()?->hasRole(['admin', 'direktur']))
+            <div class="roster-mobile-actions">
+                <button type="button" class="btn btn-primary roster-mobile-actions-trigger" data-toggle="modal" data-target="#rosterActionsModal">
+                    <i class="fas fa-sliders-h mr-2"></i> Aksi Roster
+                </button>
+            </div>
+        @endif
     </div>
+
+    @if (auth()->user()?->hasRole(['admin', 'direktur']))
+        <div class="modal fade roster-mobile-actions-modal" id="rosterActionsModal" tabindex="-1" role="dialog" aria-labelledby="rosterActionsModalTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered roster-mobile-actions-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title" id="rosterActionsModalTitle">Aksi Roster</h5>
+                            <p class="mb-0">Pilih tindakan untuk jadwal bulan ini.</p>
+                        </div>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Tutup">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="roster-mobile-actions-grid">
+                            @if (auth()->user()?->hasRole(['admin', 'direktur']))
+                                <button type="button" class="btn roster-mobile-action-option" data-dismiss="modal" wire:click="exportExcel" wire:loading.attr="disabled" wire:target="exportExcel">
+                                    <span wire:loading.remove wire:target="exportExcel"><i class="fas fa-file-excel"></i> Export Excel</span>
+                                    <span wire:loading wire:target="exportExcel"><i class="fas fa-spinner fa-spin"></i> Mengunduh...</span>
+                                </button>
+                            @endif
+
+                            @if (auth()->user()?->hasRole('admin'))
+                                @if ($company->isRosterMode())
+                                    <button type="button" class="btn btn-primary roster-mobile-action-option" data-dismiss="modal" wire:click="completeRosterWithDefaults" wire:loading.attr="disabled" wire:target="completeRosterWithDefaults">
+                                        <span wire:loading.remove wire:target="completeRosterWithDefaults"><i class="fas fa-calendar-check"></i> Lengkapi Roster</span>
+                                        <span wire:loading wire:target="completeRosterWithDefaults"><i class="fas fa-spinner fa-spin"></i> Menyimpan...</span>
+                                    </button>
+                                @endif
+
+                                <button type="button" class="btn roster-mobile-action-option" data-dismiss="modal" wire:click="copyFromPreviousMonth" wire:confirm="Salin pola jadwal libur dari bulan sebelumnya ke bulan ini?" wire:loading.attr="disabled" wire:target="copyFromPreviousMonth">
+                                    <span wire:loading.remove wire:target="copyFromPreviousMonth"><i class="fas fa-copy"></i> Salin Bulan Lalu</span>
+                                    <span wire:loading wire:target="copyFromPreviousMonth"><i class="fas fa-spinner fa-spin"></i> Menyalin...</span>
+                                </button>
+
+                                <button type="button" class="btn roster-mobile-action-option" data-dismiss="modal" wire:click="openImportModal" wire:loading.attr="disabled" wire:target="openImportModal">
+                                    <span wire:loading.remove wire:target="openImportModal"><i class="fas fa-file-upload"></i> Import Excel</span>
+                                    <span wire:loading wire:target="openImportModal"><i class="fas fa-spinner fa-spin"></i> Membuka...</span>
+                                </button>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 
     <!-- 4-Card KPI Stat Grid Sesuai Standar RULES_FRONTEND.md -->
     <div class="cash-advance-stat-grid mb-4">
@@ -152,9 +215,9 @@
     <!-- Card Filter & Navigasi Bulan (Compact & Clean White) -->
     <div class="card border-0 mb-3 roster-toolbar-card">
         <div class="card-body p-2 px-3">
-            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center flex-wrap" style="gap: 10px;">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center flex-wrap roster-toolbar-controls" style="gap: 10px;">
                 <!-- Navigasi Bulan & Tahun -->
-                <div class="d-flex align-items-center flex-wrap" style="gap: 10px;">
+                <div class="d-flex align-items-center flex-wrap roster-toolbar-month-controls" style="gap: 10px;">
                     <div class="roster-toolbar-month">
                         <button type="button" wire:click="prevMonth" wire:loading.attr="disabled" wire:target="prevMonth, nextMonth, currentMonth" class="roster-toolbar-month-btn" title="Bulan Sebelumnya">
                             <span wire:loading.remove wire:target="prevMonth"><i class="fas fa-chevron-left"></i></span>
@@ -181,11 +244,11 @@
                 </div>
 
                 <!-- Filter & Sorting Karyawan -->
-                <div class="d-flex align-items-center flex-wrap" style="gap: 10px;">
+                <div class="d-flex align-items-center flex-wrap roster-toolbar-filters" style="gap: 10px;">
                     <!-- Dropdown Sorting Karyawan -->
-                    <div style="min-width: 195px; position: relative;">
-                        <select wire:model.live="sortBy" wire:loading.attr="disabled" wire:target="sortBy" class="form-control roster-toolbar-select" title="Urutan Karyawan">
-                            <option value="custom">&#8645; Urutan Kustom (Bisa di-Drag)</option>
+                    <div class="roster-filter-sort">
+                        <select wire:model.live="sortBy" wire:loading.attr="disabled" wire:target="sortBy" class="form-control roster-toolbar-select" title="Urutan karyawan; urutan kustom bisa diatur dengan drag baris">
+                            <option value="custom">&#8645; Urutan Kustom</option>
                             <option value="name_asc">&#8595; Nama (A - Z)</option>
                             <option value="name_desc">&#8593; Nama (Z - A)</option>
                             <option value="position_asc">&#9881; Jobdesk / Posisi</option>
@@ -197,7 +260,7 @@
                     </div>
 
                     <!-- Filter Departemen -->
-                    <div style="min-width: 165px; position: relative;">
+                    <div class="roster-filter-department">
                         <select wire:model.live="departmentId" wire:loading.attr="disabled" wire:target="departmentId" class="form-control roster-toolbar-select" title="Filter Departemen">
                             <option value="">Semua Departemen</option>
                             @foreach ($departments as $dept)
@@ -210,7 +273,7 @@
                     </div>
 
                     <!-- Search Box -->
-                    <div style="min-width: 200px;">
+                    <div class="roster-filter-search">
                         <div class="input-group roster-toolbar-search">
                             <div class="input-group-prepend">
                                 <span class="input-group-text roster-toolbar-search-icon">
@@ -223,7 +286,7 @@
                     </div>
 
                     <!-- Per Page -->
-                    <div style="width: 85px;">
+                    <div class="roster-filter-page-size">
                         <select wire:model.live="perPage" class="form-control roster-toolbar-select" title="Jumlah baris karyawan">
                             <option value="0">Semua</option>
                             <option value="25">25</option>
@@ -237,9 +300,17 @@
     </div>
 
     <!-- Table Roster Grid (Excel-like Full Cell Colors, Compact Row Height 26px, Drag & Drop) -->
-    <div class="card border-0 mb-3" style="background: #ffffff; border-radius: 12px; box-shadow: 0 2px 14px -2px rgba(0, 0, 0, 0.06); overflow: hidden;">
-        <div class="card-body p-0">
-            <div class="table-responsive" style="max-height: 760px; overflow-x: auto;">
+    <div class="card border-0 mb-3 roster-table-shell position-relative" style="background: #ffffff; border-radius: 12px; box-shadow: 0 2px 14px -2px rgba(0, 0, 0, 0.06); overflow: hidden;">
+        <div wire:loading wire:target="prevMonth, nextMonth, currentMonth, sortBy, departmentId, search, perPage, reorderEmployees" class="roster-table-loading-overlay" role="status" aria-live="polite">
+            <div class="roster-table-loading-badge">
+                <i class="fas fa-spinner fa-spin text-primary" aria-hidden="true"></i>
+                <span>Memuat jadwal roster...</span>
+            </div>
+        </div>
+
+        <div class="card-body p-0" wire:loading.class="roster-table-loading-dimmed" wire:target="prevMonth, nextMonth, currentMonth, sortBy, departmentId, search, perPage, reorderEmployees">
+            <div class="roster-mobile-scroll-hint"><i class="fas fa-arrows-alt-h"></i><span>Geser tabel ke samping untuk melihat tanggal lainnya.</span></div>
+            <div class="table-responsive roster-table-responsive" style="max-height: 760px; overflow-x: auto;">
                 <table class="table mb-0 text-center roster-table" style="border-collapse: collapse; background: #ffffff;">
                     <thead class="sticky-top" style="z-index: 10;">
                         <!-- Baris Nama Hari (Clean White & Kontras) -->
@@ -306,85 +377,123 @@
                     </thead>
 
                     <tbody id="rosterTableBody">
-                        @forelse ($roster['employees'] as $idx => $emp)
+                        @forelse ($groupedEmployees as $deptName => $deptEmployees)
                             @php
-                                $empColor = $emp['color'] ?? 'none';
+                                $firstEmp = $deptEmployees->first();
+                                $deptId = $firstEmp['department_id'] ?? ($deptIdByName[$deptName] ?? '');
                             @endphp
-                            <tr wire:key="emp-row-{{ $emp['id'] }}"
-                                class="roster-row"
-                                data-emp-id="{{ $emp['id'] }}"
-                                draggable="{{ auth()->user()?->hasRole('admin') ? 'true' : 'false' }}">
-
-                                <!-- Kolom NO: Handle Drag (Garis Tiga) & Angka -->
-                                <td class="sticky-col first-col align-middle text-center p-0" style="background: #ffffff; width: 46px; min-width: 46px;">
-                                    <div class="d-flex align-items-center justify-content-center" style="gap: 4px; height: 100%;">
-                                        @if (auth()->user()?->hasRole('admin'))
-                                            <span class="drag-handle" title="Klik & geser baris ini untuk menata urutan" style="cursor: grab; color: #475569;">
-                                                <i class="fas fa-bars" style="font-size: 11px;"></i>
+                            <!-- Baris Header Grup Departemen (Sticky Kolom Kiri) -->
+                            <tr class="roster-dept-header-row"
+                                data-dept-name="{{ $deptName }}"
+                                data-dept-id="{{ $deptId }}"
+                                draggable="false">
+                                <td colspan="3" class="sticky-col first-col text-left py-1 px-3 align-middle" style="background: #f1f5f9 !important; z-index: 6; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.06); height: 30px !important;">
+                                    <div class="d-flex align-items-center justify-content-between" style="gap: 8px;">
+                                        <div class="d-flex align-items-center" style="gap: 6px;">
+                                            <i class="fas fa-building text-primary" style="font-size: 11px;"></i>
+                                            <span style="font-weight: 700; font-size: 11.5px; color: #1e293b; letter-spacing: 0.02em;">
+                                                DEPARTEMEN: {{ strtoupper($deptName) }}
                                             </span>
-                                        @endif
-                                        <span class="row-num text-dark" style="font-weight: 500; font-size: 11px; color: #334155;">{{ $idx + 1 }}</span>
-                                    </div>
-                                </td>
-
-                                <!-- Kolom NAMA KARYAWAN (Dengan pemilih warna dasar individual & 1 warna dengan Jobdesk) -->
-                                <td class="sticky-col second-col align-middle text-left emp-cell-{{ $emp['id'] }} emp-bg-{{ $empColor }}" style="padding: 0 6px 0 8px !important; width: 175px; min-width: 175px; max-width: 175px;">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <span class="font-weight-600 text-truncate" style="font-size: 11.5px; line-height: 1.2; color: #1e293b;" title="{{ $emp['name'] }}">
-                                            {{ $emp['name'] }}
+                                        </div>
+                                        <span class="badge border px-2 py-0.5" style="background: #ffffff; color: #334155; font-size: 10px; font-weight: 600; border-radius: 4px; border-color: #cbd5e1 !important;">
+                                            {{ count($deptEmployees) }} Karyawan
                                         </span>
-
-                                        @if (auth()->user()?->hasRole('admin'))
-                                            <!-- Tombol Pemilih Warna -->
-                                            <button type="button"
-                                                wire:click="openColorModal({{ $emp['id'] }}, '{{ addslashes($emp['name']) }}')"
-                                                class="btn-color-dot flex-shrink-0 ml-1"
-                                                title="Klik untuk memilih warna baris (Nama & Jobdesk)">
-                                                <span class="color-dot-indicator emp-bg-{{ $empColor }}"></span>
-                                            </button>
-                                        @endif
                                     </div>
                                 </td>
-
-                                <!-- Kolom JOBDESK (Teks Polos & Warna Senada dengan Nama Karyawan) -->
-                                <td class="sticky-col third-col align-middle text-left emp-cell-{{ $emp['id'] }} emp-bg-{{ $empColor }}" style="padding: 0 8px !important; width: 110px; min-width: 110px; max-width: 110px;">
-                                    <div class="text-truncate" style="font-size: 11px; line-height: 1.2; font-weight: 500; color: #334155;" title="{{ $emp['jobdesk'] }}">
-                                        {{ $emp['jobdesk'] }}
-                                    </div>
+                                <td colspan="{{ count($roster['dates']) + 2 }}" class="p-0 text-left px-3 align-middle" style="background: #f8fafc !important; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; height: 30px !important;">
+                                    <span style="font-size: 10.5px; font-weight: 500; color: #64748b;">
+                                        &mdash; Jadwal Kerja Roster Departemen {{ $deptName }}
+                                    </span>
                                 </td>
+                            </tr>
 
-                                <!-- Kolom Tanggal: Full Cell Warna Hijau (Masuk) & Merah (OFF) -->
-                                @foreach ($roster['dates'] as $day => $meta)
-                                    @php
-                                        $dStr = $meta['date'];
-                                        $sch = $emp['schedules'][$dStr] ?? null;
-                                        $isOff = $sch && $sch['status'] === \App\Models\EmployeeSchedule::STATUS_OFF;
-                                    @endphp
-                                    <td wire:key="cell-{{ $emp['id'] }}-{{ $dStr }}"
-                                        @if (auth()->user()?->hasRole('admin'))
-                                            wire:click="toggleDay({{ $emp['id'] }}, '{{ $dStr }}')"
-                                        @endif
-                                        class="roster-cell align-middle text-center p-0 {{ $isOff ? 'cell-off' : 'cell-work' }}"
-                                        @if (!auth()->user()?->hasRole('admin'))
-                                            style="cursor: default;"
-                                        @endif
-                                        title="{{ $emp['name'] }} (Tgl {{ $day }}): {{ auth()->user()?->hasRole('admin') ? 'Klik untuk Masuk/Libur' : ($isOff ? 'Libur' : 'Masuk') }}">
-                                        <div class="roster-cell-inner d-flex align-items-center justify-content-center w-100 h-100">
-                                            @if ($isOff)
-                                                <span class="off-text">OFF</span>
+                            @foreach ($deptEmployees as $deptIdx => $emp)
+                                @php
+                                    $empColor = $emp['color'] ?? 'none';
+                                    $empDeptId = $emp['department_id'] ?? $deptId;
+                                @endphp
+                                <tr wire:key="emp-row-{{ $emp['id'] }}"
+                                    class="roster-row"
+                                    data-emp-id="{{ $emp['id'] }}"
+                                    data-emp-name="{{ $emp['name'] }}"
+                                    data-dept-name="{{ $deptName }}"
+                                    data-dept-id="{{ $empDeptId }}"
+                                    draggable="{{ auth()->user()?->hasRole('admin') ? 'true' : 'false' }}">
+
+                                    <!-- Kolom NO: Handle Drag (Garis Tiga) & Angka (Opsi B: Reset per departemen) -->
+                                    <td class="sticky-col first-col align-middle text-center p-0" style="background: #ffffff; width: 46px; min-width: 46px;">
+                                        <div class="d-flex align-items-center justify-content-center" style="gap: 4px; height: 100%;">
+                                            @if (auth()->user()?->hasRole('admin'))
+                                                <span class="drag-handle" title="Klik & geser baris ini untuk menata urutan" style="cursor: grab; color: #475569;">
+                                                    <i class="fas fa-bars" style="font-size: 11px;"></i>
+                                                </span>
+                                            @endif
+                                            <span class="row-num text-dark" style="font-weight: 500; font-size: 11px; color: #334155;">{{ $deptIdx + 1 }}</span>
+                                        </div>
+                                    </td>
+
+                                    <!-- Kolom NAMA KARYAWAN (Dengan pemilih warna dasar individual & 1 warna dengan Jobdesk) -->
+                                    <td class="sticky-col second-col align-middle text-left emp-cell-{{ $emp['id'] }} emp-bg-{{ $empColor }}" style="padding: 0 6px 0 8px !important; width: 175px; min-width: 175px; max-width: 175px;">
+                                        <div class="d-flex align-items-center justify-content-between">
+                                            <span class="font-weight-600 text-truncate" style="font-size: 11.5px; line-height: 1.2; color: #1e293b;" title="{{ $emp['name'] }}">
+                                                {{ $emp['name'] }}
+                                            </span>
+
+                                            @if (auth()->user()?->hasRole('admin'))
+                                                <!-- Tombol Pemilih Warna -->
+                                                <button type="button"
+                                                    wire:click="openColorModal({{ $emp['id'] }}, '{{ addslashes($emp['name']) }}')"
+                                                    class="btn-color-dot flex-shrink-0 ml-1"
+                                                    title="Klik untuk memilih warna baris (Nama & Jobdesk)">
+                                                    <span class="color-dot-indicator emp-bg-{{ $empColor }}"></span>
+                                                </button>
                                             @endif
                                         </div>
                                     </td>
-                                @endforeach
 
-                                <!-- Kolom Total Masuk & Libur (Ringkas) -->
-                                <td class="align-middle p-0 text-success" style="background: #ffffff; border-left: 2px solid #e2e8f0; font-size: 11px; font-weight: 600;">
-                                    {{ $emp['total_work_days'] }} hr
-                                </td>
-                                <td class="align-middle p-0 text-danger" style="background: #ffffff; font-size: 11px; font-weight: 600;">
-                                    {{ $emp['total_off_days'] }} hr
-                                </td>
-                            </tr>
+                                    <!-- Kolom JOBDESK (Teks Polos & Warna Senada dengan Nama Karyawan) -->
+                                    <td class="sticky-col third-col align-middle text-left emp-cell-{{ $emp['id'] }} emp-bg-{{ $empColor }}" style="padding: 0 8px !important; width: 110px; min-width: 110px; max-width: 110px;">
+                                        <div class="text-truncate" style="font-size: 11px; line-height: 1.2; font-weight: 500; color: #334155;" title="{{ $emp['jobdesk'] }}">
+                                            {{ $emp['jobdesk'] }}
+                                        </div>
+                                    </td>
+
+                                    <!-- Kolom Tanggal: Full Cell Warna Hijau (Masuk) & Merah (OFF) -->
+                                    @foreach ($roster['dates'] as $day => $meta)
+                                        @php
+                                            $dStr = $meta['date'];
+                                            $sch = $emp['schedules'][$dStr] ?? null;
+                                            $isOff = $sch && $sch['status'] === \App\Models\EmployeeSchedule::STATUS_OFF;
+                                            $isMissing = ! $sch || ! ($sch['is_custom'] ?? false);
+                                        @endphp
+                                        <td wire:key="cell-{{ $emp['id'] }}-{{ $dStr }}"
+                                            @if (auth()->user()?->hasRole('admin'))
+                                                wire:click="toggleDay({{ $emp['id'] }}, '{{ $dStr }}')"
+                                            @endif
+                                            class="roster-cell align-middle text-center p-0 {{ $isMissing ? 'cell-missing' : ($isOff ? 'cell-off' : 'cell-work') }}"
+                                            @if (!auth()->user()?->hasRole('admin'))
+                                                style="cursor: default;"
+                                            @endif
+                                            title="{{ $emp['name'] }} (Tgl {{ $day }}): {{ $isMissing ? (auth()->user()?->hasRole('admin') ? 'Belum diisi. Klik untuk menentukan jadwal.' : 'Roster belum diisi') : (auth()->user()?->hasRole('admin') ? 'Klik untuk Masuk/Libur' : ($isOff ? 'Libur' : 'Masuk')) }}">
+                                            <div class="roster-cell-inner d-flex align-items-center justify-content-center w-100 h-100">
+                                                @if ($isMissing)
+                                                    <span class="missing-text" aria-label="Roster belum diisi">?</span>
+                                                @elseif ($isOff)
+                                                    <span class="off-text">OFF</span>
+                                                @endif
+                                            </div>
+                                        </td>
+                                    @endforeach
+
+                                    <!-- Kolom Total Masuk & Libur (Ringkas) -->
+                                    <td class="align-middle p-0 text-success" style="background: #ffffff; border-left: 2px solid #e2e8f0; font-size: 11px; font-weight: 600;">
+                                        {{ $emp['total_work_days'] }} hr
+                                    </td>
+                                    <td class="align-middle p-0 text-danger" style="background: #ffffff; font-size: 11px; font-weight: 600;">
+                                        {{ $emp['total_off_days'] }} hr
+                                    </td>
+                                </tr>
+                            @endforeach
                         @empty
                             <tr>
                                 <td colspan="{{ count($roster['dates']) + 5 }}" class="p-0 border-0" style="background: #ffffff;">
@@ -401,8 +510,8 @@
             </div>
 
             <!-- Footer: Legenda & Total Karyawan (Compact & Dominan Putih) -->
-            <div class="px-3 py-2.5 border-top d-flex flex-column flex-md-row justify-content-between align-items-md-center" style="background: #ffffff; border-color: #e2e8f0 !important; gap: 8px; font-size: 12px;">
-                <div class="d-flex align-items-center flex-wrap" style="gap: 16px;">
+            <div class="px-3 py-2.5 border-top d-flex flex-column flex-md-row justify-content-between align-items-md-center roster-table-footer" style="background: #ffffff; border-color: #e2e8f0 !important; gap: 8px; font-size: 12px;">
+                <div class="roster-table-legend">
                     <div class="d-flex align-items-center">
                         <span class="d-inline-block rounded mr-1.5" style="width: 14px; height: 14px; background-color: #22c55e;"></span>
                         <span style="color: #334155; font-size: 11.5px; font-weight: 500;">Masuk Kerja (Work)</span>
@@ -411,13 +520,17 @@
                         <span class="d-inline-block rounded mr-1.5" style="width: 14px; height: 14px; background-color: #ef4444;"></span>
                         <span style="color: #334155; font-size: 11.5px; font-weight: 500;">Libur Bergilir (Off Day)</span>
                     </div>
-                    <div class="d-flex align-items-center" style="color: #475569; font-size: 11.5px;">
+                    <div class="d-flex align-items-center">
+                        <span class="cell-missing d-inline-flex align-items-center justify-content-center rounded mr-1.5" style="width: 14px; height: 14px; font-size: 10px;">?</span>
+                        <span style="color: #334155; font-size: 11.5px; font-weight: 500;">Belum diisi</span>
+                    </div>
+                    <div class="d-flex align-items-center roster-table-legend-help" style="color: #475569; font-size: 11.5px;">
                         <i class="fas fa-hand-pointer mr-1" style="color: #0b52aa;"></i>
                         <span>Klik tanggal untuk ubah Masuk &harr; Libur. Tarik <i class="fas fa-bars mx-0.5"></i> untuk drag urutan baris.</span>
                     </div>
                 </div>
 
-                <div style="color: #334155; font-size: 11.5px; font-weight: 500;">
+                <div class="roster-table-total" style="color: #334155; font-size: 11.5px; font-weight: 500;">
                     Total Karyawan: <span class="badge px-2.5 py-1 ml-1" style="background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-size: 11px; border-radius: 6px; font-weight: 600;">{{ count($roster['employees']) }} Orang</span>
                 </div>
             </div>
@@ -661,6 +774,12 @@
         tr.roster-row.drag-over-bottom {
             border-bottom: 3px solid #2563eb !important;
         }
+        tr.roster-dept-header-row.drag-over-top {
+            border-top: 3px solid #0b52aa !important;
+        }
+        tr.roster-dept-header-row.drag-over-bottom {
+            border-bottom: 3px solid #0b52aa !important;
+        }
         @keyframes soft-glow-move {
             0% { background-color: #dbeafe !important; }
             50% { background-color: #eff6ff !important; }
@@ -729,6 +848,20 @@
         }
         .cell-work:hover {
             filter: brightness(0.92);
+        }
+        .cell-missing {
+            background-color: #ffffff !important;
+            color: #b45309 !important;
+            outline: 1px dashed #d97706;
+            outline-offset: -2px;
+        }
+        .cell-missing:hover {
+            background-color: #fff7ed !important;
+        }
+        .missing-text {
+            font-size: 12px;
+            font-weight: 700;
+            color: #b45309;
         }
         .cell-off {
             background-color: #ef4444 !important;
@@ -936,80 +1069,113 @@
 
             document.addEventListener('dragend', function(e) {
                 if (draggedRow) draggedRow.classList.remove('is-dragging');
-                document.querySelectorAll('tr.roster-row').forEach(r => {
+                document.querySelectorAll('tr.roster-row, tr.roster-dept-header-row').forEach(r => {
                     r.classList.remove('drag-over-top', 'drag-over-bottom');
                 });
                 draggedRow = null;
             });
 
             document.addEventListener('dragover', function(e) {
-                const row = e.target.closest('tr.roster-row');
-                if (!row || !draggedRow || draggedRow === row) return;
+                const targetEl = e.target.closest('tr.roster-row, tr.roster-dept-header-row');
+                if (!targetEl || !draggedRow || draggedRow === targetEl) return;
 
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
 
-                const rect = row.getBoundingClientRect();
+                const rect = targetEl.getBoundingClientRect();
                 const relY = e.clientY - rect.top;
 
-                document.querySelectorAll('tr.roster-row').forEach(r => {
-                    if (r !== row) r.classList.remove('drag-over-top', 'drag-over-bottom');
+                document.querySelectorAll('tr.roster-row, tr.roster-dept-header-row').forEach(r => {
+                    if (r !== targetEl) r.classList.remove('drag-over-top', 'drag-over-bottom');
                 });
 
                 if (relY < rect.height / 2) {
-                    row.classList.add('drag-over-top');
-                    row.classList.remove('drag-over-bottom');
+                    targetEl.classList.add('drag-over-top');
+                    targetEl.classList.remove('drag-over-bottom');
                 } else {
-                    row.classList.add('drag-over-bottom');
-                    row.classList.remove('drag-over-top');
+                    targetEl.classList.add('drag-over-bottom');
+                    targetEl.classList.remove('drag-over-top');
                 }
             });
 
             document.addEventListener('dragleave', function(e) {
-                const row = e.target.closest('tr.roster-row');
-                if (row && e.relatedTarget && !row.contains(e.relatedTarget)) {
-                    row.classList.remove('drag-over-top', 'drag-over-bottom');
+                const targetEl = e.target.closest('tr.roster-row, tr.roster-dept-header-row');
+                if (targetEl && e.relatedTarget && !targetEl.contains(e.relatedTarget)) {
+                    targetEl.classList.remove('drag-over-top', 'drag-over-bottom');
                 }
             });
 
             document.addEventListener('drop', function(e) {
-                const row = e.target.closest('tr.roster-row');
-                if (!row || !draggedRow || draggedRow === row) return;
+                const targetEl = e.target.closest('tr.roster-row, tr.roster-dept-header-row');
+                if (!targetEl || !draggedRow || draggedRow === targetEl) return;
 
                 e.preventDefault();
-                row.classList.remove('drag-over-top', 'drag-over-bottom');
+                targetEl.classList.remove('drag-over-top', 'drag-over-bottom');
 
                 const tableBody = document.getElementById('rosterTableBody');
                 if (!tableBody) return;
 
-                const rect = row.getBoundingClientRect();
-                const relY = e.clientY - rect.top;
-                if (relY < rect.height / 2) {
-                    tableBody.insertBefore(draggedRow, row);
-                } else {
-                    tableBody.insertBefore(draggedRow, row.nextSibling);
+                const empId = parseInt(draggedRow.getAttribute('data-emp-id'), 10);
+                const empName = draggedRow.getAttribute('data-emp-name') || 'Karyawan';
+                const sourceDeptId = draggedRow.getAttribute('data-dept-id') || '';
+                const sourceDeptName = draggedRow.getAttribute('data-dept-name') || 'Tanpa Departemen';
+
+                const targetDeptId = targetEl.getAttribute('data-dept-id') || '';
+                const targetDeptName = targetEl.getAttribute('data-dept-name') || 'Tanpa Departemen';
+
+                const componentEl = tableBody.closest('[wire\\:id]');
+                if (!componentEl || !window.Livewire) return;
+                const component = window.Livewire.find(componentEl.getAttribute('wire:id'));
+                if (!component) return;
+
+                // Cek apakah dilepas ke departemen yang berbeda
+                if (sourceDeptId !== targetDeptId) {
+                    const targetDeptDisplay = targetDeptName === 'Tanpa Departemen' ? 'Tanpa Departemen / Umum' : targetDeptName;
+                    const confirmMsg = `Pindahkan <b>${empName}</b> dari Departemen <b>${sourceDeptName}</b> ke <b>${targetDeptDisplay}</b>?`;
+
+                    if (window.Swal) {
+                        Swal.fire({
+                            title: 'Pindahkan Departemen?',
+                            html: confirmMsg,
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonColor: '#0b52aa',
+                            cancelButtonColor: '#6c757d',
+                            confirmButtonText: '<i class="fas fa-exchange-alt mr-1"></i> Ya, Pindahkan!',
+                            cancelButtonText: 'Batal',
+                            reverseButtons: true
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                component.call('changeEmployeeDepartment', empId, targetDeptId ? parseInt(targetDeptId, 10) : null);
+                            }
+                        });
+                    } else if (confirm(`Pindahkan ${empName} ke Departemen ${targetDeptDisplay}?`)) {
+                        component.call('changeEmployeeDepartment', empId, targetDeptId ? parseInt(targetDeptId, 10) : null);
+                    }
+                    return;
                 }
 
-                // Beri efek highlight pada baris yang baru dipindah
-                const movedRow = draggedRow;
-                movedRow.classList.add('just-moved');
-                setTimeout(() => {
-                    movedRow.classList.remove('just-moved');
-                }, 1600);
-
-                // Ambil urutan ID baru
-                const newOrder = Array.from(tableBody.querySelectorAll('tr.roster-row'))
-                    .map(r => parseInt(r.getAttribute('data-emp-id'), 10))
-                    .filter(id => !isNaN(id));
-
-                if (window.Livewire) {
-                    const componentEl = tableBody.closest('[wire\\:id]');
-                    if (componentEl) {
-                        const component = window.Livewire.find(componentEl.getAttribute('wire:id'));
-                        if (component) {
-                            component.call('reorderEmployees', newOrder);
-                        }
+                // Jika masih dalam departemen yang sama dan target adalah sesama baris karyawan: atur urutan
+                if (targetEl.classList.contains('roster-row')) {
+                    const rect = targetEl.getBoundingClientRect();
+                    const relY = e.clientY - rect.top;
+                    if (relY < rect.height / 2) {
+                        tableBody.insertBefore(draggedRow, targetEl);
+                    } else {
+                        tableBody.insertBefore(draggedRow, targetEl.nextSibling);
                     }
+
+                    const movedRow = draggedRow;
+                    movedRow.classList.add('just-moved');
+                    setTimeout(() => {
+                        movedRow.classList.remove('just-moved');
+                    }, 1600);
+
+                    const newOrder = Array.from(tableBody.querySelectorAll('tr.roster-row'))
+                        .map(r => parseInt(r.getAttribute('data-emp-id'), 10))
+                        .filter(id => !isNaN(id));
+
+                    component.call('reorderEmployees', newOrder);
                 }
             });
 
