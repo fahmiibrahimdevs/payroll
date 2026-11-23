@@ -31,6 +31,11 @@ new #[Layout('layouts.guest')] class extends Component
         ? $company->name
         : 'Larashiz';
     $emailDomain = $company?->email_domain ?: 'perusahaan.com';
+    $isTestEnvironment = str_contains(request()->getHost(), 'test-')
+        || str_contains((string) config('app.url'), 'test-')
+        || str_contains(config('app.name'), 'Testing')
+        || str_contains(request()->getHost(), '.test')
+        || app()->environment(['local', 'development', 'testing']);
 @endphp
 
 <div class="w-full max-w-lg mx-auto">
@@ -42,7 +47,22 @@ new #[Layout('layouts.guest')] class extends Component
                 <img src="{{ $company?->logo_url ?? asset('assets/img/larashiz-logo.jpg') }}" alt="{{ $companyName }}" class="w-16 h-16 max-w-full max-h-full object-contain p-1.5 block">
             </div>
             <div class="text-xl font-bold !text-slate-900 tracking-tight">{{ $companyName }}</div>
-            <div class="text-xs sm:text-sm font-medium text-slate-600 mt-1">Sistem Manajemen SDM & Penggajian</div>
+            <div class="text-xs sm:text-sm font-medium text-slate-600 mt-1.5 flex items-center justify-center gap-2">
+                <span>Sistem Manajemen SDM & Penggajian</span>
+                @if ($isTestEnvironment)
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border"
+                          style="background-color: #fef3c7; color: #92400e; border-color: #fde68a;">
+                        <span class="w-1.5 h-1.5 rounded-full mr-1" style="background-color: #d97706;"></span>
+                        TEST
+                    </span>
+                @else
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border"
+                          style="background-color: #d1fae5; color: #065f46; border-color: #a7f3d0;">
+                        <span class="w-1.5 h-1.5 rounded-full mr-1" style="background-color: #059669;"></span>
+                        PROD
+                    </span>
+                @endif
+            </div>
         </div>
 
         <!-- Greeting Section -->
