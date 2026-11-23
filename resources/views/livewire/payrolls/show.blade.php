@@ -359,7 +359,7 @@
                                     </button>
                                 @endif
 
-                                <button type="button" wire:click="$dispatch('swal:confirm', { title: 'Ajukan ke Direktur?', text: 'Seluruh ({{ $this->totalItemsCount }}) slip gaji telah diverifikasi HRD. Periode {{ $period->reference_number }} akan diajukan ke Direktur untuk mendapatkan persetujuan (ACC).', action: 'submit-period-confirmed' })" wire:loading.attr="disabled" wire:target="submitForApproval" @disabled(! $this->allVerified) class="btn {{ $this->allVerified ? 'btn-primary shadow-sm' : 'btn-secondary' }} payroll-action-btn" data-toggle="tooltip" title="{{ $this->allVerified ? 'Ajukan periode ke Direktur' : 'Verifikasi semua slip dahulu (' . $this->verifiedCount . '/' . $this->totalItemsCount . ')' }}">
+                                <button type="button" wire:click="$dispatch('swal:confirm', { title: 'Ajukan ke Direktur?', text: 'Seluruh ({{ $this->totalItemsCount }}) slip gaji telah diverifikasi HRD.@if ($pendingAttendanceReviewSummary['attendance_count'] > 0) Perhatian: ada {{ $pendingAttendanceReviewSummary['attendance_count'] }} absensi dari {{ $pendingAttendanceReviewSummary['employee_count'] }} karyawan yang masih menunggu review. Absensi ini belum dihitung sebagai hari hadir. Pastikan admin telah meninjau absensi sebelum melanjutkan.@endif Periode {{ $period->reference_number }} akan diajukan ke Direktur untuk mendapatkan persetujuan (ACC).', action: 'submit-period-confirmed' })" wire:loading.attr="disabled" wire:target="submitForApproval" @disabled(! $this->allVerified) class="btn {{ $this->allVerified ? 'btn-primary shadow-sm' : 'btn-secondary' }} payroll-action-btn" data-toggle="tooltip" title="{{ $this->allVerified ? 'Ajukan periode ke Direktur' : 'Verifikasi semua slip dahulu (' . $this->verifiedCount . '/' . $this->totalItemsCount . ')' }}">
                                     <span wire:loading.remove wire:target="submitForApproval"><i class="fas {{ $this->allVerified ? 'fa-paper-plane' : 'fa-lock' }} mr-1"></i> Ajukan ke Direktur</span>
                                     <span wire:loading wire:target="submitForApproval"><i class="fas fa-spinner fa-spin mr-1"></i> Mengajukan...</span>
                                 </button>
@@ -443,7 +443,14 @@
                                                     ({{ $emp->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $emp->position?->name ?? 'Karyawan' }})
                                                 </span>
                                                 &mdash;
-                                                @if ($prorate['is_prorated'])
+                                                @if (! $prorate['roster_complete'])
+                                                    <span class="badge badge-warning font-weight-600">
+                                                        Roster belum lengkap: {{ implode(', ', array_slice($prorate['missing_roster_dates'], 0, 5)) }}
+                                                        @if (count($prorate['missing_roster_dates']) > 5)
+                                                            dan {{ count($prorate['missing_roster_dates']) - 5 }} tanggal lainnya
+                                                        @endif
+                                                    </span>
+                                                @elseif ($prorate['is_prorated'])
                                                     <span class="badge badge-light text-primary border font-weight-600" style="font-size: 11.5px;">
                                                         Prorata ({{ $prorate['worked_days'] }} dari {{ $prorate['total_working_days'] }} hari kerja): Rp {{ number_format($prorate['basic_salary'], 0, ',', '.') }}
                                                     </span>
@@ -458,7 +465,7 @@
                                         @endforeach
                                     </ul>
                                     <div class="text-muted mt-1" style="font-size: 11.5px;">
-                                        <i class="fas fa-info-circle mr-1 text-primary"></i> Dihitung proporsional berdasarkan hari kerja (Senin–Sabtu). Klik tombol untuk membuat slip gaji otomatis.
+                                        <i class="fas fa-info-circle mr-1 text-primary"></i> Nominal mengikuti jadwal kerja dan kehadiran pada periode ini. Lengkapi semua tanggal roster sebelum membuat slip.
                                     </div>
                                 </div>
                             </div>

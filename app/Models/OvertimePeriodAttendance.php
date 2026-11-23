@@ -21,6 +21,7 @@ class OvertimePeriodAttendance extends Model
         'attendance_days',
         'total_meal_allowance',
         'total_daily_wage',
+        'total_hourly_work_pay',
         'notes',
         'payment_status',
         'paid_at',
@@ -42,6 +43,7 @@ class OvertimePeriodAttendance extends Model
             'attendance_days' => 'array',
             'total_meal_allowance' => 'decimal:2',
             'total_daily_wage' => 'decimal:2',
+            'total_hourly_work_pay' => 'decimal:2',
             'paid_at' => 'datetime',
         ];
     }

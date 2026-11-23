@@ -114,6 +114,12 @@
         </div>
     </div>
 
+    @if ($rosterWarning)
+        <div class="alert alert-warning mb-3" role="alert">
+            <i class="fas fa-exclamation-triangle mr-1"></i> {{ $rosterWarning }}
+        </div>
+    @endif
+
     <!-- Status Banner: Catatan Revisi Direktur atau ACC -->
     <!-- Status Banner: Catatan Revisi Direktur atau ACC (Bootstrap bd-callout) -->
     @if ($item->isRejected())

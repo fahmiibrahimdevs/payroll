@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Employee;
 use App\Models\WorkLocation;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 
 class WorkLocationSeeder extends Seeder
@@ -35,9 +36,17 @@ class WorkLocationSeeder extends Seeder
             ]
         );
 
-        // Connect all existing employees without work_location_id to Kantor Pusat
-        Employee::whereNull('work_location_id')->update([
-            'work_location_id' => $kantorPusat->id,
-        ]);
+        Employee::query()
+            ->whereNull('work_location_id')
+            ->select('id')
+            ->chunkById(100, function (Collection $employees) use ($kantorPusat): void {
+                $employeeIds = $employees->modelKeys();
+
+                Employee::query()
+                    ->whereKey($employeeIds)
+                    ->update(['work_location_id' => $kantorPusat->id]);
+
+                $kantorPusat->employees()->syncWithoutDetaching($employeeIds);
+            });
     }
 }

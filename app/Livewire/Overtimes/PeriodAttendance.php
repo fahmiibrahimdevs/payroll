@@ -3,6 +3,7 @@
 namespace App\Livewire\Overtimes;
 
 use App\Enums\EmploymentStatus;
+use App\Enums\OvertimePeriodStatus;
 use App\Enums\OvertimeStatus;
 use App\Models\Attendance;
 use App\Models\CompanyProfile;
@@ -41,6 +42,8 @@ class PeriodAttendance extends Component
         'sat' => 'Sab',
         'sun' => 'Min',
     ];
+
+    private const MAX_ROSTER_WARNING_EMPLOYEES = 5;
 
     public OvertimePeriod $period;
 
@@ -81,8 +84,97 @@ class PeriodAttendance extends Component
 
         $this->period = $period;
         app(OvertimeService::class)->syncUnlinkedApprovedSubmissions($this->period);
+        if ($this->period->status === OvertimePeriodStatus::DRAFT && ! $this->period->attendance_synced_at) {
+            try {
+                app(AttendanceService::class)->syncToWeeklyOvertimePeriod($this->period, auth()->user());
+                $this->period->refresh();
+            } catch (\Throwable $exception) {
+                $alert = [
+                    'type' => 'warning',
+                    'title' => 'Slip Belum Dapat Diperbarui Otomatis',
+                ];
+                $rosterWarningHtml = $this->renderRosterWarningContent($exception->getMessage());
+
+                if ($rosterWarningHtml !== null) {
+                    $alert['html'] = $rosterWarningHtml;
+                    $alert['customClass'] = [
+                        'popup' => 'roster-warning-popup',
+                        'title' => 'roster-warning-title',
+                        'htmlContainer' => 'roster-warning-html',
+                        'confirmButton' => 'roster-warning-confirm-button',
+                    ];
+                } else {
+                    $alert['message'] = $exception->getMessage();
+                }
+
+                $this->dispatch('swal:alert', $alert);
+            }
+        }
         $this->syncActiveEmployees();
         $this->loadAttendances();
+    }
+
+    private function renderRosterWarningContent(string $message): ?string
+    {
+        $prefix = 'Jadwal roster belum lengkap untuk seluruh karyawan aktif. Lengkapi tanggal berikut di menu Jadwal Kerja (Roster), pilih Kerja atau Libur: ';
+
+        if (! str_starts_with($message, $prefix)) {
+            return null;
+        }
+
+        $details = rtrim(substr($message, strlen($prefix)), '.');
+        $remainingEmployeeCount = 0;
+
+        if (preg_match('/;\s*dan (\d+) karyawan lainnya$/u', $details, $matches) === 1) {
+            $remainingEmployeeCount = (int) $matches[1];
+            $details = substr($details, 0, -strlen($matches[0]));
+        }
+
+        $employees = [];
+        foreach (explode('; ', $details) as $entry) {
+            $separatorPosition = strrpos($entry, ': ');
+
+            if ($separatorPosition === false) {
+                continue;
+            }
+
+            $employeeName = trim(substr($entry, 0, $separatorPosition));
+            $missingDates = trim(substr($entry, $separatorPosition + 2));
+            $dateParts = array_map('trim', explode(', ', $missingDates));
+            $dates = [];
+
+            foreach (array_chunk($dateParts, 2) as $datePart) {
+                if (count($datePart) !== 2) {
+                    continue;
+                }
+
+                $dates[] = [
+                    'weekday' => $datePart[0],
+                    'date' => $datePart[1],
+                ];
+            }
+
+            if ($employeeName === '' || $dates === []) {
+                continue;
+            }
+
+            $employees[] = [
+                'name' => $employeeName,
+                'dates' => $dates,
+            ];
+        }
+
+        $remainingEmployeeCount += max(0, count($employees) - self::MAX_ROSTER_WARNING_EMPLOYEES);
+        $employees = array_slice($employees, 0, self::MAX_ROSTER_WARNING_EMPLOYEES);
+
+        if ($employees === []) {
+            return null;
+        }
+
+        return view('livewire.overtimes.partials.roster-incomplete-warning', [
+            'employees' => $employees,
+            'remainingEmployeeCount' => $remainingEmployeeCount,
+        ])->render();
     }
 
     /**
@@ -92,12 +184,17 @@ class PeriodAttendance extends Component
     {
         app(OvertimeService::class)->syncUnlinkedApprovedSubmissions($this->period);
 
-        $linkedEmpIds = $this->period->submissions()->pluck('employee_id')->unique()->all();
-
         $startDate = Carbon::parse($this->period->start_date)->toDateString();
         $endDate = Carbon::parse($this->period->end_date)->toDateString();
+
+        $linkedEmpIds = $this->period->submissions()
+            ->whereBetween('date', [$startDate, $endDate])
+            ->whereNotIn('status', [OvertimeStatus::REJECTED_ADMIN, OvertimeStatus::REJECTED_DIREKTUR])
+            ->pluck('employee_id')->unique()->all();
+
         $attendances = Attendance::whereBetween('date', [$startDate, $endDate])
             ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+            ->where(fn ($query) => $query->whereNull('review_status')->orWhere('review_status', 'approved'))
             ->get()
             ->groupBy('employee_id');
 
@@ -117,14 +214,10 @@ class PeriodAttendance extends Component
             ->get();
 
         $existingEmpIds = $this->period->attendances()->pluck('employee_id')->all();
-        // Fallback tanpa log absensi: hari kerja aktual dalam rentang
-        // (kecualikan akhir pekan sesuai jadwal kerja dan hari libur nasional).
         $company = CompanyProfile::getProfile();
         $workDaysPerWeek = (int) ($company->work_days_per_week ?? 6);
         $isRoster = $company->isRosterMode();
         $validWorkDays = WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
-        $defaultDays = array_values($validWorkDays);
-        $defaultDaysCount = max(1, count($defaultDays));
         $hasNew = false;
 
         $rosterSchedules = $isRoster
@@ -137,16 +230,16 @@ class PeriodAttendance extends Component
                 $isHarian = $emp->employment_status === EmploymentStatus::HARIAN;
                 $dailyRate = $isHarian ? (float) ($emp->daily_rate ?? 0) : 0.0;
                 $hasOvertime = in_array($emp->id, $linkedEmpIds, true);
+                $employeeAttendances = $attendances->get($emp->id, collect());
 
                 $empValidWorkDays = $isRoster
                     ? WorkingDays::employeeWorkDays($emp->id, $startDate, $endDate, $company, $rosterSchedules->get($emp->id))
                     : $validWorkDays;
 
                 if ($hasAttendanceLog) {
-                    // Presensi mingguan hanya menghitung hari kerja valid
-                    // (Minggu/Sabtu sesuai jadwal dan libur nasional tidak
-                    // dihitung); log absensinya tetap tersimpan.
-                    $attendedDaysKeys = WorkingDays::attendedDayKeysWithin($attendances->get($emp->id, collect()), $empValidWorkDays);
+                    $attendedDaysKeys = $isHarian
+                        ? WorkingDays::attendedDayKeys($employeeAttendances)
+                        : WorkingDays::attendedDayKeysWithin($employeeAttendances, $empValidWorkDays);
                     $daysCount = count($attendedDaysKeys);
                     $daysList = $attendedDaysKeys;
 
@@ -155,12 +248,28 @@ class PeriodAttendance extends Component
                         continue;
                     }
                 } else {
-                    $empDefaultDays = $isRoster ? array_values($empValidWorkDays) : $defaultDays;
-                    $daysCount = max(1, count($empDefaultDays));
-                    $daysList = $empDefaultDays;
+                    if (! $hasOvertime) {
+                        continue;
+                    }
+
+                    $daysCount = 0;
+                    $daysList = [];
                 }
 
-                $totalDailyWage = $daysCount * $dailyRate;
+                $dailyAttendances = $employeeAttendances->filter(fn (Attendance $attendance): bool => ($attendance->casual_work_type_confirmed ?? $attendance->casual_work_type ?? 'daily') === 'daily');
+                $hourlyAttendances = $employeeAttendances->filter(fn (Attendance $attendance): bool => ($attendance->casual_work_type_confirmed ?? $attendance->casual_work_type) === 'hourly');
+                $totalDailyWage = $isHarian
+                    ? (float) $dailyAttendances->sum(fn (Attendance $attendance): float => (float) ($attendance->casual_pay_override ?? $dailyRate))
+                    : 0.0;
+                $totalHourlyWorkPay = $isHarian
+                    ? (float) $hourlyAttendances->sum(function (Attendance $attendance) use ($emp): float {
+                        $hours = $attendance->clock_in && $attendance->clock_out
+                            ? app(OvertimeService::class)->calculateOvertimeDuration($attendance->clock_in, $attendance->clock_out)
+                            : (int) $attendance->duration_minutes / 60;
+
+                        return round($hours * (float) ($emp->overtime_rate_per_hour ?? 0), 2);
+                    })
+                    : 0.0;
 
                 OvertimePeriodAttendance::create([
                     'overtime_period_id' => $this->period->id,
@@ -172,6 +281,7 @@ class PeriodAttendance extends Component
                     'attendance_days' => $daysList,
                     'total_meal_allowance' => $daysCount * $rate,
                     'total_daily_wage' => $totalDailyWage,
+                    'total_hourly_work_pay' => $totalHourlyWorkPay,
                 ]);
                 $hasNew = true;
             }
@@ -197,7 +307,12 @@ class PeriodAttendance extends Component
             ->get()
             ->sortBy(fn ($att) => $att->employee?->full_name ?? '');
 
+        $startDate = Carbon::parse($this->period->start_date)->toDateString();
+        $endDate = Carbon::parse($this->period->end_date)->toDateString();
+
         $overtimeSubmissions = $this->period->submissions()
+            ->whereBetween('date', [$startDate, $endDate])
+            ->whereNotIn('status', [OvertimeStatus::REJECTED_ADMIN, OvertimeStatus::REJECTED_DIREKTUR])
             ->get()
             ->groupBy('employee_id');
 
@@ -206,13 +321,14 @@ class PeriodAttendance extends Component
             $isHarian = $att->employee?->employment_status === EmploymentStatus::HARIAN;
             $dailyRate = $isHarian ? (float) ($att->daily_rate ?: ($att->employee?->daily_rate ?? 0)) : 0.0;
             $totalDailyWage = (float) ($att->total_daily_wage ?? round($att->attended_days * $dailyRate, 2));
+            $totalHourlyWorkPay = (float) ($att->total_hourly_work_pay ?? 0);
             $totalMealAllowance = (float) $att->total_meal_allowance;
 
             $empSubs = $overtimeSubmissions->get($att->employee_id, collect());
             $overtimeHours = (float) $empSubs->sum('duration_hours');
             $overtimePay = (float) $empSubs->sum(fn ($s) => (float) $s->subtotal_overtime);
             $overtimeMeal = (float) $empSubs->sum('meal_allowance');
-            $grandTotal = round($totalDailyWage + $totalMealAllowance + $overtimePay + $overtimeMeal, 2);
+            $grandTotal = round($totalDailyWage + $totalHourlyWorkPay + $totalMealAllowance + $overtimePay + $overtimeMeal, 2);
 
             $this->periodAttendances[$att->employee_id] = [
                 'attendance_id' => (int) $att->id,
@@ -233,6 +349,7 @@ class PeriodAttendance extends Component
                 'daily_rate' => $dailyRate,
                 'employee_overtime_rate' => (float) ($att->employee?->overtime_rate_per_hour ?: 15000),
                 'total_daily_wage' => $totalDailyWage,
+                'total_hourly_work_pay' => $totalHourlyWorkPay,
                 'overtime_hours' => $overtimeHours,
                 'overtime_pay' => $overtimePay,
                 'overtime_meal' => $overtimeMeal,
@@ -352,7 +469,27 @@ class PeriodAttendance extends Component
      */
     public function setAllEmployeesFullWeek(): void
     {
-        $allDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        if ($this->periodAttendances === []) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Belum Ada Baris Kehadiran',
+                'message' => 'Sinkronkan absensi terlebih dahulu. Hari kerja tidak akan diisi otomatis tanpa catatan hadir.',
+            ]);
+
+            return;
+        }
+
+        if (CompanyProfile::getProfile()->isRosterMode()) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Jadwal Mengikuti Roster',
+                'message' => 'Pada mode Roster Toko, hari kerja harus mengikuti jadwal masing-masing karyawan. Lengkapi atau perbaiki melalui menu Jadwal Kerja (Roster).',
+            ]);
+
+            return;
+        }
+
+        $allDays = ['sat', 'mon', 'tue', 'wed', 'thu', 'fri'];
         foreach ($this->periodAttendances as $empId => $data) {
             if (($data['payment_status'] ?? 'unpaid') === 'paid') {
                 continue;
@@ -366,7 +503,7 @@ class PeriodAttendance extends Component
         $this->dispatch('swal:alert', [
             'type' => 'info',
             'title' => 'Semua Hadir 6 Hari',
-            'message' => 'Seluruh karyawan telah diatur hadir penuh 6 hari kerja (Senin - Sabtu). Jangan lupa klik "Simpan Perubahan".',
+            'message' => 'Seluruh karyawan telah diatur hadir penuh 6 hari kerja pada siklus Sabtu–Jumat. Jangan lupa klik "Simpan Perubahan".',
         ]);
     }
 
@@ -377,14 +514,31 @@ class PeriodAttendance extends Component
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
 
-        $syncedCount = $attendanceService->syncToWeeklyOvertimePeriod($this->period, auth()->user());
-        $this->syncActiveEmployees();
-        $this->loadAttendances();
+        try {
+            $syncedCount = $attendanceService->syncToWeeklyOvertimePeriod($this->period, auth()->user());
+            $this->syncActiveEmployees();
+            $this->loadAttendances();
+        } catch (\Throwable $exception) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Absensi Belum Bisa Disinkronkan',
+                'message' => $exception->getMessage(),
+            ]);
+
+            return;
+        }
+
+        $pendingReviewCount = Attendance::query()
+            ->whereBetween('date', [$this->period->start_date->toDateString(), $this->period->end_date->toDateString()])
+            ->whereNotNull('clock_in')
+            ->where('review_status', 'pending_review')
+            ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+            ->count();
 
         $this->dispatch('swal:alert', [
-            'type' => 'success',
-            'title' => 'Sinkronisasi Absensi Selesai',
-            'message' => "Data kehadiran {$syncedCount} karyawan telah berhasil disinkronisasi dari log mesin fingerprint.",
+            'type' => $pendingReviewCount > 0 ? 'warning' : 'success',
+            'title' => $pendingReviewCount > 0 ? 'Absensi Disinkronkan, Ada yang Menunggu Review' : 'Sinkronisasi Absensi Selesai',
+            'message' => "Data kehadiran {$syncedCount} karyawan telah disinkronkan. ".($pendingReviewCount > 0 ? "{$pendingReviewCount} catatan masih menunggu review Admin dan belum masuk ke jumlah hadir atau nilai slip." : 'Absensi yang berhasil disinkronkan sudah masuk ke rincian slip.'),
         ]);
     }
 
@@ -452,14 +606,17 @@ class PeriodAttendance extends Component
         $days = (int) $this->periodAttendances[$employeeId]['attended_days'];
         $rate = (float) $this->periodAttendances[$employeeId]['meal_allowance_per_day'];
         $dailyRate = (float) ($this->periodAttendances[$employeeId]['daily_rate'] ?? 0);
+        $hourlyWorkPay = (float) ($this->periodAttendances[$employeeId]['total_hourly_work_pay'] ?? 0);
         $overtimePay = (float) ($this->periodAttendances[$employeeId]['overtime_pay'] ?? 0);
 
         $totalMeal = round($days * $rate, 2);
-        $totalDaily = round($days * $dailyRate, 2);
+        $totalDaily = (bool) ($this->periodAttendances[$employeeId]['is_harian'] ?? false)
+            ? (float) ($this->periodAttendances[$employeeId]['total_daily_wage'] ?? 0)
+            : round($days * $dailyRate, 2);
 
         $this->periodAttendances[$employeeId]['total_meal_allowance'] = $totalMeal;
         $this->periodAttendances[$employeeId]['total_daily_wage'] = $totalDaily;
-        $this->periodAttendances[$employeeId]['grand_total'] = round($totalDaily + $totalMeal + $overtimePay, 2);
+        $this->periodAttendances[$employeeId]['grand_total'] = round($totalDaily + $hourlyWorkPay + $totalMeal + $overtimePay, 2);
     }
 
     /**
@@ -468,6 +625,16 @@ class PeriodAttendance extends Component
     public function save(OvertimeService $service): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403);
+
+        if ($this->periodAttendances === []) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Belum Ada Rincian untuk Disimpan',
+                'message' => 'Sinkronkan absensi periode ini terlebih dahulu untuk memeriksa catatan kehadiran.',
+            ]);
+
+            return;
+        }
 
         DB::transaction(function () use ($service) {
             foreach ($this->periodAttendances as $employeeId => $data) {
@@ -509,6 +676,36 @@ class PeriodAttendance extends Component
             ->where('overtime_period_id', $this->period->id)
             ->where('employee_id', $employeeId)
             ->firstOrFail();
+
+        if ($att->isPaid() || $this->period->status === OvertimePeriodStatus::PAID) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Slip Sudah Dibayar',
+                'message' => 'Slip mingguan yang sudah dibayar tidak dapat diubah.',
+            ]);
+
+            return;
+        }
+
+        if (! $this->period->attendance_synced_at) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Absensi Belum Disinkronkan',
+                'message' => 'Pembaruan absensi otomatis belum selesai. Periksa roster atau data absensi, lalu buka kembali halaman ini sebelum membayar slip.',
+            ]);
+
+            return;
+        }
+
+        if (in_array($employeeId, app(OvertimeService::class)->weeklyPendingAttendanceEmployeeIds($this->period), true)) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Ada Absensi Menunggu Review',
+                'message' => 'Review absensi karyawan ini terlebih dahulu di menu Absensi. Catatan yang belum disetujui belum masuk ke jumlah hadir dan nilai slip.',
+            ]);
+
+            return;
+        }
 
         $this->selectedAttendance = $att;
         $this->selectedEmployeeId = $employeeId;
@@ -559,6 +756,16 @@ class PeriodAttendance extends Component
             ->where('employee_id', $employeeId)
             ->firstOrFail();
 
+        if ($att->isPaid() || $this->period->status === OvertimePeriodStatus::PAID) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Slip Sudah Dibayar',
+                'message' => 'Slip mingguan yang sudah dibayar tidak dapat diubah.',
+            ]);
+
+            return;
+        }
+
         $this->selectedAttendance = $att;
         $this->selectedEmployeeId = $employeeId;
         $this->selectedEmployeeData = $this->periodAttendances[$employeeId] ?? null;
@@ -591,6 +798,16 @@ class PeriodAttendance extends Component
         }
 
         if (! $this->selectedAttendance) {
+            return;
+        }
+
+        if ($this->isEditingPayment && ($this->selectedAttendance->isPaid() || $this->period->status === OvertimePeriodStatus::PAID)) {
+            $this->dispatch('swal:alert', [
+                'type' => 'error',
+                'title' => 'Slip Sudah Dibayar',
+                'message' => 'Slip mingguan yang sudah dibayar tidak dapat diubah.',
+            ]);
+
             return;
         }
 
@@ -746,6 +963,7 @@ class PeriodAttendance extends Component
         // 2. Ambil absensi dalam periode ini
         $attendances = Attendance::whereBetween('date', [$startDate, $endDate])
             ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+            ->where(fn ($query) => $query->whereNull('review_status')->orWhere('review_status', 'approved'))
             ->get()
             ->groupBy(['employee_id', fn ($a) => Carbon::parse($a->date)->toDateString()]);
 
@@ -770,6 +988,7 @@ class PeriodAttendance extends Component
         foreach ($this->periodAttendances as $empId => $attData) {
             $daysData = [];
             $totalOtHours = 0;
+            $totalHourlyWorkPay = 0.0;
             $totalHolidayOtPay = 0;
             $totalLunch = 0;
             $totalDinner = 0;
@@ -815,6 +1034,7 @@ class PeriodAttendance extends Component
 
                 // Hadir jika ada log absensi atau tercentang di checklist
                 $hasAttLog = $empAttsByDate->has($dateStr);
+                $dayAttendance = $empAttsByDate->get($dateStr, collect())->first();
                 $isInChecklist = in_array($dKey, $attData['attendance_days'] ?? [], true)
                     || in_array($dateStr, $attData['attendance_days'] ?? [], true);
                 $isAttended = $hasAttLog || $isInChecklist;
@@ -826,17 +1046,28 @@ class PeriodAttendance extends Component
                 $dinner = ($otHours >= $otMealThreshold || $otMeal > 0) ? ($otMeal > 0 ? $otMeal : $otMealAmount) : 0.0;
 
                 // Upah harian untuk pegawai harian
-                $wage = ($isHarian && $isAttended) ? $dailyRate : 0.0;
+                $workType = $dayAttendance?->casual_work_type_confirmed ?? $dayAttendance?->casual_work_type ?? 'daily';
+                $payOverride = $dayAttendance?->casual_pay_override;
+                $wage = ($isHarian && $isAttended && $workType === 'daily')
+                    ? (float) ($payOverride ?? $dailyRate)
+                    : 0.0;
+                $roundedWorkHours = $dayAttendance?->clock_in && $dayAttendance?->clock_out
+                    ? app(OvertimeService::class)->calculateOvertimeDuration($dayAttendance->clock_in, $dayAttendance->clock_out)
+                    : (int) ($dayAttendance?->duration_minutes ?? 0) / 60;
+                $hourlyWorkPay = ($isHarian && $isAttended && $workType === 'hourly')
+                    ? round($roundedWorkHours * $unitPrice, 2)
+                    : 0.0;
 
                 $dailyHourlyOtPay = $otHours * $unitPrice;
                 $dailyTotalOtPay = $dailyHourlyOtPay + $holidayOtPay;
-                $dailyTotal = $dailyTotalOtPay + $lunch + $dinner + $wage;
+                $dailyTotal = $dailyTotalOtPay + $lunch + $dinner + $wage + $hourlyWorkPay;
 
                 $totalOtHours += $otHours;
                 $totalHolidayOtPay += $holidayOtPay;
                 $totalLunch += $lunch;
                 $totalDinner += $dinner;
                 $totalDailyWage += $wage;
+                $totalHourlyWorkPay += $hourlyWorkPay;
 
                 $daysData[] = [
                     'date' => $dateStr,
@@ -847,15 +1078,16 @@ class PeriodAttendance extends Component
                     'ot_hours' => $otHours,
                     'ot_hours_formatted' => $otHours > 0 ? (intval($otHours) == $otHours ? (string) intval($otHours) : number_format($otHours, 1)) : '',
                     'holiday_ot' => $holidayOtPay,
-                    'holiday_ot_formatted' => $holidayOtPay > 0 ? 'Rp ' . number_format($holidayOtPay, 0, ',', '.') : '-',
+                    'holiday_ot_formatted' => $holidayOtPay > 0 ? 'Rp '.number_format($holidayOtPay, 0, ',', '.') : '-',
                     'daily_ot_pay' => $dailyTotalOtPay,
-                    'daily_ot_pay_formatted' => $dailyTotalOtPay > 0 ? 'Rp ' . number_format($dailyTotalOtPay, 0, ',', '.') : '-',
+                    'daily_ot_pay_formatted' => $dailyTotalOtPay > 0 ? 'Rp '.number_format($dailyTotalOtPay, 0, ',', '.') : '-',
                     'lunch' => $lunch,
-                    'lunch_formatted' => $lunch > 0 ? 'Rp ' . number_format($lunch, 0, ',', '.') : '-',
+                    'lunch_formatted' => $lunch > 0 ? 'Rp '.number_format($lunch, 0, ',', '.') : '-',
                     'dinner' => $dinner,
-                    'dinner_formatted' => $dinner > 0 ? 'Rp ' . number_format($dinner, 0, ',', '.') : '',
+                    'dinner_formatted' => $dinner > 0 ? 'Rp '.number_format($dinner, 0, ',', '.') : '',
                     'daily_total' => $dailyTotal,
-                    'daily_total_formatted' => $dailyTotal > 0 ? 'Rp ' . number_format($dailyTotal, 0, ',', '.') : '',
+                    'hourly_work_pay' => $hourlyWorkPay,
+                    'daily_total_formatted' => $dailyTotal > 0 ? 'Rp '.number_format($dailyTotal, 0, ',', '.') : '',
                     'is_attended' => $isAttended,
                 ];
             }
@@ -863,7 +1095,7 @@ class PeriodAttendance extends Component
             $hourlyOtPay = $totalOtHours * $unitPrice;
             // Total Upah Lembur = (Total Jam Lembur * Tarif/Jam) + Total Upah Lembur Seharian (Hari Libur)
             $totalOtPay = $hourlyOtPay + $totalHolidayOtPay;
-            $grandTotal = $totalOtPay + $totalLunch + $totalDinner + $totalDailyWage;
+            $grandTotal = $totalOtPay + $totalLunch + $totalDinner + $totalDailyWage + $totalHourlyWorkPay;
 
             $matrix[$empId] = [
                 'employee_id' => $empId,
@@ -875,23 +1107,27 @@ class PeriodAttendance extends Component
                 'payment_status' => $attData['payment_status'],
                 'is_harian' => $isHarian,
                 'unit_price' => $unitPrice,
-                'unit_price_formatted' => 'Rp ' . number_format($unitPrice, 0, ',', '.'),
+                'unit_price_formatted' => 'Rp '.number_format($unitPrice, 0, ',', '.'),
                 'days' => $daysData,
                 'totals' => [
                     'total_ot_hours' => $totalOtHours,
                     'total_ot_hours_formatted' => intval($totalOtHours) == $totalOtHours ? (string) intval($totalOtHours) : number_format($totalOtHours, 1),
                     'total_holiday_ot' => $totalHolidayOtPay,
-                    'total_holiday_ot_formatted' => $totalHolidayOtPay > 0 ? 'Rp ' . number_format($totalHolidayOtPay, 0, ',', '.') : '-',
+                    'total_holiday_ot_formatted' => $totalHolidayOtPay > 0 ? 'Rp '.number_format($totalHolidayOtPay, 0, ',', '.') : '-',
                     'hourly_ot_pay' => $hourlyOtPay,
-                    'hourly_ot_pay_formatted' => $hourlyOtPay > 0 ? 'Rp ' . number_format($hourlyOtPay, 0, ',', '.') : '-',
+                    'hourly_ot_pay_formatted' => $hourlyOtPay > 0 ? 'Rp '.number_format($hourlyOtPay, 0, ',', '.') : '-',
                     'total_ot_pay' => $totalOtPay,
-                    'total_ot_pay_formatted' => 'Rp ' . number_format($totalOtPay, 0, ',', '.'),
+                    'total_ot_pay_formatted' => 'Rp '.number_format($totalOtPay, 0, ',', '.'),
                     'total_lunch' => $totalLunch,
-                    'total_lunch_formatted' => 'Rp ' . number_format($totalLunch, 0, ',', '.'),
+                    'total_lunch_formatted' => 'Rp '.number_format($totalLunch, 0, ',', '.'),
                     'total_dinner' => $totalDinner,
-                    'total_dinner_formatted' => $totalDinner > 0 ? 'Rp ' . number_format($totalDinner, 0, ',', '.') : '-',
+                    'total_dinner_formatted' => $totalDinner > 0 ? 'Rp '.number_format($totalDinner, 0, ',', '.') : '-',
+                    'total_daily_wage' => $totalDailyWage,
+                    'total_daily_wage_formatted' => $totalDailyWage > 0 ? 'Rp '.number_format($totalDailyWage, 0, ',', '.') : '-',
+                    'total_hourly_work_pay' => $totalHourlyWorkPay,
+                    'total_hourly_work_pay_formatted' => $totalHourlyWorkPay > 0 ? 'Rp '.number_format($totalHourlyWorkPay, 0, ',', '.') : '-',
                     'grand_total' => $grandTotal,
-                    'grand_total_formatted' => 'Rp ' . number_format($grandTotal, 0, ',', '.'),
+                    'grand_total_formatted' => 'Rp '.number_format($grandTotal, 0, ',', '.'),
                 ],
             ];
         }
@@ -919,6 +1155,12 @@ class PeriodAttendance extends Component
     public function render(): View
     {
         $departments = Department::orderBy('name')->get(['id', 'name']);
+        $pendingReviewCount = Attendance::query()
+            ->whereBetween('date', [$this->period->start_date->toDateString(), $this->period->end_date->toDateString()])
+            ->whereNotNull('clock_in')
+            ->where('review_status', 'pending_review')
+            ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+            ->count();
 
         // Filter displayed employees based on search & department
         $filteredAttendances = collect($this->periodAttendances)->filter(function ($data) {
@@ -957,16 +1199,23 @@ class PeriodAttendance extends Component
         $matrixTotalOtPay = array_sum(array_map(fn ($m) => (float) ($m['totals']['total_ot_pay'] ?? 0), $filteredMatrix));
         $matrixTotalLunch = array_sum(array_map(fn ($m) => (float) $m['totals']['total_lunch'], $filteredMatrix));
         $matrixTotalDinner = array_sum(array_map(fn ($m) => (float) $m['totals']['total_dinner'], $filteredMatrix));
+        $matrixTotalDailyWage = array_sum(array_map(fn ($m) => (float) ($m['totals']['total_daily_wage'] ?? 0), $filteredMatrix));
+        $matrixTotalHourlyWorkPay = array_sum(array_map(fn ($m) => (float) ($m['totals']['total_hourly_work_pay'] ?? 0), $filteredMatrix));
         $matrixGrandTotal = array_sum(array_map(fn ($m) => (float) $m['totals']['grand_total'], $filteredMatrix));
 
         // Calculate live summary stats from all active paid employees in this period
-        $activeEmployeesCount = count($filteredAttendances);
-        $totalDailyWage = array_sum(array_column($filteredAttendances, 'total_daily_wage'));
-        $totalMealAllowance = array_sum(array_column($filteredAttendances, 'total_meal_allowance'));
-        $totalOvertimePay = array_sum(array_column($filteredAttendances, 'overtime_pay'));
-        $totalOvertimeMeal = array_sum(array_column($filteredAttendances, 'overtime_meal'));
-        $totalOvertimeHours = array_sum(array_column($filteredAttendances, 'overtime_hours'));
-        $grandTotal = $totalDailyWage + $totalMealAllowance + $totalOvertimePay + $totalOvertimeMeal;
+        // Sinkronkan 100% dengan hasil rekapitulasi tabel matriks harian
+        $activeEmployeesCount = collect($filteredMatrix)->filter(fn ($m) => (float) ($m['totals']['grand_total'] ?? 0) > 0)->count();
+        if ($activeEmployeesCount === 0 && count($filteredAttendances) > 0) {
+            $activeEmployeesCount = count($filteredAttendances);
+        }
+
+        $totalDailyWage = $matrixTotalDailyWage;
+        $totalMealAllowance = $matrixTotalLunch + $matrixTotalDinner;
+        $totalOvertimePay = $matrixTotalOtPay;
+        $totalOvertimeMeal = $matrixTotalDinner;
+        $totalOvertimeHours = $matrixTotalOtHours;
+        $grandTotal = $matrixGrandTotal;
         $totalDays = array_sum(array_column($filteredAttendances, 'attended_days'));
         $avgDays = $activeEmployeesCount > 0 ? round($totalDays / $activeEmployeesCount, 1) : 0;
 
@@ -982,6 +1231,7 @@ class PeriodAttendance extends Component
             ->sortBy(fn ($items, $status) => $statusOrder[$status] ?? 99);
 
         return view('livewire.overtimes.period-attendance', [
+            'period' => $this->period,
             'filteredAttendances' => $filteredAttendances,
             'groupedAttendances' => $groupedAttendances,
             'filteredMatrix' => $filteredMatrix,
@@ -991,18 +1241,21 @@ class PeriodAttendance extends Component
             'matrixTotalOtPay' => $matrixTotalOtPay,
             'matrixTotalLunch' => $matrixTotalLunch,
             'matrixTotalDinner' => $matrixTotalDinner,
+            'matrixTotalDailyWage' => $matrixTotalDailyWage,
             'matrixGrandTotal' => $matrixGrandTotal,
             'cycleDays' => $this->cycleDays,
             'employmentStatusMeta' => $this->employmentStatusMeta,
             'departments' => $departments,
             'totalEmployees' => $activeEmployeesCount,
             'totalDailyWage' => $totalDailyWage,
+            'totalHourlyWorkPay' => $matrixTotalHourlyWorkPay,
             'totalMealAllowance' => $totalMealAllowance,
             'totalOvertimeMeal' => $totalOvertimeMeal,
             'totalOvertimePay' => $totalOvertimePay,
             'totalOvertimeHours' => $totalOvertimeHours,
             'grandTotal' => $grandTotal,
             'avgDays' => $avgDays,
+            'pendingReviewCount' => $pendingReviewCount,
         ]);
     }
 }

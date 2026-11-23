@@ -1,4 +1,4 @@
-<div>
+<div class="overtimes-index-page">
     <x-slot name="header">
         <h1>Lembur</h1>
         <div class="section-header-breadcrumb">
@@ -9,28 +9,37 @@
     </x-slot>
 
     <!-- Header Section + Action Button (Modern style matching Payrolls & Kasbon) -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-2 mb-md-3">
-        <div class="mr-md-3">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-2 mb-md-3 overtime-page-header">
+        <div class="mr-md-3 overtime-page-intro">
             <h2 class="section-title mt-0">Kelola Lembur &amp; Uang Makan</h2>
             <p class="section-lead mb-0">
                 Kelola pengajuan lembur karyawan, koordinasi &amp; verifikasi jam kerja, persetujuan direktur, serta slip lembur mingguan.
             </p>
         </div>
 
-        <div class="mt-3 mt-md-0 flex-shrink-0 d-flex align-items-center" style="gap: 8px;">
+        <div class="mt-3 mt-md-0 flex-shrink-0 d-flex align-items-center overtime-create-header-actions" style="gap: 8px;">
             @if ($isKaryawan)
-                <button type="button" wire:click="openCreateModal" class="btn btn-primary d-inline-flex align-items-center font-weight-bold shadow-sm" style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; padding: 9px 16px; font-size: 13px;">
-                    <i class="fas fa-plus mr-1.5"></i> Ajukan Lembur Saya
+                <button type="button" wire:click="openCreateModal" wire:loading.attr="disabled" wire:target="openCreateModal" class="btn btn-primary d-inline-flex align-items-center font-weight-bold shadow-sm" style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; padding: 9px 16px; font-size: 13px;">
+                    <span wire:loading.remove wire:target="openCreateModal"><i class="fas fa-plus mr-1.5"></i> Ajukan Lembur Saya</span>
+                    <span wire:loading wire:target="openCreateModal"><i class="fas fa-spinner fa-spin mr-1.5"></i> Membuka...</span>
                 </button>
             @else
                 @if (auth()->user()->hasRole('admin'))
-                    <button type="button" wire:click="openCreateModal" class="btn btn-primary d-inline-flex align-items-center font-weight-bold shadow-sm" style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; padding: 9px 16px; font-size: 13px;">
-                        <i class="fas fa-plus mr-1.5"></i> Tambah Pengajuan
+                    <button type="button" wire:click="openCreateModal" wire:loading.attr="disabled" wire:target="openCreateModal" class="btn btn-primary d-inline-flex align-items-center font-weight-bold shadow-sm" style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; padding: 9px 16px; font-size: 13px;">
+                        <span wire:loading.remove wire:target="openCreateModal"><i class="fas fa-plus mr-1.5"></i> Tambah Pengajuan</span>
+                        <span wire:loading wire:target="openCreateModal"><i class="fas fa-spinner fa-spin mr-1.5"></i> Membuka...</span>
                     </button>
                 @endif
             @endif
         </div>
     </div>
+
+    @if ($isKaryawan || auth()->user()->hasRole('admin'))
+        <button type="button" wire:click="openCreateModal" wire:loading.attr="disabled" wire:target="openCreateModal" class="btn btn-floating-add overtime-mobile-create-fab" title="Tambah pengajuan lembur" aria-label="Tambah pengajuan lembur">
+            <i wire:loading wire:target="openCreateModal" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+            <i wire:loading.remove wire:target="openCreateModal" class="fas fa-plus" aria-hidden="true"></i>
+        </button>
+    @endif
 
     <!-- 4 Modern Summary Statistic Cards (.cash-advance-stat-grid standard) -->
     <div class="cash-advance-stat-grid mb-4">
@@ -183,7 +192,150 @@
 
         <!-- ================= TAB 1: DAFTAR PENGAJUAN LEMBUR ================= -->
         @if ($activeTab === 'submissions')
-            <div class="table-responsive">
+            <div class="overtime-mobile-submission-list">
+                @if ($submissions->total() > 0)
+                    @foreach ($groupedSubmissions as $dateKey => $group)
+                        <details class="overtime-submission-date-group" wire:key="mobile-submission-group-{{ $dateKey }}" open>
+                            <summary class="overtime-submission-date-heading">
+                                <span class="overtime-submission-date-label">
+                                    <span class="overtime-submission-date-icon" aria-hidden="true">
+                                        <i class="far fa-folder overtime-submission-folder-closed"></i>
+                                        <i class="far fa-folder-open overtime-submission-folder-open"></i>
+                                    </span>
+                                    <strong>{{ $group['label'] }}</strong>
+                                </span>
+                                <span class="overtime-submission-date-heading-meta">
+                                    <span class="overtime-submission-date-count">{{ $group['items']->count() }} pengajuan</span>
+                                    <i class="fas fa-chevron-right overtime-submission-date-toggle" aria-hidden="true"></i>
+                                </span>
+                            </summary>
+
+                            <div class="overtime-submission-date-items">
+                                @foreach ($group['items'] as $sub)
+                                    <article id="submission-mobile-card-{{ $sub->id }}" wire:key="mobile-submission-card-{{ $sub->id }}" class="overtime-submission-card">
+                                        <div class="overtime-submission-card-header">
+                                            <div class="overtime-submission-card-identity">
+                                                @if (! $isKaryawan)
+                                                    @if ($sub->employee && $sub->employee->photo_url)
+                                                        <img src="{{ $sub->employee->photo_url }}" alt="{{ $sub->employee?->full_name ?: 'Karyawan' }}" class="overtime-submission-avatar">
+                                                    @else
+                                                        <span class="overtime-submission-avatar overtime-submission-avatar-fallback">
+                                                            {{ \App\Support\Initials::fromName($sub->employee?->full_name) }}
+                                                        </span>
+                                                    @endif
+                                                @endif
+
+                                                <div class="overtime-submission-card-identity-copy">
+                                                    <strong>{{ $sub->employee?->full_name ?: 'Karyawan' }}</strong>
+                                                    @if (! $isKaryawan)
+                                                        <small>{{ $sub->employee?->department?->name ?? 'Tanpa Dept' }} &bull; {{ $sub->employee?->position?->name ?? 'Staff' }}</small>
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                            <span class="overtime-submission-status" style="{{ $sub->status->badgeStyle() }}">
+                                                <i class="{{ $sub->status->icon() }}" aria-hidden="true"></i>
+                                                {{ $sub->status->label() }}
+                                            </span>
+                                        </div>
+
+                                        <div class="overtime-submission-card-details">
+                                            <span>Jam kerja</span>
+                                            <strong>{{ $sub->isDaily() ? 'Lembur seharian' : $sub->formatted_work_hours }}</strong>
+                                            <span>Durasi</span>
+                                            <strong>{{ $sub->isDaily() ? '1 Hari' : $sub->formatted_duration }}</strong>
+                                        </div>
+
+                                        @if ($sub->reason)
+                                            <p class="overtime-submission-reason"><strong>Alasan:</strong> {{ $sub->reason }}</p>
+                                        @endif
+
+                                        @if ($sub->rejection_reason)
+                                            <p class="overtime-submission-rejection"><strong>Alasan penolakan:</strong> {{ $sub->rejection_reason }}</p>
+                                        @endif
+
+                                        <div class="overtime-submission-payment">
+                                            <div>
+                                                <span>Upah pokok</span>
+                                                <strong>Rp {{ number_format((float) $sub->subtotal_overtime, 0, ',', '.') }}</strong>
+                                            </div>
+                                            <div>
+                                                <span>Uang makan</span>
+                                                <strong>Rp {{ number_format((float) $sub->meal_allowance, 0, ',', '.') }}</strong>
+                                            </div>
+                                            <div class="overtime-submission-total">
+                                                <span>Total diterima</span>
+                                                <strong>{{ $sub->formatted_total_amount }}</strong>
+                                            </div>
+                                        </div>
+
+                                        <div class="overtime-submission-card-actions">
+                                            <button type="button" class="btn btn-info btn-sm" wire:click="openDetailModal('{{ $sub->hashid }}')" wire:loading.attr="disabled" wire:target="openDetailModal" title="Rincian detail pengajuan">
+                                                <i wire:loading wire:target="openDetailModal" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                                                <i wire:loading.remove wire:target="openDetailModal" class="fas fa-eye" aria-hidden="true"></i>
+                                                Rincian
+                                            </button>
+
+                                            @if (auth()->user()->hasRole('admin') && $sub->status === \App\Enums\OvertimeStatus::PENDING_ADMIN)
+                                                <button type="button" class="btn btn-primary btn-sm" wire:click="openAdjustModal('{{ $sub->hashid }}')" wire:loading.attr="disabled" wire:target="openAdjustModal" title="Koordinasi dan sesuaikan jam kerja">
+                                                    <i wire:loading wire:target="openAdjustModal" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                                                    <i wire:loading.remove wire:target="openAdjustModal" class="fas fa-user-edit" aria-hidden="true"></i>
+                                                    Sesuaikan
+                                                </button>
+                                                <button type="button" class="btn btn-danger btn-sm" wire:click="openRejectModal('{{ $sub->hashid }}')" wire:loading.attr="disabled" wire:target="openRejectModal" title="Tolak pengajuan lembur">
+                                                    <i wire:loading wire:target="openRejectModal" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                                                    <i wire:loading.remove wire:target="openRejectModal" class="fas fa-times" aria-hidden="true"></i>
+                                                    Tolak
+                                                </button>
+                                            @endif
+
+                                            @if (auth()->user()->hasRole('admin') && $sub->status !== \App\Enums\OvertimeStatus::APPROVED && $sub->submission_source === \App\Enums\OvertimeSubmissionSource::ADMIN && is_null($sub->overtime_period_id))
+                                                <button type="button" class="btn btn-outline-danger btn-sm" wire:click="confirmDelete('{{ $sub->hashid }}')" wire:loading.attr="disabled" wire:target="confirmDelete" title="Hapus pengajuan lembur">
+                                                    <i wire:loading wire:target="confirmDelete" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                                                    <i wire:loading.remove wire:target="confirmDelete" class="fas fa-trash" aria-hidden="true"></i>
+                                                    Hapus
+                                                </button>
+                                            @endif
+
+                                            @if (auth()->user()->hasRole('direktur') && $sub->status === \App\Enums\OvertimeStatus::PENDING_DIREKTUR)
+                                                <button type="button" class="btn btn-success btn-sm" onclick="confirmApproveOvertime({{ $sub->id }})" title="Setujui lembur">
+                                                    <i class="fas fa-check" aria-hidden="true"></i> Setujui
+                                                </button>
+                                                <button type="button" class="btn btn-danger btn-sm" onclick="confirmRejectOvertime({{ $sub->id }})" title="Tolak pengajuan lembur">
+                                                    <i class="fas fa-times" aria-hidden="true"></i> Tolak
+                                                </button>
+                                            @endif
+
+                                            @if ($isKaryawan && in_array($sub->status, [\App\Enums\OvertimeStatus::REJECTED_ADMIN, \App\Enums\OvertimeStatus::REJECTED_DIREKTUR], true))
+                                                <button type="button" class="btn btn-warning btn-sm" wire:click="reSubmit('{{ $sub->hashid }}')" wire:loading.attr="disabled" wire:target="reSubmit" title="Ajukan ulang atau perbaiki data">
+                                                    <i wire:loading wire:target="reSubmit" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                                                    <i wire:loading.remove wire:target="reSubmit" class="fas fa-redo" aria-hidden="true"></i>
+                                                    Ajukan ulang
+                                                </button>
+                                            @endif
+                                        </div>
+                                    </article>
+                                @endforeach
+                            </div>
+                        </details>
+                    @endforeach
+                @else
+                    <div class="overtime-mobile-submission-empty">
+                        <i class="fas fa-business-time" aria-hidden="true"></i>
+                        <strong>{{ ($search || $statusFilter !== 'all') ? 'Tidak Ada Pengajuan Lembur yang Cocok' : 'Belum Ada Pengajuan Lembur' }}</strong>
+                        <span>{{ ($search || $statusFilter !== 'all') ? 'Tidak ditemukan data pengajuan lembur yang sesuai dengan kriteria filter pencarian.' : 'Belum ada tiket pengajuan lembur yang diajukan pada periode ini.' }}</span>
+                        @if ($isKaryawan || auth()->user()?->hasRole('admin'))
+                            <button type="button" class="btn btn-primary btn-sm mt-2" wire:click="openCreateModal" wire:loading.attr="disabled" wire:target="openCreateModal">
+                                <i wire:loading wire:target="openCreateModal" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                                <i wire:loading.remove wire:target="openCreateModal" class="fas fa-plus" aria-hidden="true"></i>
+                                Tambah Pengajuan Lembur
+                            </button>
+                        @endif
+                    </div>
+                @endif
+            </div>
+
+            <div class="table-responsive overtime-submission-table-view">
                 <table class="table table-clean mb-0">
                     <thead>
                         <tr style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
@@ -313,7 +465,7 @@
                                             @endif
 
                                             <!-- HAPUS UNTUK ADMIN JIKA DIINPUT ADMIN & BELUM MASUK PERIODE -->
-                                            @if (auth()->user()->hasRole('admin') && $sub->submission_source === \App\Enums\OvertimeSubmissionSource::ADMIN && is_null($sub->overtime_period_id))
+                                            @if (auth()->user()->hasRole('admin') && $sub->status !== \App\Enums\OvertimeStatus::APPROVED && $sub->submission_source === \App\Enums\OvertimeSubmissionSource::ADMIN && is_null($sub->overtime_period_id))
                                                 <button type="button" class="btn btn-danger btn-action" wire:click="confirmDelete('{{ $sub->hashid }}')" title="Hapus Pengajuan Lembur">
                                                     <i class="fas fa-trash"></i>
                                                 </button>
@@ -321,10 +473,10 @@
 
                                             <!-- AKSI DIREKTUR: APPROVE / TOLAK DENGAN SWEETALERT2 -->
                                             @if (auth()->user()->hasRole('direktur') && $sub->status === \App\Enums\OvertimeStatus::PENDING_DIREKTUR)
-                                                <button type="button" class="btn btn-success btn-action mr-1" onclick="confirmApproveOvertime({{ $sub->id }}, @js($sub->reference_number))" title="Setujui Lembur">
+                                                <button type="button" class="btn btn-success btn-action mr-1" onclick="confirmApproveOvertime({{ $sub->id }})" title="Setujui Lembur">
                                                     <i class="fas fa-check"></i>
                                                 </button>
-                                                <button type="button" class="btn btn-danger btn-action" onclick="confirmRejectOvertime({{ $sub->id }}, @js($sub->reference_number))" title="Tolak Pengajuan Lembur">
+                                                <button type="button" class="btn btn-danger btn-action" onclick="confirmRejectOvertime({{ $sub->id }})" title="Tolak Pengajuan Lembur">
                                                     <i class="fas fa-times"></i>
                                                 </button>
                                             @endif
@@ -360,7 +512,7 @@
             </div>
 
             @if ($submissions->hasPages())
-                <div class="card-footer bg-white border-top text-right" style="padding: 12px 20px;">
+                <div class="card-footer bg-white border-top text-right overtime-submission-pagination" style="padding: 12px 20px;">
                     {{ $submissions->links() }}
                 </div>
             @endif
@@ -496,7 +648,7 @@
     </div>
 
     <!-- ================= MODAL 1: FORM PENGAJUAN LEMBUR ================= -->
-    <div wire:ignore.self class="modal fade" id="overtimeSubmissionModal" role="dialog" aria-labelledby="submissionModalLabel" aria-hidden="true" data-backdrop="static">
+    <div wire:ignore.self class="modal fade overtime-submission-modal" id="overtimeSubmissionModal" role="dialog" aria-labelledby="submissionModalLabel" aria-hidden="true" data-backdrop="static">
         <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
             <div class="modal-content bg-white" style="border: 1px solid #eaedf2; border-radius: 8px;">
                 <div class="modal-header bg-white border-bottom py-3">
@@ -1036,7 +1188,7 @@
     </div>
 
     <!-- ================= MODAL 4: DETAIL PENGAJUAN LEMBUR (KASBON STYLE) ================= -->
-    <div wire:ignore.self class="modal fade" id="overtimeDetailModal" tabindex="-1" role="dialog" aria-labelledby="detailModalLabel" aria-hidden="true">
+    <div wire:ignore.self class="modal fade overtime-detail-modal" id="overtimeDetailModal" tabindex="-1" role="dialog" aria-labelledby="detailModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
             <div class="modal-content bg-white" style="border: 1px solid #eaedf2; border-radius: 8px;">
                 <div class="modal-header bg-white border-bottom py-3">
@@ -1051,28 +1203,35 @@
                 <div class="modal-body px-4 py-3 bg-white">
                     @if ($detailSubmission)
 
-                        <!-- 1. Identitas + Total (satu kartu: avatar kiri, status kanan, total di bawah) -->
-                        <div class="mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 14px 16px;">
-                            <div class="d-flex align-items-center">
+                        <!-- 1. Identitas + Total -->
+                        <div class="mb-3 overtime-detail-summary-card" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 14px 16px;">
+                            <div class="receipt-orbit-wrapper overtime-detail-mobile-status overtime-detail-status-orbit-{{ $detailSubmission->status->value }} d-md-none" role="img" aria-label="Status {{ $detailSubmission->status->label() }}">
+                                <div class="receipt-orbit-dot overtime-detail-status-orbit-dot"></div>
+                                <div class="receipt-solid-circle overtime-detail-status-solid-circle">
+                                    <i class="{{ $detailSubmission->status === \App\Enums\OvertimeStatus::APPROVED ? 'fas fa-check' : $detailSubmission->status->icon() }}" aria-hidden="true"></i>
+                                </div>
+                            </div>
+
+                            <div class="d-flex align-items-center overtime-detail-summary-identity">
                                 @if ($detailSubmission->employee && $detailSubmission->employee->photo_url)
-                                    <img src="{{ $detailSubmission->employee->photo_url }}" alt="{{ $detailSubmission->employee?->full_name ?: 'Karyawan' }}" class="rounded-circle flex-shrink-0" style="width: 46px; height: 46px; object-fit: cover; border: 2px solid #e2e8f0;">
+                                    <img src="{{ $detailSubmission->employee->photo_url }}" alt="{{ $detailSubmission->employee?->full_name ?: 'Karyawan' }}" class="rounded-circle flex-shrink-0 overtime-detail-summary-avatar" style="width: 46px; height: 46px; object-fit: cover; border: 2px solid #e2e8f0;">
                                 @else
-                                    <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 font-weight-600"
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 font-weight-600 overtime-detail-summary-avatar"
                                          style="width: 46px; height: 46px; background-color: #eff6ff; color: #0284c7; border: 2px solid #bae6fd; font-size: 14px; letter-spacing: 0.5px;">
                                         {{ \App\Support\Initials::fromName($detailSubmission->employee?->full_name) }}
                                     </div>
                                 @endif
-                                <div class="ml-3 flex-grow-1" style="min-width: 0;">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <div class="font-weight-600 text-truncate" style="font-size: 15px; color: #0f172a; line-height: 1.35;">
+                                <div class="ml-3 flex-grow-1 overtime-detail-summary-copy" style="min-width: 0;">
+                                    <div class="d-flex align-items-center justify-content-between overtime-detail-summary-name-row">
+                                        <div class="font-weight-600 text-truncate overtime-detail-summary-name" style="font-size: 15px; color: #0f172a; line-height: 1.35;">
                                             {{ $detailSubmission->employee?->full_name ?: 'Karyawan' }}
                                         </div>
-                                        <span class="ml-2 flex-shrink-0" style="display: inline-flex; align-items: center; padding: 4px 11px; font-size: 11.5px; font-weight: 600; border-radius: 8px; {{ $detailSubmission->status->badgeStyle() }}">
+                                        <span class="ml-2 flex-shrink-0 overtime-detail-summary-status" style="display: inline-flex; align-items: center; padding: 4px 11px; font-size: 11.5px; font-weight: 600; border-radius: 8px; {{ $detailSubmission->status->badgeStyle() }}">
                                             <i class="{{ $detailSubmission->status->icon() }} mr-1.5" style="font-size: 10.5px;"></i>
                                             {{ $detailSubmission->status->label() }}
                                         </span>
                                     </div>
-                                    <div style="font-size: 12.5px; color: #475569; line-height: 1.45;">
+                                    <div class="overtime-detail-summary-meta" style="font-size: 12.5px; color: #475569; line-height: 1.45;">
                                         {{ $detailSubmission->employee?->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $detailSubmission->employee?->position?->name ?? 'Staff' }}
                                     </div>
                                 </div>
@@ -1080,7 +1239,7 @@
 
                             <div class="text-center mt-3 pt-3 border-top" style="border-color: #f1f5f9;">
                                 <div style="font-size: 11.5px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: #475569; margin-bottom: 2px;">
-                                    Total Diterima
+                                    {{ $detailSubmission->status === \App\Enums\OvertimeStatus::APPROVED ? 'Total Disetujui' : 'Total Diajukan' }}
                                 </div>
                                 <div style="font-size: 27px; font-weight: 700; color: #0f172a; line-height: 1.25; font-variant-numeric: tabular-nums;">
                                     Rp {{ number_format((float) $detailSubmission->total_amount, 0, ',', '.') }}
@@ -1097,7 +1256,7 @@
                         </div>
 
                         <!-- 3. Rincian Detail Box (Clean White Card dengan Rounded 12px & Shadow) -->
-                        <div style="border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff; margin-bottom: 14px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
+                        <div class="overtime-detail-info-card" style="border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff; margin-bottom: 14px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
                             <!-- No. Referensi -->
                             <div class="d-flex justify-content-between align-items-center" style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9;">
                                 <div class="d-flex align-items-center">
@@ -1106,7 +1265,7 @@
                                     </div>
                                     <span style="color: #334155; font-size: 13px; font-weight: 500;">No. Referensi</span>
                                 </div>
-                                <span style="color: #0f172a; font-size: 13px; font-weight: 500; font-family: monospace; letter-spacing: 0.3px;">{{ $detailSubmission->reference_number }}</span>
+                                <span style="color: #0f172a; font-size: 13px; font-weight: 500;">{{ $detailSubmission->reference_number }}</span>
                             </div>
 
                             <!-- Tanggal Lembur -->
@@ -1130,8 +1289,8 @@
                                 </div>
                                 <span style="color: #0f172a; font-size: 12.5px; font-weight: 500;">
                                     @if ($detailSubmission->isDaily())
-                                        <span class="badge px-2 py-1 mr-1 font-weight-600" style="font-size: 11px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 6px;">
-                                            <i class="fas fa-sun mr-1 text-warning"></i> Lembur Harian
+                                        <span class="badge badge-secondary px-2 py-1 mr-1 font-weight-600" style="font-size: 11px; border-radius: 6px;">
+                                            Lembur Harian
                                         </span>
                                         <span class="badge badge-light border font-weight-600">1 Hari Penuh</span>
                                     @else
@@ -1160,7 +1319,7 @@
                                     </div>
                                     <span style="color: #334155; font-size: 13px; font-weight: 500;">Asal Pengajuan</span>
                                 </div>
-                                <span class="font-weight-600" style="font-size: 11px; padding: 2px 8px; border-radius: 6px; {{ $detailSubmission->submission_source->badgeStyle() }}">
+                                <span class="badge {{ $detailSubmission->submission_source === \App\Enums\OvertimeSubmissionSource::ADMIN ? 'badge-secondary' : 'badge-light border' }} font-weight-600" style="font-size: 11px; padding: 2px 8px; border-radius: 6px;">
                                     {{ $detailSubmission->submission_source->label() }}
                                 </span>
                             </div>
@@ -1168,8 +1327,8 @@
 
                         <!-- Uraian Pekerjaan (Clean White Card dengan Rounded & Shadow) -->
                         <div class="mb-3">
-                            <label class="mb-1" style="font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #475569;">Uraian Pekerjaan</label>
-                            <div class="p-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); font-size: 13px; line-height: 1.65; font-weight: 400; color: #334155;">
+                            <label class="mb-1 overtime-detail-job-description-label" style="font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #475569;">Uraian Pekerjaan</label>
+                            <div class="p-3 overtime-detail-job-description-content" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); font-size: 13px; line-height: 1.65; font-weight: 400; color: #334155;">
                                 {{ $detailSubmission->reason }}
                             </div>
                         </div>
@@ -1210,7 +1369,7 @@
                 </div>
 
                 <div class="modal-footer bg-white border-top px-4 py-3 d-flex justify-content-between align-items-center">
-                    @if ($detailSubmission && auth()->user()->hasRole('admin') && $detailSubmission->submission_source === \App\Enums\OvertimeSubmissionSource::ADMIN && is_null($detailSubmission->overtime_period_id))
+                    @if ($detailSubmission && auth()->user()->hasRole('admin') && $detailSubmission->status !== \App\Enums\OvertimeStatus::APPROVED && $detailSubmission->submission_source === \App\Enums\OvertimeSubmissionSource::ADMIN && is_null($detailSubmission->overtime_period_id))
                         <button type="button" class="btn btn-danger btn-sm" wire:click="confirmDelete('{{ $detailSubmission->hashid }}')" style="font-weight: 500; border-radius: 8px;">
                             <i class="fas fa-trash-alt mr-1"></i> Hapus Pengajuan
                         </button>
@@ -1275,6 +1434,11 @@
                                     <span>Lembur Disetujui: <strong class="text-primary">{{ $pendingPeriodCount }} pengajuan</strong></span>
                                 </div>
                                 <div style="font-size: 11px; line-height: 1.45; color: #64748b;">
+                                    Periode gaji mencakup Sabtu–Jumat; pembayaran dilakukan pada Sabtu berikutnya.
+                                    @if (\App\Models\CompanyProfile::getProfile()->isRosterMode())
+                                        Semua jadwal karyawan aktif selain harian lepas harus diisi dulu di <a href="{{ route('schedules.index') }}">menu Jadwal Kerja (Roster)</a>.
+                                    @endif
+                                    <br>
                                     @if ($pendingPeriodCount > 0)
                                         Terdapat {{ $pendingPeriodCount }} lembur berstatus disetujui direktur pada rentang tanggal di atas yang siap dikelompokkan ke periode ini bersama uang makan seluruh karyawan.
                                     @else
@@ -1469,12 +1633,15 @@
             const data = Array.isArray(event) ? event[0] : event;
             const id = typeof data === 'object' && data !== null ? data.id : data;
             setTimeout(() => {
-                const row = document.getElementById(`submission-row-${id}`);
-                if (row) {
-                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    row.classList.add('table-row-highlight-pulse');
+                const isMobile = window.matchMedia('(max-width: 767.98px)').matches;
+                const target = isMobile
+                    ? document.getElementById(`submission-mobile-card-${id}`)
+                    : document.getElementById(`submission-row-${id}`);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    target.classList.add(isMobile ? 'overtime-submission-highlight-pulse' : 'table-row-highlight-pulse');
                     setTimeout(() => {
-                        row.classList.remove('table-row-highlight-pulse');
+                        target.classList.remove('table-row-highlight-pulse', 'overtime-submission-highlight-pulse');
                     }, 2500);
                 }
             }, 150);

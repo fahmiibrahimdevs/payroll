@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Enums\EmploymentStatus;
 use App\Enums\OvertimeStatus;
 use App\Livewire\Attendances\DashboardClock;
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\Holiday;
 use App\Models\OvertimeSubmission;
 use App\Models\WorkLocation;
 use App\Services\AttendanceService;
@@ -23,6 +25,7 @@ class WebAttendanceClockTest extends TestCase
     {
         parent::setUp();
         Storage::fake('public');
+        Storage::fake('local');
     }
 
     public function test_haversine_distance_calculation(): void
@@ -62,7 +65,7 @@ class WebAttendanceClockTest extends TestCase
         $fakePhotoBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
         Livewire::test(DashboardClock::class)
-            ->call('recordClock', 'clock_in', $fakePhotoBase64, -6.5715100, 107.7587100, null, 'Test Browser')
+            ->call('recordClock', 'clock_in', $fakePhotoBase64, -6.5715100, 107.7587100, null, 'Test Browser', 5)
             ->assertDispatched('close-web-clock-modal')
             ->assertDispatched('swal:alert');
 
@@ -72,7 +75,222 @@ class WebAttendanceClockTest extends TestCase
             'status' => 'hadir',
             'review_status' => 'approved',
             'source' => 'web_gps',
+            'clock_in_accuracy_meters' => 5,
         ]);
+
+        $attendance = Attendance::where('employee_id', $employee->id)->firstOrFail();
+        Storage::disk('local')->assertExists($attendance->clock_in_photo_path);
+        Storage::disk('public')->assertMissing($attendance->clock_in_photo_path);
+        $this->get($attendance->clock_in_photo_url)->assertOk()->assertHeader('Cache-Control', 'no-store, private');
+    }
+
+    public function test_employee_can_clock_in_at_a_secondary_default_location(): void
+    {
+        $primaryLocation = WorkLocation::create([
+            'name' => 'Lokasi Utama',
+            'latitude' => 0,
+            'longitude' => 0,
+            'radius_meters' => 50,
+            'is_active' => true,
+        ]);
+        $secondaryLocation = WorkLocation::create([
+            'name' => 'Lokasi Default Kedua',
+            'latitude' => 10,
+            'longitude' => 10,
+            'radius_meters' => 100,
+            'is_active' => true,
+        ]);
+        $employee = Employee::factory()->create([
+            'work_location_id' => $primaryLocation->id,
+            'is_free_location' => false,
+        ]);
+        $employee->defaultWorkLocations()->attach([$primaryLocation->id, $secondaryLocation->id]);
+
+        $attendance = app(AttendanceService::class)->recordWebClock(
+            employee: $employee,
+            type: 'clock_in',
+            photoBase64: null,
+            latitude: 10,
+            longitude: 10,
+            accuracyMeters: 5,
+        );
+
+        $this->assertSame('approved', $attendance->review_status);
+        $this->assertSame($secondaryLocation->id, $attendance->clock_in_location_id);
+    }
+
+    public function test_casual_worker_clock_in_waits_for_admin_without_outside_location_note(): void
+    {
+        $office = WorkLocation::create([
+            'name' => 'Kantor HLP Test',
+            'latitude' => -6.5715,
+            'longitude' => 107.7587,
+            'radius_meters' => 100,
+            'is_active' => true,
+        ]);
+        $user = $this->createKaryawanUser();
+        $employee = Employee::factory()->create([
+            'user_id' => $user->id,
+            'employment_status' => EmploymentStatus::HARIAN,
+            'work_location_id' => $office->id,
+        ]);
+        $photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+        Livewire::actingAs($user)
+            ->test(DashboardClock::class)
+            ->call('recordClock', 'clock_in', $photo, -6.5715, 107.7587, null, 'Test Browser', 5, 'daily')
+            ->assertDispatched('close-web-clock-modal')
+            ->assertDispatched('swal:alert');
+
+        $this->assertDatabaseHas('attendances', [
+            'employee_id' => $employee->id,
+            'date' => Carbon::today()->toDateString(),
+            'review_status' => 'pending_review',
+            'casual_work_type' => 'daily',
+        ]);
+    }
+
+    public function test_clock_action_rejects_missing_selfie_photo(): void
+    {
+        $user = $this->createKaryawanUser();
+        $employee = Employee::factory()->create([
+            'user_id' => $user->id,
+            'is_free_location' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(DashboardClock::class)
+            ->call('recordClock', 'clock_in', null, -6.5715, 107.7587, null, 'Test Browser')
+            ->assertDispatched('swal:alert', function ($event, $params) {
+                $payload = $params[0] ?? $params;
+
+                return $payload['title'] === 'Foto Selfie Wajib';
+            });
+
+        $this->assertDatabaseMissing('attendances', [
+            'employee_id' => $employee->id,
+            'date' => Carbon::today()->toDateString(),
+        ]);
+    }
+
+    public function test_selfie_endpoint_requires_owner_or_reviewer(): void
+    {
+        $owner = $this->createKaryawanUser();
+        $other = $this->createKaryawanUser();
+        $employee = Employee::factory()->create(['user_id' => $owner->id]);
+        $attendance = Attendance::create([
+            'employee_id' => $employee->id,
+            'date' => now()->toDateString(),
+            'clock_in_photo_path' => 'attendances/legacy.jpg',
+            'status' => 'hadir',
+        ]);
+        Storage::disk('public')->put('attendances/legacy.jpg', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='));
+
+        $this->actingAs($other)->get($attendance->clock_in_photo_url)->assertForbidden();
+        $this->actingAs($owner)->get($attendance->clock_in_photo_url)->assertOk();
+        $this->get(route('attendances.photo', [$attendance, 'unknown']))->assertNotFound();
+    }
+
+    public function test_service_rechecks_attendance_order_and_coordinates(): void
+    {
+        $employee = Employee::factory()->create(['is_free_location' => true]);
+        $service = app(AttendanceService::class);
+
+        foreach (['clock_out', 'overtime_out'] as $type) {
+            try {
+                $service->recordWebClock($employee, $type, null, -6.5, 107.7);
+                $this->fail("{$type} should be rejected without a start time");
+            } catch (\InvalidArgumentException) {
+                $this->assertDatabaseMissing('attendances', ['employee_id' => $employee->id, 'date' => now()->toDateString()]);
+            }
+        }
+
+        try {
+            $service->recordWebClock($employee, 'clock_in', null, 91.0, 107.7);
+            $this->fail('Invalid latitude should be rejected');
+        } catch (\InvalidArgumentException) {
+            $this->assertDatabaseMissing('attendances', ['employee_id' => $employee->id, 'date' => now()->toDateString()]);
+        }
+
+        try {
+            $service->recordWebClock($employee, 'clock_in', base64_encode('<script>alert(1)</script>'), -6.5, 107.7);
+            $this->fail('Non-image photo should be rejected');
+        } catch (\InvalidArgumentException) {
+            $this->assertDatabaseMissing('attendances', ['employee_id' => $employee->id, 'date' => now()->toDateString()]);
+        }
+
+        $service->recordWebClock($employee, 'clock_in', null, -6.5, 107.7);
+        $this->expectException(\InvalidArgumentException::class);
+        $service->recordWebClock($employee, 'clock_in', null, -6.5, 107.7);
+    }
+
+    public function test_legacy_selfie_command_moves_public_file_without_changing_reference(): void
+    {
+        Storage::disk('public')->put('attendances/2026-10/old.jpg', 'old photo');
+
+        $this->artisan('attendances:move-photos-private', ['--dry-run' => true])->assertSuccessful();
+        Storage::disk('public')->assertExists('attendances/2026-10/old.jpg');
+
+        $this->artisan('attendances:move-photos-private')->assertSuccessful();
+        Storage::disk('local')->assertExists('attendances/2026-10/old.jpg');
+        Storage::disk('public')->assertMissing('attendances/2026-10/old.jpg');
+    }
+
+    public function test_service_blocks_overtime_before_regular_clock_out_and_allows_holiday_overtime(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-04 18:00:00'));
+
+        try {
+            $employee = Employee::factory()->create(['is_free_location' => true]);
+            $service = app(AttendanceService::class);
+            Attendance::create([
+                'employee_id' => $employee->id,
+                'date' => now()->toDateString(),
+                'clock_in' => '08:00:00',
+                'status' => 'hadir',
+            ]);
+
+            try {
+                $service->recordWebClock($employee, 'overtime_in', null, -6.5, 107.7);
+                $this->fail('Regular clock out must precede overtime');
+            } catch (\InvalidArgumentException) {
+                $this->assertNull(Attendance::where('employee_id', $employee->id)->firstOrFail()->overtime_in);
+            }
+
+            Holiday::create(['date' => now()->toDateString(), 'name' => 'Libur Uji Lembur']);
+            $attendance = $service->recordWebClock($employee, 'overtime_in', null, -6.5, 107.7);
+            $this->assertNotNull($attendance->overtime_in);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_employee_without_active_location_is_pending_review(): void
+    {
+        WorkLocation::query()->update(['is_active' => false]);
+        $user = $this->createKaryawanUser();
+        $employee = Employee::factory()->create([
+            'user_id' => $user->id,
+            'work_location_id' => null,
+            'is_free_location' => false,
+        ]);
+
+        $this->actingAs($user);
+        Livewire::test(DashboardClock::class)
+            ->assertSet('allowedLocations', [])
+            ->assertSet('isFreeLocation', false);
+
+        $service = app(AttendanceService::class);
+        try {
+            $service->recordWebClock($employee, 'clock_in', null, -6.5, 107.7);
+            $this->fail('Reason must be supplied when location cannot be verified');
+        } catch (\InvalidArgumentException) {
+            $this->assertDatabaseMissing('attendances', ['employee_id' => $employee->id, 'date' => now()->toDateString()]);
+        }
+
+        $attendance = $service->recordWebClock($employee, 'clock_in', null, -6.5, 107.7, 'Tugas di lokasi pelanggan');
+        $this->assertSame('pending_review', $attendance->review_status);
     }
 
     public function test_employee_outside_geofence_records_pending_review(): void
@@ -97,7 +315,7 @@ class WebAttendanceClockTest extends TestCase
         $fakePhotoBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
         Livewire::test(DashboardClock::class)
-            ->call('recordClock', 'clock_in', $fakePhotoBase64, -6.6000000, 107.7587000, 'Maintenance server di site klien PT ABC', 'Test Browser')
+            ->call('recordClock', 'clock_in', $fakePhotoBase64, -6.6000000, 107.7587000, 'Maintenance server di site klien PT ABC', 'Test Browser', 5, '', '')
             ->assertDispatched('close-web-clock-modal')
             ->assertDispatched('swal:alert');
 
@@ -106,7 +324,116 @@ class WebAttendanceClockTest extends TestCase
             'date' => Carbon::today()->toDateString(),
             'review_status' => 'pending_review',
             'notes' => '[Masuk] Maintenance server di site klien PT ABC',
+            'clock_in_accuracy_meters' => 5,
         ]);
+    }
+
+    public function test_regular_employee_cannot_choose_daily_work_type_for_attendance(): void
+    {
+        $user = $this->createKaryawanUser();
+        $employee = Employee::factory()->create([
+            'user_id' => $user->id,
+            'employment_status' => EmploymentStatus::TETAP,
+            'is_free_location' => true,
+        ]);
+        $photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+        Livewire::actingAs($user)
+            ->test(DashboardClock::class)
+            ->call('recordClock', 'clock_in', $photo, -6.5715, 107.7587, null, 'Test Browser', 5, 'daily')
+            ->assertDispatched('swal:alert', function ($event, $params) {
+                $payload = $params[0] ?? $params;
+
+                return $payload['title'] === 'Presensi Tidak Dapat Dicatat'
+                    && $payload['message'] === 'Pilihan kerja harian lepas tidak berlaku untuk karyawan ini.';
+            });
+
+        $this->assertDatabaseMissing('attendances', [
+            'employee_id' => $employee->id,
+            'date' => Carbon::today()->toDateString(),
+        ]);
+    }
+
+    public function test_uncertain_gps_accuracy_crossing_radius_records_pending_review(): void
+    {
+        $office = WorkLocation::create([
+            'name' => 'Kantor Uji Akurasi',
+            'latitude' => 0,
+            'longitude' => 0,
+            'radius_meters' => 30,
+            'is_active' => true,
+        ]);
+        $employee = Employee::factory()->create([
+            'work_location_id' => $office->id,
+            'is_free_location' => false,
+        ]);
+
+        $attendance = app(AttendanceService::class)->recordWebClock(
+            employee: $employee,
+            type: 'clock_in',
+            photoBase64: null,
+            latitude: 0.00025,
+            longitude: 0,
+            notes: 'GPS kurang akurat',
+            accuracyMeters: 40,
+        );
+
+        $this->assertSame('pending_review', $attendance->review_status);
+        $this->assertSame(40, $attendance->clock_in_accuracy_meters);
+        $this->assertGreaterThan(0, $attendance->clock_in_distance_meters);
+    }
+
+    public function test_restricted_geofence_without_accuracy_requires_review(): void
+    {
+        $office = WorkLocation::create([
+            'name' => 'Kantor Uji Akurasi',
+            'latitude' => 0,
+            'longitude' => 0,
+            'radius_meters' => 30,
+            'is_active' => true,
+        ]);
+        $employee = Employee::factory()->create([
+            'work_location_id' => $office->id,
+            'is_free_location' => false,
+        ]);
+
+        $attendance = app(AttendanceService::class)->recordWebClock(
+            employee: $employee,
+            type: 'clock_in',
+            photoBase64: null,
+            latitude: 0,
+            longitude: 0,
+            notes: 'Akurasi GPS tidak tersedia',
+        );
+
+        $this->assertSame('pending_review', $attendance->review_status);
+        $this->assertNull($attendance->clock_in_accuracy_meters);
+    }
+
+    public function test_service_rejects_invalid_gps_accuracy_values(): void
+    {
+        $employee = Employee::factory()->create(['is_free_location' => true]);
+        $service = app(AttendanceService::class);
+
+        foreach ([-1, NAN, INF, '10'] as $accuracyMeters) {
+            try {
+                $service->recordWebClock(
+                    employee: $employee,
+                    type: 'clock_in',
+                    photoBase64: null,
+                    latitude: -6.5,
+                    longitude: 107.7,
+                    accuracyMeters: $accuracyMeters,
+                );
+                $this->fail('Invalid GPS accuracy should be rejected.');
+            } catch (\InvalidArgumentException $exception) {
+                $this->assertSame('Akurasi GPS tidak valid.', $exception->getMessage());
+                $this->assertDatabaseMissing('attendances', [
+                    'employee_id' => $employee->id,
+                    'date' => now()->toDateString(),
+                ]);
+            }
+        }
     }
 
     public function test_free_location_employee_records_approved_anywhere(): void
@@ -164,7 +491,7 @@ class WebAttendanceClockTest extends TestCase
         $fakePhotoBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
         Livewire::test(DashboardClock::class)
-            ->call('recordClock', 'clock_out', $fakePhotoBase64, -6.5715100, 107.7587100, 'Selesai shift kantor', 'Test Browser')
+            ->call('recordClock', 'clock_out', $fakePhotoBase64, -6.5715100, 107.7587100, 'Selesai shift kantor', 'Test Browser', 5)
             ->assertDispatched('close-web-clock-modal');
 
         $attendance = Attendance::where('employee_id', $employee->id)
@@ -173,6 +500,7 @@ class WebAttendanceClockTest extends TestCase
 
         $this->assertNotNull($attendance->clock_out);
         $this->assertNotNull($attendance->clock_out_photo_path);
+        $this->assertSame(5, $attendance->clock_out_accuracy_meters);
         $this->assertEquals(-6.5715100, (float) $attendance->clock_out_latitude);
     }
 
@@ -355,11 +683,12 @@ class WebAttendanceClockTest extends TestCase
             ->call(
                 'recordClock',
                 'overtime_in',
-                'data:image/jpeg;base64,'.base64_encode('fake_overtime_in'),
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
                 -6.5715,
                 107.7587,
                 'Lembur cetak spanduk event',
-                'Chrome / Linux'
+                'Chrome / Linux',
+                8
             )
             ->assertDispatched('swal:alert', function ($event, $params) {
                 $payload = $params[0] ?? $params;
@@ -380,11 +709,12 @@ class WebAttendanceClockTest extends TestCase
             ->call(
                 'recordClock',
                 'overtime_out',
-                'data:image/jpeg;base64,'.base64_encode('fake_overtime_out'),
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
                 -6.5715,
                 107.7587,
                 'Selesai cetak',
-                'Chrome / Linux'
+                'Chrome / Linux',
+                12
             )
             ->assertDispatched('swal:alert', function ($event, $params) {
                 $payload = $params[0] ?? $params;

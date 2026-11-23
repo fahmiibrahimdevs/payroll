@@ -11,6 +11,7 @@ use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
+use App\Models\Holiday;
 use App\Models\OvertimePeriod;
 use App\Models\OvertimePeriodAttendance;
 use App\Models\OvertimeSubmission;
@@ -30,6 +31,8 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class AttendanceService
 {
+    private const MAX_STORED_GPS_ACCURACY_METERS = 4_294_967_295;
+
     public function __construct(
         protected ActivityLogService $logger
     ) {}
@@ -452,6 +455,12 @@ class AttendanceService
                 }
             });
 
+            $refreshedWeeklyPeriods = $this->refreshDraftWeeklyPeriodsForRange(
+                $startDate->toDateString(),
+                $endDate->toDateString(),
+                $actor
+            );
+
             Log::info('Laporan absensi fingerprint (Kartu Laporan) berhasil diimpor', [
                 'start_date' => $startDate->toDateString(),
                 'end_date' => $endDate->toDateString(),
@@ -471,6 +480,7 @@ class AttendanceService
                 'unmatched_count' => 0,
                 'records_saved' => $recordsSaved,
                 'manual_preserved' => $manualPreserved,
+                'weekly_periods_refreshed' => $refreshedWeeklyPeriods,
                 'matched_names' => array_values($matched),
             ];
         }
@@ -743,6 +753,12 @@ class AttendanceService
             }
         });
 
+        $refreshedWeeklyPeriods = $this->refreshDraftWeeklyPeriodsForRange(
+            $startDate->toDateString(),
+            $endDate->toDateString(),
+            $actor
+        );
+
         Log::info('Laporan absensi fingerprint berhasil diimpor', [
             'start_date' => $startDate->toDateString(),
             'end_date' => $endDate->toDateString(),
@@ -780,6 +796,7 @@ class AttendanceService
             'unregistered_list' => [],
             'records_saved' => $recordsSaved,
             'manual_preserved' => $manualPreserved,
+            'weekly_periods_refreshed' => $refreshedWeeklyPeriods,
         ];
     }
 
@@ -823,11 +840,45 @@ class AttendanceService
         return $query->orderBy('date', 'desc')->orderBy('clock_in', 'asc');
     }
 
+    /** Refresh draft weekly periods affected by new or changed attendance data. */
+    public function refreshDraftWeeklyPeriodsForRange(string $startDate, string $endDate, ?User $actor = null): int
+    {
+        $periods = OvertimePeriod::query()
+            ->where('status', OvertimePeriodStatus::DRAFT)
+            ->where('start_date', '<=', $endDate)
+            ->where('end_date', '>=', $startDate)
+            ->get();
+
+        $refreshedCount = 0;
+        foreach ($periods as $period) {
+            OvertimePeriod::query()
+                ->whereKey($period->id)
+                ->update(['attendance_synced_at' => null]);
+
+            try {
+                $this->syncToWeeklyOvertimePeriod($period, $actor);
+                $refreshedCount++;
+            } catch (\Throwable $exception) {
+                Log::warning('Slip mingguan belum dapat diperbarui otomatis dari perubahan absensi', [
+                    'period_id' => $period->id,
+                    'start_date' => $startDate,
+                    'end_date' => $endDate,
+                    'error' => $exception->getMessage(),
+                    'actor_id' => $actor?->id,
+                ]);
+            }
+        }
+
+        return $refreshedCount;
+    }
+
     /**
      * Synchronize recorded attendances directly into a weekly OvertimePeriodAttendance.
      */
     public function syncToWeeklyOvertimePeriod(OvertimePeriod $period, ?User $actor = null): int
     {
+        $period->refresh();
+
         // Periode yang sudah lunas tidak boleh berubah — sinkronisasi ulang akan
         // membalikkan grand_total dan menimpa koreksi manual admin.
         if ($period->status !== null && $period->status !== OvertimePeriodStatus::DRAFT) {
@@ -837,11 +888,11 @@ class AttendanceService
         $startDate = Carbon::parse($period->start_date)->toDateString();
         $endDate = Carbon::parse($period->end_date)->toDateString();
 
-        // Hari kerja valid sesuai jadwal perusahaan: kecualikan Minggu (dan
-        // Sabtu bila jadwal 5 hari kerja) serta hari libur nasional. Tap di
-        // hari libur/akhir pekan tetap tersimpan di absensi sebagai data jam,
-        // tetapi TIDAK dihitung sebagai hari hadir berbayar — pembayarannya
-        // hanya lewat pengajuan lembur yang di-approve Direktur.
+        app(OvertimeService::class)->assertWeeklyRosterComplete($startDate, $endDate);
+
+        // Karyawan bulanan mengikuti jadwal perusahaan di bawah. Untuk HLP,
+        // hari dibayar berdasarkan kehadiran yang disetujui, termasuk akhir
+        // pekan dan hari libur karena mereka tidak mengikuti roster.
         $company = CompanyProfile::getProfile();
         $isRoster = $company->isRosterMode();
         $workDaysPerWeek = (int) ($company->work_days_per_week ?: 6);
@@ -850,6 +901,7 @@ class AttendanceService
         // Get all attendances in this date range
         $attendances = Attendance::whereBetween('date', [$startDate, $endDate])
             ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+            ->where(fn ($query) => $query->whereNull('review_status')->orWhere('review_status', 'approved'))
             ->get()
             ->groupBy('employee_id');
 
@@ -902,6 +954,7 @@ class AttendanceService
                     continue;
                 }
 
+                $isHarian = $emp->employment_status === EmploymentStatus::HARIAN;
                 $empAttendances = $attendances->get($emp->id);
 
                 // Hari kerja valid menurut jadwal: pada mode Roster mengikuti jadwal shift masing-masing,
@@ -909,11 +962,13 @@ class AttendanceService
                 $empValidWorkDays = $isRoster
                     ? WorkingDays::employeeWorkDays($emp->id, $startDate, $endDate, $company, $rosterSchedules->get($emp->id))
                     : $validWorkDays;
+                if ($isHarian) {
+                    $empValidWorkDays = $this->allDayKeysWithin($startDate, $endDate);
+                }
 
                 $attendedDaysKeys = $this->attendedWorkDayKeys($empAttendances ?? collect(), $empValidWorkDays);
                 $attendedCount = count($attendedDaysKeys);
                 $hasOvertime = in_array($emp->id, $linkedOvertimeEmpIds, true);
-                $isHarian = $emp->employment_status === EmploymentStatus::HARIAN;
 
                 // Opsi A & C: Hanya masukkan karyawan yang gajian (ada kehadiran kerja / upah harian / lembur)
                 if ($attendedCount <= 0 && ! $hasOvertime) {
@@ -929,7 +984,21 @@ class AttendanceService
                 $totalMeal = round($attendedCount * $rate, 2);
 
                 $dailyRate = $isHarian ? (float) ($emp->daily_rate ?? 0) : 0.0;
-                $totalDailyWage = round($attendedCount * $dailyRate, 2);
+                $hourlyWorkPay = 0.0;
+                if ($isHarian) {
+                    $dailyAttendances = ($empAttendances ?? collect())->filter(fn (Attendance $attendance): bool => ($attendance->casual_work_type_confirmed ?? $attendance->casual_work_type ?? 'daily') === 'daily');
+                    $hourlyAttendances = ($empAttendances ?? collect())->filter(fn (Attendance $attendance): bool => ($attendance->casual_work_type_confirmed ?? $attendance->casual_work_type) === 'hourly');
+                    $totalDailyWage = (float) $dailyAttendances->sum(fn (Attendance $attendance): float => (float) ($attendance->casual_pay_override ?? $dailyRate));
+                    $hourlyWorkPay = (float) $hourlyAttendances->sum(function (Attendance $attendance) use ($emp): float {
+                        $hours = $attendance->clock_in && $attendance->clock_out
+                            ? app(OvertimeService::class)->calculateOvertimeDuration($attendance->clock_in, $attendance->clock_out)
+                            : (int) $attendance->duration_minutes / 60;
+
+                        return round($hours * (float) ($emp->overtime_rate_per_hour ?? 0), 2);
+                    });
+                } else {
+                    $totalDailyWage = 0.0;
+                }
 
                 OvertimePeriodAttendance::updateOrCreate(
                     [
@@ -944,6 +1013,7 @@ class AttendanceService
                         'total_meal_allowance' => $totalMeal,
                         'daily_rate' => $dailyRate,
                         'total_daily_wage' => $totalDailyWage,
+                        'total_hourly_work_pay' => $hourlyWorkPay,
                     ]
                 );
 
@@ -956,6 +1026,10 @@ class AttendanceService
                 ->whereNotIn('employee_id', $candidateEmployees->pluck('id'))
                 ->delete();
 
+            OvertimePeriod::query()
+                ->whereKey($period->id)
+                ->update(['attendance_synced_at' => now()]);
+            $period->refresh();
             $period->recalculateTotals();
         });
 
@@ -1014,6 +1088,21 @@ class AttendanceService
         return $keys;
     }
 
+    /** @return array<string, string> */
+    private function allDayKeysWithin(string $startDate, string $endDate): array
+    {
+        $days = [];
+        $date = Carbon::parse($startDate)->startOfDay();
+        $lastDate = Carbon::parse($endDate)->startOfDay();
+
+        while ($date->lte($lastDate)) {
+            $days[$date->toDateString()] = strtolower($date->format('D'));
+            $date->addDay();
+        }
+
+        return $days;
+    }
+
     /**
      * Hitung jarak Haversine antara dua koordinat GPS dalam satuan meter.
      */
@@ -1044,6 +1133,7 @@ class AttendanceService
      * @param  string|null  $notes  Catatan / alasan jika di luar radius
      * @param  string|null  $deviceInfo  Info browser / user agent
      * @param  User|null  $actor  User yang sedang login
+     * @param  mixed  $accuracyMeters  Perkiraan akurasi dari perangkat, dalam meter
      */
     public function recordWebClock(
         Employee $employee,
@@ -1053,8 +1143,41 @@ class AttendanceService
         float $longitude,
         ?string $notes = null,
         ?string $deviceInfo = null,
-        ?User $actor = null
+        ?User $actor = null,
+        mixed $accuracyMeters = null,
+        ?string $casualWorkType = null,
+        ?string $earlyDepartureReason = null
     ): Attendance {
+        if (! in_array($type, ['clock_in', 'clock_out', 'overtime_in', 'overtime_out'], true)) {
+            throw new InvalidArgumentException('Jenis presensi tidak valid.');
+        }
+        $isCasualWorker = $employee->employment_status === EmploymentStatus::HARIAN;
+        if ($isCasualWorker && $type === 'clock_in' && ! in_array($casualWorkType, ['daily', 'hourly'], true)) {
+            throw new InvalidArgumentException('Pilih Kerja harian atau Kerja per jam sebelum absen masuk.');
+        }
+        if ($isCasualWorker && in_array($type, ['clock_in', 'clock_out'], true) && blank($photoBase64)) {
+            throw new InvalidArgumentException('Foto selfie wajib diambil saat absen masuk dan pulang.');
+        }
+        if (! $isCasualWorker && (filled($casualWorkType) || filled($earlyDepartureReason))) {
+            throw new InvalidArgumentException('Pilihan kerja harian lepas tidak berlaku untuk karyawan ini.');
+        }
+        if ($earlyDepartureReason !== null && mb_strlen($earlyDepartureReason) > 1000) {
+            throw new InvalidArgumentException('Alasan pulang lebih awal maksimal 1.000 karakter.');
+        }
+        if (! is_finite($latitude) || $latitude < -90 || $latitude > 90 || ! is_finite($longitude) || $longitude < -180 || $longitude > 180) {
+            throw new InvalidArgumentException('Koordinat lokasi tidak valid.');
+        }
+        if ($accuracyMeters !== null) {
+            if ((! is_int($accuracyMeters) && ! is_float($accuracyMeters))
+                || ! is_finite((float) $accuracyMeters)
+                || $accuracyMeters < 0
+                || $accuracyMeters > self::MAX_STORED_GPS_ACCURACY_METERS) {
+                throw new InvalidArgumentException('Akurasi GPS tidak valid.');
+            }
+
+            $accuracyMeters = (int) ceil($accuracyMeters);
+        }
+
         $today = now()->toDateString();
         $timeNow = now()->format('H:i:s');
         $photoPath = null;
@@ -1064,202 +1187,285 @@ class AttendanceService
             if (str_contains($photoBase64, ';base64,')) {
                 [, $photoBase64] = explode(';base64,', $photoBase64, 2);
             }
-            $binaryData = base64_decode($photoBase64);
+            if (strlen($photoBase64) > 2_800_000) {
+                throw new InvalidArgumentException('Ukuran foto presensi terlalu besar.');
+            }
+            $binaryData = base64_decode($photoBase64, true);
             if ($binaryData !== false) {
+                $imageInfo = @getimagesizefromstring($binaryData);
+                if (strlen($binaryData) > 2 * 1024 * 1024 || ! in_array($imageInfo['mime'] ?? null, ['image/jpeg', 'image/png', 'image/webp'], true)) {
+                    throw new InvalidArgumentException('Foto presensi harus berupa gambar JPG, PNG, atau WebP maksimal 2 MB.');
+                }
                 $dir = 'attendances/'.now()->format('Y-m');
                 $filename = 'emp_'.$employee->id.'_'.$type.'_'.now()->format('His').'_'.substr(md5(uniqid('', true)), 0, 6).'.jpg';
                 $photoPath = $dir.'/'.$filename;
-                Storage::disk('public')->put($photoPath, $binaryData);
+                if (! Storage::disk('local')->put($photoPath, $binaryData)) {
+                    throw new \RuntimeException('Foto presensi gagal disimpan.');
+                }
+            } else {
+                throw new InvalidArgumentException('Foto presensi tidak valid.');
             }
         }
 
-        // 2. Evaluasi Geofencing terhadap lokasi yang diizinkan untuk karyawan
-        $allowedLocations = $employee->getValidWorkLocationsOnDate($today);
-        $matchedLocation = null;
-        $distanceMeters = null;
-        $isInsideRadius = false;
+        try {
+            $attendance = DB::transaction(function () use ($employee, $type, $latitude, $longitude, $notes, $deviceInfo, $actor, $accuracyMeters, $photoPath, $today, $timeNow, $casualWorkType, $earlyDepartureReason, $isCasualWorker): Attendance {
+                Employee::query()->whereKey($employee->id)->lockForUpdate()->firstOrFail();
+                $attendance = Attendance::query()->where('employee_id', $employee->id)
+                    ->where('date', $today)->lockForUpdate()->firstOrNew();
 
-        if ($allowedLocations === null) {
-            // Bebas lokasi: tidak terikat geofence kantor manapun
-            $isInsideRadius = true;
-            $distanceMeters = 0;
-            $allActive = WorkLocation::query()->active()->get();
-            if ($allActive->isNotEmpty()) {
-                $nearest = null;
-                $minD = INF;
-                foreach ($allActive as $loc) {
-                    $d = $this->calculateHaversineDistance($latitude, $longitude, (float) $loc->latitude, (float) $loc->longitude);
-                    if ($d < $minD) {
-                        $minD = $d;
-                        $nearest = $loc;
+                $existingTime = match ($type) {
+                    'clock_in' => $attendance->clock_in,
+                    'clock_out' => $attendance->clock_out,
+                    'overtime_in' => $attendance->overtime_in,
+                    'overtime_out' => $attendance->overtime_out,
+                };
+                if ($existingTime) {
+                    throw new InvalidArgumentException('Presensi ini sudah tercatat hari ini.');
+                }
+                if ($type === 'clock_out' && ! $attendance->clock_in) {
+                    throw new InvalidArgumentException('Anda harus presensi masuk sebelum presensi pulang.');
+                }
+                if ($isCasualWorker && $type === 'clock_out' && ! in_array($attendance->casual_work_type, ['daily', 'hourly'], true)) {
+                    throw new InvalidArgumentException('Jenis kerja harian lepas belum tercatat. Hubungi Admin untuk memperbaiki absensi.');
+                }
+                if ($isCasualWorker && $type === 'clock_out' && $attendance->casual_work_type === 'hourly' && filled($earlyDepartureReason)) {
+                    throw new InvalidArgumentException('Keterangan pulang lebih awal hanya berlaku untuk Kerja harian.');
+                }
+                if ($type === 'clock_in' && $attendance->clock_out) {
+                    throw new InvalidArgumentException('Presensi pulang sudah tercatat hari ini.');
+                }
+                if ($type === 'overtime_out' && ! $attendance->overtime_in) {
+                    throw new InvalidArgumentException('Anda harus mulai lembur sebelum mengakhiri lembur.');
+                }
+                if ($type === 'overtime_in' && $attendance->overtime_out) {
+                    throw new InvalidArgumentException('Presensi selesai lembur sudah tercatat hari ini.');
+                }
+                if ($type === 'overtime_in' && ! $attendance->clock_out) {
+                    $schedule = EmployeeSchedule::query()->where('employee_id', $employee->id)->where('date', $today)->first();
+                    $company = CompanyProfile::getProfile();
+                    $isOffDay = $schedule
+                        ? $schedule->isOff()
+                        : WorkingDays::isWeekend(now(), (int) ($company->work_days_per_week ?: 6)) || Holiday::query()->where('date', $today)->exists();
+                    if (! $isOffDay) {
+                        throw new InvalidArgumentException('Anda harus presensi pulang sebelum mulai lembur.');
                     }
                 }
-                $matchedLocation = $nearest;
-            }
-        } else {
-            // Hitung jarak ke setiap lokasi yang diizinkan
-            if ($allowedLocations->isEmpty()) {
-                // Fallback ke semua lokasi aktif bila belum di-assign spesifik
-                $allowedLocations = WorkLocation::query()->active()->get();
-            }
 
-            $minDistance = INF;
-            $bestLocation = null;
+                // 2. Evaluasi Geofencing terhadap lokasi yang diizinkan untuk karyawan
+                $allowedLocations = $employee->getValidWorkLocationsOnDate($today);
+                $matchedLocation = null;
+                $distanceMeters = null;
+                $isInsideRadius = false;
 
-            foreach ($allowedLocations as $location) {
-                $dist = $this->calculateHaversineDistance(
-                    $latitude,
-                    $longitude,
-                    (float) $location->latitude,
-                    (float) $location->longitude
+                if ($allowedLocations === null) {
+                    // Bebas lokasi: tidak terikat geofence kantor manapun
+                    $isInsideRadius = true;
+                    $distanceMeters = 0;
+                    $allActive = WorkLocation::query()->active()->get();
+                    if ($allActive->isNotEmpty()) {
+                        $nearest = null;
+                        $minD = INF;
+                        foreach ($allActive as $loc) {
+                            $d = $this->calculateHaversineDistance($latitude, $longitude, (float) $loc->latitude, (float) $loc->longitude);
+                            if ($d < $minD) {
+                                $minD = $d;
+                                $nearest = $loc;
+                            }
+                        }
+                        $matchedLocation = $nearest;
+                    }
+                } else {
+                    // Hitung jarak ke setiap lokasi yang diizinkan
+                    if ($allowedLocations->isEmpty()) {
+                        // Fallback ke semua lokasi aktif bila belum di-assign spesifik
+                        $allowedLocations = WorkLocation::query()->active()->get();
+                    }
+
+                    $minDistance = INF;
+                    $bestLocation = null;
+
+                    foreach ($allowedLocations as $location) {
+                        $dist = $this->calculateHaversineDistance(
+                            $latitude,
+                            $longitude,
+                            (float) $location->latitude,
+                            (float) $location->longitude
+                        );
+
+                        if ($dist < $minDistance) {
+                            $minDistance = $dist;
+                            $bestLocation = $location;
+                        }
+                    }
+
+                    $matchedLocation = $bestLocation;
+                    $distanceMeters = is_finite($minDistance) ? (int) ceil($minDistance) : null;
+
+                    if ($matchedLocation && $distanceMeters !== null && $accuracyMeters !== null
+                        && $distanceMeters + $accuracyMeters <= (int) $matchedLocation->radius_meters) {
+                        $isInsideRadius = true;
+                    } else {
+                        $isInsideRadius = false;
+                    }
+                }
+
+                // Tentukan review_status:
+                // Jika di dalam radius: langsung 'approved'
+                // Jika di luar radius: 'pending_review' (admin/atasan perlu review catatan)
+                $reviewStatus = $isInsideRadius ? 'approved' : 'pending_review';
+                if ($isCasualWorker) {
+                    $reviewStatus = 'pending_review';
+                }
+                if (! $isInsideRadius && trim((string) $notes) === '') {
+                    throw new InvalidArgumentException('Isi alasan lokasi untuk presensi di luar radius.');
+                }
+
+                // 3. Ambil atau inisialisasi record presensi hari ini
+                $attendance->employee_id = $employee->id;
+                $attendance->date = $today;
+
+                if ($type === 'clock_in') {
+                    $attendance->clock_in = $timeNow;
+                    $attendance->clock_in_photo_path = $photoPath ?? $attendance->clock_in_photo_path;
+                    $attendance->clock_in_latitude = $latitude;
+                    $attendance->clock_in_longitude = $longitude;
+                    $attendance->clock_in_distance_meters = $distanceMeters;
+                    $attendance->clock_in_accuracy_meters = $accuracyMeters;
+                    $attendance->clock_in_location_id = $matchedLocation?->id;
+                    $attendance->source = 'web_gps';
+                    if ($isCasualWorker) {
+                        $attendance->casual_work_type = $casualWorkType;
+                    }
+
+                    // Status kehadiran dasar
+                    if (empty($attendance->status) || $attendance->status === 'absen') {
+                        $attendance->status = 'hadir';
+                    }
+                } elseif ($type === 'clock_out') {
+                    $attendance->clock_out = $timeNow;
+                    $attendance->clock_out_photo_path = $photoPath ?? $attendance->clock_out_photo_path;
+                    $attendance->clock_out_latitude = $latitude;
+                    $attendance->clock_out_longitude = $longitude;
+                    $attendance->clock_out_distance_meters = $distanceMeters;
+                    $attendance->clock_out_accuracy_meters = $accuracyMeters;
+                    $attendance->clock_out_location_id = $matchedLocation?->id;
+                    if ($isCasualWorker && filled($earlyDepartureReason)) {
+                        $attendance->early_departure_reason = trim($earlyDepartureReason);
+                    }
+                } elseif ($type === 'overtime_in') {
+                    $attendance->is_overtime = true;
+                    $attendance->overtime_status = 'in_progress';
+                    $attendance->overtime_in = $timeNow;
+                    $attendance->overtime_in_photo_path = $photoPath ?? $attendance->overtime_in_photo_path;
+                    $attendance->overtime_in_latitude = $latitude;
+                    $attendance->overtime_in_longitude = $longitude;
+                    $attendance->overtime_in_distance_meters = $distanceMeters;
+                    $attendance->overtime_in_accuracy_meters = $accuracyMeters;
+                    $attendance->overtime_in_location_id = $matchedLocation?->id;
+                    if (empty($attendance->source)) {
+                        $attendance->source = 'web_gps';
+                    }
+                    if (empty($attendance->status)) {
+                        $attendance->status = 'hadir';
+                    }
+                } elseif ($type === 'overtime_out') {
+                    $attendance->overtime_status = 'completed';
+                    $attendance->overtime_out = $timeNow;
+                    $attendance->overtime_out_photo_path = $photoPath ?? $attendance->overtime_out_photo_path;
+                    $attendance->overtime_out_latitude = $latitude;
+                    $attendance->overtime_out_longitude = $longitude;
+                    $attendance->overtime_out_distance_meters = $distanceMeters;
+                    $attendance->overtime_out_accuracy_meters = $accuracyMeters;
+                    $attendance->overtime_out_location_id = $matchedLocation?->id;
+
+                    if ($attendance->overtime_in && $attendance->overtime_out) {
+                        try {
+                            $in = Carbon::parse($today.' '.$attendance->overtime_in);
+                            $out = Carbon::parse($today.' '.$attendance->overtime_out);
+                            if ($out->lt($in)) {
+                                $out->addDay();
+                            }
+                            $attendance->overtime_minutes = (int) $in->diffInMinutes($out);
+                        } catch (\Throwable) {
+                        }
+                    }
+                }
+
+                // Hitung durasi kerja jika jam masuk dan pulang sudah terisi
+                if ($attendance->clock_in && $attendance->clock_out) {
+                    try {
+                        $in = Carbon::parse($today.' '.$attendance->clock_in);
+                        $out = Carbon::parse($today.' '.$attendance->clock_out);
+                        if ($out->gte($in)) {
+                            $attendance->duration_minutes = (int) $in->diffInMinutes($out);
+                        }
+                    } catch (\Throwable) {
+                        // Ignore parse errors on duration
+                    }
+                }
+
+                // Catat alasan / review status
+                if ($reviewStatus === 'pending_review') {
+                    $attendance->review_status = 'pending_review';
+                    if ($notes) {
+                        $prefix = match ($type) {
+                            'clock_in' => '[Masuk] ',
+                            'clock_out' => '[Pulang] ',
+                            'overtime_in' => '[Mulai Lembur] ',
+                            'overtime_out' => '[Selesai Lembur] ',
+                            default => "[{$type}] ",
+                        };
+                        $attendance->notes = trim(($attendance->notes ? $attendance->notes.' | ' : '').$prefix.$notes);
+                    }
+                } elseif (! $attendance->review_status || $attendance->review_status === 'approved') {
+                    $attendance->review_status = 'approved';
+                }
+
+                if ($deviceInfo) {
+                    $attendance->device_info = substr($deviceInfo, 0, 255);
+                }
+
+                $attendance->save();
+
+                if ($type === 'overtime_out') {
+                    $this->syncOvertimeSubmissionForAttendance($attendance, $employee, $actor);
+                }
+
+                $this->logger->log(
+                    action: 'record_web_attendance',
+                    module: 'attendance',
+                    level: 'info',
+                    message: "Presensi {$type} via web kamera & GPS: {$employee->full_name}",
+                    context: [
+                        'type' => $type,
+                        'employee_id' => $employee->id,
+                        'employee_name' => $employee->full_name,
+                        'time' => $timeNow,
+                        'latitude' => $latitude,
+                        'longitude' => $longitude,
+                        'distance_meters' => $distanceMeters,
+                        'accuracy_meters' => $accuracyMeters,
+                        'location_name' => $matchedLocation?->name,
+                        'is_inside_radius' => $isInsideRadius,
+                        'review_status' => $attendance->review_status,
+                        'has_photo' => ! empty($photoPath),
+                    ],
+                    userId: $actor?->id ?? auth()->id()
                 );
 
-                if ($dist < $minDistance) {
-                    $minDistance = $dist;
-                    $bestLocation = $location;
-                }
+                return $attendance;
+            });
+
+            $this->refreshDraftWeeklyPeriodsForRange($today, $today, $actor);
+
+            return $attendance;
+        } catch (\Throwable $exception) {
+            if ($photoPath) {
+                Storage::disk('local')->delete($photoPath);
             }
 
-            $matchedLocation = $bestLocation;
-            $distanceMeters = is_finite($minDistance) ? (int) round($minDistance) : null;
-
-            if ($matchedLocation && $distanceMeters !== null && $distanceMeters <= (int) $matchedLocation->radius_meters) {
-                $isInsideRadius = true;
-            } else {
-                $isInsideRadius = false;
-            }
+            throw $exception;
         }
-
-        // Tentukan review_status:
-        // Jika di dalam radius: langsung 'approved'
-        // Jika di luar radius: 'pending_review' (admin/atasan perlu review catatan)
-        $reviewStatus = $isInsideRadius ? 'approved' : 'pending_review';
-
-        // 3. Ambil atau inisialisasi record presensi hari ini
-        $attendance = Attendance::firstOrNew([
-            'employee_id' => $employee->id,
-            'date' => $today,
-        ]);
-
-        if ($type === 'clock_in') {
-            $attendance->clock_in = $timeNow;
-            $attendance->clock_in_photo_path = $photoPath ?? $attendance->clock_in_photo_path;
-            $attendance->clock_in_latitude = $latitude;
-            $attendance->clock_in_longitude = $longitude;
-            $attendance->clock_in_distance_meters = $distanceMeters;
-            $attendance->clock_in_location_id = $matchedLocation?->id;
-            $attendance->source = 'web_gps';
-
-            // Status kehadiran dasar
-            if (empty($attendance->status) || $attendance->status === 'absen') {
-                $attendance->status = 'hadir';
-            }
-        } elseif ($type === 'clock_out') {
-            $attendance->clock_out = $timeNow;
-            $attendance->clock_out_photo_path = $photoPath ?? $attendance->clock_out_photo_path;
-            $attendance->clock_out_latitude = $latitude;
-            $attendance->clock_out_longitude = $longitude;
-            $attendance->clock_out_distance_meters = $distanceMeters;
-            $attendance->clock_out_location_id = $matchedLocation?->id;
-        } elseif ($type === 'overtime_in') {
-            $attendance->is_overtime = true;
-            $attendance->overtime_status = 'in_progress';
-            $attendance->overtime_in = $timeNow;
-            $attendance->overtime_in_photo_path = $photoPath ?? $attendance->overtime_in_photo_path;
-            $attendance->overtime_in_latitude = $latitude;
-            $attendance->overtime_in_longitude = $longitude;
-            $attendance->overtime_in_distance_meters = $distanceMeters;
-            $attendance->overtime_in_location_id = $matchedLocation?->id;
-            if (empty($attendance->source)) {
-                $attendance->source = 'web_gps';
-            }
-            if (empty($attendance->status)) {
-                $attendance->status = 'hadir';
-            }
-        } elseif ($type === 'overtime_out') {
-            $attendance->overtime_status = 'completed';
-            $attendance->overtime_out = $timeNow;
-            $attendance->overtime_out_photo_path = $photoPath ?? $attendance->overtime_out_photo_path;
-            $attendance->overtime_out_latitude = $latitude;
-            $attendance->overtime_out_longitude = $longitude;
-            $attendance->overtime_out_distance_meters = $distanceMeters;
-            $attendance->overtime_out_location_id = $matchedLocation?->id;
-
-            if ($attendance->overtime_in && $attendance->overtime_out) {
-                try {
-                    $in = Carbon::parse($today.' '.$attendance->overtime_in);
-                    $out = Carbon::parse($today.' '.$attendance->overtime_out);
-                    if ($out->lt($in)) {
-                        $out->addDay();
-                    }
-                    $attendance->overtime_minutes = (int) $in->diffInMinutes($out);
-                } catch (\Throwable) {
-                }
-            }
-        }
-
-        // Hitung durasi kerja jika jam masuk dan pulang sudah terisi
-        if ($attendance->clock_in && $attendance->clock_out) {
-            try {
-                $in = Carbon::parse($today.' '.$attendance->clock_in);
-                $out = Carbon::parse($today.' '.$attendance->clock_out);
-                if ($out->gte($in)) {
-                    $attendance->duration_minutes = (int) $in->diffInMinutes($out);
-                }
-            } catch (\Throwable) {
-                // Ignore parse errors on duration
-            }
-        }
-
-        // Catat alasan / review status
-        if ($reviewStatus === 'pending_review') {
-            $attendance->review_status = 'pending_review';
-            if ($notes) {
-                $prefix = match ($type) {
-                    'clock_in' => '[Masuk] ',
-                    'clock_out' => '[Pulang] ',
-                    'overtime_in' => '[Mulai Lembur] ',
-                    'overtime_out' => '[Selesai Lembur] ',
-                    default => "[{$type}] ",
-                };
-                $attendance->notes = trim(($attendance->notes ? $attendance->notes.' | ' : '').$prefix.$notes);
-            }
-        } elseif (! $attendance->review_status || $attendance->review_status === 'approved') {
-            $attendance->review_status = 'approved';
-        }
-
-        if ($deviceInfo) {
-            $attendance->device_info = substr($deviceInfo, 0, 255);
-        }
-
-        $attendance->save();
-
-        if ($type === 'overtime_out') {
-            $this->syncOvertimeSubmissionForAttendance($attendance, $employee, $actor);
-        }
-
-        $this->logger->log(
-            action: 'record_web_attendance',
-            module: 'attendance',
-            level: 'info',
-            message: "Presensi {$type} via web kamera & GPS: {$employee->full_name}",
-            context: [
-                'type' => $type,
-                'employee_id' => $employee->id,
-                'employee_name' => $employee->full_name,
-                'time' => $timeNow,
-                'latitude' => $latitude,
-                'longitude' => $longitude,
-                'distance_meters' => $distanceMeters,
-                'location_name' => $matchedLocation?->name,
-                'is_inside_radius' => $isInsideRadius,
-                'review_status' => $attendance->review_status,
-                'has_photo' => ! empty($photoPath),
-            ],
-            userId: $actor?->id ?? auth()->id()
-        );
-
-        return $attendance;
     }
 
     /**
@@ -1269,17 +1475,57 @@ class AttendanceService
         Attendance $attendance,
         string $status,
         ?string $reviewNotes = null,
-        ?User $actor = null
+        ?User $actor = null,
+        ?float $casualPayOverride = null,
+        ?string $casualPayReason = null,
+        ?string $confirmedCasualWorkType = null
     ): Attendance {
         $validStatuses = ['approved', 'rejected'];
         if (! in_array($status, $validStatuses, true)) {
             throw new InvalidArgumentException("Status review tidak valid: {$status}");
         }
 
+        $isCasualWorker = $attendance->employee?->employment_status === EmploymentStatus::HARIAN;
+        if (! $isCasualWorker && ($casualPayOverride !== null || filled($casualPayReason))) {
+            throw new InvalidArgumentException('Penyesuaian upah ini hanya berlaku untuk karyawan harian lepas.');
+        }
+        if ($isCasualWorker && $confirmedCasualWorkType === 'hourly' && ($casualPayOverride !== null || filled($casualPayReason))) {
+            throw new InvalidArgumentException('Pembayaran Kerja per Jam dihitung otomatis dan tidak dapat disesuaikan manual.');
+        }
+        if ($isCasualWorker && $status === 'approved') {
+            if (! $attendance->clock_in || ! $attendance->clock_out || ! $attendance->clock_in_photo_path || ! $attendance->clock_out_photo_path) {
+                throw new InvalidArgumentException('Absensi harian lepas baru bisa disetujui setelah absen masuk dan pulang lengkap dengan foto.');
+            }
+            if (! in_array($confirmedCasualWorkType, ['daily', 'hourly'], true)) {
+                throw new InvalidArgumentException('Admin harus mengonfirmasi jenis kerja harian lepas sebelum menyetujui absensi.');
+            }
+            if ($confirmedCasualWorkType === 'hourly'
+                && (float) ($attendance->employee?->overtime_rate_per_hour ?? 0) <= 0) {
+                throw new InvalidArgumentException('Tarif Kerja per Jam karyawan belum tersedia. Lengkapi tarifnya di profil karyawan sebelum menyetujui absensi.');
+            }
+        }
+        if ($casualPayOverride !== null) {
+            if (! $isCasualWorker || $status !== 'approved' || ! is_finite($casualPayOverride) || $casualPayOverride < 0) {
+                throw new InvalidArgumentException('Nominal penyesuaian pembayaran tidak valid.');
+            }
+            if (blank($casualPayReason) || mb_strlen($casualPayReason) > 1000) {
+                throw new InvalidArgumentException('Alasan penyesuaian pembayaran wajib diisi maksimal 1.000 karakter.');
+            }
+        }
+
         $attendance->review_status = $status;
         $attendance->review_notes = $reviewNotes;
         $attendance->reviewed_by = $actor?->id ?? auth()->id();
         $attendance->reviewed_at = now();
+        if ($isCasualWorker && $status === 'approved') {
+            $attendance->casual_work_type_confirmed = $confirmedCasualWorkType;
+            $attendance->casual_pay_override = $confirmedCasualWorkType === 'daily' ? $casualPayOverride : null;
+            $attendance->casual_pay_reason = $confirmedCasualWorkType === 'daily' && $casualPayOverride !== null ? trim((string) $casualPayReason) : null;
+        } elseif ($status === 'rejected') {
+            $attendance->casual_work_type_confirmed = null;
+            $attendance->casual_pay_override = null;
+            $attendance->casual_pay_reason = null;
+        }
 
         if ($status === 'rejected') {
             $attendance->status = 'absen';
@@ -1288,6 +1534,12 @@ class AttendanceService
         }
 
         $attendance->save();
+
+        $this->refreshDraftWeeklyPeriodsForRange(
+            $attendance->date->toDateString(),
+            $attendance->date->toDateString(),
+            $actor
+        );
 
         $this->logger->log(
             action: 'review_attendance',

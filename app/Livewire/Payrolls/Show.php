@@ -1377,11 +1377,21 @@ class Show extends Component
             });
 
         $company = CompanyProfile::getProfile();
+        $pendingAttendanceReviewSummary = [
+            'attendance_count' => 0,
+            'employee_count' => 0,
+        ];
+
+        if ($this->period->status->isEditable() && auth()->user()?->hasRole('admin')) {
+            $pendingAttendanceReviewSummary = app(PayrollService::class)
+                ->getPendingAttendanceReviewSummary($this->period);
+        }
 
         return view('livewire.payrolls.show', [
             'items' => $items,
             'departmentSummaries' => $departmentSummaries,
             'company' => $company,
+            'pendingAttendanceReviewSummary' => $pendingAttendanceReviewSummary,
         ]);
     }
 }

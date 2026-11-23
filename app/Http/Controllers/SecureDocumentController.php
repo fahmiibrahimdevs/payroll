@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Attendance;
 use App\Models\CashAdvancePayment;
 use App\Models\Employee;
 use App\Models\OvertimePeriodAttendance;
@@ -16,6 +17,38 @@ class SecureDocumentController
     public function __construct(
         protected ActivityLogService $logger
     ) {}
+
+    public function attendancePhoto(Attendance $attendance, string $type): Response
+    {
+        $user = auth()->user();
+        $isOwnAttendance = $user?->hasRole('karyawan')
+            && (int) $user->getEmployeeRecord()?->id === (int) $attendance->employee_id;
+        abort_unless($user?->hasRole(['admin', 'direktur']) || $isOwnAttendance, 403);
+
+        $path = match ($type) {
+            'clock_in' => $attendance->clock_in_photo_path,
+            'clock_out' => $attendance->clock_out_photo_path,
+            'overtime_in' => $attendance->overtime_in_photo_path,
+            'overtime_out' => $attendance->overtime_out_photo_path,
+            default => abort(404),
+        };
+        abort_unless($path, 404);
+
+        $path = preg_replace('#^/?storage/#', '', $path);
+        abort_unless(str_starts_with($path, 'attendances/') && ! str_contains($path, '..'), 404);
+
+        $disk = Storage::disk('local')->exists($path) ? 'local' : 'public';
+        abort_unless(Storage::disk($disk)->exists($path), 404);
+        $mimeType = Storage::disk($disk)->mimeType($path);
+        abort_unless(in_array($mimeType, ['image/jpeg', 'image/png', 'image/webp'], true), 404);
+
+        return response(Storage::disk($disk)->get($path), 200, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="'.basename($path).'"',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
 
     public function employeeCv(Employee $employee): Response
     {

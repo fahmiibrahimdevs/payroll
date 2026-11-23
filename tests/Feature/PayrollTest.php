@@ -33,6 +33,7 @@ use App\Models\CompanyProfile;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeDetail;
+use App\Models\EmployeeSchedule;
 use App\Models\PayrollItem;
 use App\Models\PayrollItemLine;
 use App\Models\PayrollPeriod;
@@ -50,6 +51,13 @@ use Tests\TestCase;
 class PayrollTest extends TestCase
 {
     use DatabaseTransactions;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        CompanyProfile::getProfile()->update(['work_schedule_mode' => 'fixed']);
+    }
 
     protected function createDirectorUser(): User
     {
@@ -3439,6 +3447,7 @@ class PayrollTest extends TestCase
         $emp = Employee::factory()->create([
             'status' => EmployeeStatus::ACTIVE,
             'employment_status' => EmploymentStatus::KONTRAK,
+            'join_date' => '2026-01-01',
             'contract_end_date' => '2026-10-28',
             'basic_salary' => 8000000,
         ]);
@@ -3695,6 +3704,118 @@ class PayrollTest extends TestCase
         $this->actingAs($karyawanUser);
         $responseKaryawan = $this->get(route('payrolls.print-all', $period));
         $responseKaryawan->assertForbidden();
+    }
+
+    public function test_roster_salary_counts_approved_attendance_and_ignores_pending_review(): void
+    {
+        $company = CompanyProfile::getProfile();
+        $company->update(['work_schedule_mode' => 'roster']);
+        $employee = Employee::factory()->active()->create([
+            'basic_salary' => 3000000,
+            'join_date' => '2026-01-01',
+        ]);
+        $period = PayrollPeriod::create([
+            'reference_number' => 'PR-ROSTER-'.uniqid(),
+            'name' => 'Payroll roster November 2026',
+            'month' => 11,
+            'year' => 2026,
+            'start_date' => '2026-11-01',
+            'end_date' => '2026-11-03',
+            'status' => PayrollPeriodStatus::DRAFT,
+        ]);
+
+        foreach ([
+            '2026-11-01' => EmployeeSchedule::STATUS_OFF,
+            '2026-11-02' => EmployeeSchedule::STATUS_WORK,
+            '2026-11-03' => EmployeeSchedule::STATUS_WORK,
+        ] as $date => $status) {
+            EmployeeSchedule::create([
+                'employee_id' => $employee->id,
+                'date' => $date,
+                'status' => $status,
+            ]);
+        }
+
+        Attendance::create([
+            'employee_id' => $employee->id,
+            'date' => '2026-11-02',
+            'clock_in' => '08:00:00',
+            'status' => 'hadir',
+            'source' => 'fingerprint',
+            'review_status' => 'approved',
+        ]);
+        Attendance::create([
+            'employee_id' => $employee->id,
+            'date' => '2026-11-03',
+            'clock_in' => '08:00:00',
+            'status' => 'hadir',
+            'source' => 'web',
+            'review_status' => 'pending_review',
+        ]);
+
+        $salary = app(PayrollService::class)->calculateProratedSalary($employee, $period, $company);
+
+        $this->assertSame(1500000.0, $salary['basic_salary']);
+        $this->assertSame(1, $salary['worked_days']);
+        $this->assertSame(2, $salary['total_working_days']);
+        $this->assertTrue($salary['roster_complete']);
+    }
+
+    public function test_payroll_submission_confirmation_warns_about_attendance_waiting_for_review(): void
+    {
+        $admin = $this->createAdminUser();
+        $employee = Employee::factory()->active()->create([
+            'join_date' => '2026-01-01',
+        ]);
+        $period = app(PayrollService::class)->createPeriod([
+            'month' => 11,
+            'year' => 2026,
+            'name' => 'Penggajian Periode November 2026',
+        ], $admin);
+        $attendanceDate = $period->start_date->toDateString();
+
+        Attendance::create([
+            'employee_id' => $employee->id,
+            'date' => $attendanceDate,
+            'clock_in' => '08:00:00',
+            'status' => 'hadir',
+            'source' => 'web',
+            'review_status' => 'pending_review',
+        ]);
+
+        app(PayrollService::class)->verifyAllItems($period, $admin);
+
+        Livewire::actingAs($admin)
+            ->test(PayrollShow::class, ['period' => $period])
+            ->assertSee('1 absensi')
+            ->assertSee('menunggu review')
+            ->assertSee('belum dihitung sebagai hari hadir');
+    }
+
+    public function test_monthly_payroll_creation_stops_when_roster_is_incomplete(): void
+    {
+        $admin = $this->createAdminUser();
+        CompanyProfile::getProfile()->update(['work_schedule_mode' => 'roster']);
+        Employee::factory()->active()->create([
+            'full_name' => 'Karyawan Roster Bolong',
+            'basic_salary' => 3000000,
+            'join_date' => '2026-01-01',
+        ]);
+
+        try {
+            app(PayrollService::class)->createPeriod([
+                'month' => 11,
+                'year' => 2026,
+                'start_date' => '2026-11-01',
+                'end_date' => '2026-11-30',
+                'name' => 'Payroll roster belum lengkap',
+            ], $admin);
+            $this->fail('Pembuatan slip harus berhenti saat tanggal roster belum lengkap.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('Jadwal kerja Karyawan Roster Bolong belum lengkap pada 01/11/2026', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('payroll_periods', ['month' => 11, 'year' => 2026]);
     }
 
     public function test_basic_salary_is_calculated_from_actual_attendance_days(): void

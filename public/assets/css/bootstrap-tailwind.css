@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@source "../../../resources/views";
+@source "../../../app";
 
 @theme {
   --breakpoint-sm: 576px;

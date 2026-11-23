@@ -1,4 +1,4 @@
-<div>
+<div class="employees-index-page">
     <x-slot name="header">
         <h1>Kelola Karyawan</h1>
         <div class="section-header-breadcrumb">
@@ -122,7 +122,7 @@
     </div>
 
     <!-- Main Content Row: 3 cols Filter Sidebar + 9 cols Data Table -->
-    <div class="row align-items-start">
+    <div class="row align-items-start employees-main-row">
         <!-- Left Sidebar: Filter Panel & Distribusi Grafik di Card yang Sama (Desktop: 3 cols / col-lg-3 col-md-4 d-none d-md-block) -->
         <div class="col-lg-3 col-md-4 d-none d-md-block">
             <div class="card shadow-sm border-0 mb-0" style="border-radius: 12px; overflow: hidden; background: #ffffff; border: 1px solid #e9edf2;">
@@ -309,9 +309,9 @@
         </div>
 
         <!-- Right Side: Employee Data (Desktop: 9 cols / col-lg-9 col-md-8 col-12) -->
-        <div class="col-lg-9 col-md-8 col-12">
+        <div class="col-lg-9 col-md-8 col-12 employee-data-column">
             <!-- Unified Main Card (Matching Kasbon: Header, Search/Entries, Table, Footer in ONE Card) -->
-            <div class="card cash-advance-main-card mb-0">
+            <div class="card cash-advance-main-card employees-main-card mb-0">
                 <!-- Row 1: Header & Controls Card -->
                 <div class="cash-advance-top-card">
                     <div class="card-header">
@@ -351,7 +351,7 @@
                 </div>
 
                 <!-- Row 2: Full-Width Data Table -->
-                <div class="table-responsive">
+                <div class="table-responsive employee-table-view">
                     <table class="table table-clean mb-0">
                         <thead>
                             <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
@@ -489,6 +489,111 @@
                             @endforelse
                         </tbody>
                     </table>
+                </div>
+
+                <div class="employee-mobile-list">
+                    @forelse ($groupedEmployees as $departmentName => $deptEmployees)
+                        <section class="employee-mobile-group" wire:key="employee-mobile-group-{{ md5($departmentName) }}">
+                            <div class="employee-mobile-group-heading">
+                                <span>{{ $departmentName }}</span>
+                                <span class="employee-mobile-group-count">{{ $deptEmployees->count() }} karyawan</span>
+                            </div>
+
+                            @foreach ($deptEmployees as $employee)
+                                <article class="employee-mobile-card" wire:key="employee-mobile-{{ $employee->id }}">
+                                    <div class="employee-mobile-card-header">
+                                        <img src="{{ $employee->photo_url }}" alt="{{ $employee->full_name }}" class="employee-mobile-photo">
+                                        <div class="employee-mobile-identity">
+                                            <div class="employee-mobile-name" title="{{ $employee->full_name }}">{{ $employee->full_name }}</div>
+                                            <div class="employee-mobile-position" title="{{ $employee->position?->name ?: 'Tanpa Jabatan' }}">{{ $employee->position?->name ?: 'Tanpa Jabatan' }}</div>
+                                            @if ($employee->user?->hasRole('direktur'))
+                                                <span class="employee-mobile-role employee-mobile-role-director">Direktur</span>
+                                            @elseif ($employee->user?->hasRole('admin'))
+                                                <span class="employee-mobile-role employee-mobile-role-admin">Admin</span>
+                                            @endif
+                                        </div>
+                                        <span class="employee-mobile-employment-status" style="color: {{ $employee->employment_status_text_color }};">
+                                            {{ $employee->employment_status_label }}
+                                        </span>
+                                    </div>
+
+                                    <div class="employee-mobile-details">
+                                        <div class="employee-mobile-detail">
+                                            <span>Tanggal Masuk</span>
+                                            <strong>{{ $employee->join_date ? $employee->join_date->format('d M Y') : '-' }}</strong>
+                                        </div>
+                                        <div class="employee-mobile-detail">
+                                            <span>Sisa Kontrak</span>
+                                            <strong title="{{ $employee->remaining_contract_label }}">{{ $employee->remaining_contract_label }}</strong>
+                                        </div>
+                                        <div class="employee-mobile-detail employee-mobile-detail-phone">
+                                            <span>Telepon</span>
+                                            <strong>{{ $employee->detail?->phone ?: '-' }}</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="employee-mobile-card-footer">
+                                        <div class="employee-mobile-account-status">
+                                            @if ($employee->user)
+                                                @if (auth()->user()->hasRole('admin'))
+                                                    <label class="custom-switch pl-0 m-0 cursor-pointer"
+                                                           wire:key="emp-switch-mobile-{{ $employee->id }}"
+                                                           x-data="{
+                                                               active: @js((bool) $employee->user->is_active),
+                                                               sync(val) {
+                                                                   this.active = !!val;
+                                                                   if (this.$refs.checkbox) {
+                                                                       this.$refs.checkbox.checked = this.active;
+                                                                   }
+                                                               }
+                                                           }"
+                                                           x-init="sync(active)"
+                                                           x-effect="sync(@js((bool) $employee->user->is_active))"
+                                                           @employee-account-status-updated.window="if ($event.detail && $event.detail.id === '{{ $employee->hashid }}') { sync($event.detail.status); }"
+                                                           title="{{ $employee->user->is_active ? 'Akun aktif' : 'Akun nonaktif' }}"
+                                                           @click.prevent="$wire.confirmToggleAccountStatus('{{ $employee->hashid }}')">
+                                                        <input type="checkbox"
+                                                               x-ref="checkbox"
+                                                               class="custom-switch-input"
+                                                               :checked="active"
+                                                               aria-label="Status akun {{ $employee->full_name }}"
+                                                               @disabled(! auth()->user()->hasRole('admin'))>
+                                                        <span class="custom-switch-indicator"></span>
+                                                        <span class="custom-switch-description" x-text="active ? 'Aktif' : 'Nonaktif'">{{ $employee->user->is_active ? 'Aktif' : 'Nonaktif' }}</span>
+                                                    </label>
+                                                @else
+                                                    <span class="employee-mobile-account-readonly {{ $employee->user->is_active ? 'is-active' : 'is-inactive' }}">
+                                                        Akun {{ $employee->user->is_active ? 'Aktif' : 'Nonaktif' }}
+                                                    </span>
+                                                @endif
+                                            @else
+                                                <span class="employee-mobile-account-readonly is-inactive">Belum ada akun</span>
+                                            @endif
+                                        </div>
+
+                                        <div class="employee-mobile-card-actions">
+                                            <a href="{{ route('employees.show', $employee) }}" class="btn btn-info btn-action" title="Lihat Profil" aria-label="Lihat profil {{ $employee->full_name }}"><i class="fas fa-eye"></i></a>
+                                            @if (auth()->user()->hasRole('admin'))
+                                                <button type="button" wire:click="edit('{{ $employee->hashid }}')" wire:loading.attr="disabled" wire:target="edit('{{ $employee->hashid }}')" class="btn btn-primary btn-action" title="Edit Data" aria-label="Edit {{ $employee->full_name }}"><i wire:loading wire:target="edit('{{ $employee->hashid }}')" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="edit('{{ $employee->hashid }}')" class="fas fa-pencil-alt"></i></button>
+                                                <button type="button" wire:click="confirmDelete('{{ $employee->hashid }}')" wire:loading.attr="disabled" wire:target="confirmDelete('{{ $employee->hashid }}')" class="btn btn-danger btn-action" title="Hapus Data" aria-label="Hapus {{ $employee->full_name }}"><i wire:loading wire:target="confirmDelete('{{ $employee->hashid }}')" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="confirmDelete('{{ $employee->hashid }}')" class="fas fa-trash"></i></button>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </article>
+                            @endforeach
+                        </section>
+                    @empty
+                        <div class="employee-mobile-empty">
+                            <i class="fas fa-users" aria-hidden="true"></i>
+                            <strong>Tidak Ada Data Karyawan</strong>
+                            <p>{{ ($search || $filterDepartment || $filterPosition || $filterStatus || $filterEmploymentStatus)
+                                ? 'Tidak ditemukan data karyawan yang cocok dengan kriteria filter pencarian.'
+                                : 'Belum ada data master karyawan yang terdaftar di dalam sistem.' }}</p>
+                            @if (auth()->user()?->hasRole('admin'))
+                                <button type="button" wire:click="create" class="btn btn-primary"><i class="fas fa-user-plus mr-1"></i> Tambah Karyawan Baru</button>
+                            @endif
+                        </div>
+                    @endforelse
                 </div>
 
                 <!-- Footer: Info & Pagination (Inside the Same Card) -->

@@ -1,4 +1,4 @@
-<div>
+<div class="position-index-page">
     <x-slot name="header">
         <h1>Kelola Jabatan</h1>
         <div class="section-header-breadcrumb">
@@ -13,7 +13,7 @@
         Kelola data posisi dan struktur jabatan kepegawaian dalam organisasi perusahaan.
     </p>
 
-    <div class="card">
+    <div class="card position-list-shell">
         <div class="card-header">
             <h4>Tabel Jabatan</h4>
         </div>
@@ -40,7 +40,7 @@
             </div>
 
             <!-- Full-Width Data Table -->
-            <div class="table-responsive">
+            <div class="table-responsive position-table-view">
                 <table class="table table-clean">
                     <thead class="bg-gray-100">
                         <tr>
@@ -96,6 +96,38 @@
                         @endforelse
                     </tbody>
                 </table>
+            </div>
+
+            <div class="position-mobile-list">
+                @forelse ($positions as $position)
+                    <article class="position-mobile-card" wire:key="position-mobile-{{ $position->id }}">
+                        <div class="position-mobile-card-content">
+                            <h3 class="position-mobile-card-name" title="{{ $position->name }}">{{ $position->name }}</h3>
+                            <p class="position-mobile-card-description mb-0" title="{{ $position->description ?: '-' }}">{{ $position->description ?: '-' }}</p>
+                        </div>
+                        <div class="position-mobile-card-actions">
+                            <button type="button" wire:click="edit({{ $position->id }})" wire:loading.attr="disabled" wire:target="edit({{ $position->id }})" class="btn btn-primary btn-action" title="Edit Data" aria-label="Edit {{ $position->name }}">
+                                <i wire:loading wire:target="edit({{ $position->id }})" class="fas fa-spinner fa-spin"></i>
+                                <i wire:loading.remove wire:target="edit({{ $position->id }})" class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button type="button" wire:click="confirmDelete({{ $position->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $position->id }})" class="btn btn-danger btn-action" title="Hapus Data" aria-label="Hapus {{ $position->name }}">
+                                <i wire:loading wire:target="confirmDelete({{ $position->id }})" class="fas fa-spinner fa-spin"></i>
+                                <i wire:loading.remove wire:target="confirmDelete({{ $position->id }})" class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </article>
+                @empty
+                    <div class="position-mobile-empty">
+                        <div class="font-weight-600">Tidak ada data ditemukan</div>
+                        <p class="mb-0">
+                            @if ($search)
+                                Tidak ada jabatan yang sesuai dengan kata kunci "{{ $search }}".
+                            @else
+                                Belum ada data jabatan yang tersedia.
+                            @endif
+                        </p>
+                    </div>
+                @endforelse
             </div>
 
             <!-- Footer: Info & Pagination -->

@@ -93,6 +93,14 @@ class Index extends Component
 
     public string $auditReviewNotes = '';
 
+    public string $auditConfirmedCasualWorkType = '';
+
+    public bool $auditCasualPayOverrideEnabled = false;
+
+    public string $auditCasualPayOverride = '';
+
+    public string $auditCasualPayReason = '';
+
     public function mount(): void
     {
         $user = auth()->user();
@@ -281,10 +289,14 @@ class Index extends Component
                 $manualNote = " ({$result['manual_preserved']} koreksi manual admin tetap dipertahankan)";
             }
 
+            $weeklyNote = ($result['weekly_periods_refreshed'] ?? 0) > 0
+                ? ' Slip mingguan terkait telah dihitung ulang otomatis.'
+                : '';
+
             $this->dispatch('swal:alert', [
                 'type' => 'success',
                 'title' => 'Import Absensi Berhasil',
-                'message' => "Periode {$result['start_date']} s/d {$result['end_date']}: Berhasil menyimpan {$result['records_saved']} data presensi dari {$result['matched_count']} karyawan{$manualNote}.",
+                'message' => "Periode {$result['start_date']} s/d {$result['end_date']}: Berhasil menyimpan {$result['records_saved']} data presensi dari {$result['matched_count']} karyawan{$manualNote}.{$weeklyNote}",
             ]);
         } catch (InvalidArgumentException $e) {
             // Penolakan validasi import (mis. rentang tanggal > 1 bulan):
@@ -413,6 +425,12 @@ class Index extends Component
         $this->auditAttendanceId = $attendance->id;
         $this->auditTab = 'clock_in';
         $this->auditReviewNotes = $attendance->review_notes ?? '';
+        $this->auditConfirmedCasualWorkType = $attendance->casual_work_type_confirmed ?? $attendance->casual_work_type ?? '';
+        $this->auditCasualPayOverrideEnabled = $attendance->employee?->employment_status === EmploymentStatus::HARIAN
+            && $this->auditConfirmedCasualWorkType === 'daily'
+            && $attendance->casual_pay_override !== null;
+        $this->auditCasualPayOverride = $attendance->casual_pay_override !== null ? (string) (float) $attendance->casual_pay_override : '';
+        $this->auditCasualPayReason = $attendance->casual_pay_reason ?? '';
 
         $this->dispatch('open-modal', id: 'manualAttendanceModal');
         $this->dispatchMapAuditPayload();
@@ -448,20 +466,26 @@ class Index extends Component
         $att = $this->auditAttendance;
 
         if ($this->auditTab === 'overtime') {
-            $location = $att->overtimeInLocation ?: ($att->overtimeOutLocation ?: ($att->employee?->workLocation ?: $att->clockInLocation));
+            $matchedLocation = $att->overtimeInLocation ?: $att->overtimeOutLocation;
+            $location = $matchedLocation ?: ($att->employee?->workLocation ?: $att->clockInLocation);
             $empLat = (float) ($att->overtime_in_latitude ?: $att->overtime_out_latitude ?: 0);
             $empLng = (float) ($att->overtime_in_longitude ?: $att->overtime_out_longitude ?: 0);
             $distance = (int) ($att->overtime_in_distance_meters ?: $att->overtime_out_distance_meters ?: 0);
+            $accuracy = $att->overtime_in_latitude !== null ? $att->overtime_in_accuracy_meters : $att->overtime_out_accuracy_meters;
         } elseif ($this->auditTab === 'clock_out') {
-            $location = $att->clockOutLocation ?: ($att->employee?->workLocation ?: $att->clockInLocation);
+            $matchedLocation = $att->clockOutLocation;
+            $location = $matchedLocation ?: ($att->employee?->workLocation ?: $att->clockInLocation);
             $empLat = (float) ($att->clock_out_latitude ?: 0);
             $empLng = (float) ($att->clock_out_longitude ?: 0);
             $distance = (int) ($att->clock_out_distance_meters ?: 0);
+            $accuracy = $att->clock_out_accuracy_meters;
         } else {
-            $location = $att->clockInLocation ?: $att->employee?->workLocation;
+            $matchedLocation = $att->clockInLocation;
+            $location = $matchedLocation ?: $att->employee?->workLocation;
             $empLat = (float) ($att->clock_in_latitude ?: 0);
             $empLng = (float) ($att->clock_in_longitude ?: 0);
             $distance = (int) ($att->clock_in_distance_meters ?: 0);
+            $accuracy = $att->clock_in_accuracy_meters;
         }
 
         $officeLat = $location ? (float) $location->latitude : -6.5715000;
@@ -480,7 +504,8 @@ class Index extends Component
             'empLat' => $hasEmpGps ? $empLat : null,
             'empLng' => $hasEmpGps ? $empLng : null,
             'distanceMeters' => $distance,
-            'isInsideRadius' => $hasEmpGps ? ($distance <= $radiusMeters) : false,
+            'accuracyMeters' => $accuracy,
+            'isInsideRadius' => $hasEmpGps && ($att->employee?->is_free_location || ($matchedLocation && $accuracy !== null && $distance + $accuracy <= $radiusMeters)),
         ]);
     }
 
@@ -495,12 +520,38 @@ class Index extends Component
             return;
         }
 
+        $canAdjustCasualPay = $this->auditAttendance->employee?->employment_status === EmploymentStatus::HARIAN
+            && $this->auditConfirmedCasualWorkType === 'daily';
+
+        if ($this->auditAttendance->employee?->employment_status === EmploymentStatus::HARIAN
+            && ! in_array($this->auditConfirmedCasualWorkType, ['daily', 'hourly'], true)) {
+            $this->addError('auditConfirmedCasualWorkType', 'Pilih jenis kerja yang akan disetujui Admin.');
+
+            return;
+        }
+
         try {
+            if ($canAdjustCasualPay && $this->auditCasualPayOverrideEnabled) {
+                if (! is_numeric($this->auditCasualPayOverride) || (float) $this->auditCasualPayOverride < 0) {
+                    $this->addError('auditCasualPayOverride', 'Masukkan nominal pembayaran yang valid.');
+
+                    return;
+                }
+                if (blank($this->auditCasualPayReason) || mb_strlen($this->auditCasualPayReason) > 1000) {
+                    $this->addError('auditCasualPayReason', 'Alasan penyesuaian wajib diisi maksimal 1.000 karakter.');
+
+                    return;
+                }
+            }
+
             $service->reviewAttendance(
                 attendance: $this->auditAttendance,
                 status: 'approved',
                 reviewNotes: $this->auditReviewNotes,
-                actor: auth()->user()
+                actor: auth()->user(),
+                casualPayOverride: $canAdjustCasualPay && $this->auditCasualPayOverrideEnabled ? (float) $this->auditCasualPayOverride : null,
+                casualPayReason: $canAdjustCasualPay && $this->auditCasualPayOverrideEnabled ? $this->auditCasualPayReason : null,
+                confirmedCasualWorkType: $this->auditAttendance->employee?->employment_status === EmploymentStatus::HARIAN ? $this->auditConfirmedCasualWorkType : null
             );
 
             $this->auditAttendance->refresh();
@@ -508,10 +559,10 @@ class Index extends Component
             $this->dispatch('swal:alert', [
                 'type' => 'success',
                 'title' => 'Presensi Disetujui!',
-                'message' => 'Status presensi '.$this->auditAttendance->employee?->full_name.' berhasil disetujui.',
+                'message' => 'Status presensi '.$this->auditAttendance->employee?->full_name.' berhasil disetujui. Slip mingguan pada tanggal tersebut dihitung ulang otomatis.',
             ]);
 
-            $this->dispatch('close-modal', id: 'attendanceAuditModal');
+            $this->dispatch('close-modal', id: 'manualAttendanceModal');
         } catch (\Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -545,10 +596,10 @@ class Index extends Component
             $this->dispatch('swal:alert', [
                 'type' => 'warning',
                 'title' => 'Presensi Ditolak',
-                'message' => 'Status presensi '.$this->auditAttendance->employee?->full_name.' ditandai sebagai Mangkir (Absen).',
+                'message' => 'Status presensi '.$this->auditAttendance->employee?->full_name.' ditandai sebagai Mangkir (Absen). Slip mingguan pada tanggal tersebut dihitung ulang otomatis.',
             ]);
 
-            $this->dispatch('close-modal', id: 'attendanceAuditModal');
+            $this->dispatch('close-modal', id: 'manualAttendanceModal');
         } catch (\Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',
@@ -777,6 +828,12 @@ class Index extends Component
             );
         });
 
+        app(AttendanceService::class)->refreshDraftWeeklyPeriodsForRange(
+            $this->manualDate,
+            $this->manualDate,
+            auth()->user()
+        );
+
         app(ActivityLogService::class)->info(
             action: $action,
             module: 'attendances',
@@ -841,6 +898,14 @@ class Index extends Component
         ];
 
         $attendance->delete();
+
+        if ($context['date']) {
+            app(AttendanceService::class)->refreshDraftWeeklyPeriodsForRange(
+                $context['date'],
+                $context['date'],
+                auth()->user()
+            );
+        }
 
         app(ActivityLogService::class)->warning(
             action: 'ATTENDANCE_DELETED',
@@ -975,6 +1040,14 @@ class Index extends Component
             'source' => 'fingerprint',
             'notes' => null,
         ]);
+
+        if ($attendance->date) {
+            app(AttendanceService::class)->refreshDraftWeeklyPeriodsForRange(
+                $attendance->date->toDateString(),
+                $attendance->date->toDateString(),
+                auth()->user()
+            );
+        }
 
         app(ActivityLogService::class)->info(
             action: 'ATTENDANCE_RESET_TO_FINGERPRINT',

@@ -1,7 +1,7 @@
 <!-- ================= 1 CARD BERISI 3 ANALISIS KASBON (DESAIN EKSEKUTIF SEPERTI HALAMAN PENGGAJIAN) ================= -->
-<div class="card shadow-sm border-0 mb-0" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e9edf2;">
+<div class="card shadow-sm border-0 mb-0 cash-advance-analysis-card" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e9edf2;">
     <!-- 1. Header Card Bersih & Konsisten -->
-    <div class="border-bottom d-flex align-items-center justify-content-between" style="background: #ffffff; padding: 14px 20px;">
+    <div class="border-bottom d-flex align-items-center justify-content-between cash-advance-analysis-header" style="background: #ffffff; padding: 14px 20px;">
         <div>
             <h4 class="mb-0" style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.35;">
                 Analisis Kasbon
@@ -14,7 +14,7 @@
 
     <div class="card-body p-0">
         <!-- 2. Seksi 1: Kasbon Diberikan vs Dibayar (Bar Chart) -->
-        <div style="padding: 16px 20px 14px;">
+        <div class="cash-advance-analysis-section" style="padding: 16px 20px 14px;">
             <div class="d-flex align-items-center justify-content-between mb-2">
                 <div style="font-size: 12px; font-weight: 700; color: #334155;">
                     Diberikan vs Dibayar
@@ -156,7 +156,7 @@
 
         <!-- 3. Seksi 2: Top 5 Kasbon Terbesar (Donut hanya bila debitur >= 3; di bawah itu daftar ringkas) -->
         @php $debtorCount = count($chartData['top_debtors']['data'] ?? []); @endphp
-        <div style="border-top: 1px solid #f1f5f9; padding: 16px 20px 14px;">
+        <div class="cash-advance-analysis-section" style="border-top: 1px solid #f1f5f9; padding: 16px 20px 14px;">
             <div class="d-flex align-items-center justify-content-between mb-1">
                 <div style="font-size: 12px; font-weight: 700; color: #334155;">
                     Top 5 Kasbon Terbesar
@@ -299,7 +299,7 @@
         </div>
 
         <!-- 4. Seksi 3: Distribusi per Departemen (Donut Chart dengan Center Text Overlay) -->
-        <div style="border-top: 1px solid #f1f5f9; padding: 16px 20px 18px;">
+        <div class="cash-advance-analysis-section" style="border-top: 1px solid #f1f5f9; padding: 16px 20px 18px;">
             <div class="d-flex align-items-center justify-content-between mb-2">
                 <div style="font-size: 12px; font-weight: 700; color: #334155;">
                     Distribusi Departemen

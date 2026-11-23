@@ -315,7 +315,7 @@ class AttendanceTest extends TestCase
             ->assertSeeHtml('att-chip-manual')
             ->assertSeeHtml('att-chip-present')
             ->assertSeeHtml('<optgroup label=')
-            ->assertSee('ID Finger:')
+            ->assertDontSee('ID Finger:')
             ->assertSee('Manual');
     }
 
@@ -422,8 +422,8 @@ class AttendanceTest extends TestCase
         $response = $this->actingAs($this->adminUser)
             ->get(route('overtimes.periods.print', [$period, $this->employee]));
         $response->assertOk();
-        $response->assertSee('Upah Harian');
-        $response->assertSee('750.000');
+        $response->assertSee('125.000');
+        $response->assertSee('900.000');
     }
 
     public function test_import_fingerprint_kartu_laporan_format_with_dynamic_blocks_and_overtime(): void
@@ -729,7 +729,7 @@ class AttendanceTest extends TestCase
         $this->assertSame($beforeCount, Attendance::count());
     }
 
-    public function test_sync_weekly_excludes_sunday_and_holiday_from_attended_days(): void
+    public function test_sync_weekly_counts_harian_lepas_attendance_on_sundays_and_holidays(): void
     {
         // Jadwal 6 hari kerja: Sabtu tetap hari kerja, hanya Minggu + libur nasional yang dikecualikan
         CompanyProfile::getProfile()->update(['work_days_per_week' => 6]);
@@ -773,12 +773,12 @@ class AttendanceTest extends TestCase
             ->where('employee_id', $this->employee->id)
             ->firstOrFail();
 
-        // Rabu (libur) dan Minggu tidak dihitung; Senin, Selasa, Kamis, Jumat, Sabtu = 5 hari
-        $this->assertEquals(5, $periodAtt->attended_days);
-        $this->assertEquals(['mon', 'tue', 'thu', 'fri', 'sat'], $periodAtt->attendance_days);
-        $this->assertEquals(500000, (float) $periodAtt->total_daily_wage);
+        // HLP dibayar berdasarkan hari yang benar-benar tercatat, termasuk hari libur dan Minggu.
+        $this->assertEquals(7, $periodAtt->attended_days);
+        $this->assertEquals(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], $periodAtt->attendance_days);
+        $this->assertEquals(700000, (float) $periodAtt->total_daily_wage);
         // Tunjangan makan memakai rate seragam perusahaan (Rp 25.000/hari)
-        $this->assertEquals(125000, (float) $periodAtt->total_meal_allowance);
+        $this->assertEquals(175000, (float) $periodAtt->total_meal_allowance);
 
         // Data jam hari libur/Minggu tetap tersimpan di absensi (tidak dihapus)
         $this->assertDatabaseHas('attendances', [

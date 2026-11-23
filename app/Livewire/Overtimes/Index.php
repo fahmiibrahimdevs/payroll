@@ -101,7 +101,7 @@ class Index extends Component
     {
         $this->form->date = date('Y-m-d');
         $now = Carbon::now();
-        $start = $now->isFriday() ? $now->copy() : $now->copy()->previous(Carbon::FRIDAY);
+        $start = $now->isSaturday() ? $now->copy() : $now->copy()->previous(Carbon::SATURDAY);
         $end = $start->copy()->addDays(6);
         $this->period_start_date = $start->format('Y-m-d');
         $this->period_end_date = $end->format('Y-m-d');
@@ -1005,17 +1005,16 @@ class Index extends Component
             'period_notes' => 'Catatan Periode',
         ]);
 
-        // Sama dengan aturan siklus gaji mingguan: periode harus persis
-        // Jum'at s/d Kamis (7 hari).
+        // Siklus gaji mingguan berjalan Sabtu sampai Jumat (7 hari).
         $startDate = Carbon::parse($this->period_start_date);
         $endDate = Carbon::parse($this->period_end_date);
 
-        if (! $startDate->isFriday()) {
-            $this->addError('period_start_date', 'Tanggal mulai harus jatuh pada hari Jum\'at.');
+        if (! $startDate->isSaturday()) {
+            $this->addError('period_start_date', 'Tanggal mulai harus jatuh pada hari Sabtu.');
         }
 
-        if (! $endDate->isThursday() || $startDate->copy()->addDays(6)->format('Y-m-d') !== $endDate->format('Y-m-d')) {
-            $this->addError('period_end_date', 'Tanggal akhir harus jatuh pada hari Kamis (persis 7 hari siklus Jum\'at s/d Kamis).');
+        if (! $endDate->isFriday() || $startDate->copy()->addDays(6)->format('Y-m-d') !== $endDate->format('Y-m-d')) {
+            $this->addError('period_end_date', 'Tanggal akhir harus jatuh pada hari Jumat (persis 7 hari siklus Sabtu s/d Jumat).');
         }
 
         if ($this->getErrorBag()->isNotEmpty()) {
@@ -1039,8 +1038,8 @@ class Index extends Component
             ]);
         } catch (\Throwable $e) {
             $this->dispatch('swal:alert', [
-                'type' => 'error',
-                'title' => 'Gagal Membuat Periode',
+                'type' => str_contains($e->getMessage(), 'Jadwal roster belum lengkap') ? 'warning' : 'error',
+                'title' => str_contains($e->getMessage(), 'Jadwal roster belum lengkap') ? 'Lengkapi Roster Terlebih Dahulu' : 'Gagal Membuat Periode',
                 'message' => $e->getMessage(),
             ]);
         }
@@ -1091,6 +1090,7 @@ class Index extends Component
         $endDate = Carbon::parse($period->end_date)->toDateString();
         $attendances = Attendance::whereBetween('date', [$startDate, $endDate])
             ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+            ->where(fn ($query) => $query->whereNull('review_status')->orWhere('review_status', 'approved'))
             ->get()
             ->groupBy('employee_id');
 
@@ -1109,12 +1109,8 @@ class Index extends Component
             ->get();
 
         $existingEmpIds = $period->attendances->pluck('employee_id')->all();
-        // Fallback tanpa log absensi: hari kerja aktual dalam rentang
-        // (kecualikan akhir pekan sesuai jadwal kerja dan hari libur nasional).
         $workDaysPerWeek = (int) (CompanyProfile::getProfile()->work_days_per_week ?? 6);
         $validWorkDays = WorkingDays::workDays($startDate, $endDate, $workDaysPerWeek);
-        $defaultDays = array_values($validWorkDays);
-        $defaultDaysCount = max(1, count($defaultDays));
         $hasNew = false;
 
         foreach ($targetEmployees as $emp) {
@@ -1135,8 +1131,12 @@ class Index extends Component
                         continue;
                     }
                 } else {
-                    $daysCount = $defaultDaysCount;
-                    $daysList = $defaultDays;
+                    if (! $hasOvertime) {
+                        continue;
+                    }
+
+                    $daysCount = 0;
+                    $daysList = [];
                 }
 
                 $att = OvertimePeriodAttendance::create([

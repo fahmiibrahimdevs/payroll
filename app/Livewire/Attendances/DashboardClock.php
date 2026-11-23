@@ -2,17 +2,20 @@
 
 namespace App\Livewire\Attendances;
 
+use App\Enums\EmploymentStatus;
 use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
 use App\Models\Holiday;
 use App\Models\User;
+use App\Models\WorkLocation;
 use App\Services\AttendanceService;
 use App\Support\WorkingDays;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use InvalidArgumentException;
 use Livewire\Component;
 
 class DashboardClock extends Component
@@ -51,6 +54,8 @@ class DashboardClock extends Component
 
     public bool $isFreeLocation = false;
 
+    public bool $isCasualWorker = false;
+
     public function mount(AttendanceService $attendanceService): void
     {
         $this->loadEmployee();
@@ -66,6 +71,7 @@ class DashboardClock extends Component
         }
 
         $this->employee = $user->getEmployeeRecord();
+        $this->isCasualWorker = $this->employee?->employment_status === EmploymentStatus::HARIAN;
 
         // Fallback untuk kemudahan testing jika login sebagai Admin/Direktur di mode lokal
         if (! $this->employee && app()->environment(['local', 'testing'])) {
@@ -79,6 +85,9 @@ class DashboardClock extends Component
                 $this->allowedLocations = [];
             } else {
                 $this->isFreeLocation = false;
+                if ($locations->isEmpty()) {
+                    $locations = WorkLocation::query()->active()->get();
+                }
                 $this->allowedLocations = $locations->map(fn ($loc) => [
                     'id' => $loc->id,
                     'name' => $loc->name,
@@ -200,14 +209,12 @@ class DashboardClock extends Component
 
         $readOnlyData = null;
         if ($isReadOnly && $this->todayAttendance) {
-            $photoPath = match ($type) {
-                'clock_in' => $this->todayAttendance->clock_in_photo_path,
-                'clock_out' => $this->todayAttendance->clock_out_photo_path,
-                'overtime_in' => $this->todayAttendance->overtime_in_photo_path,
-                'overtime_out' => $this->todayAttendance->overtime_out_photo_path,
+            $photoUrl = match ($type) {
+                'clock_in' => $this->todayAttendance->clock_in_photo_url,
+                'clock_out' => $this->todayAttendance->clock_out_photo_url,
+                'overtime_in' => $this->todayAttendance->overtime_in_photo_url,
+                'overtime_out' => $this->todayAttendance->overtime_out_photo_url,
             };
-
-            $photoUrl = $photoPath ? '/storage/'.ltrim($photoPath, '/') : null;
 
             $time = match ($type) {
                 'clock_in' => $this->todayAttendance->clock_in,
@@ -238,6 +245,13 @@ class DashboardClock extends Component
                 'overtime_out' => $this->todayAttendance->overtime_out_distance_meters,
             };
 
+            $accuracy = match ($type) {
+                'clock_in' => $this->todayAttendance->clock_in_accuracy_meters,
+                'clock_out' => $this->todayAttendance->clock_out_accuracy_meters,
+                'overtime_in' => $this->todayAttendance->overtime_in_accuracy_meters,
+                'overtime_out' => $this->todayAttendance->overtime_out_accuracy_meters,
+            };
+
             $location = match ($type) {
                 'clock_in' => $this->todayAttendance->clockInLocation,
                 'clock_out' => $this->todayAttendance->clockOutLocation,
@@ -247,7 +261,8 @@ class DashboardClock extends Component
 
             $locationName = $location?->name ?? ($this->isFreeLocation ? 'Bebas Lokasi' : 'Kantor Resmi');
             $allowedRadius = $location?->radius_meters ?? 50;
-            $isInside = $this->isFreeLocation || ($distance !== null && $distance <= $allowedRadius);
+            $isInside = $this->isFreeLocation || ($location && $distance !== null && $accuracy !== null
+                && $distance + $accuracy <= $allowedRadius);
 
             $readOnlyData = [
                 'photoUrl' => $photoUrl,
@@ -255,6 +270,7 @@ class DashboardClock extends Component
                 'latitude' => $latitude,
                 'longitude' => $longitude,
                 'distance' => $distance,
+                'accuracy' => $accuracy,
                 'locationName' => $locationName,
                 'allowedRadius' => $allowedRadius,
                 'isInside' => $isInside,
@@ -270,6 +286,8 @@ class DashboardClock extends Component
             'readOnlyData' => $readOnlyData,
             'isFreeLocation' => $this->isFreeLocation,
             'allowedLocations' => $this->allowedLocations,
+            'isCasualWorker' => $this->isCasualWorker,
+            'casualWorkType' => $this->todayAttendance?->casual_work_type,
         ]);
     }
 
@@ -283,7 +301,10 @@ class DashboardClock extends Component
         float $longitude,
         ?string $notes,
         ?string $deviceInfo,
-        AttendanceService $attendanceService
+        AttendanceService $attendanceService,
+        mixed $accuracyMeters = null,
+        ?string $casualWorkType = null,
+        ?string $earlyDepartureReason = null
     ): void {
         if (! $this->employee) {
             $this->dispatch('swal:alert', [
@@ -342,6 +363,16 @@ class DashboardClock extends Component
             return;
         }
 
+        if (blank($photoBase64)) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Foto Selfie Wajib',
+                'message' => 'Kamera belum menghasilkan foto selfie. Izinkan akses kamera atau coba lagi sebelum menyimpan presensi.',
+            ]);
+
+            return;
+        }
+
         try {
             $attendance = $attendanceService->recordWebClock(
                 employee: $this->employee,
@@ -351,7 +382,10 @@ class DashboardClock extends Component
                 longitude: $longitude,
                 notes: $notes,
                 deviceInfo: $deviceInfo,
-                actor: Auth::user()
+                actor: Auth::user(),
+                accuracyMeters: $accuracyMeters,
+                casualWorkType: $casualWorkType,
+                earlyDepartureReason: $earlyDepartureReason
             );
 
             $this->loadAttendanceState($attendanceService);
@@ -364,10 +398,15 @@ class DashboardClock extends Component
             };
 
             if ($attendance->isPendingReview()) {
+                $reviewMessage = $this->isCasualWorker
+                    ? 'Absensi harian lepas tercatat dan menunggu persetujuan Admin sebelum masuk ke slip mingguan.'
+                    : ($this->allowedLocations === [] && ! $this->isFreeLocation
+                    ? 'Lokasi kerja aktif belum tersedia. Catatan alasan Anda telah dikirimkan ke Admin untuk ditinjau.'
+                    : 'Pembacaan GPS belum memastikan posisi Anda di dalam radius kantor. Catatan alasan Anda telah dikirimkan ke Admin untuk ditinjau.');
                 $this->dispatch('swal:alert', [
                     'type' => 'warning',
                     'title' => "Presensi {$typeLabel} Berhasil Dicatat (Perlu Review)",
-                    'message' => 'Anda berada di luar radius kantor resmi. Catatan alasan Anda telah dikirimkan ke Admin untuk ditinjau.',
+                    'message' => $reviewMessage,
                 ]);
             } else {
                 $successMsg = match ($type) {
@@ -384,6 +423,12 @@ class DashboardClock extends Component
             }
 
             $this->dispatch('close-web-clock-modal');
+        } catch (InvalidArgumentException $e) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Presensi Tidak Dapat Dicatat',
+                'message' => $e->getMessage(),
+            ]);
         } catch (\Throwable $e) {
             $this->dispatch('swal:alert', [
                 'type' => 'error',

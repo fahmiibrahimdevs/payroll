@@ -30,6 +30,13 @@ class PayrollTaxIntegrationTest extends TestCase
 {
     use DatabaseTransactions;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        CompanyProfile::getProfile()->update(['work_schedule_mode' => 'fixed']);
+    }
+
     protected function createAdminUser(): User
     {
         $role = Role::firstOrCreate(
@@ -396,7 +403,7 @@ class PayrollTaxIntegrationTest extends TestCase
             'department_id' => $dept->id,
             'position_id' => $pos->id,
             'full_name' => 'Rina Nose',
-            'join_date' => Carbon::now()->subMonths(2),
+            'join_date' => '2025-01-01',
             'status' => EmployeeStatus::ACTIVE,
             'basic_salary' => 12_000_000,
         ]);
@@ -425,7 +432,7 @@ class PayrollTaxIntegrationTest extends TestCase
 
         Livewire::test(PayrollManageItem::class, ['period' => $period, 'item' => $item])
             ->call('recalculateTax')
-            ->assertDispatched('swal:alert');
+            ->assertDispatched('swal:alert', fn ($event, $params) => ($params[0]['type'] ?? '') === 'success');
 
         $item->refresh();
         $this->assertEquals(1, $item->lines()->where('category', PayrollLineCategory::TAX)->count());
@@ -808,7 +815,7 @@ class PayrollTaxIntegrationTest extends TestCase
             'department_id' => $dept->id,
             'position_id' => $pos->id,
             'full_name' => 'Budi Master Toggle',
-            'join_date' => Carbon::now()->subMonths(6),
+            'join_date' => Carbon::parse('2025-01-01'),
             'status' => EmployeeStatus::ACTIVE,
             'basic_salary' => 8_000_000,
         ]);

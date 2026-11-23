@@ -1,4 +1,4 @@
-<div>
+<div class="dashboard-admin-home">
     <!-- Top Row: 8 Metric Cards (Kiri 4x2) + Widget Presensi Mandiri (Kanan) | Pada Mobile Presensi Mandiri Tampil Paling Atas -->
     <div class="row align-items-start mb-4">
         <!-- Sisi Kiri (col-xl-9 col-lg-8): 8 Stat Cards dalam Grid 4x2 (Desktop order-lg-1, Mobile order-2) -->
@@ -220,21 +220,21 @@
         </div>
 
         <!-- Sisi Kanan (col-xl-3 col-lg-4): Widget Presensi Mandiri (Desktop order-lg-2, Mobile order-1 berada di paling atas) -->
-        <div class="col-xl-3 col-lg-4 order-1 order-lg-2 mb-3 mb-lg-0">
+        <div class="col-xl-3 col-lg-4 order-1 order-lg-2 mb-3 mb-lg-0 dashboard-attendance-widget">
             <livewire:attendances.dashboard-clock wire:key="admin-attendance-clock-widget" />
         </div>
     </div>
 
     <!-- Section Title & Filter: Dashboard Utama / Analitik Tren Penggajian & PPh 21 -->
-    <div class="d-flex justify-content-between align-items-center flex-wrap mb-3 mt-2" style="gap: 14px;">
+    <div class="d-flex justify-content-between align-items-center flex-wrap mb-3 mt-2 dashboard-main-toolbar" style="gap: 14px;">
         <div>
             <h2 class="section-title my-0">Dashboard Utama</h2>
             <p class="section-lead mb-0">Pantau metrik karyawan, operasional penggajian, dan kasbon secara real-time.</p>
         </div>
 
         <!-- Filter Periode (Clean Styled Dropdown Pill) -->
-        <div class="d-flex align-items-center flex-wrap" style="gap: 8px; background: #ffffff; padding: 4px 10px; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);">
-            <div class="d-flex align-items-center" style="gap: 6px;">
+        <div class="d-flex align-items-center flex-wrap dashboard-period-filter" style="gap: 8px; background: #ffffff; padding: 4px 10px; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);">
+            <div class="d-flex align-items-center dashboard-period-filter-field" style="gap: 6px;">
                 <i class="far fa-calendar-alt text-muted" style="font-size: 12px;"></i>
                 <label for="filter-month" class="mb-0 text-muted font-weight-600" style="font-size: 11.5px;">Bulan:</label>
                 <select id="filter-month" wire:model.live="selectedMonth" class="form-control form-control-sm border shadow-none font-weight-bold" style="font-size: 11.5px; border-radius: 8px; border-color: #e2e8f0; background-color: #f8fafc; color: #0f172a; height: 30px; padding: 2px 10px; cursor: pointer; width: 130px;">
@@ -243,7 +243,7 @@
                     @endforeach
                 </select>
             </div>
-            <div class="d-flex align-items-center" style="gap: 6px;">
+            <div class="d-flex align-items-center dashboard-period-filter-field" style="gap: 6px;">
                 <label for="filter-year" class="mb-0 text-muted font-weight-600" style="font-size: 11.5px;">Tahun:</label>
                 <select id="filter-year" wire:model.live="selectedYear" class="form-control form-control-sm border shadow-none font-weight-bold" style="font-size: 11.5px; border-radius: 8px; border-color: #e2e8f0; background-color: #f8fafc; color: #0f172a; height: 30px; padding: 2px 10px; cursor: pointer; width: 90px;">
                     @foreach ($availableYears as $year)
@@ -255,10 +255,10 @@
     </div>
 
     <!-- Row 2: Charts & Analytics (Gaya Eksekutif Kasbon & Penggajian) -->
-    <div class="row align-items-stretch">
+    <div class="row align-items-stretch dashboard-widget-row">
         <!-- Grafik Kiri (col-lg-8): Tren Beban Penggajian & PPh 21 -->
         <div class="col-lg-8 col-md-12 col-12 mb-4">
-            <div class="card shadow-sm border-0 mb-0 d-flex flex-column" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e9edf2 !important; height: 100%;">
+            <div class="card shadow-sm border-0 mb-0 d-flex flex-column dashboard-flat-mobile-card" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); height: 100%;">
                 <div class="border-bottom d-flex align-items-center justify-content-between flex-wrap" style="background: #ffffff; padding: 14px 20px; gap: 8px;">
                     <div>
                         <h4 class="mb-0" style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.35;">
@@ -403,7 +403,7 @@
 
         <!-- Grafik Kanan (col-lg-4): Donut Sebaran Karyawan per Departemen -->
         <div class="col-lg-4 col-md-12 col-12 mb-4">
-            <div class="card shadow-sm border-0 mb-0 d-flex flex-column" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e9edf2 !important; height: 100%;">
+            <div class="card shadow-sm border-0 mb-0 d-flex flex-column dashboard-flat-mobile-card" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); height: 100%;">
                 <div class="border-bottom d-flex align-items-center justify-content-between" style="background: #ffffff; padding: 14px 20px;">
                     <div>
                         <h4 class="mb-0" style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.35;">
@@ -526,10 +526,10 @@
     </div>
 
     <!-- Row 3: Operational Widgets (Status Penggajian Berjalan & Pengajuan Kasbon Terkini) -->
-    <div class="row align-items-stretch">
+    <div class="row align-items-stretch dashboard-widget-row">
         <!-- Widget Kiri: Periode Penggajian Berjalan -->
         <div class="col-lg-6 col-md-12 col-12 mb-4">
-            <div class="card shadow-sm border-0 mb-0 d-flex flex-column" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e9edf2 !important; height: 100%;">
+            <div class="card shadow-sm border-0 mb-0 d-flex flex-column dashboard-flat-mobile-card" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); height: 100%;">
                 <!-- Header Card -->
                 <div class="d-flex justify-content-between align-items-center" style="background: #ffffff; padding: 16px 20px; border-bottom: 1px solid #f1f5f9;">
                     <div>
@@ -721,7 +721,7 @@
 
         <!-- Widget Kanan: Pengajuan Kasbon Terkini -->
         <div class="col-lg-6 col-md-12 col-12 mb-4">
-            <div class="card shadow-sm border-0 mb-0 d-flex flex-column" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e9edf2 !important; height: 100%;">
+            <div class="card shadow-sm border-0 mb-0 d-flex flex-column dashboard-flat-mobile-card" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); height: 100%;">
                 <div class="d-flex justify-content-between align-items-center" style="background: #ffffff; padding: 14px 20px; border-bottom: 1px solid #f1f5f9;">
                     <div>
                         <h4 class="mb-0" style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.35;">

@@ -17,11 +17,24 @@
     <!-- Native Section Title & Lead -->
     <h2 class="section-title mt-0">Presensi &amp; Uang Makan: {{ $period->name }}</h2>
     <p class="section-lead">
-        Kelola hari masuk kerja, upah harian, dan uang makan mingguan seluruh karyawan dengan siklus mingguan Jum'at s/d Kamis.
+        Kelola kehadiran dan rincian gaji untuk periode Sabtu–Jumat. Pembayaran dilakukan pada Sabtu berikutnya.
     </p>
 
-    <!-- ================= 2. 4 MODERN STAT CARDS (REKAP BIAYA MINGGUAN) ================= -->
-    <div class="cash-advance-stat-grid mb-4">
+    @if (! $period->attendance_synced_at)
+        <div class="alert alert-warning" role="alert">
+            Data absensi belum berhasil diperbarui otomatis. Slip belum bisa dibayar. Periksa roster atau data absensi, lalu buka kembali halaman ini agar sistem mencoba lagi.
+        </div>
+    @endif
+
+    @if ($pendingReviewCount > 0)
+        <div class="alert alert-warning" role="alert">
+            <strong>{{ $pendingReviewCount }} catatan absensi menunggu review Admin.</strong>
+            Catatan ini belum menambah jumlah hadir atau nilai slip. Periksa di <a href="{{ route('attendances.index') }}">menu Absensi</a>; karyawan lain yang datanya sudah beres tetap bisa dibayar.
+        </div>
+    @endif
+
+    <!-- ================= 2. 5 MODERN STAT CARDS (REKAP BIAYA MINGGUAN) ================= -->
+    <div class="cash-advance-stat-grid weekly-attendance-stat-grid mb-4">
         <!-- 1. Total Biaya Mingguan -->
         <div class="card cash-advance-stat-card">
             <div class="card-body cash-advance-stat-body">
@@ -68,6 +81,23 @@
             </div>
         </div>
 
+        <div class="card cash-advance-stat-card">
+            <div class="card-body cash-advance-stat-body">
+                <div class="cash-advance-stat-icon cash-advance-stat-icon-blue">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="cash-advance-stat-content">
+                    <div class="cash-advance-stat-title" title="Total Upah Kerja per Jam">Upah Kerja per Jam</div>
+                    <div class="cash-advance-stat-value-row">
+                        <div class="cash-advance-stat-value text-gray-800" style="color: #1f2937;">
+                            Rp {{ number_format($totalHourlyWorkPay, 0, ',', '.') }}
+                        </div>
+                    </div>
+                    <div class="cash-advance-stat-subtext">Karyawan harian lepas</div>
+                </div>
+            </div>
+        </div>
+
         <!-- 3. Total Uang Makan -->
         <div class="card cash-advance-stat-card">
             <div class="card-body cash-advance-stat-body">
@@ -85,7 +115,11 @@
                         </span>
                     </div>
                     <div class="cash-advance-stat-subtext">
-                        Uang makan staf &amp; harian
+                        @if ($matrixTotalDinner > 0)
+                            Siang Rp {{ number_format($matrixTotalLunch, 0, ',', '.') }} + Malam Rp {{ number_format($matrixTotalDinner, 0, ',', '.') }}
+                        @else
+                            Uang makan staf &amp; harian
+                        @endif
                     </div>
                 </div>
             </div>
@@ -108,7 +142,7 @@
                         </span>
                     </div>
                     <div class="cash-advance-stat-subtext">
-                        {{ $totalOvertimeHours }} Jam lembur @if (($totalOvertimeMeal ?? 0) > 0) <span style="color: #16a34a; font-weight: 600;">(+ Makan Rp {{ number_format($totalOvertimeMeal, 0, ',', '.') }})</span> @else mingguan @endif
+                        {{ $totalOvertimeHours }} Jam lembur @if ($matrixTotalHolidayOt > 0) <span style="color: #e11d48; font-weight: 600;">(+ Seharian Rp {{ number_format($matrixTotalHolidayOt, 0, ',', '.') }})</span> @else mingguan @endif
                     </div>
                 </div>
             </div>
@@ -122,22 +156,6 @@
             <h4 class="mb-0">Daftar Kehadiran Karyawan</h4>
 
             <div class="d-flex align-items-center" style="gap: 8px;">
-                <!-- Tarik Data dari Mesin Absensi (Solid Primary - Hidden Sementara) -->
-                <button type="button"
-                        wire:click="syncFromAttendance"
-                        wire:loading.attr="disabled"
-                        wire:target="syncFromAttendance"
-                        class="btn btn-primary btn-sm d-none align-items-center font-weight-bold shadow-sm"
-                        style="background-color: #0b52aa; border-color: #0b52aa; border-radius: 8px; padding: 7px 15px; font-size: 13px;"
-                        title="Tarik data kehadiran otomatis dari mesin absensi">
-                    <span wire:loading.remove wire:target="syncFromAttendance">
-                        <i class="fas fa-fingerprint mr-1.5"></i> Tarik dari Absensi Mesin
-                    </span>
-                    <span wire:loading wire:target="syncFromAttendance">
-                        <i class="fas fa-spinner fa-spin mr-1.5"></i> Sinkronisasi...
-                    </span>
-                </button>
-
                 <!-- Cetak Seluruh Slip Mingguan (Solid Info) -->
                 <a href="{{ route('overtimes.periods.print', $period) }}"
                    target="_blank"
@@ -187,9 +205,9 @@
                             <th rowspan="2" class="text-left" style="min-width: 110px; width: 115px; padding-left: 12px !important;">HARI</th>
                             <th rowspan="2" class="text-center" style="width: 65px;">JAM</th>
                             <th rowspan="2" class="text-center" style="width: 95px;">HARI LIBUR</th>
-                            <th rowspan="2" class="text-right" style="width: 110px; padding-right: 14px !important;">UNIT PRICE</th>
+                            <th rowspan="2" class="text-center" style="width: 110px;">UNIT PRICE</th>
                             <th colspan="2" class="text-center">UANG MAKAN</th>
-                            <th rowspan="2" class="text-right" style="width: 130px; padding-right: 14px !important;">UPAH DITERIMA</th>
+                            <th rowspan="2" class="text-center" style="width: 130px;">UPAH DITERIMA</th>
                             <th rowspan="2" class="text-center" style="min-width: 180px; width: 190px;">AKSI</th>
                         </tr>
                         <tr>
@@ -237,27 +255,43 @@
                                         @endif
                                     </td>
                                     <!-- HARI LIBUR -->
-                                    <td class="text-right px-2.5 font-weight-500" style="color: #334155; font-variant-numeric: tabular-nums;">
-                                        {{ $firstDay['holiday_ot_formatted'] }}
+                                    <td class="px-2.5 font-weight-500" style="color: #334155;">
+                                        @if ($firstDay['holiday_ot'] > 0)
+                                            <div class="currency-split">
+                                                <span>Rp</span>
+                                                <span>{{ number_format($firstDay['holiday_ot'], 0, ',', '.') }}</span>
+                                            </div>
+                                        @else
+                                            <div class="text-center" style="color: #cbd5e1;">-</div>
+                                        @endif
                                     </td>
                                     <!-- UNIT PRICE (rowspan) -->
-                                    <td rowspan="{{ $daysCount }}" class="cell-rowspan text-right px-3 font-weight-600" style="color: #1e293b; font-size: 13px; font-variant-numeric: tabular-nums;">
-                                        {{ $emp['unit_price_formatted'] }}
+                                    <td rowspan="{{ $daysCount }}" class="cell-rowspan px-3 font-weight-600" style="color: #1e293b; font-size: 13px;">
+                                        <div class="currency-split">
+                                            <span>Rp</span>
+                                            <span>{{ number_format($emp['unit_price'], 0, ',', '.') }}</span>
+                                        </div>
                                     </td>
                                     <!-- MAKAN SIANG -->
-                                    <td class="text-right px-2.5" style="color: #334155; font-variant-numeric: tabular-nums;">
+                                    <td class="px-2.5" style="color: #334155;">
                                         @if ($firstDay['lunch'] > 0)
-                                            {{ $firstDay['lunch_formatted'] }}
+                                            <div class="currency-split">
+                                                <span>Rp</span>
+                                                <span>{{ number_format($firstDay['lunch'], 0, ',', '.') }}</span>
+                                            </div>
                                         @else
-                                            <span style="color: #cbd5e1;">-</span>
+                                            <div class="text-center" style="color: #cbd5e1;">-</div>
                                         @endif
                                     </td>
                                     <!-- MAKAN MALAM -->
-                                    <td class="text-right px-2.5" style="color: #334155; font-variant-numeric: tabular-nums;">
+                                    <td class="px-2.5" style="color: #334155;">
                                         @if ($firstDay['dinner'] > 0)
-                                            {{ $firstDay['dinner_formatted'] }}
+                                            <div class="currency-split">
+                                                <span>Rp</span>
+                                                <span>{{ number_format($firstDay['dinner'], 0, ',', '.') }}</span>
+                                            </div>
                                         @else
-                                            <span style="color: #cbd5e1;">-</span>
+                                            <div class="text-center" style="color: #cbd5e1;">-</div>
                                         @endif
                                     </td>
                                     <!-- UPAH DITERIMA (rowspan) -->
@@ -309,23 +343,36 @@
                                             @endif
                                         </td>
                                         <!-- HARI LIBUR -->
-                                        <td class="text-right px-2.5 font-weight-500" style="color: #334155; font-variant-numeric: tabular-nums;">
-                                            {{ $day['holiday_ot_formatted'] }}
+                                        <td class="px-2.5 font-weight-500" style="color: #334155;">
+                                            @if ($day['holiday_ot'] > 0)
+                                                <div class="currency-split">
+                                                    <span>Rp</span>
+                                                    <span>{{ number_format($day['holiday_ot'], 0, ',', '.') }}</span>
+                                                </div>
+                                            @else
+                                                <div class="text-center" style="color: #cbd5e1;">-</div>
+                                            @endif
                                         </td>
                                         <!-- MAKAN SIANG -->
-                                        <td class="text-right px-2.5" style="color: #334155; font-variant-numeric: tabular-nums;">
+                                        <td class="px-2.5" style="color: #334155;">
                                             @if ($day['lunch'] > 0)
-                                                {{ $day['lunch_formatted'] }}
+                                                <div class="currency-split">
+                                                    <span>Rp</span>
+                                                    <span>{{ number_format($day['lunch'], 0, ',', '.') }}</span>
+                                                </div>
                                             @else
-                                                <span style="color: #cbd5e1;">-</span>
+                                                <div class="text-center" style="color: #cbd5e1;">-</div>
                                             @endif
                                         </td>
                                         <!-- MAKAN MALAM -->
-                                        <td class="text-right px-2.5" style="color: #334155; font-variant-numeric: tabular-nums;">
+                                        <td class="px-2.5" style="color: #334155;">
                                             @if ($day['dinner'] > 0)
-                                                {{ $day['dinner_formatted'] }}
+                                                <div class="currency-split">
+                                                    <span>Rp</span>
+                                                    <span>{{ number_format($day['dinner'], 0, ',', '.') }}</span>
+                                                </div>
                                             @else
-                                                <span style="color: #cbd5e1;">-</span>
+                                                <div class="text-center" style="color: #cbd5e1;">-</div>
                                             @endif
                                         </td>
                                     </tr>
@@ -339,20 +386,55 @@
                                     <td class="text-center font-weight-700" style="color: #0f172a !important;">
                                         {{ $emp['totals']['total_ot_hours_formatted'] }}
                                     </td>
-                                    <td class="text-right font-weight-600 px-2.5" style="color: #334155 !important; font-variant-numeric: tabular-nums;">
-                                        {{ $emp['totals']['total_holiday_ot_formatted'] }}
+                                    <td class="font-weight-600 px-2.5" style="color: #334155 !important;">
+                                        @if ($emp['totals']['total_holiday_ot'] > 0)
+                                            <div class="currency-split">
+                                                <span>Rp</span>
+                                                <span>{{ number_format($emp['totals']['total_holiday_ot'], 0, ',', '.') }}</span>
+                                            </div>
+                                        @else
+                                            <div class="text-center" style="color: #cbd5e1;">-</div>
+                                        @endif
                                     </td>
-                                    <td class="text-right font-weight-600 px-3" style="color: #1e293b !important; font-size: 13px; font-variant-numeric: tabular-nums;">
-                                        {{ $emp['totals']['hourly_ot_pay_formatted'] }}
+                                    <td class="font-weight-600 px-3" style="color: #1e293b !important; font-size: 13px;">
+                                        @if ($emp['totals']['hourly_ot_pay'] > 0)
+                                            <div class="currency-split">
+                                                <span>Rp</span>
+                                                <span>{{ number_format($emp['totals']['hourly_ot_pay'], 0, ',', '.') }}</span>
+                                            </div>
+                                        @else
+                                            <div class="text-center" style="color: #cbd5e1;">-</div>
+                                        @endif
                                     </td>
-                                    <td class="text-right font-weight-600 px-2.5" style="color: #334155 !important; font-variant-numeric: tabular-nums;">
-                                        {{ $emp['totals']['total_lunch_formatted'] }}
+                                    <td class="font-weight-600 px-2.5" style="color: #334155 !important;">
+                                        @if ($emp['totals']['total_lunch'] > 0)
+                                            <div class="currency-split">
+                                                <span>Rp</span>
+                                                <span>{{ number_format($emp['totals']['total_lunch'], 0, ',', '.') }}</span>
+                                            </div>
+                                        @else
+                                            <div class="text-center" style="color: #cbd5e1;">-</div>
+                                        @endif
                                     </td>
-                                    <td class="text-right font-weight-600 px-2.5" style="color: #334155 !important; font-variant-numeric: tabular-nums;">
-                                        {{ $emp['totals']['total_dinner_formatted'] }}
+                                    <td class="font-weight-600 px-2.5" style="color: #334155 !important;">
+                                        @if ($emp['totals']['total_dinner'] > 0)
+                                            <div class="currency-split">
+                                                <span>Rp</span>
+                                                <span>{{ number_format($emp['totals']['total_dinner'], 0, ',', '.') }}</span>
+                                            </div>
+                                        @else
+                                            <div class="text-center" style="color: #cbd5e1;">-</div>
+                                        @endif
                                     </td>
-                                    <td class="text-right font-weight-800 px-3" style="color: #0b52aa !important; font-size: 13.5px; font-variant-numeric: tabular-nums;">
-                                        {{ $emp['totals']['grand_total_formatted'] }}
+                                    <td class="font-weight-800 px-3" style="color: #0b52aa !important; font-size: 13.5px;">
+                                        @if ($emp['totals']['grand_total'] > 0)
+                                            <div class="currency-split">
+                                                <span>Rp</span>
+                                                <span>{{ number_format($emp['totals']['grand_total'], 0, ',', '.') }}</span>
+                                            </div>
+                                        @else
+                                            <div class="text-center" style="color: #cbd5e1;">-</div>
+                                        @endif
                                     </td>
                                 </tr>
                             @endif
@@ -373,20 +455,55 @@
                                 <td class="text-center font-weight-800" style="font-size: 13px; color: #0f172a !important;">
                                     {{ intval($matrixTotalOtHours) == $matrixTotalOtHours ? (string) intval($matrixTotalOtHours) : number_format($matrixTotalOtHours, 1) }}
                                 </td>
-                                <td class="text-right font-weight-600 px-2.5" style="color: #334155 !important; font-variant-numeric: tabular-nums;">
-                                    {{ $matrixTotalHolidayOt > 0 ? 'Rp ' . number_format($matrixTotalHolidayOt, 0, ',', '.') : '-' }}
+                                <td class="font-weight-600 px-2.5" style="color: #334155 !important;">
+                                    @if ($matrixTotalHolidayOt > 0)
+                                        <div class="currency-split">
+                                            <span>Rp</span>
+                                            <span>{{ number_format($matrixTotalHolidayOt, 0, ',', '.') }}</span>
+                                        </div>
+                                    @else
+                                        <div class="text-center" style="color: #cbd5e1;">-</div>
+                                    @endif
                                 </td>
-                                <td class="text-right font-weight-700 px-2.5" style="color: #1e293b !important; font-size: 12.5px; font-variant-numeric: tabular-nums;">
-                                    {{ $matrixTotalHourlyOtPay > 0 ? 'Rp ' . number_format($matrixTotalHourlyOtPay, 0, ',', '.') : '-' }}
+                                <td class="font-weight-700 px-2.5" style="color: #1e293b !important; font-size: 12.5px;">
+                                    @if ($matrixTotalHourlyOtPay > 0)
+                                        <div class="currency-split">
+                                            <span>Rp</span>
+                                            <span>{{ number_format($matrixTotalHourlyOtPay, 0, ',', '.') }}</span>
+                                        </div>
+                                    @else
+                                        <div class="text-center" style="color: #cbd5e1;">-</div>
+                                    @endif
                                 </td>
-                                <td class="text-right font-weight-700 px-2.5" style="color: #1e293b !important; font-size: 12.5px; font-variant-numeric: tabular-nums;">
-                                    Rp {{ number_format($matrixTotalLunch, 0, ',', '.') }}
+                                <td class="font-weight-700 px-2.5" style="color: #1e293b !important; font-size: 12.5px;">
+                                    @if ($matrixTotalLunch > 0)
+                                        <div class="currency-split">
+                                            <span>Rp</span>
+                                            <span>{{ number_format($matrixTotalLunch, 0, ',', '.') }}</span>
+                                        </div>
+                                    @else
+                                        <div class="text-center" style="color: #cbd5e1;">-</div>
+                                    @endif
                                 </td>
-                                <td class="text-right font-weight-700 px-2.5" style="color: #1e293b !important; font-size: 12.5px; font-variant-numeric: tabular-nums;">
-                                    Rp {{ number_format($matrixTotalDinner, 0, ',', '.') }}
+                                <td class="font-weight-700 px-2.5" style="color: #1e293b !important; font-size: 12.5px;">
+                                    @if ($matrixTotalDinner > 0)
+                                        <div class="currency-split">
+                                            <span>Rp</span>
+                                            <span>{{ number_format($matrixTotalDinner, 0, ',', '.') }}</span>
+                                        </div>
+                                    @else
+                                        <div class="text-center" style="color: #cbd5e1;">-</div>
+                                    @endif
                                 </td>
-                                <td class="text-right font-weight-800 px-3" style="color: #0b52aa !important; font-size: 14.5px; font-variant-numeric: tabular-nums;">
-                                    Rp {{ number_format($matrixGrandTotal, 0, ',', '.') }}
+                                <td class="font-weight-800 px-3" style="color: #0b52aa !important; font-size: 14.5px;">
+                                    @if ($matrixGrandTotal > 0)
+                                        <div class="currency-split">
+                                            <span>Rp</span>
+                                            <span>{{ number_format($matrixGrandTotal, 0, ',', '.') }}</span>
+                                        </div>
+                                    @else
+                                        <div class="text-center" style="color: #cbd5e1;">-</div>
+                                    @endif
                                 </td>
                                 <td></td>
                             </tr>
@@ -566,10 +683,15 @@
                 @if ($selectedAttendance)
                     <div class="modal-footer bg-white border-top p-3">
                         <div class="d-flex w-100" style="gap: 10px;">
-                            <!-- KIRI: EDIT -->
-                            <button type="button" wire:click="openEditPaymentModal({{ $selectedAttendance->employee_id }})" class="btn btn-primary flex-fill font-weight-600 shadow-sm" style="border-radius: 8px; font-size: 13.5px; padding: 10px 14px; background-color: #0b52aa; border-color: #0b52aa;">
-                                <i class="fas fa-edit mr-1.5"></i> Edit
-                            </button>
+                            @if (! $selectedAttendance->isPaid() && $period->status !== \App\Enums\OvertimePeriodStatus::PAID)
+                                <button type="button" wire:click="openEditPaymentModal({{ $selectedAttendance->employee_id }})" wire:loading.attr="disabled" wire:target="openEditPaymentModal" class="btn btn-primary flex-fill font-weight-600 shadow-sm" style="border-radius: 8px; font-size: 13.5px; padding: 10px 14px; background-color: #0b52aa; border-color: #0b52aa;">
+                                    <i class="fas fa-edit mr-1.5"></i> Edit
+                                </button>
+                            @else
+                                <span class="badge badge-success d-inline-flex align-items-center px-3">
+                                    <i class="fas fa-lock mr-1"></i> Slip terkunci setelah dibayar
+                                </span>
+                            @endif
 
                             <!-- KANAN: CETAK SLIP (SUCCESS GREEN) -->
                             <a href="{{ route('overtimes.periods.print', ['period' => $period, 'employee' => $selectedAttendance->employee?->hashid]) }}"
@@ -772,6 +894,14 @@
         line-height: 1.35 !important;
         vertical-align: middle !important;
         border: 1px solid #e2e8f0;
+    }
+    .currency-split {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        width: 100% !important;
+        gap: 8px !important;
+        font-variant-numeric: tabular-nums !important;
     }
     .table-matrix thead th {
         background-color: #f1f5f9 !important;

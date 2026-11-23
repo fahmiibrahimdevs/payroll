@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Enums\OvertimePeriodStatus;
+use App\Enums\OvertimeStatus;
 use App\Traits\HasObfuscatedId;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,12 +26,14 @@ class OvertimePeriod extends Model
         'total_overtime_pay',
         'total_meal_allowance',
         'total_daily_wage',
+        'total_hourly_work_pay',
         'grand_total',
         'employee_count',
         'status',
         'created_by',
         'paid_by',
         'paid_at',
+        'attendance_synced_at',
         'notes',
     ];
 
@@ -39,10 +43,12 @@ class OvertimePeriod extends Model
             'start_date' => 'date',
             'end_date' => 'date',
             'paid_at' => 'datetime',
+            'attendance_synced_at' => 'datetime',
             'total_hours' => 'decimal:2',
             'total_overtime_pay' => 'decimal:2',
             'total_meal_allowance' => 'decimal:2',
             'total_daily_wage' => 'decimal:2',
+            'total_hourly_work_pay' => 'decimal:2',
             'grand_total' => 'decimal:2',
             'status' => OvertimePeriodStatus::class,
         ];
@@ -101,12 +107,19 @@ class OvertimePeriod extends Model
      */
     public function recalculateTotals(): void
     {
-        $submissions = $this->submissions()->get();
+        $startDate = Carbon::parse($this->start_date)->toDateString();
+        $endDate = Carbon::parse($this->end_date)->toDateString();
+
+        $submissions = $this->submissions()
+            ->whereBetween('date', [$startDate, $endDate])
+            ->where('status', OvertimeStatus::APPROVED)
+            ->get();
         $attendances = $this->attendances()->get();
 
         $totalHours = (float) $submissions->sum('duration_hours');
         $totalOvertimePay = (float) $submissions->sum(fn ($sub) => (float) $sub->subtotal_overtime);
         $totalDailyWage = (float) $attendances->sum('total_daily_wage');
+        $totalHourlyWorkPay = (float) $attendances->sum('total_hourly_work_pay');
 
         // Total uang makan = uang makan kehadiran shift mingguan + uang makan lembur malam dari pengajuan lembur
         $totalMealAllowance = round((float) $attendances->sum('total_meal_allowance') + (float) $submissions->sum('meal_allowance'), 2);
@@ -115,11 +128,13 @@ class OvertimePeriod extends Model
         $this->total_overtime_pay = $totalOvertimePay;
         $this->total_meal_allowance = $totalMealAllowance;
         $this->total_daily_wage = $totalDailyWage;
-        $this->grand_total = $totalOvertimePay + $totalMealAllowance + $totalDailyWage;
+        $this->total_hourly_work_pay = $totalHourlyWorkPay;
+        $this->grand_total = $totalOvertimePay + $totalMealAllowance + $totalDailyWage + $totalHourlyWorkPay;
 
         // Opsi A & C: Hanya hitung karyawan yang menerima hak gajian mingguan (> 0 hari masuk / upah / lembur)
         $activeAttendanceEmpIds = $attendances->filter(fn ($att) => (
             (float) ($att->total_daily_wage ?? 0) > 0 ||
+            (float) ($att->total_hourly_work_pay ?? 0) > 0 ||
             (float) ($att->total_meal_allowance ?? 0) > 0 ||
             (int) ($att->attended_days ?? 0) > 0
         ))->pluck('employee_id');

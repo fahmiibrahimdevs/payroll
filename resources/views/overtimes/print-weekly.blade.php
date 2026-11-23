@@ -350,10 +350,12 @@
             background-color: #dbeafe;
             color: #000000;
             font-weight: 800;
-            font-size: 11px;
-            padding: 6px 8px;
+            font-size: 10.5px;
+            padding: 7px 8px;
             border: 1px solid #1e293b;
             text-align: center;
+            white-space: nowrap !important;
+            text-wrap: nowrap !important;
         }
 
         .calc-table td {
@@ -361,6 +363,8 @@
             border: 1px solid #1e293b;
             font-size: 11px;
             vertical-align: middle;
+            white-space: nowrap !important;
+            text-wrap: nowrap !important;
         }
 
         .td-center {
@@ -369,6 +373,15 @@
 
         .td-right {
             text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .currency-split {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            gap: 6px;
             font-variant-numeric: tabular-nums;
         }
 
@@ -550,37 +563,6 @@
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
-
-            .unpaid-watermark {
-                display: flex !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-        }
-
-        /* Large Diagonal Status Watermark for Unpaid Slips */
-        .unpaid-watermark {
-            position: absolute;
-            top: 48%;
-            left: 50%;
-            transform: translate(-50%, -50%) rotate(-28deg);
-            font-size: 56px;
-            font-weight: 900;
-            letter-spacing: 5px;
-            color: rgba(220, 38, 38, 0.14) !important;
-            border: 5px dashed rgba(220, 38, 38, 0.25) !important;
-            padding: 12px 36px;
-            border-radius: 12px;
-            text-transform: uppercase;
-            pointer-events: none;
-            z-index: 50;
-            white-space: nowrap;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            line-height: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
     </style>
 </head>
@@ -598,15 +580,28 @@
         </div>
     </div>
 
-    @forelse ($slips as ['employee' => $emp, 'submissions' => $submissions, 'attendance' => $attendance, 'total_hours' => $totalHours, 'total_overtime_pay' => $totalOvertimePay, 'overtime_meal_allowance' => $overtimeMealAllowance, 'grand_total' => $grandTotal, 'grand_total_in_words' => $grandTotalInWords, 'is_harian' => $isHarian, 'days_count' => $daysCount, 'meal_rate' => $mealRate, 'daily_rate' => $dailyRate, 'total_meal' => $totalMeal, 'total_daily_wage' => $totalDailyWage, 'attended_days_labels' => $attendedDaysList, 'is_paid' => $isSlipPaid])
+    @forelse ($slips as $slip)
+        @php
+            $emp = $slip['employee'];
+            $submissions = $slip['submissions'];
+            $attendance = $slip['attendance'];
+            $totalHours = $slip['total_hours'];
+            $totalOvertimePay = $slip['total_overtime_pay'];
+            $overtimeMealAllowance = $slip['overtime_meal_allowance'];
+            $grandTotal = $slip['grand_total'];
+            $grandTotalInWords = $slip['grand_total_in_words'];
+            $isHarian = $slip['is_harian'];
+            $daysCount = $slip['days_count'];
+            $mealRate = $slip['meal_rate'];
+            $dailyRate = $slip['daily_rate'];
+            $totalMeal = $slip['total_meal'];
+            $totalDailyWage = $slip['total_daily_wage'];
+            $isSlipPaid = $slip['is_paid'];
+            $days = $slip['days'];
+            $totals = $slip['totals'];
+            $unitPriceFormatted = $slip['unit_price_formatted'];
+        @endphp
         <div class="slip-paper {{ $isHarian ? 'slip-theme-harian' : 'slip-theme-staff' }}">
-            @if (! $isSlipPaid)
-                <!-- Watermark Status Belum Lunas (User Request: Batch print tetap cetak semua namun diberi watermark) -->
-                <div class="unpaid-watermark">
-                    DRAFT &bull; BELUM LUNAS
-                </div>
-            @endif
-
             <!-- Full-Page Repeating Diagonal Watermark Pattern (45 Derajat) -->
             <svg class="slip-watermark-pattern" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="100%">
                 <defs>
@@ -671,7 +666,7 @@
                                 @if ($isHarian)
                                     <strong>Rp {{ number_format($dailyRate, 0, ',', '.') }}</strong> / hari
                                 @else
-                                    <strong>{{ $emp->formatted_overtime_rate_per_hour }}</strong> / jam
+                                    <strong>{{ $slip['unit_price_formatted'] }}</strong> / jam
                                 @endif
                             </td>
                             <td class="col-lbl">Uang Makan</td>
@@ -684,125 +679,194 @@
                 </div>
             </div>
 
-            <!-- 1. RINCIAN KEHADIRAN & UANG MAKAN MINGGUAN (TABEL RESMI) -->
+            <!-- TABEL RINCIAN PRESENSI, LEMBUR & UANG MAKAN MINGGUAN (FORMAT MATRIX KONSISTEN) -->
             <div style="font-weight: 800; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; color: #1e293b;">
-                1. RINCIAN KEHADIRAN &amp; {{ $isHarian ? 'UPAH HARIAN / UANG MAKAN' : 'UANG MAKAN MINGGUAN' }}
+                RINCIAN PRESENSI, LEMBUR &amp; {{ $isHarian ? 'UPAH HARIAN / UANG MAKAN' : 'UANG MAKAN MINGGUAN' }}
             </div>
-            <table class="calc-table">
+            <table class="calc-table matrix-print-table">
                 <thead>
                     <tr>
-                        <th style="width: 35px;">NO</th>
-                        <th>KOMPONEN</th>
-                        <th style="width: 100px;">HARI MASUK</th>
-                        <th>RINCIAN HARI HADIR</th>
-                        <th style="width: 130px;">TARIF / HARI</th>
-                        <th style="width: 150px;">SUBTOTAL</th>
+                        <th rowspan="2" style="text-align: left; padding-left: 10px; width: 130px; white-space: nowrap !important;">HARI</th>
+                        <th rowspan="2" style="width: 50px; text-align: center; white-space: nowrap !important;">JAM</th>
+                        <th rowspan="2" style="width: 90px; text-align: center; white-space: nowrap !important;">HARI LIBUR</th>
+                        <th rowspan="2" style="width: 105px; text-align: center; white-space: nowrap !important;">UNIT PRICE</th>
+                        <th colspan="2" style="text-align: center; white-space: nowrap !important;">UANG MAKAN</th>
+                        <th rowspan="2" style="width: 130px; text-align: center; white-space: nowrap !important;">UPAH DITERIMA</th>
+                    </tr>
+                    <tr>
+                        <th style="width: 115px; text-align: right; padding-right: 10px; white-space: nowrap !important;">MAKAN SIANG</th>
+                        <th style="width: 115px; text-align: right; padding-right: 10px; white-space: nowrap !important;">MAKAN MALAM</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @if ($isHarian)
+                    @php
+                        $daysMatrixCount = count($days);
+                        $firstDay = $days[0] ?? null;
+                    @endphp
+                    @if ($firstDay)
                         <tr>
-                            <td class="td-center">1</td>
-                            <td><strong>Upah Kerja Harian</strong></td>
-                            <td class="td-center"><strong>{{ $daysCount }} Hari</strong></td>
-                            <td>{{ !empty($attendedDaysList) ? implode(', ', $attendedDaysList) : '-' }}</td>
-                            <td class="td-right">Rp {{ number_format($dailyRate, 0, ',', '.') }}</td>
-                            <td class="td-right"><strong>Rp {{ number_format($totalDailyWage, 0, ',', '.') }}</strong></td>
-                        </tr>
-                        <tr>
-                            <td class="td-center">2</td>
-                            <td><strong>Uang Makan Harian</strong></td>
-                            <td class="td-center"><strong>{{ $daysCount }} Hari</strong></td>
-                            <td>{{ !empty($attendedDaysList) ? implode(', ', $attendedDaysList) : '-' }}</td>
-                            <td class="td-right">Rp {{ number_format($mealRate, 0, ',', '.') }}</td>
-                            <td class="td-right"><strong>Rp {{ number_format($totalMeal, 0, ',', '.') }}</strong></td>
-                        </tr>
-                    @else
-                        <tr>
-                            <td class="td-center">1</td>
-                            <td><strong>Uang Makan Kehadiran Mingguan</strong></td>
-                            <td class="td-center"><strong>{{ $daysCount }} Hari</strong></td>
-                            <td>{{ !empty($attendedDaysList) ? implode(', ', $attendedDaysList) : '-' }}</td>
-                            <td class="td-right">Rp {{ number_format($mealRate, 0, ',', '.') }}</td>
-                            <td class="td-right"><strong>Rp {{ number_format($totalMeal, 0, ',', '.') }}</strong></td>
-                        </tr>
-                    @endif
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="4" class="td-center">
-                            <strong>TOTAL {{ $isHarian ? 'UPAH HARIAN & UANG MAKAN' : 'UANG MAKAN MINGGUAN' }}</strong>
-                        </td>
-                        <td class="td-center"><strong>{{ $daysCount }} Hari</strong></td>
-                        <td class="td-right subtotal-theme">
-                            <strong>Rp {{ number_format($isHarian ? ($totalDailyWage + $totalMeal) : $totalMeal, 0, ',', '.') }}</strong>
-                        </td>
-                    </tr>
-                </tfoot>
-            </table>
-
-            <!-- 2. TABEL RINCIAN LEMBUR KERJA -->
-            <div style="font-weight: 800; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; color: #1e293b;">
-                2. RINCIAN UPAH LEMBUR KERJA
-            </div>
-            <table class="calc-table">
-                <thead>
-                    <tr>
-                        <th style="width: 30px;">NO</th>
-                        <th style="width: 85px;">TANGGAL</th>
-                        <th style="width: 100px;">JAM KERJA</th>
-                        <th style="width: 70px;">DURASI</th>
-                        <th style="width: 110px;">TARIF / SATUAN</th>
-                        <th style="width: 130px;">SUBTOTAL LEMBUR</th>
-                        <th>URAIAN / TUGAS</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($submissions as $idx => $sub)
-                        <tr>
-                            <td class="td-center">{{ $idx + 1 }}</td>
-                            <td class="td-center">{{ $sub->date->locale('id')->translatedFormat('d/m/Y') }}</td>
-                            <td class="td-center font-monospace">{{ $sub->formatted_work_hours }}</td>
-                            <td class="td-center font-weight-bold">{{ $sub->formatted_duration }}</td>
-                            <td class="td-right">{{ $sub->formatted_rate_label }}</td>
-                            <td class="td-right font-weight-bold">
-                                {{ $sub->formatted_subtotal_overtime }}
-                                @if ((float) $sub->meal_allowance > 0)
-                                    <div style="font-size: 8.5px; color: #16a34a; font-weight: normal;">+ Makan Rp {{ number_format((float) $sub->meal_allowance, 0, ',', '.') }}</div>
+                            <!-- HARI -->
+                            <td style="text-align: left; padding-left: 10px; {{ $firstDay['is_holiday'] ? 'color: #dc2626; font-weight: 600;' : 'color: #1e293b;' }}">
+                                {{ $firstDay['day_name'] }}, {{ $firstDay['date_formatted'] }}
+                            </td>
+                            <!-- JAM -->
+                            <td style="text-align: center; font-weight: 600; color: #0f172a;">
+                                {{ !empty($firstDay['ot_hours_formatted']) ? $firstDay['ot_hours_formatted'] : '-' }}
+                            </td>
+                            <!-- HARI LIBUR -->
+                            <td style="padding: 6px 8px;">
+                                @if ($firstDay['holiday_ot'] > 0)
+                                    <div class="currency-split">
+                                        <span>Rp</span>
+                                        <span>{{ number_format($firstDay['holiday_ot'], 0, ',', '.') }}</span>
+                                    </div>
+                                @else
+                                    <div style="text-align: center; color: #cbd5e1;">-</div>
                                 @endif
                             </td>
-                            <td>{{ $sub->reason }}</td>
+                            <!-- UNIT PRICE (rowspan) -->
+                            <td rowspan="{{ $daysMatrixCount }}" style="vertical-align: middle; padding: 6px 8px; font-weight: 600; font-size: 11.5px; background-color: #ffffff;">
+                                {{ $unitPriceFormatted }}
+                            </td>
+                            <!-- MAKAN SIANG -->
+                            <td style="padding: 6px 8px;">
+                                @if ($firstDay['lunch'] > 0)
+                                    <div class="currency-split">
+                                        <span>Rp</span>
+                                        <span>{{ number_format($firstDay['lunch'], 0, ',', '.') }}</span>
+                                    </div>
+                                @else
+                                    <div style="text-align: center; color: #cbd5e1;">-</div>
+                                @endif
+                            </td>
+                            <!-- MAKAN MALAM -->
+                            <td style="padding: 6px 8px;">
+                                @if ($firstDay['dinner'] > 0)
+                                    <div class="currency-split">
+                                        <span>Rp</span>
+                                        <span>{{ number_format($firstDay['dinner'], 0, ',', '.') }}</span>
+                                    </div>
+                                @else
+                                    <div style="text-align: center; color: #cbd5e1;">-</div>
+                                @endif
+                            </td>
+                            <!-- UPAH DITERIMA (rowspan clean white) -->
+                            <td rowspan="{{ $daysMatrixCount }}" style="background-color: #ffffff; text-align: left; padding: 8px; vertical-align: middle;">
+                                @if ($isHarian)
+                                    <div style="font-size: 10px; color: #64748b;">Upah harian</div>
+                                    <div style="font-weight: 700; margin-bottom: 8px;">Rp {{ number_format($totals['total_daily_wage'], 0, ',', '.') }}</div>
+                                    <div style="font-size: 10px; color: #64748b;">Kerja per jam</div>
+                                    <div style="font-weight: 700;">Rp {{ number_format($totals['total_hourly_work_pay'], 0, ',', '.') }}</div>
+                                @endif
+                            </td>
                         </tr>
-                    @empty
-                        <tr>
-                            <td colspan="7" class="td-center py-2 text-muted">Tidak ada lembur kerja pada minggu ini.</td>
-                        </tr>
-                    @endforelse
+
+                        @for ($d = 1; $d < $daysMatrixCount; $d++)
+                            @php $day = $days[$d]; @endphp
+                            <tr>
+                                <!-- HARI -->
+                                <td style="text-align: left; padding-left: 10px; {{ $day['is_holiday'] ? 'color: #dc2626; font-weight: 600;' : 'color: #1e293b;' }}">
+                                    {{ $day['day_name'] }}, {{ $day['date_formatted'] }}
+                                </td>
+                                <!-- JAM -->
+                                <td style="text-align: center; font-weight: 600; color: #0f172a;">
+                                    {{ !empty($day['ot_hours_formatted']) ? $day['ot_hours_formatted'] : '-' }}
+                                </td>
+                                <!-- HARI LIBUR -->
+                                <td style="padding: 6px 8px;">
+                                    @if ($day['holiday_ot'] > 0)
+                                        <div class="currency-split">
+                                            <span>Rp</span>
+                                            <span>{{ number_format($day['holiday_ot'], 0, ',', '.') }}</span>
+                                        </div>
+                                    @else
+                                        <div style="text-align: center; color: #cbd5e1;">-</div>
+                                    @endif
+                                </td>
+                                <!-- MAKAN SIANG -->
+                                <td style="padding: 6px 8px;">
+                                    @if ($day['lunch'] > 0)
+                                        <div class="currency-split">
+                                            <span>Rp</span>
+                                            <span>{{ number_format($day['lunch'], 0, ',', '.') }}</span>
+                                        </div>
+                                    @else
+                                        <div style="text-align: center; color: #cbd5e1;">-</div>
+                                    @endif
+                                </td>
+                                <!-- MAKAN MALAM -->
+                                <td style="padding: 6px 8px;">
+                                    @if ($day['dinner'] > 0)
+                                        <div class="currency-split">
+                                            <span>Rp</span>
+                                            <span>{{ number_format($day['dinner'], 0, ',', '.') }}</span>
+                                        </div>
+                                    @else
+                                        <div style="text-align: center; color: #cbd5e1;">-</div>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endfor
+                    @endif
                 </tbody>
                 <tfoot>
-                    <tr>
-                        <td colspan="3" class="td-center"><strong>UPAH POKOK LEMBUR</strong></td>
-                        <td class="td-center"><strong>{{ number_format($totalHours, 2) }} jam</strong></td>
-                        <td></td>
-                        <td class="td-right"><strong>Rp {{ number_format($totalOvertimePay, 0, ',', '.') }}</strong></td>
-                        <td></td>
-                    </tr>
-                    @if ($overtimeMealAllowance > 0)
-                        <tr>
-                            <td colspan="3" class="td-center"><strong>TOTAL UANG MAKAN LEMBUR</strong></td>
-                            <td colspan="2" class="td-center" style="font-size: 10px; color: #475569;">(Lembur Seharian &amp; Jam &ge; 3 Jam)</td>
-                            <td class="td-right" style="color: #16a34a;"><strong>+ Rp {{ number_format($overtimeMealAllowance, 0, ',', '.') }}</strong></td>
-                            <td></td>
-                        </tr>
-                    @endif
-                    <tr>
-                        <td colspan="5" class="td-center">
-                            <strong>TOTAL LEMBUR {{ $overtimeMealAllowance > 0 ? '& UANG MAKAN LEMBUR' : '' }}</strong>
+                    <tr class="tfoot-total-row">
+                        <td style="text-align: center; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase;">
+                            <strong>TOTAL LEMBUR</strong>
                         </td>
-                        <td class="td-right subtotal-theme">
-                            <strong>Rp {{ number_format($totalOvertimePay + $overtimeMealAllowance, 0, ',', '.') }}</strong>
+                        <td style="text-align: center; font-size: 11.5px; color: #0f172a;">
+                            <strong>{{ $totals['total_ot_hours_formatted'] }}</strong>
                         </td>
-                        <td></td>
+                        <td style="padding: 6px 8px;">
+                            @if ($totals['total_holiday_ot'] > 0)
+                                <div class="currency-split">
+                                    <span>Rp</span>
+                                    <span>{{ number_format($totals['total_holiday_ot'], 0, ',', '.') }}</span>
+                                </div>
+                            @else
+                                <div style="text-align: center; color: #cbd5e1;">-</div>
+                            @endif
+                        </td>
+                        <td style="padding: 6px 8px; font-size: 11.5px;">
+                            @if ($totals['hourly_ot_pay'] > 0)
+                                <div class="currency-split">
+                                    <span>Rp</span>
+                                    <span>{{ number_format($totals['hourly_ot_pay'], 0, ',', '.') }}</span>
+                                </div>
+                            @else
+                                <div style="text-align: center; color: #cbd5e1;">-</div>
+                            @endif
+                        </td>
+                        <td style="padding: 6px 8px;">
+                            @if ($totals['total_lunch'] > 0)
+                                <div class="currency-split">
+                                    <span>Rp</span>
+                                    <span>{{ number_format($totals['total_lunch'], 0, ',', '.') }}</span>
+                                </div>
+                            @else
+                                <div style="text-align: center; color: #cbd5e1;">-</div>
+                            @endif
+                        </td>
+                        <td style="padding: 6px 8px;">
+                            @if ($totals['total_dinner'] > 0)
+                                <div class="currency-split">
+                                    <span>Rp</span>
+                                    <span>{{ number_format($totals['total_dinner'], 0, ',', '.') }}</span>
+                                </div>
+                            @else
+                                <div style="text-align: center; color: #cbd5e1;">-</div>
+                            @endif
+                        </td>
+                        <td style="padding: 6px 8px; font-size: 12px; font-weight: 800;" class="subtotal-theme">
+                            @if ($totals['grand_total'] > 0)
+                                <div class="currency-split">
+                                    <span>Rp</span>
+                                    <span>{{ number_format($totals['grand_total'], 0, ',', '.') }}</span>
+                                </div>
+                            @else
+                                <div style="text-align: center; color: #cbd5e1;">-</div>
+                            @endif
+                        </td>
                     </tr>
                 </tfoot>
             </table>
@@ -813,7 +877,7 @@
                     <div class="gaji-bersih-title">TOTAL DITERIMA MINGGU INI</div>
                     <div class="gaji-bersih-sub">
                         @if ($isHarian)
-                            (UPAH HARIAN + UANG MAKAN KEHADIRAN + LEMBUR{{ $overtimeMealAllowance > 0 ? ' & MAKAN LEMBUR' : '' }})
+                            (UPAH HARIAN / KERJA PER JAM + UANG MAKAN KEHADIRAN + LEMBUR{{ $overtimeMealAllowance > 0 ? ' & MAKAN LEMBUR' : '' }})
                         @else
                             (UANG MAKAN KEHADIRAN + UPAH LEMBUR{{ $overtimeMealAllowance > 0 ? ' + UANG MAKAN LEMBUR' : '' }})
                         @endif

@@ -1,4 +1,4 @@
-<div>
+<div class="weekly-payroll-index-page" x-data="{ footerVisible: false, init() { const footer = document.querySelector('.main-footer'); if (!footer || typeof IntersectionObserver === 'undefined') return; const footerObserver = new IntersectionObserver(([entry]) => { this.footerVisible = entry.isIntersecting; }); footerObserver.observe(footer); if (typeof this.$cleanup === 'function') { this.$cleanup(() => footerObserver.disconnect()); } } }">
     <x-slot name="header">
         <h1>Gaji &amp; Slip Mingguan</h1>
         <div class="section-header-breadcrumb">
@@ -9,7 +9,7 @@
     </x-slot>
 
     <!-- Template Native Section Title & Lead + Tombol Buat Periode Baru -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-2 mb-md-3">
+    <div class="weekly-payroll-page-heading d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-2 mb-md-3">
         <div class="mr-md-3">
             <h2 class="section-title mt-0">Rekap Gaji &amp; Slip Mingguan</h2>
             <p class="section-lead mb-0">
@@ -120,12 +120,12 @@
     </div>
 
     <!-- Main Split Layout (3 Kolom Ringkasan & Grafik : 9 Kolom Riwayat Periode) -->
-    <div class="row align-items-start">
+    <div class="row align-items-start weekly-payroll-content-row">
         <!-- ================= KOLOM KIRI (COL-3): RINGKASAN & DONUT CHART BIAYA MINGGUAN ================= -->
-        <div class="col-12 col-lg-3 col-md-4 mb-4">
-            <div class="card shadow-sm border-0" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03);">
+        <div class="col-12 col-lg-3 col-md-4 mb-4 weekly-payroll-summary-column">
+            <div class="card shadow-sm border-0 weekly-payroll-summary-card" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03);">
                 <!-- 1. Header Card -->
-                <div class="border-bottom d-flex align-items-center justify-content-between" style="background: #ffffff; padding: 14px 20px;">
+                <div class="border-bottom d-flex align-items-center justify-content-between weekly-payroll-summary-header" style="background: #ffffff; padding: 14px 20px;">
                     <div>
                         <h4 class="mb-0" style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.35;">
                             Rekap Gaji Mingguan
@@ -139,9 +139,9 @@
                     </span>
                 </div>
 
-                <div class="card-body p-0">
+                <div class="card-body p-0 weekly-payroll-summary-body">
                     <!-- 2. Hero Metric: Donut Chart Komposisi Biaya Mingguan -->
-                    <div style="padding: 16px 20px 14px;" class="text-center">
+                    <div style="padding: 16px 20px 14px;" class="text-center weekly-payroll-summary-chart">
                         <div class="d-flex align-items-center justify-content-between mb-1">
                             <div style="font-size: 12px; font-weight: 600; color: #64748b;">
                                 Komposisi biaya mingguan
@@ -227,7 +227,7 @@
                                  }
                              }"
                              x-init="initChart()"
-                             class="position-relative d-flex justify-content-center align-items-center my-3"
+                             class="position-relative d-flex justify-content-center align-items-center my-3 weekly-payroll-summary-donut"
                              style="height: 180px; width: 100%;">
 
                             <canvas x-ref="canvas" style="max-height: 180px; max-width: 180px;"></canvas>
@@ -253,9 +253,9 @@
                     </div>
 
                     <!-- 3. Dual Metric Tiles: Total Periode & Rata-rata per Periode -->
-                    <div style="padding: 0 20px 14px;">
+                    <div style="padding: 0 20px 14px;" class="weekly-payroll-summary-stat-tiles">
                         <div class="row no-gutters" style="gap: 8px;">
-                            <div class="col" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 12px;">
+                            <div class="col weekly-payroll-summary-stat-tile" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 12px;">
                                 <div style="font-size: 11px; font-weight: 500; color: #64748b; line-height: 1.3;">
                                     Total periode
                                 </div>
@@ -263,7 +263,7 @@
                                     {{ $stats['total_periods'] }} Periode
                                 </div>
                             </div>
-                            <div class="col" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 12px;">
+                            <div class="col weekly-payroll-summary-stat-tile" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 12px;">
                                 <div style="font-size: 11px; font-weight: 500; color: #64748b; line-height: 1.3;">
                                     Rata-rata / periode
                                 </div>
@@ -279,7 +279,7 @@
                     </div>
 
                     <!-- 4. Komposisi Alokasi Uang Mingguan (Allocation Bar) -->
-                    <div style="border-top: 1px solid #f1f5f9; padding: 14px 20px;">
+                    <div class="weekly-payroll-summary-allocation" style="border-top: 1px solid #f1f5f9; padding: 14px 20px;">
                         <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 9px;">
                             Alokasi biaya mingguan
                         </div>
@@ -293,7 +293,7 @@
 
                         <!-- Breakdown List -->
                         <div class="d-flex flex-column" style="gap: 6px;">
-                            <div class="d-flex align-items-center justify-content-between" style="font-size: 11.5px; line-height: 1.4;">
+                            <div class="d-flex align-items-center justify-content-between weekly-payroll-allocation-item" style="font-size: 11.5px; line-height: 1.4;">
                                 <div class="d-flex align-items-center">
                                     <span style="width: 8px; height: 8px; border-radius: 2px; background-color: #10b981; margin-right: 7px; flex-shrink: 0;"></span>
                                     <span style="color: #475569; font-weight: 500;">Upah harian lepas</span>
@@ -302,7 +302,7 @@
                                     Rp {{ number_format($stats['total_daily_wage'], 0, ',', '.') }} · {{ $pctDaily }}%
                                 </span>
                             </div>
-                            <div class="d-flex align-items-center justify-content-between" style="font-size: 11.5px; line-height: 1.4;">
+                            <div class="d-flex align-items-center justify-content-between weekly-payroll-allocation-item" style="font-size: 11.5px; line-height: 1.4;">
                                 <div class="d-flex align-items-center">
                                     <span style="width: 8px; height: 8px; border-radius: 2px; background-color: #f59e0b; margin-right: 7px; flex-shrink: 0;"></span>
                                     <span style="color: #475569; font-weight: 500;">Uang makan mingguan</span>
@@ -311,7 +311,7 @@
                                     Rp {{ number_format($stats['total_meal_allowance'], 0, ',', '.') }} · {{ $pctMeal }}%
                                 </span>
                             </div>
-                            <div class="d-flex align-items-center justify-content-between" style="font-size: 11.5px; line-height: 1.4;">
+                            <div class="d-flex align-items-center justify-content-between weekly-payroll-allocation-item" style="font-size: 11.5px; line-height: 1.4;">
                                 <div class="d-flex align-items-center">
                                     <span style="width: 8px; height: 8px; border-radius: 2px; background-color: #0b52aa; margin-right: 7px; flex-shrink: 0;"></span>
                                     <span style="color: #475569; font-weight: 500;">Upah lembur mingguan</span>
@@ -327,18 +327,18 @@
         </div>
 
         <!-- ================= KOLOM KANAN (COL-9): DAFTAR RIWAYAT PERIODE MINGGUAN ================= -->
-        <div class="col-12 col-lg-9 col-md-8 mb-4">
-            <div class="card shadow-sm">
-                <div class="card-header">
+        <div class="col-12 col-lg-9 col-md-8 mb-4 weekly-payroll-list-column">
+            <div class="card shadow-sm weekly-payroll-list-card">
+                <div class="card-header weekly-payroll-list-header">
                     <h4>Daftar Riwayat Periode</h4>
                 </div>
 
-                <div class="card-body p-0">
+                <div class="card-body p-0 weekly-payroll-list-body">
                     <!-- Controls: Show Entries & Search Bar (Format Baku Gaji Bulanan Tanpa Filter Status) -->
                     <div class="dt-control-wrapper">
                         <div class="dt-show-entries">
                             Show
-                            <select wire:model.live="perPage" class="dt-select-entries">
+                            <select wire:model.live="perPage" class="dt-select-entries" aria-label="Jumlah periode per halaman">
                                 <option value="10">10</option>
                                 <option value="25">25</option>
                                 <option value="50">50</option>
@@ -349,12 +349,12 @@
 
                         <div class="dt-search-wrapper">
                             <span class="mr-1">Search:</span>
-                            <input type="text" wire:model.live.debounce.300ms="search" class="dt-search-input" placeholder="Search here...">
+                            <input type="text" wire:model.live.debounce.300ms="search" class="dt-search-input" placeholder="Search here..." aria-label="Cari periode mingguan">
                         </div>
                     </div>
 
                     <!-- Table Responsive -->
-                    <div class="table-responsive">
+                    <div class="table-responsive weekly-payroll-table-view">
                         <table class="table table-clean mb-0">
                             <thead style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
                                 <tr>
@@ -513,6 +513,101 @@
                         </table>
                     </div>
 
+                    <div class="weekly-payroll-mobile-list d-md-none">
+                        @forelse ($periods as $per)
+                            @php
+                                $totalEmp = (int) ($per->attendances_count ?? $per->employee_count ?? 0);
+                                $paidEmp = (int) ($per->paid_attendances_count ?? 0);
+                                if ($per->status === \App\Enums\OvertimePeriodStatus::PAID && $paidEmp < $totalEmp) {
+                                    $paidEmp = $totalEmp;
+                                }
+                                $pct = $totalEmp > 0 ? (int) round(($paidEmp / $totalEmp) * 100) : 0;
+                                $isFullyPaid = ($totalEmp > 0 && $paidEmp >= $totalEmp) || $per->status === \App\Enums\OvertimePeriodStatus::PAID;
+                                $isPartiallyPaid = ! $isFullyPaid && $paidEmp > 0;
+                            @endphp
+
+                            <article class="weekly-period-mobile-card" wire:key="weekly-period-mobile-{{ $per->id }}">
+                                <div class="weekly-period-mobile-heading">
+                                    <div class="weekly-period-mobile-title-wrap">
+                                        @if (auth()->user()?->hasRole('admin'))
+                                            <a href="{{ route('overtimes.periods.attendances', $per) }}" class="weekly-period-mobile-title" title="{{ $per->reference_number }}">{{ $per->name }}</a>
+                                        @else
+                                            <span class="weekly-period-mobile-title" title="{{ $per->reference_number }}">{{ $per->name }}</span>
+                                        @endif
+                                        <div class="weekly-period-mobile-date">Jum'at – Kamis · {{ $per->start_date->locale('id')->translatedFormat('d M') }} – {{ $per->end_date->locale('id')->translatedFormat('d M Y') }}</div>
+                                    </div>
+                                    <div class="weekly-period-mobile-total" role="group" aria-label="Total biaya {{ $per->formatted_grand_total }}">
+                                        <strong>{{ $per->formatted_grand_total }}</strong>
+                                    </div>
+                                </div>
+
+                                <div class="weekly-period-mobile-breakdown">
+                                    <div class="weekly-period-mobile-amount">
+                                        <span>Upah harian</span>
+                                        <strong>Rp {{ number_format((float) ($per->total_daily_wage ?? 0), 0, ',', '.') }}</strong>
+                                    </div>
+                                    <div class="weekly-period-mobile-amount">
+                                        <span>Uang makan</span>
+                                        <strong>{{ $per->formatted_total_meal_allowance }}</strong>
+                                    </div>
+                                    <div class="weekly-period-mobile-amount">
+                                        <span>Upah lembur</span>
+                                        <strong>{{ $per->formatted_total_overtime_pay }}</strong>
+                                    </div>
+                                </div>
+
+                                <div class="weekly-period-mobile-payment">
+                                    <div class="weekly-period-mobile-payment-summary">
+                                        @if ($isFullyPaid)
+                                            <span class="weekly-period-mobile-status is-paid">Sudah dibayar</span>
+                                        @elseif ($isPartiallyPaid)
+                                            <span class="weekly-period-mobile-status is-partial">{{ $pct }}% selesai</span>
+                                        @else
+                                            <span class="weekly-period-mobile-status is-unpaid">Belum dibayar</span>
+                                        @endif
+                                        <span class="weekly-period-mobile-paid-count">{{ $paidEmp }} dari {{ $totalEmp }} karyawan</span>
+                                    </div>
+                                    <div class="weekly-period-mobile-progress" role="progressbar" aria-valuenow="{{ $pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="Progres pembayaran">
+                                        <span class="{{ $isFullyPaid ? 'is-paid' : ($isPartiallyPaid ? 'is-partial' : 'is-unpaid') }}" style="width: {{ $pct }}%;"></span>
+                                    </div>
+                                </div>
+
+                                <div class="weekly-period-mobile-actions">
+                                    @if (auth()->user()?->hasRole(['admin', 'direktur']))
+                                        @if (auth()->user()?->hasRole('admin'))
+                                            <a href="{{ route('overtimes.periods.attendances', $per) }}" class="btn btn-primary weekly-period-mobile-action" title="Atur Presensi, Uang Makan & Tarik Data Absensi">
+                                                <i class="fas fa-calendar-check" aria-hidden="true"></i><span>Presensi</span>
+                                            </a>
+                                        @endif
+                                        <a href="{{ route('overtimes.periods.print', $per) }}" target="_blank" class="btn btn-info weekly-period-mobile-action" title="Cetak Seluruh Slip Mingguan">
+                                            <i class="fas fa-print" aria-hidden="true"></i><span>Slip</span>
+                                        </a>
+                                        @if ($per->status === \App\Enums\OvertimePeriodStatus::DRAFT)
+                                            <button type="button" class="btn btn-success weekly-period-mobile-action" wire:click="confirmMarkPaid({{ $per->id }})" wire:loading.attr="disabled" wire:target="confirmMarkPaid({{ $per->id }})" title="Tandai Selesai Dibayar">
+                                                <i wire:loading.remove wire:target="confirmMarkPaid({{ $per->id }})" class="fas fa-check-double" aria-hidden="true"></i>
+                                                <i wire:loading wire:target="confirmMarkPaid({{ $per->id }})" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                                                <span>Lunas</span>
+                                            </button>
+                                            <button type="button" class="btn btn-danger weekly-period-mobile-action" wire:click="confirmDelete({{ $per->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $per->id }})" title="Hapus Periode Mingguan">
+                                                <i wire:loading.remove wire:target="confirmDelete({{ $per->id }})" class="fas fa-trash-alt" aria-hidden="true"></i>
+                                                <i wire:loading wire:target="confirmDelete({{ $per->id }})" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                                                <span>Hapus</span>
+                                            </button>
+                                        @endif
+                                    @else
+                                        <a href="{{ route('overtimes.periods.print', $per) }}" target="_blank" class="btn btn-info weekly-period-mobile-action" title="Lihat Slip Mingguan Saya">
+                                            <i class="fas fa-print" aria-hidden="true"></i><span>Lihat slip</span>
+                                        </a>
+                                    @endif
+                                </div>
+                            </article>
+                        @empty
+                            <div class="weekly-payroll-mobile-empty">
+                                <x-empty-state icon="fas fa-calendar-alt" title="Belum Ada Periode Gaji Mingguan" subtitle="Kelompokkan upah harian, uang makan, dan lembur mingguan dengan siklus Jum'at s/d Kamis." :action-label="auth()->user()?->hasRole(['admin', 'direktur']) ? 'Buat Periode Mingguan' : null" action-wire-click="openCreatePeriodModal" action-icon="fas fa-plus" />
+                            </div>
+                        @endforelse
+                    </div>
+
                     <!-- Footer: Info & Pagination -->
                     <div class="dt-footer-wrapper">
                         <div>
@@ -528,7 +623,7 @@
     </div>
 
     <!-- MODAL: BUAT PERIODE GAJI MINGGUAN (Standard Clean Stisla Modal) -->
-    <div wire:ignore.self class="modal fade" id="weeklyPeriodModal" role="dialog" aria-labelledby="weeklyPeriodModalLabel" aria-hidden="true">
+    <div wire:ignore.self class="modal fade weekly-period-modal" id="weeklyPeriodModal" role="dialog" aria-labelledby="weeklyPeriodModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
                 <div class="modal-header">
@@ -641,7 +736,7 @@
 
     <!-- Floating Action Button (Buat Periode Baru - Khusus Mobile) -->
     @if (auth()->user()?->hasRole(['admin', 'direktur']))
-        <button type="button" wire:click="openCreatePeriodModal" wire:loading.attr="disabled" wire:target="openCreatePeriodModal" class="btn-floating-add d-md-none" title="Buat Periode Mingguan" aria-label="Buat Periode Mingguan">
+        <button type="button" wire:click="openCreatePeriodModal" wire:loading.attr="disabled" wire:target="openCreatePeriodModal" class="btn-floating-add d-md-none" x-show="!footerVisible" x-transition.opacity.duration.150ms title="Buat Periode Mingguan" aria-label="Buat Periode Mingguan">
             <i wire:loading wire:target="openCreatePeriodModal" class="fas fa-spinner fa-spin"></i>
             <i wire:loading.remove wire:target="openCreatePeriodModal" class="fas fa-plus"></i>
         </button>

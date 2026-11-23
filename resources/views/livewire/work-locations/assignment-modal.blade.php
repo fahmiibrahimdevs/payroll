@@ -11,7 +11,7 @@
                 </button>
             </div>
 
-            <form wire:submit="storeAssignment">
+            <form id="locationAssignmentForm">
                 <div class="modal-body py-3 px-4 bg-white">
                     <div class="row">
                         <!-- 1. Karyawan -->
@@ -22,7 +22,15 @@
                                     <select id="assign_employee_id" class="form-control select2 @error('assignmentForm.employee_id') is-invalid @enderror">
                                         <option value="">-- Pilih Karyawan --</option>
                                         @foreach ($allActiveEmployees as $emp)
-                                            <option value="{{ $emp->id }}">
+                                            @php
+                                                $defaultLocationIds = $emp->defaultWorkLocations->modelKeys();
+                                                if ($emp->work_location_id !== null) {
+                                                    $defaultLocationIds[] = (int) $emp->work_location_id;
+                                                }
+                                                $defaultLocationIds = array_values(array_unique(array_map('intval', $defaultLocationIds)));
+                                                sort($defaultLocationIds);
+                                            @endphp
+                                            <option value="{{ $emp->id }}" data-default-location-ids="{{ implode(',', $defaultLocationIds) }}">
                                                 {{ $emp->full_name }} ({{ $emp->position?->name ?? 'Staff' }} - {{ $emp->department?->name ?? 'Umum' }})
                                             </option>
                                         @endforeach
@@ -120,38 +128,119 @@
             $.fn.modal.Constructor.prototype._enforceFocus = function () {};
         }
 
+        const assignmentLocationOptionTemplates = $('#assign_work_location_id option').toArray().map(function (option) {
+            const optionTemplate = option.cloneNode(true);
+            optionTemplate.selected = false;
+
+            return optionTemplate;
+        });
+
         const initSelect2 = function () {
-            if ($('#assign_employee_id').length && !$('#assign_employee_id').hasClass('select2-hidden-accessible')) {
-                $('#assign_employee_id').select2({
-                    dropdownParent: $('#locationAssignmentModal'),
-                    width: '100%',
-                    placeholder: '-- Pilih Karyawan --',
-                    allowClear: true
-                }).off('change').on('change', function () {
+            const $employeeSelect = $('#assign_employee_id');
+            if ($employeeSelect.length) {
+                if (!$employeeSelect.hasClass('select2-hidden-accessible')) {
+                    $employeeSelect.select2({
+                        dropdownParent: $('#locationAssignmentModal'),
+                        width: '100%',
+                        placeholder: '-- Pilih Karyawan --',
+                        allowClear: true
+                    });
+                }
+
+                $employeeSelect.off('change.assignmentEmployee').on('change.assignmentEmployee', function () {
                     const val = $(this).val();
+                    const employeeId = val ? String(val) : '';
+                    const selectedEmployeeOption = $(this).find('option:selected');
+                    const defaultLocationIds = String(selectedEmployeeOption.attr('data-default-location-ids') || '')
+                        .split(',')
+                        .filter(Boolean);
+
+                    updateAssignmentLocationOptions(employeeId, defaultLocationIds);
+
                     if (typeof @this !== 'undefined') {
-                        @this.set('assignmentForm.employee_id', val ? String(val) : '');
+                        @this.call('selectAssignmentEmployee', val ? Number(val) : null)
+                            .then(function (result) {
+                                const data = result && typeof result === 'object' ? result : {};
+                                const resolvedEmployeeId = data.employeeId ?? employeeId;
+
+                                if (String($('#assign_employee_id').val() || '') !== String(resolvedEmployeeId || '')) {
+                                    return;
+                                }
+
+                                updateAssignmentLocationOptions(resolvedEmployeeId, data.locationIds || []);
+                            })
+                            .catch(function () {
+                                updateAssignmentLocationOptions(employeeId, defaultLocationIds);
+                            });
                     }
                 });
             }
 
-            if ($('#assign_work_location_id').length && !$('#assign_work_location_id').hasClass('select2-hidden-accessible')) {
-                $('#assign_work_location_id').select2({
-                    dropdownParent: $('#locationAssignmentModal'),
-                    width: '100%',
-                    placeholder: '-- Pilih Lokasi Kerja / Site --',
-                    allowClear: true
-                }).off('change').on('change', function () {
+            const $locationSelect = $('#assign_work_location_id');
+            if ($locationSelect.length) {
+                if (!$locationSelect.hasClass('select2-hidden-accessible')) {
+                    $locationSelect.select2({
+                        dropdownParent: $('#locationAssignmentModal'),
+                        width: '100%',
+                        placeholder: '-- Pilih Lokasi Kerja / Site --',
+                        allowClear: true
+                    });
+                }
+
+                $locationSelect.off('change.assignmentLocation').on('change.assignmentLocation', function () {
                     const val = $(this).val();
                     if (typeof @this !== 'undefined') {
-                        @this.set('assignmentForm.work_location_id', val ? String(val) : '');
+                        @this.set('assignmentForm.work_location_id', val ? String(val) : '', false);
                     }
                 });
             }
         };
 
+        const updateAssignmentLocationOptions = function (employeeId, defaultLocationIds) {
+            const selectedLocationId = String($('#assign_work_location_id').val() || '');
+            const defaultLocationIdSet = new Set((defaultLocationIds || []).map(function (locationId) {
+                return String(locationId);
+            }));
+            const shouldClearSelectedLocation = Boolean(employeeId) && defaultLocationIdSet.has(selectedLocationId);
+            const $locationSelect = $('#assign_work_location_id');
+            const availableOptions = assignmentLocationOptionTemplates.filter(function (optionTemplate) {
+                const locationId = String(optionTemplate.value || '');
+
+                return !employeeId || !locationId || !defaultLocationIdSet.has(locationId);
+            });
+
+            $locationSelect.empty();
+            availableOptions.forEach(function (optionTemplate) {
+                $locationSelect.append(optionTemplate.cloneNode(true));
+            });
+
+            if (shouldClearSelectedLocation) {
+                if (typeof @this !== 'undefined') {
+                    @this.set('assignmentForm.work_location_id', '', false);
+                }
+            }
+
+            $locationSelect.val(shouldClearSelectedLocation ? '' : selectedLocationId);
+            $locationSelect.trigger('change.select2');
+        };
+
+        const assignmentForm = document.getElementById('locationAssignmentForm');
+        assignmentForm?.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            const employeeId = $('#assign_employee_id').val();
+            const workLocationId = $('#assign_work_location_id').val();
+
+            if (typeof @this !== 'undefined') {
+                @this.set('assignmentForm.employee_id', employeeId ? String(employeeId) : '', false);
+                @this.set('assignmentForm.work_location_id', workLocationId ? String(workLocationId) : '', false);
+                @this.storeAssignment();
+            }
+        });
+
         $(document).ready(function () {
             initSelect2();
+            updateAssignmentLocationOptions('', []);
         });
 
         function registerLivewireEvents() {
@@ -168,6 +257,7 @@
 
                             $('#assign_employee_id').val(empVal ? String(empVal) : '').trigger('change.select2');
                             $('#assign_work_location_id').val(locVal ? String(locVal) : '').trigger('change.select2');
+                            updateAssignmentLocationOptions('', []);
                         }
                     }, 50);
                 }
@@ -180,6 +270,7 @@
                 if (modalId === 'locationAssignmentModal') {
                     $('#assign_employee_id').val('').trigger('change.select2');
                     $('#assign_work_location_id').val('').trigger('change.select2');
+                    updateAssignmentLocationOptions('');
                 }
             });
         }
@@ -193,6 +284,7 @@
         $('#locationAssignmentModal').on('hidden.bs.modal', function () {
             $('#assign_employee_id').val('').trigger('change.select2');
             $('#assign_work_location_id').val('').trigger('change.select2');
+            updateAssignmentLocationOptions('');
         });
     })();
 </script>

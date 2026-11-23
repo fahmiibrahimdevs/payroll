@@ -1,4 +1,4 @@
-<div>
+<div class="cash-advances-index-page">
     <x-slot name="header">
         <h1>Kasbon</h1>
         <div class="section-header-breadcrumb">
@@ -9,7 +9,7 @@
     </x-slot>
 
         <h2 class="section-title">Kasbon Karyawan</h2>
-        <p class="section-lead">
+        <p class="section-lead mb-3">
             Kelola pengajuan pinjaman karyawan, cek sisa kasbon berjalan, dan lakukan pencatatan pelunasan kasbon.
         </p>
 
@@ -138,7 +138,7 @@
 
             <!-- Kolom Kanan: Card Tabel Semua Karyawan (col-12 col-lg-9) -->
             <div class="col-12 col-lg-9 mb-4">
-                <div class="card cash-advance-main-card mb-0">
+                <div class="card cash-advance-main-card cash-advance-recap-card mb-0">
                     <!-- Row 1: Header & Controls Card (on mobile) -->
                     <div class="cash-advance-top-card">
                         <div class="card-header">
@@ -186,7 +186,7 @@
                     </div>
 
                     <!-- Row 2: Full-Width Data Table -->
-                    <div class="table-responsive">
+                    <div class="table-responsive cash-advance-recap-table-view">
                         <table class="table table-clean mb-0">
                             <thead>
                                 <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
@@ -312,6 +312,81 @@
                         </table>
                     </div>
 
+                    <div class="cash-advance-recap-mobile-list">
+                        @if ($recapByDepartment && $recap && $recap->total() > 0)
+                            @foreach ($recapByDepartment as $departmentName => $deptRows)
+                                @php $isOfficialDept = $departmentName !== 'Tanpa Departemen'; @endphp
+                                <section class="cash-advance-recap-mobile-group" wire:key="cash-advance-recap-mobile-group-{{ Str::slug($departmentName) }}">
+                                    <div class="cash-advance-recap-mobile-group-heading">
+                                        <span title="Departemen {{ $departmentName }}">Departemen {{ $departmentName }}</span>
+                                        <div class="cash-advance-recap-mobile-group-meta">
+                                            @if (! $isOfficialDept)
+                                                <span class="cash-advance-recap-mobile-warning">Perlu dilengkapi</span>
+                                            @endif
+                                            <span class="cash-advance-recap-mobile-count">{{ $deptRows->count() }} karyawan</span>
+                                        </div>
+                                    </div>
+
+                                    @foreach ($deptRows as $row)
+                                        <article class="cash-advance-recap-mobile-card" wire:key="cash-advance-recap-mobile-{{ $row['id'] }}">
+                                            <div class="cash-advance-recap-mobile-header">
+                                                <img src="{{ $row['photo_url'] }}" alt="{{ $row['name'] }}" class="cash-advance-recap-mobile-avatar">
+                                                <div class="cash-advance-recap-mobile-identity">
+                                                    <div class="cash-advance-recap-mobile-name" title="{{ $row['name'] }}">{{ $row['name'] }}</div>
+                                                    <div class="cash-advance-recap-mobile-position" title="{{ $row['department'] }} · {{ $row['position'] }}">{{ $row['department'] }} · {{ $row['position'] }}</div>
+                                                </div>
+                                            </div>
+
+                                            <div class="cash-advance-recap-mobile-metrics">
+                                                <div><span>Total Pinjaman</span><strong title="{{ $row['formatted_initial_amount'] }}">{{ $row['formatted_initial_amount'] }}</strong></div>
+                                                <div><span>Sudah Dibayar</span><strong class="is-paid" title="{{ $row['formatted_paid_amount'] }}">{{ $row['formatted_paid_amount'] }}</strong></div>
+                                                <div><span>Sisa Kasbon</span><strong class="is-remaining" title="{{ $row['formatted_remaining_amount'] }}">{{ $row['formatted_remaining_amount'] }}</strong></div>
+                                                <div><span>Potongan Bulan Ini</span><strong class="is-deduction" title="{{ $row['formatted_monthly_deduction'] }}">{{ $row['formatted_monthly_deduction'] }}</strong></div>
+                                            </div>
+
+                                            <div class="cash-advance-recap-mobile-footer">
+                                                <div class="cash-advance-recap-mobile-progress">
+                                                    @if ($row['has_active'])
+                                                        <div class="cash-advance-recap-mobile-progress-track"><span style="width: {{ $row['repayment_percentage'] }}%;"></span></div>
+                                                        <span>{{ $row['repayment_text'] }}</span>
+                                                    @else
+                                                        <span>Tidak ada kasbon aktif</span>
+                                                    @endif
+                                                </div>
+
+                                                <div class="cash-advance-recap-mobile-actions">
+                                                    @if (auth()->user()?->hasRole('admin') && $row['has_active'])
+                                                        <button type="button" wire:click="quickEarlyPayment('{{ $row['hashid'] }}')" wire:loading.attr="disabled" wire:target="quickEarlyPayment('{{ $row['hashid'] }}')" class="btn btn-success btn-action" title="Pelunasan Tagihan Lebih Awal — {{ $row['name'] }}" aria-label="Pelunasan tagihan lebih awal untuk {{ $row['name'] }}">
+                                                            <i wire:loading.remove wire:target="quickEarlyPayment('{{ $row['hashid'] }}')" class="fas fa-hand-holding-usd"></i>
+                                                            <i wire:loading wire:target="quickEarlyPayment('{{ $row['hashid'] }}')" class="fas fa-spinner fa-spin"></i>
+                                                        </button>
+                                                    @endif
+                                                    <button type="button" wire:click="selectEmployee('{{ $row['hashid'] ?? $row['id'] }}')" wire:loading.attr="disabled" wire:target="selectEmployee('{{ $row['hashid'] ?? $row['id'] }}')" class="btn btn-primary btn-action" title="Lihat Tagihan & Buku Besar {{ $row['name'] }}" aria-label="Lihat tagihan dan buku besar {{ $row['name'] }}">
+                                                        <i wire:loading.remove wire:target="selectEmployee('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-eye"></i>
+                                                        <i wire:loading wire:target="selectEmployee('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-spinner fa-spin"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </article>
+                                    @endforeach
+                                </section>
+                            @endforeach
+                        @else
+                            <div class="cash-advance-recap-mobile-empty">
+                                <i class="fas fa-wallet" aria-hidden="true"></i>
+                                <strong>Tidak Ada Data Kasbon Karyawan</strong>
+                                <p>{{ $search ? 'Tidak ada catatan kasbon karyawan yang cocok dengan pencarian "' . $search . '".' : 'Belum ada data pengajuan atau saldo kasbon aktif saat ini.' }}</p>
+                                @can('create', \App\Models\CashAdvance::class)
+                                    <button type="button" wire:click="createPengajuan" wire:loading.attr="disabled" wire:target="createPengajuan" class="btn btn-primary">
+                                        <i wire:loading.remove wire:target="createPengajuan" class="fas fa-plus mr-1"></i>
+                                        <i wire:loading wire:target="createPengajuan" class="fas fa-spinner fa-spin mr-1"></i>
+                                        Buat Pengajuan Baru
+                                    </button>
+                                @endcan
+                            </div>
+                        @endif
+                    </div>
+
                     <!-- Footer: Info & Pagination -->
                     @if ($recap && $recap->total() > 0)
                         <div class="dt-footer-wrapper">
@@ -329,10 +404,10 @@
 
     @else
         <!-- ================= MODE 2: KARYAWAN SPESIFIK (2 COLS) ================= -->
-        <div class="row align-items-start">
+        <div class="row align-items-start cash-advance-employee-row">
             <!-- Left Side: Card Avatar Profile Karyawan (Flutter-Style ListTile UI) -->
             <div class="col-lg-3 col-md-4 col-12 mb-4 mb-md-0">
-                <div class="card mb-3 mb-md-0">
+                <div class="card cash-advance-profile-card mb-3 mb-md-0">
                     <div class="card-body p-3 text-center">
                         <!-- Avatar Circle -->
                         <div class="d-flex justify-content-center mb-2">
@@ -525,7 +600,7 @@
                                     </div>
                                 </div>
                             @else
-                                <div class="text-center py-3 px-2 bg-white mt-2" style="border: 1px dashed #cbd5e1; border-radius: 12px;">
+                                <div class="cash-advance-no-liability-empty text-center mt-2">
                                     <i class="fas fa-check-circle text-success mb-1" style="font-size: 20px;"></i>
                                     <div class="font-weight-600 text-dark" style="font-size: 12.5px;">Tidak Ada Tanggungan</div>
                                     <div class="text-muted text-xs">Karyawan ini sedang tidak memiliki kasbon aktif.</div>
@@ -538,7 +613,7 @@
 
             <!-- Right Side: Main Content Card (Tagihan Bulanan & Riwayat Transaksi) (9 cols on desktop) -->
             <div class="col-lg-9 col-md-8 col-12">
-                <div class="card cash-advance-main-card">
+                <div class="card cash-advance-main-card cash-advance-detail-card">
                     <!-- Row 1: Header + Tabs + Controls Card (on mobile) -->
                     <div class="cash-advance-top-card">
                         <!-- Card Header: Native Template Title with Back Navigation -->
@@ -707,7 +782,7 @@
                                 @if ($paginatedStatements && $paginatedStatements->total() > 0)
                                     <div class="statement-mobile-list">
                                         @foreach ($paginatedStatements as $index => $st)
-                                            <div class="card statement-mobile-card {{ $st['is_paid'] ? 'statement-card-paid !border-l-[#10b981]' : ($st['is_overdue'] ? '!border-l-[#ef4444] !bg-[#fef2f2]' : 'statement-card-unpaid !border-l-[#f59e0b]') }}" wire:key="statement-card-{{ $st['month_key'] }}">
+                                            <div class="card statement-mobile-card {{ $st['is_paid'] ? 'statement-card-paid' : ($st['is_overdue'] ? 'statement-card-overdue' : 'statement-card-unpaid') }}" wire:key="statement-card-{{ $st['month_key'] }}">
                                                 <div class="card-body">
                                                     <!-- Top Row: Title (Left) & Detail Button (Right) -->
                                                     <div class="d-flex align-items-center justify-content-between mb-1.5">
@@ -760,7 +835,7 @@
                                         @endforeach
                                     </div>
                                 @else
-                                    <div class="card p-4 text-center text-muted mb-3">
+                                    <div class="cash-advance-detail-empty text-center text-muted mb-3">
                                         <div class="empty-state py-2">
                                             <div class="empty-state-icon bg-light text-muted mx-auto mb-2" style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;">
                                                 <i class="fas fa-file-invoice-dollar"></i>
@@ -798,7 +873,7 @@
                         @else
                             <!-- ================= TAB 2: RIWAYAT TRANSAKSI (BUKU BESAR) ================= -->
                             <!-- Data Table -->
-                            <div class="table-responsive">
+                            <div class="table-responsive cash-advance-ledger-table-view">
                                 <table class="table table-clean mb-0">
                                     <thead class="bg-gray-100">
                                         <tr>
@@ -924,6 +999,67 @@
                                         @endif
                                     </tbody>
                                 </table>
+                            </div>
+
+                            <div class="cash-advance-ledger-mobile-list">
+                                @if ($ledger && $ledger->total() > 0)
+                                    @foreach ($ledger as $row)
+                                        <article id="ledger-mobile-card-{{ $row['type'] }}-{{ $row['id'] }}" wire:key="ledger-mobile-card-{{ $row['type'] }}-{{ $row['id'] }}" class="cash-advance-ledger-mobile-card">
+                                            <div class="cash-advance-ledger-mobile-header">
+                                                <div class="cash-advance-ledger-mobile-date">
+                                                    <strong>{{ $row['formatted_date'] }}</strong>
+                                                    <span><i class="far fa-user mr-1"></i>{{ $row['creator_name'] }}</span>
+                                                </div>
+                                                <span class="{{ $row['status_badge'] }}">{{ $row['status_label'] }}</span>
+                                            </div>
+
+                                            <div class="cash-advance-ledger-mobile-reference" title="{{ $row['reference_number'] }}">{{ $row['reference_number'] }}</div>
+                                            <div class="cash-advance-ledger-mobile-description" title="{{ $row['description'] ?: '-' }}">{{ $row['description'] ?: '-' }}</div>
+
+                                            <div class="cash-advance-ledger-mobile-amounts">
+                                                <div><span>Pengajuan</span><strong>{{ $row['formatted_advance_amount'] }}</strong></div>
+                                                <div><span>Pelunasan</span><strong>{{ $row['formatted_payment_amount'] }}</strong></div>
+                                                <div><span>Saldo Akhir</span><strong>{{ $row['formatted_saldo_akhir'] }}</strong></div>
+                                            </div>
+
+                                            <div class="cash-advance-ledger-mobile-actions">
+                                                @if ($row['type'] === 'advance')
+                                                    @if ($row['status'] === 'pending')
+                                                        @can('approve', $row['model'])
+                                                            <button type="button" wire:click="openApproval('{{ $row['hashid'] ?? $row['id'] }}')" wire:loading.attr="disabled" wire:target="openApproval('{{ $row['hashid'] ?? $row['id'] }}')" class="btn btn-primary btn-action" title="Persetujuan Direktur" aria-label="Persetujuan Direktur"><i wire:loading.remove wire:target="openApproval('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-clipboard-check"></i><i wire:loading wire:target="openApproval('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-spinner fa-spin"></i></button>
+                                                        @endcan
+                                                        @can('update', $row['model'])
+                                                            <button type="button" wire:click="edit('{{ $row['hashid'] ?? $row['id'] }}')" wire:loading.attr="disabled" wire:target="edit('{{ $row['hashid'] ?? $row['id'] }}')" class="btn btn-warning btn-action" title="Edit Data" aria-label="Edit Pengajuan"><i wire:loading.remove wire:target="edit('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-pencil-alt"></i><i wire:loading wire:target="edit('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-spinner fa-spin"></i></button>
+                                                        @endcan
+                                                        @can('delete', $row['model'])
+                                                            <button type="button" wire:click="confirmDelete('{{ $row['hashid'] ?? $row['id'] }}')" wire:loading.attr="disabled" wire:target="confirmDelete('{{ $row['hashid'] ?? $row['id'] }}')" class="btn btn-danger btn-action" title="Hapus Pengajuan" aria-label="Hapus Pengajuan"><i wire:loading.remove wire:target="confirmDelete('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-trash"></i><i wire:loading wire:target="confirmDelete('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-spinner fa-spin"></i></button>
+                                                        @endcan
+                                                    @else
+                                                        <button type="button" wire:click="showDetail('{{ $row['hashid'] ?? $row['id'] }}')" wire:loading.attr="disabled" wire:target="showDetail('{{ $row['hashid'] ?? $row['id'] }}')" class="btn btn-primary btn-action" title="Lihat Rincian Kasbon" aria-label="Lihat Rincian Kasbon"><i wire:loading.remove wire:target="showDetail('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-eye"></i><i wire:loading wire:target="showDetail('{{ $row['hashid'] ?? $row['id'] }}')" class="fas fa-spinner fa-spin"></i></button>
+                                                    @endif
+                                                @else
+                                                    @if (!empty($row['model']->proof_document))
+                                                        <a href="{{ $row['model']->proof_document_url }}" target="_blank" rel="noopener" class="btn btn-secondary btn-action" title="Lihat Bukti Transfer" aria-label="Lihat Bukti Transfer"><i class="fas fa-file-image"></i></a>
+                                                    @endif
+                                                    @if ($row['status'] === 'pending' && auth()->user()?->hasRole('direktur'))
+                                                        <button type="button" onclick="confirmApprovePayment({{ $row['id'] }})" class="btn btn-success btn-action" title="Setujui Pembayaran" aria-label="Setujui Pembayaran"><i class="fas fa-check"></i></button>
+                                                        <button type="button" onclick="confirmRejectPayment({{ $row['id'] }})" class="btn btn-danger btn-action" title="Tolak Pembayaran" aria-label="Tolak Pembayaran"><i class="fas fa-times"></i></button>
+                                                    @endif
+                                                    <button type="button" wire:click="showDetail('{{ $row['cash_advance_hashid'] ?? $row['cash_advance_id'] }}', {{ $row['id'] }})" wire:loading.attr="disabled" wire:target="showDetail('{{ $row['cash_advance_hashid'] ?? $row['cash_advance_id'] }}', {{ $row['id'] }})" class="btn btn-info btn-action" title="Lihat Transaksi Pelunasan" aria-label="Lihat Transaksi Pelunasan"><i wire:loading.remove wire:target="showDetail('{{ $row['cash_advance_hashid'] ?? $row['cash_advance_id'] }}', {{ $row['id'] }})" class="fas fa-receipt"></i><i wire:loading wire:target="showDetail('{{ $row['cash_advance_hashid'] ?? $row['cash_advance_id'] }}', {{ $row['id'] }})" class="fas fa-spinner fa-spin"></i></button>
+                                                @endif
+                                            </div>
+                                        </article>
+                                    @endforeach
+                                @else
+                                    <div class="cash-advance-ledger-mobile-empty">
+                                        <i class="fas fa-receipt" aria-hidden="true"></i>
+                                        <strong>Belum Ada Riwayat Kasbon</strong>
+                                        <p>{{ $search ? 'Tidak ada transaksi kasbon yang sesuai dengan pencarian "' . $search . '".' : 'Belum ada riwayat pengajuan maupun pelunasan kasbon untuk karyawan ini.' }}</p>
+                                        @can('create', \App\Models\CashAdvance::class)
+                                            <button type="button" wire:click="createPengajuan" wire:loading.attr="disabled" wire:target="createPengajuan" class="btn btn-primary"><i wire:loading.remove wire:target="createPengajuan" class="fas fa-plus mr-1"></i><i wire:loading wire:target="createPengajuan" class="fas fa-spinner fa-spin mr-1"></i>Buat Pengajuan Baru</button>
+                                        @endcan
+                                    </div>
+                                @endif
                             </div>
 
                             <!-- Footer: Info & Pagination -->
@@ -1091,12 +1227,16 @@
                 const type = data.type;
                 const id = data.id;
                 setTimeout(() => {
-                    const row = document.getElementById(`ledger-row-${type}-${id}`);
+                    const row = document.getElementById(`ledger-row-${type}-${id}`)
+                        || document.getElementById(`ledger-mobile-card-${type}-${id}`);
                     if (row) {
                         row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        row.classList.add('table-row-highlight-pulse');
+                        const highlightClass = row.classList.contains('cash-advance-ledger-mobile-card')
+                            ? 'is-highlighted'
+                            : 'table-row-highlight-pulse';
+                        row.classList.add(highlightClass);
                         setTimeout(() => {
-                            row.classList.remove('table-row-highlight-pulse');
+                            row.classList.remove(highlightClass);
                         }, 2500);
                     }
                 }, 150);

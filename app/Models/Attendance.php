@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Facades\Storage;
 
 class Attendance extends Model
 {
@@ -27,11 +26,13 @@ class Attendance extends Model
         'clock_in_latitude',
         'clock_in_longitude',
         'clock_in_distance_meters',
+        'clock_in_accuracy_meters',
         'clock_in_location_id',
         'clock_out_photo_path',
         'clock_out_latitude',
         'clock_out_longitude',
         'clock_out_distance_meters',
+        'clock_out_accuracy_meters',
         'clock_out_location_id',
         'is_overtime',
         'overtime_status',
@@ -41,11 +42,13 @@ class Attendance extends Model
         'overtime_in_latitude',
         'overtime_in_longitude',
         'overtime_in_distance_meters',
+        'overtime_in_accuracy_meters',
         'overtime_in_location_id',
         'overtime_out_photo_path',
         'overtime_out_latitude',
         'overtime_out_longitude',
         'overtime_out_distance_meters',
+        'overtime_out_accuracy_meters',
         'overtime_out_location_id',
         'status',
         'duration_minutes',
@@ -56,6 +59,11 @@ class Attendance extends Model
         'raw_log',
         'notes',
         'review_status',
+        'casual_work_type',
+        'casual_work_type_confirmed',
+        'early_departure_reason',
+        'casual_pay_override',
+        'casual_pay_reason',
         'review_notes',
         'reviewed_by',
         'reviewed_at',
@@ -78,16 +86,21 @@ class Attendance extends Model
             'clock_in_latitude' => 'decimal:7',
             'clock_in_longitude' => 'decimal:7',
             'clock_in_distance_meters' => 'integer',
+            'clock_in_accuracy_meters' => 'integer',
             'clock_out_latitude' => 'decimal:7',
             'clock_out_longitude' => 'decimal:7',
             'clock_out_distance_meters' => 'integer',
+            'clock_out_accuracy_meters' => 'integer',
             'is_overtime' => 'boolean',
             'overtime_in_latitude' => 'decimal:7',
             'overtime_in_longitude' => 'decimal:7',
             'overtime_in_distance_meters' => 'integer',
+            'overtime_in_accuracy_meters' => 'integer',
             'overtime_out_latitude' => 'decimal:7',
             'overtime_out_longitude' => 'decimal:7',
             'overtime_out_distance_meters' => 'integer',
+            'overtime_out_accuracy_meters' => 'integer',
+            'casual_pay_override' => 'decimal:2',
             'reviewed_at' => 'datetime',
         ];
     }
@@ -203,20 +216,11 @@ class Attendance extends Model
     }
 
     /**
-     * Format a storage path to a web-accessible relative URL.
+     * Build the authorized URL for a stored attendance photo.
      */
-    private function formatPhotoUrl(?string $path): ?string
+    private function formatPhotoUrl(?string $path, string $type): ?string
     {
-        if (! $path) {
-            return null;
-        }
-
-        $clean = ltrim($path, '/');
-        if (str_starts_with($clean, 'storage/')) {
-            return '/'.$clean;
-        }
-
-        return '/storage/'.$clean;
+        return $path ? route('attendances.photo', ['attendance' => $this, 'type' => $type]) : null;
     }
 
     /**
@@ -224,7 +228,7 @@ class Attendance extends Model
      */
     public function getClockInPhotoUrlAttribute(): ?string
     {
-        return $this->formatPhotoUrl($this->clock_in_photo_path);
+        return $this->formatPhotoUrl($this->clock_in_photo_path, 'clock_in');
     }
 
     /**
@@ -232,7 +236,7 @@ class Attendance extends Model
      */
     public function getClockOutPhotoUrlAttribute(): ?string
     {
-        return $this->formatPhotoUrl($this->clock_out_photo_path);
+        return $this->formatPhotoUrl($this->clock_out_photo_path, 'clock_out');
     }
 
     /**
@@ -240,7 +244,7 @@ class Attendance extends Model
      */
     public function getOvertimeInPhotoUrlAttribute(): ?string
     {
-        return $this->formatPhotoUrl($this->overtime_in_photo_path);
+        return $this->formatPhotoUrl($this->overtime_in_photo_path, 'overtime_in');
     }
 
     /**
@@ -248,7 +252,7 @@ class Attendance extends Model
      */
     public function getOvertimeOutPhotoUrlAttribute(): ?string
     {
-        return $this->formatPhotoUrl($this->overtime_out_photo_path);
+        return $this->formatPhotoUrl($this->overtime_out_photo_path, 'overtime_out');
     }
 
     /**

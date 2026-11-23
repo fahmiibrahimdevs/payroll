@@ -4,12 +4,12 @@ namespace Tests\Feature;
 
 use App\Enums\EmployeeStatus;
 use App\Enums\EmploymentStatus;
+use App\Enums\PayrollPeriodStatus;
 use App\Livewire\Holidays\Index as HolidayIndex;
 use App\Models\Attendance;
 use App\Models\CompanyProfile;
 use App\Models\Employee;
 use App\Models\Holiday;
-use App\Models\OvertimePeriodAttendance;
 use App\Models\PayrollPeriod;
 use App\Models\Role;
 use App\Models\User;
@@ -156,7 +156,36 @@ class HolidayTest extends TestCase
         $this->assertEquals('26 dari 26 hari hadir', $item->notes);
     }
 
-    public function test_weekly_fallback_excludes_sundays_and_holidays(): void
+    public function test_prorated_join_date_excludes_holiday_when_no_attendance_exists(): void
+    {
+        $company = CompanyProfile::getProfile();
+        $company->update(['work_days_per_week' => 6, 'work_schedule_mode' => 'fixed']);
+        Holiday::create(['date' => '2026-10-20', 'name' => 'Libur Prorata']);
+
+        $employee = Employee::factory()->active()->create([
+            'basic_salary' => 5200000,
+            'join_date' => '2026-10-15',
+        ]);
+        $period = PayrollPeriod::create([
+            'reference_number' => 'PR-HOLIDAY-2026-10',
+            'name' => 'Payroll Libur Prorata',
+            'month' => 10,
+            'year' => 2026,
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-10-31',
+            'payment_date' => '2026-10-31',
+            'status' => PayrollPeriodStatus::DRAFT,
+            'created_by' => $this->adminUser->id,
+        ]);
+
+        $result = app(PayrollService::class)->calculateProratedSalary($employee, $period, $company);
+
+        $this->assertSame(26, $result['total_working_days']);
+        $this->assertSame(14, $result['worked_days']);
+        $this->assertSame(2800000.0, $result['basic_salary']);
+    }
+
+    public function test_weekly_period_does_not_assume_attendance_when_logs_are_missing(): void
     {
         $service = app(OvertimeService::class);
 
@@ -179,12 +208,9 @@ class HolidayTest extends TestCase
             'end_date' => '2026-10-08',
         ], $this->adminUser);
 
-        $att = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
-            ->where('employee_id', $employee->id)
-            ->firstOrFail();
-
-        // Jum, Sab, Sel, Rab, Kam = 5 hari (Min & hari libur dikecualikan).
-        $this->assertEquals(5, $att->attended_days);
-        $this->assertEqualsCanonicalizing(['fri', 'sat', 'tue', 'wed', 'thu'], $att->attendance_days);
+        $this->assertDatabaseMissing('overtime_period_attendances', [
+            'overtime_period_id' => $period->id,
+            'employee_id' => $employee->id,
+        ]);
     }
 }

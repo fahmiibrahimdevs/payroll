@@ -1,4 +1,4 @@
-<div>
+<div class="department-index-page">
     <x-slot name="header">
         <h1>Kelola Department</h1>
         <div class="section-header-breadcrumb">
@@ -13,7 +13,7 @@
         Kelola struktur departemen dan divisi kerja dalam organisasi perusahaan.
     </p>
 
-    <div class="card">
+    <div class="card department-list-shell">
         <div class="card-header">
             <h4>Tabel Department</h4>
         </div>
@@ -40,7 +40,7 @@
             </div>
 
             <!-- Full-Width Data Table -->
-            <div class="table-responsive">
+            <div class="table-responsive department-table-view">
                 <table class="table table-clean">
                     <thead class="bg-gray-100">
                         <tr>
@@ -96,6 +96,38 @@
                         @endforelse
                     </tbody>
                 </table>
+            </div>
+
+            <div class="department-mobile-list">
+                @forelse ($departments as $department)
+                    <article class="department-mobile-card" wire:key="department-mobile-{{ $department->id }}">
+                        <div class="department-mobile-card-content">
+                            <h3 class="department-mobile-card-name" title="{{ $department->name }}">{{ $department->name }}</h3>
+                            <p class="department-mobile-card-description mb-0" title="{{ $department->description ?: '-' }}">{{ $department->description ?: '-' }}</p>
+                        </div>
+                        <div class="department-mobile-card-actions">
+                            <button type="button" wire:click="edit({{ $department->id }})" wire:loading.attr="disabled" wire:target="edit({{ $department->id }})" class="btn btn-primary btn-action" title="Edit Data" aria-label="Edit {{ $department->name }}">
+                                <i wire:loading wire:target="edit({{ $department->id }})" class="fas fa-spinner fa-spin"></i>
+                                <i wire:loading.remove wire:target="edit({{ $department->id }})" class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button type="button" wire:click="confirmDelete({{ $department->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $department->id }})" class="btn btn-danger btn-action" title="Hapus Data" aria-label="Hapus {{ $department->name }}">
+                                <i wire:loading wire:target="confirmDelete({{ $department->id }})" class="fas fa-spinner fa-spin"></i>
+                                <i wire:loading.remove wire:target="confirmDelete({{ $department->id }})" class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </article>
+                @empty
+                    <div class="department-mobile-empty">
+                        <div class="font-weight-600">Tidak ada data ditemukan</div>
+                        <p class="mb-0">
+                            @if ($search)
+                                Tidak ada department yang sesuai dengan kata kunci "{{ $search }}".
+                            @else
+                                Belum ada department yang tersedia.
+                            @endif
+                        </p>
+                    </div>
+                @endforelse
             </div>
 
             <!-- Footer: Info & Pagination -->

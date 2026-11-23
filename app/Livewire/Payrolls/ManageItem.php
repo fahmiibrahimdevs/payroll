@@ -43,6 +43,8 @@ class ManageItem extends Component
 
     public PayrollItem $item;
 
+    public ?string $rosterWarning = null;
+
     #[Computed]
     public function isEditable(): bool
     {
@@ -185,6 +187,10 @@ class ManageItem extends Component
         }
 
         $info = app(PayrollService::class)->calculateProratedSalary($this->item->employee, $this->period);
+
+        if (! $info['roster_complete']) {
+            return null;
+        }
 
         return (float) $info['basic_salary'];
     }
@@ -334,10 +340,18 @@ class ManageItem extends Component
         if ($this->isEditable && $this->item->employee) {
             $service = app(PayrollService::class);
             $salaryInfo = $service->calculateProratedSalary($this->item->employee, $this->period);
+            $rosterComplete = $salaryInfo['roster_complete'];
+            if (! $rosterComplete) {
+                $missingDates = implode(', ', array_slice($salaryInfo['missing_roster_dates'], 0, 5));
+                $remainingCount = count($salaryInfo['missing_roster_dates']) - 5;
+                $remainingText = $remainingCount > 0 ? " dan {$remainingCount} tanggal lainnya" : '';
+                $this->rosterWarning = "Roster belum lengkap pada {$missingDates}{$remainingText}. Lengkapi roster sebelum menghitung ulang gaji pokok.";
+            }
+
             $expectedBasic = (float) $salaryInfo['basic_salary'];
             $empDetail = $this->item->employee->detail;
 
-            $needsSalarySync = (float) $this->item->basic_salary !== $expectedBasic;
+            $needsSalarySync = $rosterComplete && (float) $this->item->basic_salary !== $expectedBasic;
             $needsTaxSync = $empDetail && $empDetail->ptkp_status && (
                 $this->item->ptkp_status !== $empDetail->ptkp_status ||
                 $this->item->tax_method !== $empDetail->tax_method
@@ -1196,6 +1210,10 @@ class ManageItem extends Component
         }
 
         $info = app(PayrollService::class)->calculateProratedSalary($this->item->employee, $this->period);
+
+        if (! $info['roster_complete']) {
+            return 1.0;
+        }
 
         return $info['is_prorated'] ? (float) ($info['ratio'] ?? 1.0) : 1.0;
     }

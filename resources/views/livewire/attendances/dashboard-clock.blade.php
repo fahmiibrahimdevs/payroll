@@ -622,6 +622,26 @@
                 </div>
 
                 <div class="modal-body py-3 px-4 bg-white" style="max-height: calc(100vh - 160px); overflow-y: auto;">
+                    <div id="casualWorkTypeGroup" class="form-group mb-3" style="display: none;">
+                        <label for="casualWorkTypeSelect">Jenis kerja <span class="text-danger">*</span></label>
+                        <select id="casualWorkTypeSelect" class="form-control">
+                            <option value="">-- Pilih jenis kerja --</option>
+                            <option value="daily">Kerja harian</option>
+                            <option value="hourly">Kerja per jam</option>
+                        </select>
+                        <small class="d-block mt-1" style="color: #475569;">Pilihan ini akan diperiksa Admin sebelum masuk ke slip mingguan.</small>
+                    </div>
+                    <div id="earlyDepartureGroup" class="form-group mb-3" style="display: none;">
+                        <label for="earlyDepartureSelect">Kondisi saat pulang</label>
+                        <select id="earlyDepartureSelect" class="form-control">
+                            <option value="scheduled">Pulang sesuai rencana</option>
+                            <option value="early">Pulang lebih awal</option>
+                        </select>
+                        <div id="earlyDepartureReasonGroup" class="mt-2" style="display: none;">
+                            <label for="earlyDepartureReason">Alasan pulang lebih awal <span class="text-danger">*</span></label>
+                            <textarea id="earlyDepartureReason" class="form-control" rows="2" maxlength="1000" placeholder="Tuliskan alasan singkat"></textarea>
+                        </div>
+                    </div>
                     <!-- Centered Receipt Hero: Dashed Orbit Ring + Heading + Subtitle -->
                     <div id="gpsStatusContainer" class="text-center pt-1 mb-3">
                         <div class="receipt-orbit-wrapper orbit-info" id="gpsOrbitWrapper">
@@ -770,6 +790,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let isFreeLocationEmployee = false;
     let geoWatchId = null;
     let isCameraReady = false;
+    let isCasualWorker = false;
+    let savedCasualWorkType = '';
 
     // 1. Live Analog Clock Ticker
     function updateAnalogClock() {
@@ -836,7 +858,7 @@ document.addEventListener('DOMContentLoaded', function () {
                   Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
                   Math.sin(dLon/2) * Math.sin(dLon/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return Math.round(R * c);
+        return Math.ceil(R * c);
     }
 
     // Inisialisasi Map Leaflet Interaktif
@@ -954,7 +976,9 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 officeMarker.setLatLng([officeLoc.latitude, officeLoc.longitude]);
             }
-            officeMarker.bindTooltip(officeLoc.name || 'Kantor / Site', { direction: 'top', offset: [0, -12] });
+            const officeTooltip = document.createElement('span');
+            officeTooltip.textContent = officeLoc.name || 'Kantor / Site';
+            officeMarker.bindTooltip(officeTooltip, { direction: 'top', offset: [0, -12] });
 
             const circleColor = isInsideRadius ? '#10b981' : '#f59e0b';
             const radius = officeLoc.radius_meters || 50;
@@ -1255,7 +1279,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const addrEl = document.getElementById('overlayAddressText');
         if (addrEl) {
-            addrEl.innerHTML = currentAddressLines.join('<br>');
+            addrEl.replaceChildren();
+            currentAddressLines.forEach((line, index) => {
+                if (index > 0) addrEl.appendChild(document.createElement('br'));
+                addrEl.appendChild(document.createTextNode(line));
+            });
         }
     }
 
@@ -1489,15 +1517,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
             drawTimemarkWatermarkOnCanvas(ctx, 720, 720);
 
-            currentPhotoBase64 = canvas.toDataURL('image/jpeg', 0.85);
+            const fallbackPreview = canvas.toDataURL('image/jpeg', 0.85);
             if (photoPreview) {
-                photoPreview.src = currentPhotoBase64;
+                photoPreview.src = fallbackPreview;
                 photoPreview.style.display = 'block';
             }
             if (video) video.style.display = 'none';
             if (overlay) overlay.style.display = 'none';
 
-            setPhotoControlsState(true);
+            // A generated placeholder is only an error preview, never a valid selfie.
+            setPhotoControlsState(false);
             updateSubmitButtonState();
         }
     }
@@ -1535,10 +1564,12 @@ document.addEventListener('DOMContentLoaded', function () {
             hasGottenPosition = true;
             currentLatitude = position.coords.latitude;
             currentLongitude = position.coords.longitude;
-            currentAccuracy = Math.round(position.coords.accuracy || 0);
+            currentAccuracy = Number.isFinite(position.coords.accuracy) && position.coords.accuracy >= 0
+                ? Math.ceil(position.coords.accuracy)
+                : null;
 
             if (gpsOverlay) {
-                gpsOverlay.innerText = `GPS: ${currentLatitude.toFixed(5)}, ${currentLongitude.toFixed(5)} (±${currentAccuracy}m)`;
+                gpsOverlay.innerText = `GPS: ${currentLatitude.toFixed(5)}, ${currentLongitude.toFixed(5)} (${currentAccuracy === null ? 'akurasi tidak tersedia' : 'akurasi perangkat sekitar ±' + currentAccuracy + 'm'})`;
             }
 
             reverseGeocodeAddress(currentLatitude, currentLongitude);
@@ -1629,12 +1660,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (!currentAllowedLocations || currentAllowedLocations.length === 0) {
-            isInsideRadius = true;
-            if (orbitWrapper) orbitWrapper.className = 'receipt-orbit-wrapper orbit-success';
-            if (icon) icon.className = 'fas fa-check';
-            if (title) title.innerText = 'Lokasi Terverifikasi';
-            if (info) info.innerText = 'Tidak ada pembatasan lokasi khusus.';
-            if (notesGroup) notesGroup.style.display = 'none';
+            isInsideRadius = false;
+            if (orbitWrapper) orbitWrapper.className = 'receipt-orbit-wrapper orbit-warning';
+            if (icon) icon.className = 'fas fa-exclamation-triangle';
+            if (title) title.innerText = 'Lokasi Belum Terverifikasi';
+            if (info) info.textContent = 'Belum ada lokasi kerja aktif. Presensi akan menunggu review Admin; isi alasan lokasi Anda.';
+            if (notesGroup) notesGroup.style.display = 'block';
 
             if (currentLatitude !== null && currentLongitude !== null) {
                 initWebClockMap(currentLatitude, currentLongitude);
@@ -1655,22 +1686,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const allowedRadius = matchedLocation ? matchedLocation.radius_meters : 50;
 
-        if (minDistance <= allowedRadius) {
+        if (currentAccuracy !== null && minDistance + currentAccuracy <= allowedRadius) {
             isInsideRadius = true;
             if (orbitWrapper) orbitWrapper.className = 'receipt-orbit-wrapper orbit-success';
             if (icon) icon.className = 'fas fa-check';
             if (title) title.innerText = 'Radius Kantor Terverifikasi';
             if (info) {
-                info.innerHTML = `Posisi Anda valid berada di area <strong>${matchedLocation.name}</strong> (${minDistance}m dari pusat, batas radius ${allowedRadius}m).`;
+                info.textContent = `Titik GPS ${minDistance}m dari ${matchedLocation.name}, akurasi perangkat sekitar ±${currentAccuracy}m; seluruh rentang masih di dalam batas ${allowedRadius}m.`;
             }
             if (notesGroup) notesGroup.style.display = 'none';
         } else {
             isInsideRadius = false;
             if (orbitWrapper) orbitWrapper.className = 'receipt-orbit-wrapper orbit-warning';
             if (icon) icon.className = 'fas fa-exclamation-triangle';
-            if (title) title.innerText = 'Di Luar Radius Kantor Resmi';
+            if (title) title.innerText = minDistance > allowedRadius ? 'Di Luar Radius Kantor Resmi' : 'Lokasi Perlu Review';
             if (info) {
-                info.innerHTML = `Peringatan: Jarak Anda <strong>${minDistance}m</strong> dari <strong>${matchedLocation.name}</strong> (Batas: ${allowedRadius}m). Wajib mengisi alasan kunjungan.`;
+                const accuracyText = currentAccuracy === null ? 'akurasi perangkat tidak tersedia' : `akurasi perangkat sekitar ±${currentAccuracy}m`;
+                info.textContent = `Titik GPS ${minDistance}m dari ${matchedLocation.name} (batas ${allowedRadius}m), ${accuracyText}. Posisi belum dapat dipastikan di dalam radius; isi alasan untuk review Admin.`;
             }
             if (notesGroup) notesGroup.style.display = 'block';
         }
@@ -1732,11 +1764,32 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function updateCasualDepartureFields() {
+        const earlySelect = document.getElementById('earlyDepartureSelect');
+        const reasonGroup = document.getElementById('earlyDepartureReasonGroup');
+        if (reasonGroup) reasonGroup.style.display = earlySelect?.value === 'early' ? 'block' : 'none';
+    }
+
+    document.getElementById('earlyDepartureSelect')?.addEventListener('change', updateCasualDepartureFields);
+
     window.addEventListener('open-web-clock-modal', function (event) {
         const data = event.detail[0] || event.detail;
         currentClockType = data.type || 'clock_in';
         isFreeLocationEmployee = !!data.isFreeLocation;
         currentAllowedLocations = data.allowedLocations || [];
+        isCasualWorker = !!data.isCasualWorker;
+        savedCasualWorkType = data.casualWorkType || '';
+        const workTypeGroup = document.getElementById('casualWorkTypeGroup');
+        const workTypeSelect = document.getElementById('casualWorkTypeSelect');
+        const earlyDepartureGroup = document.getElementById('earlyDepartureGroup');
+        const earlyDepartureSelect = document.getElementById('earlyDepartureSelect');
+        const earlyDepartureReason = document.getElementById('earlyDepartureReason');
+        if (workTypeGroup) workTypeGroup.style.display = isCasualWorker && currentClockType === 'clock_in' ? 'block' : 'none';
+        if (workTypeSelect) workTypeSelect.value = savedCasualWorkType;
+        if (earlyDepartureGroup) earlyDepartureGroup.style.display = isCasualWorker && currentClockType === 'clock_out' && savedCasualWorkType === 'daily' ? 'block' : 'none';
+        if (earlyDepartureSelect) earlyDepartureSelect.value = 'scheduled';
+        if (earlyDepartureReason) earlyDepartureReason.value = '';
+        updateCasualDepartureFields();
         const isReadOnly = !!data.isReadOnly;
         const readOnlyData = data.readOnlyData || null;
         isModalReadOnly = isReadOnly;
@@ -1813,12 +1866,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     orbitWrapper.className = 'receipt-orbit-wrapper orbit-success';
                     statusIcon.className = 'fas fa-check';
                     statusTitle.innerText = `Presensi ${clockTypeLabel} Terverifikasi`;
-                    distanceInfo.innerHTML = `Tercatat valid pada <strong>${readOnlyData.time}</strong> di <strong>${readOnlyData.locationName}</strong>${readOnlyData.distance ? ' (' + readOnlyData.distance + 'm)' : ''}.`;
+                    distanceInfo.textContent = `Tercatat valid pada ${readOnlyData.time} di ${readOnlyData.locationName}${readOnlyData.distance ? ' (' + readOnlyData.distance + 'm)' : ''}. Akurasi perangkat sekitar ${readOnlyData.accuracy === null ? 'tidak tersedia' : '±' + readOnlyData.accuracy + 'm'}.`;
                 } else {
                     orbitWrapper.className = 'receipt-orbit-wrapper orbit-warning';
                     statusIcon.className = 'fas fa-exclamation-triangle';
-                    statusTitle.innerText = `Presensi ${clockTypeLabel} (Di Luar Radius)`;
-                    distanceInfo.innerHTML = `Tercatat pada <strong>${readOnlyData.time}</strong>. Jarak: <strong>${readOnlyData.distance ?? 0}m</strong> dari ${readOnlyData.locationName}. Status: Menunggu Review Atasan.`;
+                    statusTitle.innerText = `Presensi ${clockTypeLabel} (Perlu Review Lokasi)`;
+                    const reviewLabel = readOnlyData.reviewStatus === 'approved' ? 'Disetujui Admin' : (readOnlyData.reviewStatus === 'rejected' ? 'Ditolak Admin' : 'Menunggu Review Admin');
+                    distanceInfo.textContent = `Tercatat pada ${readOnlyData.time}. Jarak ${readOnlyData.distance ?? 0}m dari ${readOnlyData.locationName}; akurasi perangkat sekitar ${readOnlyData.accuracy === null ? 'tidak tersedia' : '±' + readOnlyData.accuracy + 'm'}. Status: ${reviewLabel}.`;
                 }
             }
 
@@ -1864,6 +1918,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             currentLatitude = null;
             currentLongitude = null;
+            currentAccuracy = null;
             currentPhotoBase64 = null;
             isCameraReady = false;
 
@@ -1975,16 +2030,33 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const notes = notesInput ? notesInput.value.trim() : '';
+        const casualWorkTypeInput = document.getElementById('casualWorkTypeSelect');
+        const casualWorkType = isCasualWorker && currentClockType === 'clock_in' ? (casualWorkTypeInput?.value || '') : '';
+        const earlyDepartureSelect = document.getElementById('earlyDepartureSelect');
+        const earlyDepartureReasonInput = document.getElementById('earlyDepartureReason');
+        const isCasualDailyCheckout = isCasualWorker && currentClockType === 'clock_out' && savedCasualWorkType === 'daily';
+        const earlyDepartureReason = isCasualDailyCheckout && earlyDepartureSelect?.value === 'early'
+            ? (earlyDepartureReasonInput?.value.trim() || '')
+            : '';
+        if (isCasualWorker && currentClockType === 'clock_in' && !['daily', 'hourly'].includes(casualWorkType)) {
+            Swal.fire({ icon: 'warning', title: 'Pilih Jenis Kerja', text: 'Pilih Kerja harian atau Kerja per jam terlebih dahulu.', confirmButtonColor: '#0b52aa' });
+            return;
+        }
+        if (isCasualDailyCheckout && earlyDepartureSelect?.value === 'early' && !earlyDepartureReason) {
+            Swal.fire({ icon: 'warning', title: 'Alasan Belum Diisi', text: 'Tuliskan alasan pulang lebih awal agar Admin dapat meninjau pembayaran.', confirmButtonColor: '#0b52aa' });
+            earlyDepartureReasonInput?.focus();
+            return;
+        }
         if (!isInsideRadius && !notes) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Alasan Wajib Diisi',
-                    text: 'Anda berada di luar radius kantor resmi. Mohon tuliskan alasan kunjungan site / tugas luar.',
+                    text: 'Lokasi GPS belum dapat dipastikan di dalam radius kantor. Mohon tuliskan alasan untuk review Admin.',
                     confirmButtonColor: '#0b52aa'
                 });
             } else {
-                alert('Anda berada di luar radius kantor resmi. Mohon tuliskan alasan kunjungan site.');
+                alert('Lokasi GPS belum dapat dipastikan di dalam radius kantor. Mohon tuliskan alasan.');
             }
             if (notesInput) notesInput.focus();
             return;
@@ -2003,7 +2075,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const rootEl = document.getElementById('attendanceClockRoot') || document.getElementById('webClockModal')?.closest('[wire\\:id]');
         if (window.Livewire && rootEl) {
             const comp = window.Livewire.find(rootEl.getAttribute('wire:id'));
-            comp.call('recordClock', currentClockType, currentPhotoBase64, currentLatitude, currentLongitude, notes, deviceInfo)
+            comp.call('recordClock', currentClockType, currentPhotoBase64, currentLatitude, currentLongitude, notes, deviceInfo, currentAccuracy, casualWorkType, earlyDepartureReason)
                 .finally(() => {
                     updateSubmitButtonState();
                     if (spinner) spinner.style.display = 'none';

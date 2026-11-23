@@ -882,6 +882,7 @@ class PayrollService
             foreach ($activeEmployees as $index => $employee) {
                 $payslipNumber = $payslipNumbers[$index];
                 $salaryInfo = $this->calculateProratedSalary($employee, $period, $company);
+                $this->ensureRosterComplete($employee, $salaryInfo);
                 $basicSalary = (float) $salaryInfo['basic_salary'];
                 $prorateNote = $this->formatProrateNote($salaryInfo, $employee);
 
@@ -969,7 +970,7 @@ class PayrollService
     /**
      * Calculate prorated basic salary for an employee in a given period (6-day work week: Monday - Saturday).
      *
-     * @return array{basic_salary: float, full_salary: float, is_prorated: bool, worked_days: int, total_working_days: int}
+     * @return array{basic_salary: float, full_salary: float, is_prorated: bool, worked_days: int, total_working_days: int, roster_complete: bool, missing_roster_dates: array<int, string>}
      */
     public function calculateProratedSalary(Employee $employee, PayrollPeriod $period, ?CompanyProfile $company = null): array
     {
@@ -992,24 +993,25 @@ class PayrollService
                 ->keyBy(fn ($s) => $s->date->toDateString())
             : collect();
 
-        $hasSchedules = $isRoster && $employeeSchedules->isNotEmpty();
+        $missingRosterDates = [];
+        if ($isRoster) {
+            for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
+                if (! $employeeSchedules->has($date->toDateString())) {
+                    $missingRosterDates[] = $date->toDateString();
+                }
+            }
+        }
+        $rosterComplete = ! $isRoster || $missingRosterDates === [];
 
-        // Total working days in period (5 days: exclude Sat & Sun; 6 days: exclude Sun; Roster: count scheduled work days)
+        // In roster mode, only saved work dates count; missing dates remain unresolved.
         $totalWorkingDays = 0;
         $curr = $startDate->copy();
         while ($curr->lte($endDate)) {
             $dateString = $curr->toDateString();
-            if ($hasSchedules) {
+            if ($isRoster) {
                 $sch = $employeeSchedules->get($dateString);
-                if ($sch) {
-                    if ($sch->isWork()) {
-                        $totalWorkingDays++;
-                    }
-                } else {
-                    $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
-                    if (! $isWeekend && ! $holidayDates->has($dateString)) {
-                        $totalWorkingDays++;
-                    }
+                if ($sch?->isWork()) {
+                    $totalWorkingDays++;
                 }
             } else {
                 $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
@@ -1031,17 +1033,10 @@ class PayrollService
             $weekendDates = [];
             for ($curr = $startDate->copy(); $curr->lte($endDate); $curr->addDay()) {
                 $dateString = $curr->toDateString();
-                if ($hasSchedules) {
+                if ($isRoster) {
                     $sch = $employeeSchedules->get($dateString);
-                    if ($sch) {
-                        if ($sch->isOff()) {
-                            $weekendDates[] = $dateString;
-                        }
-                    } else {
-                        $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
-                        if ($isWeekend || $holidayDates->has($dateString)) {
-                            $weekendDates[] = $dateString;
-                        }
+                    if (! $sch?->isWork()) {
+                        $weekendDates[] = $dateString;
                     }
                 } else {
                     $isWeekend = WorkingDays::isWeekend($curr, $workDaysPerWeek);
@@ -1054,6 +1049,10 @@ class PayrollService
             $attendedDaysQuery = Attendance::where('employee_id', $employee->id)
                 ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
                 ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+                ->where(function (Builder $query) {
+                    $query->whereNull('review_status')
+                        ->orWhere('review_status', 'approved');
+                })
                 // clock_in bertipe TIME - cukup cek NOT NULL (perbandingan != ''
                 // tidak valid di PostgreSQL).
                 ->whereNotNull('clock_in');
@@ -1076,6 +1075,8 @@ class PayrollService
                 'ratio' => (float) $ratio,
                 'reason' => 'attendance',
                 'reason_text' => "{$attendedDays} dari {$totalWorkingDays} hari hadir",
+                'roster_complete' => $rosterComplete,
+                'missing_roster_dates' => $missingRosterDates,
             ];
         }
 
@@ -1094,6 +1095,8 @@ class PayrollService
                 'ratio' => 0.0,
                 'reason' => 'none',
                 'reason_text' => 'tidak ada hari kerja aktif dalam periode',
+                'roster_complete' => $rosterComplete,
+                'missing_roster_dates' => $missingRosterDates,
             ];
         }
 
@@ -1107,6 +1110,8 @@ class PayrollService
                 'ratio' => 1.0,
                 'reason' => 'full',
                 'reason_text' => '',
+                'roster_complete' => $rosterComplete,
+                'missing_roster_dates' => $missingRosterDates,
             ];
         }
 
@@ -1115,11 +1120,11 @@ class PayrollService
         $curr = $workedStart->copy();
         while ($curr->lte($workedEnd)) {
             $dateString = $curr->toDateString();
-            if ($hasSchedules) {
+            if ($isRoster) {
                 $sch = $employeeSchedules->get($dateString);
-                $isWorkDay = $sch ? $sch->isWork() : (! WorkingDays::isWeekend($curr, $workDaysPerWeek) && ! $holidayDates->has($dateString));
+                $isWorkDay = $sch?->isWork() ?? false;
             } else {
-                $isWorkDay = ! WorkingDays::isWeekend($curr, $workDaysPerWeek);
+                $isWorkDay = ! WorkingDays::isWeekend($curr, $workDaysPerWeek) && ! $holidayDates->has($dateString);
             }
             if ($isWorkDay) {
                 $workedDays++;
@@ -1155,7 +1160,56 @@ class PayrollService
             'ratio' => (float) $ratio,
             'reason' => $reason,
             'reason_text' => $reasonText,
+            'roster_complete' => $rosterComplete,
+            'missing_roster_dates' => $missingRosterDates,
         ];
+    }
+
+    /**
+     * Summarize attendance records awaiting review that belong to a monthly payroll period.
+     *
+     * @return array{attendance_count: int, employee_count: int}
+     */
+    public function getPendingAttendanceReviewSummary(PayrollPeriod $period): array
+    {
+        $summary = Attendance::query()
+            ->whereIn('employee_id', $period->items()->select('employee_id'))
+            ->whereBetween('date', [$period->start_date->toDateString(), $period->end_date->toDateString()])
+            ->pendingReview()
+            ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+            ->whereNotNull('clock_in')
+            ->selectRaw('COUNT(*) as attendance_count')
+            ->selectRaw('COUNT(DISTINCT employee_id) as employee_count')
+            ->first();
+
+        return [
+            'attendance_count' => (int) $summary->attendance_count,
+            'employee_count' => (int) $summary->employee_count,
+        ];
+    }
+
+    /**
+     * Stop payroll writes until every roster date in the period has an explicit status.
+     *
+     * @param  array{missing_roster_dates?: array<int, string>}  $salaryInfo
+     */
+    private function ensureRosterComplete(Employee $employee, array $salaryInfo): void
+    {
+        $missingDates = $salaryInfo['missing_roster_dates'] ?? [];
+        if ($missingDates === []) {
+            return;
+        }
+
+        $formattedDates = collect($missingDates)
+            ->take(5)
+            ->map(fn (string $date): string => Carbon::parse($date)->format('d/m/Y'))
+            ->implode(', ');
+        $remainingCount = count($missingDates) - 5;
+        $suffix = $remainingCount > 0 ? " dan {$remainingCount} tanggal lainnya" : '';
+
+        throw new InvalidArgumentException(
+            "Jadwal kerja {$employee->full_name} belum lengkap pada {$formattedDates}{$suffix}. Lengkapi roster sebelum memproses slip gaji."
+        );
     }
 
     /**
@@ -1218,6 +1272,7 @@ class PayrollService
             $payslipNumber = $this->generatePayslipNumber($date);
 
             $salaryInfo = $this->calculateProratedSalary($employee, $period);
+            $this->ensureRosterComplete($employee, $salaryInfo);
             $basicSalary = $salaryInfo['basic_salary'];
             $prorateNote = $this->formatProrateNote($salaryInfo, $employee);
 
@@ -1311,6 +1366,12 @@ class PayrollService
             ->get();
 
         $createdItems = collect();
+        $company = CompanyProfile::getProfile();
+        foreach ($missingEmployees as $employee) {
+            $salaryInfo = $this->calculateProratedSalary($employee, $period, $company);
+            $this->ensureRosterComplete($employee, $salaryInfo);
+        }
+
         foreach ($missingEmployees as $employee) {
             $createdItems->push($this->addEmployeeToPeriod($period, $employee, $user));
         }
@@ -1341,6 +1402,7 @@ class PayrollService
                 }
 
                 $salaryInfo = $this->calculateProratedSalary($employee, $period, $company);
+                $this->ensureRosterComplete($employee, $salaryInfo);
                 $newBasic = (float) $salaryInfo['basic_salary'];
 
                 $item->update([
@@ -1386,6 +1448,7 @@ class PayrollService
         return DB::transaction(function () use ($item, $period, $employee, $user) {
             $company = CompanyProfile::getProfile();
             $salaryInfo = $this->calculateProratedSalary($employee, $period, $company);
+            $this->ensureRosterComplete($employee, $salaryInfo);
             $newBasic = (float) $salaryInfo['basic_salary'];
 
             $item->update([

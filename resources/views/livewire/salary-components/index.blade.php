@@ -1,4 +1,4 @@
-<div>
+<div class="salary-components-index-page">
     <x-slot name="header">
         <h1>Kelola Komponen Gaji</h1>
         <div class="section-header-breadcrumb">
@@ -14,7 +14,7 @@
     </p>
 
     <!-- Main Content Row: 3 cols Filter Sidebar + 9 cols Data Table -->
-    <div class="row align-items-start">
+    <div class="row align-items-start salary-components-main-row">
         <!-- Left Sidebar: Filter Panel (Desktop: 3 cols / col-lg-3 col-md-4 d-none d-md-block) -->
         <div class="col-lg-3 col-md-4 d-none d-md-block">
             <div class="card">
@@ -34,12 +34,12 @@
         </div>
 
         <!-- Right Side: Salary Component Data (Desktop: 9 cols / col-lg-9 col-md-8 col-12) -->
-        <div class="col-lg-9 col-md-8 col-12">
-            <div class="card">
+        <div class="col-lg-9 col-md-8 col-12 salary-components-data-column">
+            <div class="card salary-component-list-shell">
                 <div class="card-header">
                     <h4>Daftar Komponen Gaji</h4>
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body p-0 salary-component-list-body">
                     <!-- Controls: Show Entries & Search Bar -->
                     <div class="dt-control-wrapper">
                         <div class="dt-show-entries">
@@ -66,7 +66,7 @@
                     </div>
 
                     <!-- Table Container -->
-                    <div class="table-responsive">
+                    <div class="table-responsive salary-component-table-view">
                         <table class="table table-clean">
                             <thead class="bg-gray-100">
                                 <tr>
@@ -180,12 +180,94 @@
                         </table>
                     </div>
 
+                    <div class="salary-component-mobile-list">
+                        @forelse ($salaryComponents->groupBy(fn($item) => $item->category_label) as $groupLabel => $items)
+                            <section class="salary-component-mobile-group" wire:key="salary-component-mobile-group-{{ Str::slug($groupLabel) }}">
+                                <div class="salary-component-mobile-group-heading">
+                                    <span>{{ $groupLabel }}</span>
+                                    <span class="salary-component-mobile-group-count">{{ $items->count() }} komponen</span>
+                                </div>
+
+                                @foreach ($items as $item)
+                                    <article class="salary-component-mobile-card" wire:key="salary-component-mobile-{{ $item->id }}">
+                                        <div class="salary-component-mobile-card-header">
+                                            <div class="salary-component-mobile-identity">
+                                                <div class="salary-component-mobile-name" title="{{ $item->name }}">{{ $item->name }}</div>
+                                            </div>
+                                            <div class="salary-component-mobile-tags">
+                                                @if ($item->code)
+                                                    <span class="salary-component-mobile-code" title="{{ $item->code }}">{{ $item->code }}</span>
+                                                @endif
+                                                @if ($item->is_system)
+                                                    <span class="badge badge-secondary salary-component-mobile-system" title="Komponen Bawaan Sistem"><i class="fas fa-lock mr-1"></i>Sistem</span>
+                                                @endif
+                                            </div>
+                                        </div>
+
+                                        @if ($item->description)
+                                            <p class="salary-component-mobile-description" title="{{ $item->description }}">{{ Str::limit($item->description, 90) }}</p>
+                                        @endif
+
+                                        <div class="salary-component-mobile-details">
+                                            <div>
+                                                <span>Metode Hitung</span>
+                                                <strong title="{{ $item->calculation_type_label }}">{{ $item->calculation_type_label }}</strong>
+                                            </div>
+                                            <div>
+                                                <span>Nilai Default</span>
+                                                <strong title="{{ $item->default_value !== null && $item->default_value !== '' ? $item->default_value_formatted : '-' }}">{{ $item->default_value !== null && $item->default_value !== '' ? $item->default_value_formatted : '-' }}</strong>
+                                            </div>
+                                        </div>
+
+                                        <div class="salary-component-mobile-card-footer">
+                                            <div class="salary-component-mobile-toggles">
+                                                <div class="salary-component-mobile-toggle">
+                                                    <span class="salary-component-mobile-toggle-label">Pajak</span>
+                                                    <label class="custom-switch pl-0 m-0 cursor-pointer" title="{{ $item->is_system && $item->code === 'GAJI_POKOK' ? 'Gaji Pokok wajib dikenakan pajak' : ($item->is_taxable ? 'Pajak: Kena Pajak (Klik untuk ubah)' : 'Pajak: Bebas Pajak (Klik untuk ubah)') }}">
+                                                        <input type="checkbox" wire:click="toggleTaxable({{ $item->id }})" wire:loading.attr="disabled" wire:target="toggleTaxable({{ $item->id }})" class="custom-switch-input" aria-label="Pajak {{ $item->name }}" {{ $item->is_taxable ? 'checked' : '' }} {{ $item->is_system && $item->code === 'GAJI_POKOK' ? 'disabled' : '' }}>
+                                                        <span class="custom-switch-indicator"></span>
+                                                    </label>
+                                                    <small>{{ $item->is_taxable ? 'Kena Pajak' : 'Bebas Pajak' }}</small>
+                                                </div>
+                                                <div class="salary-component-mobile-toggle">
+                                                    <span class="salary-component-mobile-toggle-label">Status</span>
+                                                    <label class="custom-switch pl-0 m-0 cursor-pointer" title="{{ $item->is_system && $item->code === 'GAJI_POKOK' ? 'Gaji Pokok wajib selalu aktif' : ($item->is_active ? 'Status: Aktif (Klik untuk nonaktifkan)' : 'Status: Nonaktif (Klik untuk aktifkan)') }}">
+                                                        <input type="checkbox" wire:click="toggleStatus({{ $item->id }})" wire:loading.attr="disabled" wire:target="toggleStatus({{ $item->id }})" class="custom-switch-input" aria-label="Status {{ $item->name }}" {{ $item->is_active ? 'checked' : '' }} {{ $item->is_system && $item->code === 'GAJI_POKOK' ? 'disabled' : '' }}>
+                                                        <span class="custom-switch-indicator"></span>
+                                                    </label>
+                                                    <small>{{ $item->is_active ? 'Aktif' : 'Nonaktif' }}</small>
+                                                </div>
+                                            </div>
+
+                                            <div class="salary-component-mobile-card-actions">
+                                                <button type="button" wire:click="edit({{ $item->id }})" wire:loading.attr="disabled" wire:target="edit({{ $item->id }})" class="btn btn-primary btn-action" title="Edit Komponen" aria-label="Edit {{ $item->name }}"><i wire:loading wire:target="edit({{ $item->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="edit({{ $item->id }})" class="fas fa-pencil-alt"></i></button>
+                                                @if (! $item->is_system)
+                                                    <button type="button" wire:click="confirmDelete({{ $item->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $item->id }})" class="btn btn-danger btn-action" title="Hapus Komponen" aria-label="Hapus {{ $item->name }}"><i wire:loading wire:target="confirmDelete({{ $item->id }})" class="fas fa-spinner fa-spin"></i><i wire:loading.remove wire:target="confirmDelete({{ $item->id }})" class="fas fa-trash"></i></button>
+                                                @else
+                                                    <button type="button" class="btn btn-secondary btn-action cursor-not-allowed" disabled title="Komponen sistem tidak dapat dihapus" aria-label="Komponen sistem tidak dapat dihapus"><i class="fas fa-lock text-muted"></i></button>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    </article>
+                                @endforeach
+                            </section>
+                        @empty
+                            <div class="salary-component-mobile-empty">
+                                <i class="fas fa-folder-open" aria-hidden="true"></i>
+                                <strong>Tidak ada data komponen gaji</strong>
+                                <p>{{ ($search || $filterCategory || $filterType || $filterStatus)
+                                    ? 'Tidak ada komponen gaji yang sesuai dengan kriteria filter pencarian.'
+                                    : 'Belum ada master komponen gaji yang ditambahkan.' }}</p>
+                            </div>
+                        @endforelse
+                    </div>
+
                     <!-- Footer: Info & Pagination -->
-                    <div class="dt-footer-wrapper">
-                        <div>
+                    <div class="dt-footer-wrapper salary-component-pagination">
+                        <div class="salary-component-pagination-info">
                             Showing {{ $salaryComponents->total() > 0 ? $salaryComponents->firstItem() : 0 }} to {{ $salaryComponents->total() > 0 ? $salaryComponents->lastItem() : 0 }} of {{ $salaryComponents->total() }} entries
                         </div>
-                        <div>
+                        <div class="salary-component-pagination-links">
                             {{ $salaryComponents->links('livewire.custom-pagination') }}
                         </div>
                     </div>

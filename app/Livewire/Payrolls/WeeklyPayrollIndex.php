@@ -48,7 +48,7 @@ class WeeklyPayrollIndex extends Component
     }
 
     /**
-     * Inisialisasi siklus default: Sabtu s/d Sabtu (8 Hari Sesuai Matrix Sintesa).
+     * Inisialisasi siklus default: Jum'at s/d Kamis (7 hari).
      */
     public function initDefaultFridayCycle(): void
     {
@@ -57,15 +57,15 @@ class WeeklyPayrollIndex extends Component
         if ($latestPeriod && $latestPeriod->end_date) {
             $lastEnd = Carbon::parse($latestPeriod->end_date);
             $start = $lastEnd->copy()->addDay();
-            if (! $start->isSaturday()) {
-                $start = $start->next(Carbon::SATURDAY);
+            if (! $start->isFriday()) {
+                $start = $start->next(Carbon::FRIDAY);
             }
         } else {
             $now = Carbon::now();
-            $start = $now->isSaturday() ? $now->copy() : $now->copy()->previous(Carbon::SATURDAY);
+            $start = $now->isFriday() ? $now->copy() : $now->copy()->previous(Carbon::FRIDAY);
         }
 
-        $end = $start->copy()->addDays(7); // Sabtu berikutnya (8 Hari)
+        $end = $start->copy()->addDays(6);
 
         $this->period_start_date = $start->format('Y-m-d');
         $this->period_end_date = $end->format('Y-m-d');
@@ -80,8 +80,8 @@ class WeeklyPayrollIndex extends Component
         if (! empty($val)) {
             try {
                 $picked = Carbon::parse($val);
-                $start = $picked->copy();
-                $end = $start->copy()->addDays(7); // Default 8 hari: Sabtu s/d Sabtu
+                $start = $picked->copy()->startOfWeek(Carbon::FRIDAY);
+                $end = $start->copy()->addDays(6);
 
                 $this->period_start_date = $start->format('Y-m-d');
                 $this->period_end_date = $end->format('Y-m-d');

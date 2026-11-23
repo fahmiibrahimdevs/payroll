@@ -1,7 +1,7 @@
 <!-- ================= 1 CARD BERISI ANALISIS LEMBUR (DESAIN EKSEKUTIF SEPERTI KASBON & PENGGAJIAN) ================= -->
-<div class="card shadow-sm border-0 mb-0" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e9edf2;">
+<div class="card shadow-sm border-0 mb-0 overtime-chart-card" style="border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e9edf2;">
     <!-- 1. Header Card Bersih & Konsisten -->
-    <div class="border-bottom d-flex align-items-center justify-content-between" style="background: #ffffff; padding: 14px 20px;">
+    <div class="border-bottom d-flex align-items-center justify-content-between overtime-chart-header" style="background: #ffffff; padding: 14px 20px;">
         <div>
             <h4 class="mb-0" style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.35;">
                 Analisis Lembur
@@ -14,7 +14,7 @@
 
     <div class="card-body p-0">
         <!-- 2. Seksi 1: Tren Jam Lembur Bulanan (Bar Chart) -->
-        <div style="padding: 16px 20px 14px;">
+        <div class="overtime-chart-section" style="padding: 16px 20px 14px;">
             <div class="d-flex align-items-center justify-content-between mb-2">
                 <div style="font-size: 12px; font-weight: 700; color: #334155;">
                     Tren Jam Lembur
@@ -140,7 +140,7 @@
         </div>
 
         <!-- 3. Seksi 2: Distribusi Lembur per Departemen (Donut Chart dengan Center Text Overlay) -->
-        <div style="border-top: 1px solid #f1f5f9; padding: 16px 20px 14px;">
+        <div class="overtime-chart-section overtime-chart-section-bordered" style="border-top: 1px solid #f1f5f9; padding: 16px 20px 14px;">
             <div class="d-flex align-items-center justify-content-between mb-1">
                 <div style="font-size: 12px; font-weight: 700; color: #334155;">
                     Sebaran per Departemen
@@ -256,9 +256,9 @@
         </div>
 
         <!-- 4. Seksi 3: Dual Metric Tiles (Rata-rata Jam & Biaya/Orang) -->
-        <div style="padding: 0 20px 14px;">
+        <div class="overtime-chart-metrics-section" style="padding: 0 20px 14px;">
             <div class="row no-gutters" style="gap: 8px;">
-                <div class="col" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 12px;">
+                <div class="col overtime-chart-metric-card" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 12px;">
                     <div style="font-size: 10.5px; font-weight: 500; color: #64748b; line-height: 1.3;">
                         Rata-rata / orang
                     </div>
@@ -266,7 +266,7 @@
                         {{ $chartData['metrics']['avg_hours_per_person'] ?? 0 }} jam
                     </div>
                 </div>
-                <div class="col" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 12px;">
+                <div class="col overtime-chart-metric-card" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 12px;">
                     <div style="font-size: 10.5px; font-weight: 500; color: #64748b; line-height: 1.3;">
                         Rata-rata upah
                     </div>
@@ -279,7 +279,7 @@
 
         <!-- 5. Seksi 4: Rincian Departemen dengan Mini Progress Bar -->
         @if (!empty($chartData['department_breakdown']))
-            <div style="border-top: 1px solid #f1f5f9; padding: 14px 20px 16px;">
+            <div class="overtime-chart-section overtime-chart-section-bordered overtime-chart-breakdown" style="border-top: 1px solid #f1f5f9; padding: 14px 20px 16px;">
                 <div style="font-size: 12px; font-weight: 700; color: #0f172a; margin-bottom: 10px;">
                     Biaya per Departemen
                 </div>

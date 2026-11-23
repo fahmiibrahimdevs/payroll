@@ -182,11 +182,13 @@
                                     </label>
                                     <textarea id="auditReviewNotes" wire:model="auditReviewNotes" class="form-control mb-2.5" rows="2" placeholder="Catatan persetujuan / alasan penolakan (opsional)..." style="font-size: 12px; height: 60px;"></textarea>
                                     <div class="d-flex align-items-center" style="gap: 8px;">
-                                        <button type="button" wire:click="approveAudit" class="btn btn-success btn-block d-inline-flex align-items-center justify-content-center shadow-sm" style="font-weight: 500; font-size: 12.5px; border-radius: 8px; padding: 8px 12px;">
-                                            <i class="fas fa-check mr-1.5"></i> Setujui Presensi
+                                        <button type="button" wire:click="approveAudit" wire:loading.attr="disabled" wire:target="approveAudit,rejectAudit" class="btn btn-success btn-block d-inline-flex align-items-center justify-content-center shadow-sm" style="font-weight: 500; font-size: 12.5px; border-radius: 8px; padding: 8px 12px;">
+                                            <span wire:loading.remove wire:target="approveAudit"><i class="fas fa-check mr-1.5"></i> Setujui Presensi</span>
+                                            <span wire:loading wire:target="approveAudit"><i class="fas fa-spinner fa-spin mr-1.5"></i> Memproses...</span>
                                         </button>
-                                        <button type="button" wire:click="rejectAudit" class="btn btn-outline-danger btn-block d-inline-flex align-items-center justify-content-center" style="font-weight: 500; font-size: 12.5px; border-radius: 8px; padding: 8px 12px;">
-                                            <i class="fas fa-times mr-1.5"></i> Tolak (Mangkir)
+                                        <button type="button" wire:click="rejectAudit" wire:loading.attr="disabled" wire:target="approveAudit,rejectAudit" class="btn btn-outline-danger btn-block d-inline-flex align-items-center justify-content-center" style="font-weight: 500; font-size: 12.5px; border-radius: 8px; padding: 8px 12px;">
+                                            <span wire:loading.remove wire:target="rejectAudit"><i class="fas fa-times mr-1.5"></i> Tolak (Mangkir)</span>
+                                            <span wire:loading wire:target="rejectAudit"><i class="fas fa-spinner fa-spin mr-1.5"></i> Memproses...</span>
                                         </button>
                                     </div>
                                 </div>
@@ -198,14 +200,16 @@
                             <!-- Tab Bar: Lokasi Masuk vs Lokasi Pulang -->
                             <div class="d-flex align-items-center justify-content-between mb-2">
                                 <div class="btn-group btn-group-toggle" data-toggle="buttons">
-                                    <button id="auditTabMasuk" type="button" wire:click="setAuditTab('clock_in')" class="btn btn-sm {{ $auditTab === 'clock_in' ? 'btn-primary active' : 'btn-outline-secondary' }}" style="border-radius: 8px 0 0 8px; font-weight: 500; font-size: 12px; {{ $auditTab === 'clock_in' ? 'background-color: #0b52aa; border-color: #0b52aa;' : '' }}">
-                                        <i class="fas fa-sign-in-alt mr-1"></i> 🟢 Lokasi Masuk
+                                    <button id="auditTabMasuk" type="button" wire:click="setAuditTab('clock_in')" wire:loading.attr="disabled" wire:target="setAuditTab" class="btn btn-sm {{ $auditTab === 'clock_in' ? 'btn-primary active' : 'btn-outline-secondary' }}" style="border-radius: 8px 0 0 8px; font-weight: 500; font-size: 12px; {{ $auditTab === 'clock_in' ? 'background-color: #0b52aa; border-color: #0b52aa;' : '' }}">
+                                        <span wire:loading.remove wire:target="setAuditTab"><i class="fas fa-sign-in-alt mr-1"></i> 🟢 Lokasi Masuk</span>
+                                        <span wire:loading wire:target="setAuditTab"><i class="fas fa-spinner fa-spin mr-1"></i> Memuat...</span>
                                         @if ($auditAttendance->clock_in_distance_meters !== null)
                                             <span class="badge badge-light ml-1" style="font-size: 10px;">{{ $auditAttendance->clock_in_distance_meters }}m</span>
                                         @endif
                                     </button>
-                                    <button id="auditTabPulang" type="button" wire:click="setAuditTab('clock_out')" class="btn btn-sm {{ $auditTab === 'clock_out' ? 'btn-primary active' : 'btn-outline-secondary' }}" style="border-radius: 0 8px 8px 0; font-weight: 500; font-size: 12px; {{ $auditTab === 'clock_out' ? 'background-color: #0b52aa; border-color: #0b52aa;' : '' }}">
-                                        <i class="fas fa-sign-out-alt mr-1"></i> 🔴 Lokasi Pulang
+                                    <button id="auditTabPulang" type="button" wire:click="setAuditTab('clock_out')" wire:loading.attr="disabled" wire:target="setAuditTab" class="btn btn-sm {{ $auditTab === 'clock_out' ? 'btn-primary active' : 'btn-outline-secondary' }}" style="border-radius: 0 8px 8px 0; font-weight: 500; font-size: 12px; {{ $auditTab === 'clock_out' ? 'background-color: #0b52aa; border-color: #0b52aa;' : '' }}">
+                                        <span wire:loading.remove wire:target="setAuditTab"><i class="fas fa-sign-out-alt mr-1"></i> 🔴 Lokasi Pulang</span>
+                                        <span wire:loading wire:target="setAuditTab"><i class="fas fa-spinner fa-spin mr-1"></i> Memuat...</span>
                                         @if ($auditAttendance->clock_out_distance_meters !== null)
                                             <span class="badge badge-light ml-1" style="font-size: 10px;">{{ $auditAttendance->clock_out_distance_meters }}m</span>
                                         @endif
@@ -235,6 +239,7 @@
                                             <div id="auditMapCoordinatesText" class="text-truncate text-muted mt-0.5" style="font-size: 11px;">
                                                 Menyiapkan koordinat titik tap...
                                             </div>
+                                            <div id="auditMapAccuracyText" class="small text-muted">Akurasi GPS perangkat: menunggu data...</div>
                                         </div>
                                         <div class="text-right flex-shrink-0">
                                             <div id="auditMapDistanceText" style="font-size: 16px; font-weight: 700; color: #0f172a;">
@@ -290,6 +295,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const empLat = data.empLat;
         const empLng = data.empLng;
         const distance = data.distanceMeters || 0;
+        const accuracy = data.accuracyMeters;
         const isInside = data.isInsideRadius;
         const tab = data.tab || 'clock_in';
         const locationName = data.locationName || 'Kantor Resmi';
@@ -322,8 +328,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (distanceLine) auditMap.removeLayer(distanceLine);
 
         // 3. Tambahkan Marker Pusat Kantor & Radius Circle
-        officeMarker = L.marker([officeLat, officeLng]).addTo(auditMap)
-            .bindPopup(`<strong>${locationName}</strong><br>Radius diizinkan: ${radiusMeters} meter`);
+        const officePopup = document.createElement('div');
+        officePopup.textContent = `${locationName} — Radius diizinkan: ${radiusMeters} meter`;
+        officeMarker = L.marker([officeLat, officeLng]).addTo(auditMap).bindPopup(officePopup);
 
         radiusCircle = L.circle([officeLat, officeLng], {
             radius: radiusMeters,
@@ -337,10 +344,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const statusBadge = document.getElementById('auditMapStatusBadge');
         const officeLabel = document.getElementById('auditMapOfficeLabel');
         const coordsText = document.getElementById('auditMapCoordinatesText');
+        const accuracyText = document.getElementById('auditMapAccuracyText');
         const distText = document.getElementById('auditMapDistanceText');
 
         if (officeLabel) officeLabel.innerText = `${locationName} (Batas ${radiusMeters}m)`;
         if (distText) distText.innerText = `${distance} m`;
+        if (accuracyText) accuracyText.textContent = `Akurasi GPS (perkiraan perangkat): ${accuracy === null ? 'tidak tersedia' : 'sekitar ±' + accuracy + ' m'}`;
 
         if (empLat && empLng) {
             // Karyawan memiliki koordinat tap GPS
@@ -354,9 +363,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             } else {
                 if (statusBadge) {
-                    statusBadge.className = 'badge badge-warning text-dark mr-2';
+                    statusBadge.className = 'badge badge-warning text-white mr-2';
                     statusBadge.style.backgroundColor = '#f59e0b';
-                    statusBadge.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i> Di Luar Radius';
+                    statusBadge.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i> Perlu Review Lokasi';
                 }
             }
 
@@ -364,8 +373,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const tabName = tab === 'clock_in' ? 'Masuk' : (tab === 'overtime' ? 'Lembur' : 'Pulang');
             employeeMarker = L.circleMarker([empLat, empLng], {
                 radius: 9,
-                color: isInside ? '#059669' : '#dc2626',
-                fillColor: isInside ? '#10b981' : '#ef4444',
+                color: isInside ? '#059669' : '#d97706',
+                fillColor: isInside ? '#10b981' : '#f59e0b',
                 fillOpacity: 0.9,
                 weight: 3
             }).addTo(auditMap).bindPopup(`<strong>Titik Tap Karyawan (${tabName})</strong><br>Jarak: ${distance} meter`);

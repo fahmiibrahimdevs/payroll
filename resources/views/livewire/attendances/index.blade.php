@@ -1,4 +1,4 @@
-<div>
+<div class="attendances-index-page">
     <x-slot name="header">
         <h1>Absensi Karyawan</h1>
         <div class="section-header-breadcrumb">
@@ -9,16 +9,16 @@
     </x-slot>
 
     <!-- Header Section & Action Buttons -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
+    <div class="attendance-page-intro d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
         <div class="mr-md-3">
-            <h2 class="section-title mt-0">Rekap Presensi &amp; Jam Kerja Mesin Fingerprint</h2>
+            <h2 class="section-title mt-0"><span class="attendance-page-title-text">Rekap Presensi &amp; Jam Kerja Mesin Fingerprint</span></h2>
             <p class="section-lead mb-0">
                 Tampilan Matriks Kehadiran harian seluruh karyawan lengkap dengan jam scan masuk dan scan pulang.
             </p>
         </div>
 
         @if (auth()->user()?->hasRole(['admin', 'direktur']))
-            <div class="mt-3 mt-md-0 flex-shrink-0 d-flex align-items-center" style="gap: 8px;">
+            <div class="attendance-page-actions mt-3 mt-md-0 flex-shrink-0 d-flex align-items-center" style="gap: 8px;">
                 <button type="button" onclick="$('#importAttendanceModal').modal('show')" class="btn font-weight-bold d-inline-flex align-items-center text-white" style="background-color: #1d4ed8; border: none; border-radius: 8px; padding: 7px 16px; font-size: 12px; box-shadow: 0 2px 6px rgba(29, 78, 216, 0.25); transition: all 0.15s;">
                     <i class="fas fa-file-excel mr-1.5"></i> Import Excel Mesin
                 </button>
@@ -151,7 +151,7 @@
     <!-- Card Filter & Navigasi Bulan (Clean White & Compact, Style Jadwal) -->
     <div class="card border-0 mb-3 roster-toolbar-card">
         <div class="card-body p-2 px-3">
-            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center flex-wrap" style="gap: 10px;">
+            <div class="attendance-toolbar-controls d-flex flex-column flex-lg-row justify-content-between align-items-lg-center flex-wrap" style="gap: 10px;">
                 <!-- Navigasi Bulan & Tahun -->
                 <div class="d-flex align-items-center flex-wrap" style="gap: 10px;">
                     <div class="roster-toolbar-month">
@@ -181,8 +181,8 @@
                     @endif
                 </div>
 
-                <!-- Filter & Search Karyawan -->
-                <div class="d-flex align-items-center flex-wrap" style="gap: 10px;">
+                <!-- Filter Karyawan (desktop) -->
+                <div class="attendance-filter-fields d-none d-md-flex align-items-center flex-wrap" style="gap: 10px;">
                     <!-- Dropdown Sorting Karyawan -->
                     <div style="min-width: 185px; position: relative;">
                         <select wire:model.live="sortBy" wire:loading.attr="disabled" wire:target="sortBy" class="form-control roster-toolbar-select" title="Urutan Karyawan">
@@ -223,9 +223,12 @@
                             <i class="fas fa-spinner fa-spin text-primary" style="font-size: 11px;"></i>
                         </div>
                     </div>
+                </div>
 
+                <!-- Search and page size remain visible on mobile -->
+                <div class="attendance-search-controls d-flex align-items-center flex-wrap" style="gap: 8px;">
                     <!-- Search Box -->
-                    <div style="min-width: 200px;">
+                    <div class="attendance-search-field" style="min-width: 200px;">
                         <div class="input-group roster-toolbar-search">
                             <div class="input-group-prepend">
                                 <span class="input-group-text roster-toolbar-search-icon">
@@ -238,23 +241,95 @@
                     </div>
 
                     <!-- Per Page -->
-                    <div style="width: 85px;">
-                        <select wire:model.live="perPage" class="form-control roster-toolbar-select" title="Jumlah baris karyawan">
+                    <div class="attendance-per-page-control">
+                        <select wire:model.live="perPage" wire:loading.attr="disabled" wire:target="perPage" class="form-control roster-toolbar-select" title="Jumlah baris karyawan">
                             <option value="0">Semua</option>
                             <option value="25">25</option>
                             <option value="50">50</option>
                             <option value="100">100</option>
                         </select>
+                        <div wire:loading wire:target="perPage" style="position: absolute; right: 22px; top: 50%; transform: translateY(-50%); pointer-events: none;">
+                            <i class="fas fa-spinner fa-spin text-primary" style="font-size: 10px;"></i>
+                        </div>
                     </div>
+
+                    <button type="button" class="attendance-mobile-filter-button btn btn-primary d-md-none" data-toggle="modal" data-target="#attendanceFilterModal">
+                        <i class="fas fa-filter mr-1"></i> Filter
+                        @if ($sortBy !== 'custom' || $departmentFilter !== '' || $employmentStatusFilter !== '')
+                            <span class="attendance-filter-active-indicator">Aktif</span>
+                        @endif
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div wire:ignore.self class="modal fade attendance-filter-modal" id="attendanceFilterModal" tabindex="-1" role="dialog" aria-labelledby="attendanceFilterModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content bg-white">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="attendanceFilterModalLabel"><i class="fas fa-filter text-primary mr-2"></i>Filter Absensi</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="form-group mb-3">
+                        <label for="attendanceFilterSortBy">Urutan Karyawan</label>
+                        <select id="attendanceFilterSortBy" wire:model.live="sortBy" wire:loading.attr="disabled" wire:target="sortBy" class="form-control roster-toolbar-select">
+                            <option value="custom">Urutan Roster (Jadwal)</option>
+                            <option value="name_asc">Nama (A - Z)</option>
+                            <option value="name_desc">Nama (Z - A)</option>
+                            <option value="position_asc">Jobdesk / Posisi</option>
+                            <option value="department_asc">Departemen</option>
+                            <option value="status_asc">Status Kepegawaian</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label for="attendanceFilterDepartment">Departemen</label>
+                        <select id="attendanceFilterDepartment" wire:model.live="departmentFilter" wire:loading.attr="disabled" wire:target="departmentFilter" class="form-control roster-toolbar-select">
+                            <option value="">Semua Departemen</option>
+                            @foreach ($departments as $dept)
+                                <option value="{{ $dept->id }}">{{ $dept->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="form-group mb-0">
+                        <label for="attendanceFilterEmploymentStatus">Status Kepegawaian</label>
+                        <select id="attendanceFilterEmploymentStatus" wire:model.live="employmentStatusFilter" wire:loading.attr="disabled" wire:target="employmentStatusFilter" class="form-control roster-toolbar-select">
+                            <option value="">Semua Status</option>
+                            @foreach ($employmentStatuses as $es)
+                                <option value="{{ $es->value }}">{{ $es->label() }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary btn-block" data-dismiss="modal">Terapkan</button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Table Roster Grid (Style Jadwal: Sticky 2-Tier Header, 3 Sticky Columns, Clean White Grid) -->
-    <div class="card border-0 mb-3" style="background: #ffffff; border-radius: 12px; box-shadow: 0 2px 14px -2px rgba(0, 0, 0, 0.06); overflow: hidden;">
-        <div class="card-body p-0">
-            <div class="table-responsive" style="max-height: 760px; overflow-x: auto;">
+    <div class="card attendance-table-shell position-relative">
+        <!-- Loading Overlay saat Filter / Ganti Bulan / Sorting -->
+        <div wire:loading wire:target="previousMonth, nextMonth, goToCurrentMonth, sortBy, departmentFilter, employmentStatusFilter, search, perPage" class="attendance-table-loading-overlay">
+            <div class="attendance-table-loading-badge">
+                <i class="fas fa-spinner fa-spin mr-2 text-primary" style="font-size: 13px;"></i>
+                <span>Memuat data presensi...</span>
+            </div>
+        </div>
+
+        <div class="attendance-table-scroll-hint d-md-none">
+            <i class="fas fa-arrows-alt-h" aria-hidden="true"></i>
+            <span>Geser tabel ke samping untuk melihat tanggal lainnya</span>
+        </div>
+
+        <div class="attendance-table-body" wire:loading.class="table-loading-dimmed" wire:target="previousMonth, nextMonth, goToCurrentMonth, sortBy, departmentFilter, employmentStatusFilter, search, perPage">
+            <div class="table-responsive attendance-table-scroll">
                 <table class="table mb-0 text-center attendance-roster-table modern-attendance-matrix" style="border-collapse: collapse; background: #ffffff;">
                     <thead class="sticky-top" style="z-index: 10;">
                         <!-- Baris 1: Kolom Tetap Kiri, Nama Hari (Clean White & Merah Kontras Hari Minggu/Libur), dan Rekap -->
@@ -284,7 +359,7 @@
                             <th class="align-middle text-center p-0 font-weight-bold" style="width: 44px; min-width: 44px; max-width: 44px; color: #be123c; font-size: 9.5px; border-bottom: 2px solid #cbd5e1; background: #ffffff !important; height: 20px;" title="Total Hari Libur">LIBUR</th>
                         </tr>
                     </thead>
-                    <tbody x-on:click="const cell = $event.target.closest('.att-cell-clickable'); if (cell) { $wire.openCellModal(cell.dataset.emp, cell.dataset.date); }">
+                    <tbody x-on:click="const cell = $event.target.closest('.att-cell-clickable'); if (cell && !cell.classList.contains('is-loading')) { cell.classList.add('is-loading'); $wire.openCellModal(cell.dataset.emp, cell.dataset.date); }">
                         @php
                             $rowNumber = ($matrixEmployees->firstItem() ?? 1);
                         @endphp
@@ -370,45 +445,30 @@
 
             <!-- Footer: Petunjuk Interaksi, Legenda Simbol & Paginasi -->
             @if ($matrixEmployees && $matrixEmployees->total() > 0)
-                <div class="card-footer bg-white border-top py-2 px-3 d-flex flex-column flex-lg-row justify-content-between align-items-center" style="gap: 10px;">
-                    <div class="d-flex align-items-center flex-wrap" style="color: #334155; font-size: 11.5px; gap: 14px;">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-hand-pointer mr-1.5 text-primary"></i>
-                            <span>Klik tanda sel untuk ubah data / koreksi presensi.</span>
+                <div class="attendance-table-footer">
+                    <div class="attendance-table-footer-top">
+                        <div class="attendance-table-help">
+                            <span class="attendance-table-help-icon" aria-hidden="true"><i class="fas fa-hand-pointer"></i></span>
+                            <span>Klik sel pada tabel untuk mengubah atau mengoreksi presensi.</span>
                         </div>
-                        <!-- Mini Legenda Full-Cell -->
-                        <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
-                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
-                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 20px; height: 18px; background: #dcfce7; color: #15803d; border-radius: 3px; font-size: 9px;"><i class="fas fa-check"></i></span> Hadir
-                            </span>
-                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
-                                <span class="d-inline-flex align-items-center justify-content-center position-relative" style="width: 24px; height: 18px; background: #dcfce7; color: #15803d; border-radius: 3px; font-size: 9px;"><i class="fas fa-check"></i><span style="position: absolute; top: 0; right: 0; background: #f59e0b; color: #fff; font-size: 6px; font-weight: 800; line-height: 1; padding: 1px 1.5px; border-bottom-left-radius: 2px;">OT</span></span> Hadir + Lembur
-                            </span>
-                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
-                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 20px; height: 18px; background: #fffbeb; color: #b45309; border: 1px solid #f59e0b; border-radius: 3px; font-size: 8px; font-weight: 800;">OT</span> Lembur
-                            </span>
-                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
-                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 18px; height: 18px; background: #fef3c7; color: #b45309; border-radius: 3px; font-size: 9px; font-weight: 800;">T</span> Terlambat
-                            </span>
-                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
-                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 18px; height: 18px; background: #e0e7ff; color: #3730a3; border-radius: 3px; font-size: 9px; font-weight: 800;">C</span> Cuti
-                            </span>
-                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
-                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 18px; height: 18px; background: #fef9c3; color: #854d0e; border-radius: 3px; font-size: 9px; font-weight: 800;">S</span> Sakit
-                            </span>
-                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
-                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 18px; height: 18px; background: #e0f2fe; color: #0369a1; border-radius: 3px; font-size: 9px; font-weight: 800;">I</span> Izin
-                            </span>
-                            <span class="d-inline-flex align-items-center" style="gap: 4px;">
-                                <span class="d-inline-flex align-items-center justify-content-center" style="width: 18px; height: 18px; background: #fee2e2; color: #b91c1c; border-radius: 3px; font-size: 9px; font-weight: 800;">A</span> Alpa
-                            </span>
-                        </div>
+                        @if ($matrixEmployees->hasPages())
+                            <div class="attendance-table-pagination">
+                                {{ $matrixEmployees->links('livewire.custom-pagination') }}
+                            </div>
+                        @endif
                     </div>
-                    @if ($matrixEmployees->hasPages())
-                        <div>
-                            {{ $matrixEmployees->links('livewire.custom-pagination') }}
-                        </div>
-                    @endif
+
+                    <div class="attendance-table-legend" role="list" aria-label="Legenda status presensi">
+                        <span class="attendance-table-legend-title">Keterangan</span>
+                        <span class="attendance-legend-item" role="listitem"><span class="attendance-legend-mark attendance-legend-mark-present" aria-hidden="true"><i class="fas fa-check"></i></span>Hadir</span>
+                        <span class="attendance-legend-item" role="listitem"><span class="attendance-legend-mark attendance-legend-mark-present-overtime" aria-hidden="true"><i class="fas fa-check"></i><span>OT</span></span>Hadir + Lembur</span>
+                        <span class="attendance-legend-item" role="listitem"><span class="attendance-legend-mark attendance-legend-mark-overtime" aria-hidden="true">OT</span>Lembur</span>
+                        <span class="attendance-legend-item" role="listitem"><span class="attendance-legend-mark attendance-legend-mark-late" aria-hidden="true">T</span>Terlambat</span>
+                        <span class="attendance-legend-item" role="listitem"><span class="attendance-legend-mark attendance-legend-mark-leave" aria-hidden="true">C</span>Cuti</span>
+                        <span class="attendance-legend-item" role="listitem"><span class="attendance-legend-mark attendance-legend-mark-sick" aria-hidden="true">S</span>Sakit</span>
+                        <span class="attendance-legend-item" role="listitem"><span class="attendance-legend-mark attendance-legend-mark-permission" aria-hidden="true">I</span>Izin</span>
+                        <span class="attendance-legend-item" role="listitem"><span class="attendance-legend-mark attendance-legend-mark-absent" aria-hidden="true">A</span>Alpa</span>
+                    </div>
                 </div>
             @endif
         </div>
@@ -756,6 +816,70 @@
             filter: brightness(0.93);
             z-index: 2;
         }
+
+        /* Instant Loading Feedback saat Klik Sel Presensi (Pola Jadwal Kerja) */
+        .att-cell-wrap.is-loading {
+            pointer-events: none !important;
+            filter: brightness(0.88);
+            position: relative;
+        }
+        .att-cell-wrap.is-loading > * {
+            opacity: 0.12 !important;
+        }
+        .att-cell-wrap.is-loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 14px;
+            height: 14px;
+            margin-top: -7px;
+            margin-left: -7px;
+            border: 2px solid rgba(11, 82, 170, 0.25);
+            border-top-color: #0b52aa;
+            border-radius: 50%;
+            animation: att-cell-spin 0.55s linear infinite;
+            z-index: 10;
+            box-sizing: border-box;
+        }
+        @keyframes att-cell-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Table Loading Overlay & Dimming */
+        .attendance-table-loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(1.5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            pointer-events: none;
+            transition: all 0.2s ease;
+        }
+        .attendance-table-loading-badge {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            border-radius: 9999px;
+            padding: 8px 20px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+        }
+        .table-loading-dimmed {
+            opacity: 0.5;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
         .att-cell-present {
             background-color: #dcfce7 !important;
             color: #15803d !important;
@@ -1047,84 +1171,83 @@
         </div>
     </div>
 
-    <!-- MODAL 2: EDIT PRESENSI & AUDIT FOTO / GPS (DUAL FLOATING CARDS SIDE-BY-SIDE) -->
+    <!-- MODAL 2: EDIT PRESENSI & AUDIT FOTO / GPS -->
     <div wire:ignore.self class="modal fade" id="manualAttendanceModal" tabindex="-1" role="dialog" aria-labelledby="manualAttendanceModalLabel" aria-hidden="true" data-backdrop="static">
-        <div class="modal-dialog modal-dialog-centered" style="max-width: 1200px; width: 95%; margin: 1.5rem auto;" role="document">
-            <div class="modal-content border-0 bg-transparent shadow-none" style="border: none !important; background: transparent !important; box-shadow: none !important;">
-                <div class="row align-items-stretch" style="margin: 0 -8px;">
-
-                    <!-- PANEL KIRI (col-lg-7): Form Edit Catatan Presensi -->
-                    <div class="col-lg-7 col-12 px-2 mb-3 mb-lg-0">
-                        <div class="card shadow-lg bg-white h-100 d-flex flex-column" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.08), 0 10px 10px -5px rgba(0,0,0,0.04);">
-                            <div class="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
-                                <div class="d-flex align-items-center min-width-0">
-                                    <div class="mr-2.5 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 32px; height: 32px; border-radius: 8px; background: #0b52aa; color: #ffffff;">
-                                        <i class="fas fa-edit" style="font-size: 14px;"></i>
-                                    </div>
-                                    <div class="min-width-0">
-                                        <h5 class="card-title text-dark m-0 font-weight-700" id="manualAttendanceModalLabel" style="font-size: 15px; letter-spacing: -0.2px;">
-                                            {{ $editingAttendanceId ? 'Edit Catatan Presensi' : 'Input Presensi Manual' }}
-                                        </h5>
-                                    </div>
-                                </div>
-                                <button type="button" class="close text-muted" data-dismiss="modal" aria-label="Close" style="font-size: 20px; line-height: 1;">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
+        <div class="modal-dialog modal-dialog-centered attendance-dual-modal-dialog" role="document">
+            <div class="attendance-mobile-slide-track">
+            <div class="modal-content attendance-edit-modal-content">
+                <form wire:submit.prevent="saveManualAttendance" class="attendance-edit-modal-form">
+                    <div class="modal-header attendance-edit-modal-header">
+                        <div class="d-flex align-items-center min-width-0">
+                            <div class="attendance-modal-icon mr-3">
+                                <i class="fas fa-edit" aria-hidden="true"></i>
                             </div>
+                            <div class="min-width-0">
+                                <h5 class="modal-title attendance-edit-modal-title" id="manualAttendanceModalLabel">
+                                    {{ $editingAttendanceId ? 'Edit Catatan Presensi' : 'Input Presensi Manual' }}
+                                </h5>
+                                <div class="attendance-edit-modal-subtitle">Periksa detail presensi sebelum menyimpan perubahan.</div>
+                            </div>
+                        </div>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body attendance-edit-modal-body">
 
-                            <form wire:submit.prevent="saveManualAttendance" class="d-flex flex-column flex-grow-1">
-                                <div class="card-body py-3 px-4 bg-white flex-grow-1" style="overflow-y: auto; max-height: calc(85vh - 140px);">
-
-                                    @if ($editingAttendance)
-                                        <!-- Ringkasan Karyawan (Pure White Card) -->
-                                        <div class="d-flex align-items-center p-3 mb-3 bg-white" style="border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);">
-                                            <div class="mr-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 42px; height: 42px; border-radius: 10px; background: #0b52aa; color: #ffffff; font-weight: 700; font-size: 15px;">
+                                    @if ($editingAttendanceId && $editingAttendance)
+                                        <!-- Ringkasan Karyawan -->
+                                        <div class="attendance-employee-summary">
+                                            <div class="attendance-employee-avatar">
                                                 {{ $editingAttendance->employee?->initials ?? 'K' }}
                                             </div>
-                                            <div class="min-width-0 flex-grow-1">
-                                                <div class="text-truncate font-weight-700 text-dark" style="font-size: 13.5px; color: #0f172a;">
+                                            <div class="attendance-employee-details">
+                                                <div class="attendance-employee-name">
                                                     {{ $editingAttendance->employee?->full_name }}
                                                 </div>
-                                                <div class="text-truncate" style="font-size: 11.5px; color: #475569;">
+                                                <div class="attendance-employee-role">
                                                     {{ $editingAttendance->employee?->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $editingAttendance->employee?->position?->name ?? 'Staff' }}
                                                 </div>
-                                                <div style="font-size: 11px; color: #64748b;">
-                                                    ID Finger: {{ $editingAttendance->employee?->fingerprint_id ?? '-' }} &bull; Tanggal: {{ $editingAttendance->date?->format('d M Y') }}
+                                                <div class="attendance-employee-meta">
+                                                    Tanggal Presensi: {{ $editingAttendance->date?->format('d M Y') }}
                                                 </div>
                                             </div>
                                         </div>
+                                        <button type="button" class="btn btn-primary btn-block attendance-mobile-proof-open" data-attendance-mobile-proof-open>
+                                            <i class="fas fa-map-marked-alt mr-1" aria-hidden="true"></i> Bukti Foto &amp; Lokasi GPS
+                                        </button>
                                     @endif
 
-                                    <!-- Pilih Karyawan (Select2 Searchable dengan optgroup status kerja) -->
-                                    <div class="form-group mb-3">
-                                        <label for="manualEmployeeId" class="font-weight-bold" style="font-size: 12.5px; color: #0f172a;">Karyawan <span class="text-danger">*</span></label>
-                                        <div wire:ignore>
-                                            <select id="manualEmployeeId" class="form-control select2 @error('manualEmployeeId') is-invalid @enderror" style="width: 100%;" {{ $lockDateAndEmployee ? 'disabled' : '' }}>
-                                                <option value="">-- Pilih Karyawan --</option>
-                                                @foreach ($allEmployees->groupBy(fn($e) => $e->employment_status instanceof \App\Enums\EmploymentStatus ? $e->employment_status->label() : (\App\Enums\EmploymentStatus::tryFrom((string) $e->employment_status)?->label() ?? 'Lainnya')) as $statusLabel => $groupEmps)
-                                                    <optgroup label="{{ $statusLabel }}">
-                                                        @foreach ($groupEmps as $emp)
-                                                            <option value="{{ $emp->id }}">
-                                                                {{ $emp->full_name }} - ID Finger: {{ $emp->fingerprint_id ?? '-' }}
-                                                            </option>
-                                                        @endforeach
-                                                    </optgroup>
-                                                @endforeach
-                                            </select>
+                                    @unless ($editingAttendanceId)
+                                        <!-- Pilih Karyawan (Select2 Searchable dengan optgroup status kerja) -->
+                                        <div class="form-group mb-3">
+                                            <label for="manualEmployeeId" class="font-weight-bold" style="font-size: 12.5px; color: #0f172a;">Karyawan <span class="text-danger">*</span></label>
+                                            <div wire:ignore>
+                                                <select id="manualEmployeeId" class="form-control select2 @error('manualEmployeeId') is-invalid @enderror" style="width: 100%;" {{ $lockDateAndEmployee ? 'disabled' : '' }}>
+                                                    <option value="">-- Pilih Karyawan --</option>
+                                                    @foreach ($allEmployees->groupBy(fn($e) => $e->employment_status instanceof \App\Enums\EmploymentStatus ? $e->employment_status->label() : (\App\Enums\EmploymentStatus::tryFrom((string) $e->employment_status)?->label() ?? 'Lainnya')) as $statusLabel => $groupEmps)
+                                                        <optgroup label="{{ $statusLabel }}">
+                                                            @foreach ($groupEmps as $emp)
+                                                                <option value="{{ $emp->id }}">{{ $emp->full_name }}</option>
+                                                            @endforeach
+                                                        </optgroup>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            @error('manualEmployeeId')
+                                                <div class="text-danger text-xs mt-1">{{ $message }}</div>
+                                            @enderror
                                         </div>
-                                        @error('manualEmployeeId')
-                                            <div class="text-danger text-xs mt-1">{{ $message }}</div>
-                                        @enderror
-                                    </div>
 
-                                    <!-- Tanggal Presensi -->
-                                    <div class="form-group mb-3">
-                                        <label for="manualDate" class="font-weight-bold" style="font-size: 12.5px; color: #0f172a;">Tanggal Presensi <span class="text-danger">*</span></label>
-                                        <input type="date" id="manualDate" wire:model.live="manualDate" class="form-control @error('manualDate') is-invalid @enderror" {{ $lockDateAndEmployee ? 'disabled' : '' }} style="border-radius: 8px; border-color: #e2e8f0;">
-                                        @error('manualDate')
-                                            <div class="invalid-feedback">{{ $message }}</div>
-                                        @enderror
-                                    </div>
+                                        <!-- Tanggal Presensi -->
+                                        <div class="form-group mb-3">
+                                            <label for="manualDate" class="font-weight-bold" style="font-size: 12.5px; color: #0f172a;">Tanggal Presensi <span class="text-danger">*</span></label>
+                                            <input type="date" id="manualDate" wire:model.live="manualDate" class="form-control @error('manualDate') is-invalid @enderror" {{ $lockDateAndEmployee ? 'disabled' : '' }} style="border-radius: 8px; border-color: #e2e8f0;">
+                                            @error('manualDate')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                    @endunless
 
                                     @if ($manualStatus === 'libur')
                                         <!-- Informasi Hari Libur / Off (Pure White) -->
@@ -1140,7 +1263,7 @@
 
                                         <!-- Fieldset Checklist: Apakah Lembur Seharian? -->
                                         <fieldset class="custom-modal-fieldset bg-white mb-3" style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;">
-                                            <legend class="custom-modal-legend" style="background: #ffffff; padding: 0 8px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
+                                            <legend class="custom-modal-legend" style="background: #ffffff; padding: 0 8px; font-size: 12.5px; font-weight: 500; color: #0f172a;">
                                                 <div class="custom-control custom-checkbox d-inline-block">
                                                     <input type="checkbox" class="custom-control-input" id="hasFullDayOvertimeCheck" wire:model.live="hasFullDayOvertime">
                                                     <label class="custom-control-label font-weight-bold mb-0" for="hasFullDayOvertimeCheck" style="cursor: pointer; font-size: 12.5px; color: #0f172a;">
@@ -1150,13 +1273,16 @@
                                             </legend>
 
                                             @if ($hasFullDayOvertime)
-                                                <div class="row">
+                                                <div class="row attendance-time-range-row">
                                                     <div class="col-6">
                                                         <div class="form-group mb-0">
                                                             <div class="d-flex align-items-center justify-content-between mb-1">
                                                                 <label for="manualClockIn" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Jam Masuk</label>
                                                                 @if ($manualClockIn)
-                                                                    <a href="javascript:void(0)" wire:click="clearClockIn" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                    <a href="javascript:void(0)" wire:click="clearClockIn" wire:loading.attr="disabled" wire:target="clearClockIn" class="text-danger font-weight-bold" style="font-size: 11px;">
+                                                                        <span wire:loading.remove wire:target="clearClockIn">Hapus</span>
+                                                                        <span wire:loading wire:target="clearClockIn"><i class="fas fa-spinner fa-spin"></i></span>
+                                                                    </a>
                                                                 @endif
                                                             </div>
                                                             <div class="input-group">
@@ -1174,7 +1300,10 @@
                                                             <div class="d-flex align-items-center justify-content-between mb-1">
                                                                 <label for="manualClockOut" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Jam Keluar</label>
                                                                 @if ($manualClockOut)
-                                                                    <a href="javascript:void(0)" wire:click="clearClockOut" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                    <a href="javascript:void(0)" wire:click="clearClockOut" wire:loading.attr="disabled" wire:target="clearClockOut" class="text-danger font-weight-bold" style="font-size: 11px;">
+                                                                        <span wire:loading.remove wire:target="clearClockOut">Hapus</span>
+                                                                        <span wire:loading wire:target="clearClockOut"><i class="fas fa-spinner fa-spin"></i></span>
+                                                                    </a>
                                                                 @endif
                                                             </div>
                                                             <div class="input-group">
@@ -1193,23 +1322,26 @@
 
                                         <!-- Fieldset Checklist: Apakah Lembur Per Jam? -->
                                         <fieldset class="custom-modal-fieldset bg-white mb-3" style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;">
-                                            <legend class="custom-modal-legend" style="background: #ffffff; padding: 0 8px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
+                                            <legend class="custom-modal-legend" style="background: #ffffff; padding: 0 8px; font-size: 12.5px; font-weight: 500; color: #0f172a;">
                                                 <div class="custom-control custom-checkbox d-inline-block">
                                                     <input type="checkbox" class="custom-control-input" id="hasOvertimeCheck" wire:model.live="hasOvertime">
-                                                    <label class="custom-control-label font-weight-bold mb-0" for="hasOvertimeCheck" style="cursor: pointer; font-size: 12.5px; color: #0f172a;">
+                                                    <label class="custom-control-label mb-0" for="hasOvertimeCheck" style="cursor: pointer; font-size: 12.5px; font-weight: 500; color: #0f172a;">
                                                         Apakah Lembur Per Jam?
                                                     </label>
                                                 </div>
                                             </legend>
 
                                             @if ($hasOvertime)
-                                                <div class="row">
+                                                <div class="row attendance-time-range-row">
                                                     <div class="col-6">
                                                         <div class="form-group mb-0">
                                                             <div class="d-flex align-items-center justify-content-between mb-1">
                                                                 <label for="manualOvertimeIn" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Lembur Mulai</label>
                                                                 @if ($manualOvertimeIn)
-                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeIn" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeIn" wire:loading.attr="disabled" wire:target="clearOvertimeIn" class="text-danger font-weight-bold" style="font-size: 11px;">
+                                                                        <span wire:loading.remove wire:target="clearOvertimeIn">Hapus</span>
+                                                                        <span wire:loading wire:target="clearOvertimeIn"><i class="fas fa-spinner fa-spin"></i></span>
+                                                                    </a>
                                                                 @endif
                                                             </div>
                                                             <div class="input-group">
@@ -1227,7 +1359,10 @@
                                                             <div class="d-flex align-items-center justify-content-between mb-1">
                                                                 <label for="manualOvertimeOut" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Lembur Selesai</label>
                                                                 @if ($manualOvertimeOut)
-                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeOut" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeOut" wire:loading.attr="disabled" wire:target="clearOvertimeOut" class="text-danger font-weight-bold" style="font-size: 11px;">
+                                                                        <span wire:loading.remove wire:target="clearOvertimeOut">Hapus</span>
+                                                                        <span wire:loading wire:target="clearOvertimeOut"><i class="fas fa-spinner fa-spin"></i></span>
+                                                                    </a>
                                                                 @endif
                                                             </div>
                                                             <div class="input-group">
@@ -1269,7 +1404,7 @@
 
                                             <!-- Input Jam Masuk & Jam Keluar -->
                                             @if ($manualStatus === 'hadir')
-                                                <div class="row">
+                                                <div class="row attendance-time-range-row">
                                                     <div class="col-6">
                                                         <div class="form-group mb-0">
                                                             <div class="d-flex align-items-center justify-content-between mb-1">
@@ -1277,7 +1412,10 @@
                                                                     Jam Masuk <span class="text-danger">*</span>
                                                                 </label>
                                                                 @if ($manualClockIn)
-                                                                    <a href="javascript:void(0)" wire:click="clearClockIn" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                    <a href="javascript:void(0)" wire:click="clearClockIn" wire:loading.attr="disabled" wire:target="clearClockIn" class="text-danger font-weight-bold" style="font-size: 11px;">
+                                                                        <span wire:loading.remove wire:target="clearClockIn">Hapus</span>
+                                                                        <span wire:loading wire:target="clearClockIn"><i class="fas fa-spinner fa-spin"></i></span>
+                                                                    </a>
                                                                 @endif
                                                             </div>
                                                             <div class="input-group">
@@ -1295,7 +1433,10 @@
                                                             <div class="d-flex align-items-center justify-content-between mb-1">
                                                                 <label for="manualClockOut" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Jam Keluar</label>
                                                                 @if ($manualClockOut)
-                                                                    <a href="javascript:void(0)" wire:click="clearClockOut" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                    <a href="javascript:void(0)" wire:click="clearClockOut" wire:loading.attr="disabled" wire:target="clearClockOut" class="text-danger font-weight-bold" style="font-size: 11px;">
+                                                                        <span wire:loading.remove wire:target="clearClockOut">Hapus</span>
+                                                                        <span wire:loading wire:target="clearClockOut"><i class="fas fa-spinner fa-spin"></i></span>
+                                                                    </a>
                                                                 @endif
                                                             </div>
                                                             <div class="input-group">
@@ -1324,13 +1465,16 @@
                                             </legend>
 
                                             @if ($hasOvertime)
-                                                <div class="row">
+                                                <div class="row attendance-time-range-row">
                                                     <div class="col-6">
                                                         <div class="form-group mb-0">
                                                             <div class="d-flex align-items-center justify-content-between mb-1">
                                                                 <label for="manualOvertimeIn" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Lembur Mulai</label>
                                                                 @if ($manualOvertimeIn)
-                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeIn" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeIn" wire:loading.attr="disabled" wire:target="clearOvertimeIn" class="text-danger font-weight-bold" style="font-size: 11px;">
+                                                                        <span wire:loading.remove wire:target="clearOvertimeIn">Hapus</span>
+                                                                        <span wire:loading wire:target="clearOvertimeIn"><i class="fas fa-spinner fa-spin"></i></span>
+                                                                    </a>
                                                                 @endif
                                                             </div>
                                                             <div class="input-group">
@@ -1348,7 +1492,10 @@
                                                             <div class="d-flex align-items-center justify-content-between mb-1">
                                                                 <label for="manualOvertimeOut" class="font-weight-bold mb-0" style="font-size: 12px; color: #0f172a;">Lembur Selesai</label>
                                                                 @if ($manualOvertimeOut)
-                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeOut" class="text-danger font-weight-bold" style="font-size: 11px;">Hapus</a>
+                                                                    <a href="javascript:void(0)" wire:click="clearOvertimeOut" wire:loading.attr="disabled" wire:target="clearOvertimeOut" class="text-danger font-weight-bold" style="font-size: 11px;">
+                                                                        <span wire:loading.remove wire:target="clearOvertimeOut">Hapus</span>
+                                                                        <span wire:loading wire:target="clearOvertimeOut"><i class="fas fa-spinner fa-spin"></i></span>
+                                                                    </a>
                                                                 @endif
                                                             </div>
                                                             <div class="input-group">
@@ -1373,247 +1520,304 @@
                                     </div>
                                 </div>
 
-                                <div class="card-footer bg-white border-top py-3 px-4">
+                                <div class="modal-footer attendance-edit-modal-footer">
                                     @if ($editingAttendanceId)
-                                        <div class="row w-100 mx-0">
-                                            <div class="col-6 pr-1 pl-0">
-                                                <button type="button" wire:click="confirmDeleteAttendance({{ $editingAttendanceId }})" wire:loading.attr="disabled" class="btn btn-outline-danger btn-block font-weight-600" style="border-radius: 8px; font-size: 13px; padding: 9px 12px;">
-                                                    <i class="fas fa-trash-alt mr-1"></i> Hapus Presensi
-                                                </button>
-                                            </div>
-                                            <div class="col-6 pl-1 pr-0">
-                                                <button type="submit" class="btn btn-primary btn-block font-weight-600 text-white" style="background: linear-gradient(135deg, #0b52aa 0%, #1e40af 100%); border: none; border-radius: 8px; font-size: 13px; padding: 9px 12px;">
-                                                    <i class="fas fa-save mr-1"></i> Simpan Perubahan
-                                                </button>
-                                            </div>
+                                        <div class="attendance-edit-modal-actions">
+                                            <button type="button" wire:click="confirmDeleteAttendance({{ $editingAttendanceId }})" wire:loading.attr="disabled" wire:target="confirmDeleteAttendance,deleteAttendance,saveManualAttendance" class="btn btn-danger font-weight-600">
+                                                    <span wire:loading.remove wire:target="confirmDeleteAttendance,deleteAttendance"><i class="fas fa-trash-alt mr-1"></i> Hapus Presensi</span>
+                                                    <span wire:loading wire:target="confirmDeleteAttendance,deleteAttendance"><i class="fas fa-spinner fa-spin mr-1"></i> Menghapus...</span>
+                                            </button>
+                                            <button type="submit" wire:loading.attr="disabled" wire:target="saveManualAttendance,confirmDeleteAttendance,deleteAttendance" class="btn btn-primary font-weight-600">
+                                                    <span wire:loading.remove wire:target="saveManualAttendance"><i class="fas fa-save mr-1"></i> Simpan Perubahan</span>
+                                                    <span wire:loading wire:target="saveManualAttendance"><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...</span>
+                                            </button>
                                         </div>
                                     @else
-                                        <button type="submit" class="btn btn-primary btn-block font-weight-600 text-white" style="background: linear-gradient(135deg, #0b52aa 0%, #1e40af 100%); border: none; border-radius: 8px; font-size: 13px; padding: 9px 14px;">
-                                            <i class="fas fa-save mr-1"></i> Simpan Presensi
+                                        <button type="submit" wire:loading.attr="disabled" wire:target="saveManualAttendance" class="btn btn-primary btn-block font-weight-600">
+                                            <span wire:loading.remove wire:target="saveManualAttendance"><i class="fas fa-save mr-1"></i> Simpan Presensi</span>
+                                            <span wire:loading wire:target="saveManualAttendance"><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...</span>
                                         </button>
                                     @endif
                                 </div>
-                            </form>
-                        </div>
-                    </div>
+                </form>
+            </div>
 
                     <!-- PANEL KANAN (col-lg-5): Floating Bukti Foto & Lokasi GPS -->
-                    <div class="col-lg-5 col-12 px-2">
-                        <div class="card shadow-lg bg-white h-100 d-flex flex-column" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.08), 0 10px 10px -5px rgba(0,0,0,0.04);">
-                            <div class="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
-                                <div class="d-flex align-items-center min-width-0">
-                                    <div class="mr-2.5 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 32px; height: 32px; border-radius: 8px; background: #eff6ff; color: #0b52aa;">
-                                        <i class="fas fa-map-marked-alt" style="font-size: 14px;"></i>
-                                    </div>
-                                    <div class="min-width-0">
-                                        <h5 class="card-title text-dark m-0 font-weight-700" style="font-size: 15px; letter-spacing: -0.2px;">
-                                            Bukti Foto & Lokasi GPS
-                                        </h5>
-                                        <div class="text-truncate" style="font-size: 11px; color: #64748b;">
-                                            Audit visual kehadiran & koordinat
+                    <div class="card attendance-proof-window">
+                        <div class="card-header attendance-proof-header">
+                            <div class="d-flex align-items-center min-width-0">
+                                <div class="attendance-proof-icon attendance-proof-map-icon mr-3">
+                                    <i class="fas fa-map-marked-alt" aria-hidden="true"></i>
+                                </div>
+                                <div class="min-width-0">
+                                    <h5 class="card-title attendance-proof-title">Bukti Foto & Lokasi GPS</h5>
+                                    <div class="attendance-proof-subtitle">Verifikasi bukti dan titik presensi.</div>
+                                </div>
+                            </div>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+
+                        <div class="card-body attendance-proof-body">
+                                @if ($editingAttendanceId && $editingAttendance)
+                                    <div class="attendance-employee-summary attendance-mobile-proof-identity">
+                                        <div class="attendance-employee-avatar">
+                                            {{ $editingAttendance->employee?->initials ?? 'K' }}
+                                        </div>
+                                        <div class="attendance-employee-details">
+                                            <div class="attendance-employee-name">{{ $editingAttendance->employee?->full_name }}</div>
+                                            <div class="attendance-employee-role">{{ $editingAttendance->employee?->department?->name ?? 'Tanpa Departemen' }} &bull; {{ $editingAttendance->employee?->position?->name ?? 'Staff' }}</div>
+                                            <div class="attendance-employee-meta">Tanggal Presensi: {{ $editingAttendance->date?->format('d M Y') }}</div>
                                         </div>
                                     </div>
-                                </div>
-                                <button type="button" class="close text-muted" data-dismiss="modal" aria-label="Close" style="font-size: 20px; line-height: 1;">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-
-                            <div class="card-body p-3.5 bg-white flex-grow-1 d-flex flex-column" style="overflow-y: auto; max-height: calc(85vh - 140px);">
+                                @endif
                                 @if ($auditAttendance)
-                                    <!-- Nav Tab Pills (Masuk, Pulang, Lembur) -->
-                                    <div class="d-flex align-items-center mb-3 p-1 bg-white border" style="border-radius: 12px; border-color: #e2e8f0 !important; gap: 4px;">
-                                        <button type="button" wire:click="setAuditTab('clock_in')" class="btn btn-sm flex-fill font-weight-600" style="border-radius: 8px; font-size: 12px; padding: 7px 10px; transition: all 0.15s ease; {{ $auditTab === 'clock_in' ? 'background: #0b52aa; color: #ffffff;' : 'background: #ffffff; color: #475569; border: 1px solid #e2e8f0;' }}">
-                                            <i class="fas fa-camera mr-1"></i> Masuk
-                                        </button>
-                                        <button type="button" wire:click="setAuditTab('clock_out')" class="btn btn-sm flex-fill font-weight-600" style="border-radius: 8px; font-size: 12px; padding: 7px 10px; transition: all 0.15s ease; {{ $auditTab === 'clock_out' ? 'background: #0b52aa; color: #ffffff;' : 'background: #ffffff; color: #475569; border: 1px solid #e2e8f0;' }}">
-                                            <i class="fas fa-door-open mr-1"></i> Pulang
-                                        </button>
-                                        <button type="button" wire:click="setAuditTab('overtime')" class="btn btn-sm flex-fill font-weight-600" style="border-radius: 8px; font-size: 12px; padding: 7px 10px; transition: all 0.15s ease; {{ $auditTab === 'overtime' ? 'background: #0b52aa; color: #ffffff;' : 'background: #ffffff; color: #475569; border: 1px solid #e2e8f0;' }}">
-                                            <i class="fas fa-stopwatch mr-1"></i> Lembur
-                                        </button>
-                                    </div>
+                                    <ul class="nav nav-pills nav-justified attendance-audit-tabs" role="tablist">
+                                        <li class="nav-item" role="presentation">
+                                            <button type="button" id="attendanceClockTab" class="nav-link {{ in_array($auditTab, ['clock_in', 'clock_out'], true) ? 'active' : '' }}" data-toggle="pill" data-target="#attendanceClockPanel" wire:click="setAuditTab('clock_in')" role="tab" aria-controls="attendanceClockPanel" aria-selected="{{ in_array($auditTab, ['clock_in', 'clock_out'], true) ? 'true' : 'false' }}">
+                                                <i class="fas fa-camera mr-1" aria-hidden="true"></i>Masuk &amp; Pulang
+                                            </button>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <button type="button" id="attendanceOvertimeTab" class="nav-link {{ $auditTab === 'overtime' ? 'active' : '' }}" data-toggle="pill" data-target="#attendanceOvertimePanel" wire:click="setAuditTab('overtime')" role="tab" aria-controls="attendanceOvertimePanel" aria-selected="{{ $auditTab === 'overtime' ? 'true' : 'false' }}">
+                                                <i class="fas fa-stopwatch mr-1" aria-hidden="true"></i>Lembur
+                                            </button>
+                                        </li>
+                                    </ul>
 
                                     @if ($auditAttendance->isPendingReview())
                                         <!-- Review Alert Box (Pure White) -->
                                         <div class="p-3 mb-3 bg-white border" style="border-radius: 12px; border-color: #fde68a !important; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
                                             <div class="d-flex align-items-center mb-1 font-weight-700" style="font-size: 12px; color: #b45309;">
-                                                <i class="fas fa-exclamation-triangle mr-1.5"></i> Perlu Review (Di Luar Radius Kantor)
+                                                <i class="fas fa-exclamation-triangle mr-1.5"></i> {{ $auditAttendance->employee?->employment_status === \App\Enums\EmploymentStatus::HARIAN ? 'Menunggu Persetujuan Admin' : 'Perlu Review Lokasi GPS' }}
                                             </div>
+                                            @if ($auditAttendance->employee?->employment_status === \App\Enums\EmploymentStatus::HARIAN)
+                                                <div class="mb-2" style="font-size: 11.5px; color: #1e293b; line-height: 1.4;">
+                                                    Pilihan karyawan: <strong>{{ $auditAttendance->casual_work_type === 'hourly' ? 'Kerja per jam' : 'Kerja harian' }}</strong>
+                                                    @if ($auditAttendance->casual_work_type === 'daily' && $auditAttendance->early_departure_reason)
+                                                        <br>Pulang lebih awal: {{ $auditAttendance->early_departure_reason }}
+                                                    @endif
+                                                    @if ($auditAttendance->casual_work_type === 'hourly' || $auditConfirmedCasualWorkType === 'hourly')
+                                                        <br>Durasi tercatat: {{ intdiv((int) $auditAttendance->duration_minutes, 60) }} jam {{ (int) $auditAttendance->duration_minutes % 60 }} menit
+                                                        <br>Pembayaran dihitung otomatis mengikuti pembulatan di Profil Perusahaan.
+                                                    @endif
+                                                </div>
+                                                <div class="form-group mb-2">
+                                                    <label for="auditConfirmedCasualWorkType">Jenis kerja yang disetujui Admin <span class="text-danger">*</span></label>
+                                                    <select id="auditConfirmedCasualWorkType" class="form-control @error('auditConfirmedCasualWorkType') is-invalid @enderror" wire:model.live="auditConfirmedCasualWorkType">
+                                                        <option value="">Pilih jenis kerja</option>
+                                                        <option value="daily">Kerja harian</option>
+                                                        <option value="hourly">Kerja per jam</option>
+                                                    </select>
+                                                    @error('auditConfirmedCasualWorkType') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                                                    <small class="form-text text-muted">Periksa pilihan karyawan. Ubah jika jenis kerja sebenarnya berbeda.</small>
+                                                </div>
+                                                @if ($auditConfirmedCasualWorkType === 'daily')
+                                                    <div class="form-group mb-2">
+                                                        <div class="custom-control custom-checkbox">
+                                                            <input type="checkbox" id="auditCasualPayOverrideEnabled" class="custom-control-input" wire:model.live="auditCasualPayOverrideEnabled">
+                                                            <label class="custom-control-label" for="auditCasualPayOverrideEnabled">Sesuaikan nilai pembayaran</label>
+                                                        </div>
+                                                    </div>
+                                                    @if ($auditCasualPayOverrideEnabled)
+                                                        <div class="form-group mb-2">
+                                                            <label for="auditCasualPayOverride">Nilai yang dibayarkan (Rp) <span class="text-danger">*</span></label>
+                                                            <input type="number" min="0" step="1000" id="auditCasualPayOverride" class="form-control @error('auditCasualPayOverride') is-invalid @enderror" wire:model="auditCasualPayOverride" placeholder="Masukkan nominal pembayaran">
+                                                            @error('auditCasualPayOverride') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                                                        </div>
+                                                        <div class="form-group mb-2">
+                                                            <label for="auditCasualPayReason">Alasan penyesuaian <span class="text-danger">*</span></label>
+                                                            <textarea id="auditCasualPayReason" rows="2" maxlength="1000" class="form-control @error('auditCasualPayReason') is-invalid @enderror" wire:model="auditCasualPayReason" placeholder="Contoh: pulang lebih awal karena keadaan darurat keluarga"></textarea>
+                                                            @error('auditCasualPayReason') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                                                        </div>
+                                                    @endif
+                                                @endif
+                                            @endif
                                             @if ($auditAttendance->notes)
                                                 <div class="mb-2" style="font-size: 11.5px; color: #1e293b; line-height: 1.4;">
                                                     <strong>Keterangan Karyawan:</strong> {{ $auditAttendance->notes }}
                                                 </div>
                                             @endif
                                             <div class="d-flex" style="gap: 8px;">
-                                                <button type="button" wire:click="approveAudit" class="btn btn-sm btn-success flex-fill font-weight-600" style="border-radius: 6px; font-size: 11.5px; padding: 6px;">
-                                                    <i class="fas fa-check mr-1"></i> Setujui Valid
+                                                <button type="button" wire:click="approveAudit" wire:loading.attr="disabled" wire:target="approveAudit,rejectAudit" class="btn btn-sm btn-success flex-fill font-weight-600" style="border-radius: 6px; font-size: 11.5px; padding: 6px;">
+                                                    <span wire:loading.remove wire:target="approveAudit"><i class="fas fa-check mr-1"></i> Setujui Valid</span>
+                                                    <span wire:loading wire:target="approveAudit"><i class="fas fa-spinner fa-spin mr-1"></i> Memproses...</span>
                                                 </button>
-                                                <button type="button" wire:click="rejectAudit" class="btn btn-sm btn-outline-danger flex-fill font-weight-600" style="border-radius: 6px; font-size: 11.5px; padding: 6px;">
-                                                    <i class="fas fa-times mr-1"></i> Tolak (Alpa)
+                                                <button type="button" wire:click="rejectAudit" wire:loading.attr="disabled" wire:target="approveAudit,rejectAudit" class="btn btn-sm btn-danger flex-fill font-weight-600 attendance-audit-reject-button" style="border-radius: 6px; font-size: 11.5px; padding: 6px;">
+                                                    <span wire:loading.remove wire:target="rejectAudit"><i class="fas fa-times mr-1"></i> Tolak (Alpa)</span>
+                                                    <span wire:loading wire:target="rejectAudit"><i class="fas fa-spinner fa-spin mr-1"></i> Memproses...</span>
                                                 </button>
                                             </div>
                                         </div>
                                     @endif
 
-                                    @if ($auditTab === 'clock_in')
-                                        <!-- TAB 1: MASUK -->
-                                        <div class="mb-3">
-                                            <div class="d-flex justify-content-between align-items-center mb-1.5">
-                                                <span style="font-size: 12px; font-weight: 700; color: #0f172a;">Foto Selfie Masuk</span>
-                                                <span style="font-size: 11px; color: #64748b; font-weight: 600;">{{ $auditAttendance->clock_in ? substr($auditAttendance->clock_in, 0, 5) . ' WIB' : '-' }}</span>
-                                            </div>
-                                            <div class="position-relative border text-center mx-auto" style="width: 100%; max-width: 280px; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden; background: #0f172a; border-color: #e2e8f0 !important;">
-                                                @if ($auditAttendance->clock_in_photo_url)
-                                                    <a href="{{ $auditAttendance->clock_in_photo_url }}" target="_blank" title="Klik untuk memperbesar" class="d-block w-100 h-100">
-                                                        <img src="{{ $auditAttendance->clock_in_photo_url }}" alt="Selfie Masuk" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
-                                                    </a>
-                                                    <div class="position-absolute" style="top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); padding: 3px 8px; border-radius: 6px; font-size: 10px; color: #ffffff; z-index: 2;">
-                                                        <i class="fas fa-map-marker-alt text-warning mr-1"></i> {{ $auditAttendance->clock_in_distance_meters ?? 0 }}m dari kantor
+                                    <div class="tab-content attendance-audit-tab-content">
+                                        <!-- TAB 1: MASUK & PULANG -->
+                                        <div class="tab-pane fade attendance-audit-tab-pane {{ $auditTab !== 'overtime' ? 'show active' : '' }}" id="attendanceClockPanel" role="tabpanel" aria-labelledby="attendanceClockTab">
+                                            <div class="row">
+                                                <div class="col-6">
+                                                    <div class="attendance-audit-section-heading">
+                                                        <span>Foto Masuk</span>
+                                                        <span class="badge badge-light attendance-audit-time">{{ $auditAttendance->clock_in ? substr($auditAttendance->clock_in, 0, 5) . ' WIB' : '-' }}</span>
                                                     </div>
-                                                    <div class="photo-error-fallback flex-column align-items-center justify-content-center h-100 text-muted" style="display: none; font-size: 11.5px;">
-                                                        <i class="fas fa-image mb-1.5" style="font-size: 24px; color: #94a3b8;"></i>
-                                                        <span style="color: #cbd5e1;">File foto tidak ditemukan di server</span>
+                                                    <div class="position-relative attendance-audit-photo-frame attendance-audit-photo-frame-small">
+                                                        @if ($auditAttendance->clock_in_photo_url)
+                                                            <a href="{{ $auditAttendance->clock_in_photo_url }}" target="_blank" title="Klik untuk memperbesar" class="d-block w-100 h-100">
+                                                                <img src="{{ $auditAttendance->clock_in_photo_url }}" alt="Selfie Masuk" class="attendance-audit-photo-image" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
+                                                            </a>
+                                                            <div class="attendance-audit-photo-distance">
+                                                                <i class="fas fa-map-marker-alt text-warning mr-1"></i> {{ $auditAttendance->clock_in_distance_meters ?? 0 }}m dari kantor
+                                                            </div>
+                                                            <div class="photo-error-fallback attendance-audit-photo-empty">
+                                                                <i class="fas fa-image" aria-hidden="true"></i>
+                                                                <strong>Foto tidak dapat dimuat</strong>
+                                                                <span>Periksa kembali berkas bukti presensi.</span>
+                                                            </div>
+                                                        @else
+                                                            <div class="attendance-audit-photo-empty">
+                                                                <i class="fas fa-camera-slash" aria-hidden="true"></i>
+                                                                <strong>Foto masuk tidak tersedia</strong>
+                                                                <span>Tidak ada foto selfie pada catatan ini.</span>
+                                                            </div>
+                                                        @endif
                                                     </div>
-                                                @else
-                                                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style="font-size: 12px;">
-                                                        <i class="fas fa-camera-slash mb-1.5" style="font-size: 24px; color: #94a3b8;"></i>
-                                                        <span style="color: #cbd5e1;">Tanpa Foto Masuk (Manual / Finger)</span>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="attendance-audit-section-heading">
+                                                        <span>Foto Pulang</span>
+                                                        <span class="badge badge-light attendance-audit-time">{{ $auditAttendance->clock_out ? substr($auditAttendance->clock_out, 0, 5) . ' WIB' : '-' }}</span>
                                                     </div>
-                                                @endif
+                                                    <div class="position-relative attendance-audit-photo-frame attendance-audit-photo-frame-small">
+                                                        @if ($auditAttendance->clock_out_photo_url)
+                                                            <a href="{{ $auditAttendance->clock_out_photo_url }}" target="_blank" title="Klik untuk memperbesar" class="d-block w-100 h-100">
+                                                                <img src="{{ $auditAttendance->clock_out_photo_url }}" alt="Selfie Pulang" class="attendance-audit-photo-image" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
+                                                            </a>
+                                                            <div class="attendance-audit-photo-distance">
+                                                                <i class="fas fa-map-marker-alt text-warning mr-1"></i> {{ $auditAttendance->clock_out_distance_meters ?? 0 }}m dari kantor
+                                                            </div>
+                                                            <div class="photo-error-fallback attendance-audit-photo-empty">
+                                                                <i class="fas fa-image" aria-hidden="true"></i>
+                                                                <strong>Foto tidak dapat dimuat</strong>
+                                                                <span>Periksa kembali berkas bukti presensi.</span>
+                                                            </div>
+                                                        @else
+                                                            <div class="attendance-audit-photo-empty">
+                                                                <i class="fas fa-camera-slash" aria-hidden="true"></i>
+                                                                <strong>Foto pulang tidak tersedia</strong>
+                                                                <span>Tidak ada foto selfie pada catatan ini.</span>
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
 
-                                    @elseif ($auditTab === 'clock_out')
-                                        <!-- TAB 2: PULANG -->
-                                        <div class="mb-3">
-                                            <div class="d-flex justify-content-between align-items-center mb-1.5">
-                                                <span style="font-size: 12px; font-weight: 700; color: #0f172a;">Foto Selfie Pulang</span>
-                                                <span style="font-size: 11px; color: #64748b; font-weight: 600;">{{ $auditAttendance->clock_out ? substr($auditAttendance->clock_out, 0, 5) . ' WIB' : '-' }}</span>
-                                            </div>
-                                            <div class="position-relative border text-center mx-auto" style="width: 100%; max-width: 280px; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden; background: #0f172a; border-color: #e2e8f0 !important;">
-                                                @if ($auditAttendance->clock_out_photo_url)
-                                                    <a href="{{ $auditAttendance->clock_out_photo_url }}" target="_blank" title="Klik untuk memperbesar" class="d-block w-100 h-100">
-                                                        <img src="{{ $auditAttendance->clock_out_photo_url }}" alt="Selfie Pulang" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
-                                                    </a>
-                                                    <div class="position-absolute" style="top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); padding: 3px 8px; border-radius: 6px; font-size: 10px; color: #ffffff; z-index: 2;">
-                                                        <i class="fas fa-map-marker-alt text-warning mr-1"></i> {{ $auditAttendance->clock_out_distance_meters ?? 0 }}m dari kantor
-                                                    </div>
-                                                    <div class="photo-error-fallback flex-column align-items-center justify-content-center h-100 text-muted" style="display: none; font-size: 11.5px;">
-                                                        <i class="fas fa-image mb-1.5" style="font-size: 24px; color: #94a3b8;"></i>
-                                                        <span style="color: #cbd5e1;">File foto tidak ditemukan di server</span>
-                                                    </div>
-                                                @else
-                                                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style="font-size: 12px;">
-                                                        <i class="fas fa-camera-slash mb-1.5" style="font-size: 24px; color: #94a3b8;"></i>
-                                                        <span style="color: #cbd5e1;">Tanpa Foto Pulang</span>
-                                                    </div>
-                                                @endif
-                                            </div>
-                                        </div>
-
-                                    @else
                                         <!-- TAB 3: LEMBUR -->
-                                        <div class="mb-3">
-                                            <div class="d-flex justify-content-between align-items-center mb-2 p-2.5 bg-white border" style="border-radius: 10px; border-color: #e2e8f0 !important;">
+                                        <div class="tab-pane fade attendance-audit-tab-pane {{ $auditTab === 'overtime' ? 'show active' : '' }}" id="attendanceOvertimePanel" role="tabpanel" aria-labelledby="attendanceOvertimeTab">
+                                            <div class="attendance-overtime-summary">
                                                 <div>
-                                                    <div style="font-size: 11px; color: #64748b;">Jam Lembur:</div>
-                                                    <div style="font-size: 12.5px; font-weight: 700; color: #0b52aa;">
+                                                    <span class="attendance-overtime-label">Jam lembur</span>
+                                                    <strong class="attendance-overtime-value">
                                                         {{ $auditAttendance->overtime_in ? substr($auditAttendance->overtime_in, 0, 5) : '-' }} WIB &mdash; {{ $auditAttendance->overtime_out ? substr($auditAttendance->overtime_out, 0, 5) : '-' }} WIB
-                                                    </div>
+                                                    </strong>
                                                 </div>
                                                 <div class="text-right">
-                                                    <div style="font-size: 11px; color: #64748b;">Total Durasi:</div>
-                                                    <div style="font-size: 12.5px; font-weight: 700; color: #059669;">
+                                                    <span class="attendance-overtime-label">Total durasi</span>
+                                                    <strong class="attendance-overtime-duration">
                                                         {{ $auditAttendance->overtime_minutes ? intdiv($auditAttendance->overtime_minutes, 60).'j '.($auditAttendance->overtime_minutes % 60).'m' : '-' }}
-                                                    </div>
+                                                    </strong>
                                                 </div>
                                             </div>
 
-                                            <div class="row mb-2">
-                                                <div class="col-6 pr-1">
-                                                    <div style="font-size: 11px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">Mulai Lembur</div>
-                                                    <div class="position-relative border text-center" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; background: #0f172a; border-color: #e2e8f0 !important;">
+                                            <div class="row attendance-audit-overtime-photos">
+                                                <div class="col-6">
+                                                    <div class="attendance-audit-overtime-photo-title">Mulai lembur</div>
+                                                    <div class="position-relative attendance-audit-photo-frame attendance-audit-photo-frame-small">
                                                         @if ($auditAttendance->overtime_in_photo_url)
                                                             <a href="{{ $auditAttendance->overtime_in_photo_url }}" target="_blank" class="d-block w-100 h-100">
-                                                                <img src="{{ $auditAttendance->overtime_in_photo_url }}" alt="Mulai Lembur" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
+                                                                <img src="{{ $auditAttendance->overtime_in_photo_url }}" alt="Mulai Lembur" class="attendance-audit-photo-image" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
                                                             </a>
-                                                            <div class="photo-error-fallback flex-column align-items-center justify-content-center h-100 text-muted" style="display: none; font-size: 10.5px;">
-                                                                <i class="fas fa-image mb-1" style="font-size: 18px; color: #94a3b8;"></i>
-                                                                <span style="color: #cbd5e1;">Foto tidak ada</span>
+                                                            <div class="photo-error-fallback attendance-audit-photo-empty">
+                                                                <i class="fas fa-image" aria-hidden="true"></i>
+                                                                <strong>Foto tidak dapat dimuat</strong>
                                                             </div>
                                                         @else
-                                                            <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style="font-size: 11px;">
-                                                                <i class="fas fa-camera-slash mb-1" style="font-size: 18px; color: #94a3b8;"></i>
-                                                                <span style="color: #cbd5e1;">Tanpa Foto</span>
+                                                            <div class="attendance-audit-photo-empty">
+                                                                <i class="fas fa-camera-slash" aria-hidden="true"></i>
+                                                                <strong>Foto tidak tersedia</strong>
                                                             </div>
                                                         @endif
                                                     </div>
                                                 </div>
-                                                <div class="col-6 pl-1">
-                                                    <div style="font-size: 11px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">Selesai Lembur</div>
-                                                    <div class="position-relative border text-center" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; background: #0f172a; border-color: #e2e8f0 !important;">
+                                                <div class="col-6">
+                                                    <div class="attendance-audit-overtime-photo-title">Selesai lembur</div>
+                                                    <div class="position-relative attendance-audit-photo-frame attendance-audit-photo-frame-small">
                                                         @if ($auditAttendance->overtime_out_photo_url)
                                                             <a href="{{ $auditAttendance->overtime_out_photo_url }}" target="_blank" class="d-block w-100 h-100">
-                                                                <img src="{{ $auditAttendance->overtime_out_photo_url }}" alt="Selesai Lembur" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
+                                                                <img src="{{ $auditAttendance->overtime_out_photo_url }}" alt="Selesai Lembur" class="attendance-audit-photo-image" onerror="this.parentElement.style.display='none'; this.closest('.position-relative').querySelector('.photo-error-fallback').style.display='flex';">
                                                             </a>
-                                                            <div class="photo-error-fallback flex-column align-items-center justify-content-center h-100 text-muted" style="display: none; font-size: 10.5px;">
-                                                                <i class="fas fa-image mb-1" style="font-size: 18px; color: #94a3b8;"></i>
-                                                                <span style="color: #cbd5e1;">Foto tidak ada</span>
+                                                            <div class="photo-error-fallback attendance-audit-photo-empty">
+                                                                <i class="fas fa-image" aria-hidden="true"></i>
+                                                                <strong>Foto tidak dapat dimuat</strong>
                                                             </div>
                                                         @else
-                                                            <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style="font-size: 11px;">
-                                                                <i class="fas fa-camera-slash mb-1" style="font-size: 18px; color: #94a3b8;"></i>
-                                                                <span style="color: #cbd5e1;">Tanpa Foto</span>
+                                                            <div class="attendance-audit-photo-empty">
+                                                                <i class="fas fa-camera-slash" aria-hidden="true"></i>
+                                                                <strong>Foto tidak tersedia</strong>
                                                             </div>
                                                         @endif
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    @endif
-
-                                    <!-- Interactive Leaflet Map -->
-                                    <div class="mb-3">
-                                        <div class="d-flex justify-content-between align-items-center mb-1.5">
-                                            <span style="font-size: 12px; font-weight: 700; color: #0f172a;">Peta Koordinat GPS</span>
-                                            <span id="auditMapStatusBadge" class="badge badge-light border" style="font-size: 10.5px;">Memuat GPS...</span>
-                                        </div>
-                                        <div id="auditLeafletMap" wire:ignore style="width: 100%; height: 180px; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden;"></div>
                                     </div>
 
-                                    <!-- Location Info Box (Pure White) -->
-                                    <div class="p-2.5 bg-white border" style="border-radius: 10px; border-color: #e2e8f0 !important; font-size: 11.5px;">
-                                        <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <span style="color: #64748b;">Lokasi Acuan:</span>
-                                            <span id="auditMapOfficeLabel" class="font-weight-600 text-dark">-</span>
+                                    <div wire:ignore>
+                                        <!-- Interactive Leaflet Map -->
+                                        <div class="attendance-audit-map-section">
+                                            <div class="attendance-audit-section-heading">
+                                                <span>Lokasi presensi</span>
+                                                <span id="auditMapStatusBadge" class="badge badge-light attendance-audit-time">Memuat GPS...</span>
+                                            </div>
+                                            <div id="auditLeafletMap" class="attendance-audit-map"></div>
                                         </div>
-                                        <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <span style="color: #64748b;">Jarak dari Kantor:</span>
-                                            <span id="auditMapDistanceText" class="font-weight-700 text-primary">-</span>
-                                        </div>
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <span style="color: #64748b;">Koordinat Tap:</span>
-                                            <span id="auditMapCoordinatesText" class="font-weight-500 text-muted text-truncate" style="max-width: 180px;">-</span>
+
+                                        <div class="attendance-audit-location-list">
+                                            <div class="attendance-audit-location-row">
+                                                <span class="attendance-audit-location-label">Lokasi acuan</span>
+                                                <span id="auditMapOfficeLabel" class="attendance-audit-location-value">-</span>
+                                            </div>
+                                            <div class="attendance-audit-location-row">
+                                                <span class="attendance-audit-location-label">Jarak dari kantor</span>
+                                                <span id="auditMapDistanceText" class="attendance-audit-location-value text-primary">-</span>
+                                            </div>
+                                            <div class="attendance-audit-location-row">
+                                                <span class="attendance-audit-location-label">Koordinat presensi</span>
+                                                <span id="auditMapCoordinatesText" class="attendance-audit-location-value" title="Koordinat presensi">-</span>
+                                            </div>
                                         </div>
                                     </div>
                                 @else
-                                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-center py-5">
-                                        <div class="mb-3 d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; border-radius: 50%; background: #eff6ff; color: #0b52aa;">
+                                    <div class="attendance-proof-empty-state d-flex flex-column align-items-center justify-content-center h-100 text-center">
+                                        <div class="attendance-proof-empty-icon mb-3 d-flex align-items-center justify-content-center">
                                             <i class="fas fa-map-marked-alt" style="font-size: 22px;"></i>
                                         </div>
-                                        <div style="font-size: 13.5px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">
+                                        <div class="attendance-proof-empty-title">
                                             Input Presensi Baru
                                         </div>
-                                        <div style="font-size: 11.5px; color: #64748b; max-width: 260px;">
+                                        <div class="attendance-proof-empty-copy">
                                             Bukti foto selfie dan koordinat GPS akan tercatat otomatis saat presensi dilakukan via portal mandiri karyawan.
                                         </div>
                                     </div>
                                 @endif
-                            </div>
+                        </div>
+                        <div class="modal-footer attendance-proof-mobile-footer">
+                            <button type="button" class="btn btn-primary btn-block attendance-proof-return-button" data-attendance-mobile-proof-back>
+                                <i class="fas fa-arrow-left mr-1" aria-hidden="true"></i> Kembali ke Form
+                            </button>
                         </div>
                     </div>
-                </div>
             </div>
         </div>
     </div>
@@ -1653,6 +1857,62 @@
 
             initSelect2();
 
+            const syncMobileSlideHeight = () => {
+                const modal = document.getElementById('manualAttendanceModal');
+                const track = modal?.querySelector('.attendance-mobile-slide-track');
+                const isMobile = window.matchMedia('(max-width: 575.98px)').matches;
+
+                if (!modal || !track || !isMobile) {
+                    return;
+                }
+
+                const activePanelSelector = modal.classList.contains('attendance-mobile-proof-active')
+                    ? '.attendance-proof-window'
+                    : '.attendance-edit-modal-content';
+                const activePanel = modal.querySelector(activePanelSelector);
+
+                if (!activePanel) {
+                    return;
+                }
+
+                window.requestAnimationFrame(() => {
+                    const activePanelHeight = Math.ceil(activePanel.getBoundingClientRect().height);
+                    if (activePanelHeight > 0) {
+                        track.style.height = `${activePanelHeight}px`;
+                    }
+                });
+            };
+
+            if (!window.attendanceMobileProofNavigationBound) {
+                document.addEventListener('click', (event) => {
+                    const openButton = event.target.closest('[data-attendance-mobile-proof-open]');
+                    const backButton = event.target.closest('[data-attendance-mobile-proof-back]');
+                    const isMobile = window.matchMedia('(max-width: 575.98px)').matches;
+
+                    if (openButton && isMobile) {
+                        const modal = openButton.closest('#manualAttendanceModal');
+                        modal?.classList.add('attendance-mobile-proof-active');
+                        syncMobileSlideHeight();
+                    } else if (backButton && isMobile) {
+                        const modal = backButton.closest('#manualAttendanceModal');
+                        modal?.classList.remove('attendance-mobile-proof-active');
+                        syncMobileSlideHeight();
+                    }
+                });
+
+                window.addEventListener('resize', () => {
+                    if (!window.matchMedia('(max-width: 575.98px)').matches) {
+                        const modal = document.getElementById('manualAttendanceModal');
+                        modal?.classList.remove('attendance-mobile-proof-active');
+                        modal?.querySelector('.attendance-mobile-slide-track')?.style.removeProperty('height');
+                    } else {
+                        syncMobileSlideHeight();
+                    }
+                });
+
+                window.attendanceMobileProofNavigationBound = true;
+            }
+
             // Auto focus search field saat dropdown Select2 dibuka
             $(document).on('select2:open', () => {
                 setTimeout(() => {
@@ -1664,9 +1924,11 @@
             });
 
             Livewire.on('open-modal', (event) => {
+                resetLoadingCells();
                 const data = Array.isArray(event) ? event[0] : event;
                 const modalId = typeof data === 'object' && data !== null ? data.id : data;
                 if (modalId === 'manualAttendanceModal') {
+                    document.getElementById('manualAttendanceModal')?.classList.remove('attendance-mobile-proof-active');
                     setTimeout(() => {
                         initSelect2();
                         const empVal = @this.get('manualEmployeeId');
@@ -1677,9 +1939,30 @@
                 }
             });
 
+            // Animasi spinner instan & lock saat klik sel matriks presensi
+            const resetLoadingCells = function() {
+                document.querySelectorAll('.att-cell-wrap.is-loading').forEach(el => el.classList.remove('is-loading'));
+            };
+
+            if (typeof Livewire !== 'undefined' && Livewire.hook) {
+                Livewire.hook('commit', ({ succeed }) => {
+                    succeed(() => {
+                        resetLoadingCells();
+                        syncMobileSlideHeight();
+                    });
+                });
+            }
+            window.addEventListener('livewire:error', resetLoadingCells);
+            document.addEventListener('livewire:navigated', resetLoadingCells);
+
             $('#manualAttendanceModal').on('hidden.bs.modal', function () {
+                this.classList.remove('attendance-mobile-proof-active');
+                this.querySelector('.attendance-mobile-slide-track')?.style.removeProperty('height');
                 $('#manualEmployeeId').val('').trigger('change.select2');
+                resetLoadingCells();
             });
+
+            $('#manualAttendanceModal').on('shown.bs.modal', syncMobileSlideHeight);
         }
 
         if (document.readyState === 'loading') {

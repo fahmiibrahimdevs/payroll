@@ -841,8 +841,8 @@
         @if (isset($overtimeSummary) && $overtimeSummary['grand_total'] > 0)
             <div class="data-karyawan-box mb-3" style="border: 1.5px dashed #0284c7; background-color: #f0f9ff;">
                 <div class="box-header d-flex justify-content-between align-items-center" style="background-color: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 11px;">
-                    <span><i class="fas fa-info-circle mr-1"></i> INFORMASI TAMBAHAN: TELAH DITERIMA MINGGUAN (NON-THP)</span>
-                    <span style="font-weight: 500; font-size: 10px; text-transform: none; color: #0284c7;">Sudah Dicairkan Mingguan</span>
+                    <span><i class="fas fa-info-circle mr-1"></i> RINGKASAN MINGGUAN (DI LUAR GAJI BULANAN)</span>
+                    <span style="font-weight: 500; font-size: 10px; text-transform: none; color: #0284c7;">Informasi saja</span>
                 </div>
                 <div class="box-body" style="padding: 8px 12px;">
                     <table class="data-table" style="font-size: 11px;">
@@ -850,6 +850,9 @@
                             <td style="width: 28%; font-weight: 600; color: #1e293b;">Total Uang Makan Mingguan:</td>
                             <td style="width: 22%; font-weight: 700; color: #0284c7;">
                                 Rp {{ number_format($overtimeSummary['total_meal_allowance'], 0, ',', '.') }}
+                                <div style="font-size: 9px; font-weight: 400; color: #475569;">
+                                    Kehadiran: Rp {{ number_format($overtimeSummary['attendance_meal_allowance'], 0, ',', '.') }} · Lembur seharian: Rp {{ number_format($overtimeSummary['daily_overtime_meal_allowance'], 0, ',', '.') }} · Lembur per jam: Rp {{ number_format($overtimeSummary['hourly_overtime_meal_allowance'], 0, ',', '.') }}
+                                </div>
                             </td>
                             <td style="width: 28%; font-weight: 600; color: #1e293b;">Total Upah Lembur Mingguan:</td>
                             <td style="width: 22%; font-weight: 700; color: #0b52aa;">
@@ -857,11 +860,14 @@
                                 @if ($overtimeSummary['total_hours'] > 0)
                                     <span style="font-size: 10px; font-weight: normal; color: #64748b;">({{ number_format($overtimeSummary['total_hours'], 1) }} jam)</span>
                                 @endif
+                                <div style="font-size: 9px; font-weight: 400; color: #475569;">
+                                    Seharian: Rp {{ number_format($overtimeSummary['daily_overtime_pay'], 0, ',', '.') }} · Per jam: Rp {{ number_format($overtimeSummary['hourly_overtime_pay'], 0, ',', '.') }}
+                                </div>
                             </td>
                         </tr>
                         <tr>
                             <td colspan="4" style="padding-top: 4px; font-size: 10px; color: #64748b; font-style: italic;">
-                                * Catatan: Nominal uang makan dan upah lembur di atas telah diterima setiap minggu dan tidak diakumulasikan ke saldo transfer akhir bulan.
+                                * Catatan: Rincian mingguan ini hanya untuk informasi dan tidak ditambahkan ke total gaji bulanan.
                             </td>
                         </tr>
                     </table>

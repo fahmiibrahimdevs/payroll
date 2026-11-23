@@ -21,6 +21,7 @@ use App\Models\OvertimeSubmission;
 use App\Models\Position;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AttendanceService;
 use App\Services\OvertimeService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -112,6 +113,48 @@ class OvertimeTest extends TestCase
         $response->assertSee('Tren Jam Lembur');
         $response->assertSee('Sebaran per Departemen');
         $response->assertSee('Lembur - <span class="text-primary font-weight-bold">Semua Karyawan</span>', false);
+    }
+
+    public function test_submission_list_hides_reference_number_and_keeps_searching_by_it(): void
+    {
+        $referenceNumber = 'LMB-QUERY-'.uniqid();
+        $submission = OvertimeSubmission::create([
+            'reference_number' => $referenceNumber,
+            'employee_id' => $this->employee->id,
+            'overtime_type' => OvertimeType::HOURLY,
+            'date' => Carbon::today()->format('Y-m-d'),
+            'start_time' => '17:00',
+            'end_time' => '20:00',
+            'duration_hours' => 3.00,
+            'hourly_rate' => 25000.00,
+            'meal_allowance' => 15000.00,
+            'total_amount' => 90000.00,
+            'reason' => 'Lembur tugas harian',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->karyawanUser->id,
+        ]);
+
+        $submissions = app(OvertimeService::class)->getPaginatedSubmissions(
+            search: $referenceNumber,
+            status: 'all',
+            employeeId: $this->employee->id,
+        );
+        $listedSubmission = $submissions->first();
+
+        $this->assertNotNull($listedSubmission);
+        $this->assertSame($submission->id, $listedSubmission->id);
+        $this->assertArrayNotHasKey('reference_number', $listedSubmission->getAttributes());
+        $this->assertTrue($listedSubmission->relationLoaded('employee'));
+        $this->assertFalse($listedSubmission->relationLoaded('submitter'));
+
+        $this->actingAs($this->adminUser);
+
+        Livewire::test(OvertimeIndex::class)
+            ->assertSee($this->employee->full_name)
+            ->assertDontSee($referenceNumber)
+            ->set('search', $referenceNumber)
+            ->assertSee($this->employee->full_name);
     }
 
     public function test_direktur_can_view_overtime_page(): void
@@ -460,8 +503,8 @@ class OvertimeTest extends TestCase
     public function test_admin_can_create_weekly_period_and_mark_as_paid(): void
     {
         $service = app(OvertimeService::class);
-        // Periode mingguan wajib siklus Jum'at s/d Kamis (7 hari).
-        $startDate = Carbon::now()->isFriday() ? Carbon::now() : Carbon::now()->previous(Carbon::FRIDAY);
+        // Periode mingguan wajib siklus Sabtu s/d Jumat (7 hari).
+        $startDate = Carbon::now()->isSaturday() ? Carbon::now() : Carbon::now()->previous(Carbon::SATURDAY);
         $endDate = $startDate->copy()->addDays(6);
 
         $sub1 = OvertimeSubmission::create([
@@ -497,7 +540,10 @@ class OvertimeTest extends TestCase
         $sub1->refresh();
         $this->assertEquals($period->id, $sub1->overtime_period_id);
 
-        // Mark as paid
+        $this->assertNotNull($period->attendance_synced_at);
+        $period->update(['attendance_synced_at' => null]);
+
+        // Pembayaran memicu pembaruan otomatis untuk periode lama yang belum memiliki penanda sinkron.
         Livewire::test(OvertimeIndex::class)
             ->call('markPeriodPaid', $period->id)
             ->assertDispatched('swal:alert');
@@ -505,6 +551,18 @@ class OvertimeTest extends TestCase
         $period->refresh();
         $this->assertEquals(OvertimePeriodStatus::PAID, $period->status);
         $this->assertNotNull($period->paid_at);
+        $this->assertNotNull($period->attendance_synced_at);
+
+        $attendance = $period->attendances()->firstOrFail();
+        $attendedDays = (int) $attendance->attended_days;
+        try {
+            $service->updatePeriodAttendance($period, $attendance->employee_id, ['attended_days' => 1], $this->adminUser);
+            $this->fail('Slip pada periode yang sudah lunas harus terkunci.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertSame('Periode mingguan sudah lunas dan tidak dapat diubah.', $exception->getMessage());
+        }
+
+        $this->assertSame($attendedDays, (int) $attendance->fresh()->attended_days);
     }
 
     public function test_weekly_slip_is_printable_for_employee_and_admin(): void
@@ -541,11 +599,41 @@ class OvertimeTest extends TestCase
             'submitted_by' => $this->karyawanUser->id,
         ]);
 
+        $this->employee->update(['overtime_rate_per_hour' => 40000]);
         $this->actingAs($this->adminUser);
         $response = $this->get(route('overtimes.periods.print', $period->id));
         $response->assertStatus(200);
         $response->assertSee('SLIP MINGGUAN');
         $response->assertSee('65.000');
+        $this->assertSame(50000.0, $response->viewData('slips')[0]['totals']['hourly_ot_pay']);
+        $this->assertSame('Rp 25.000', $response->viewData('slips')[0]['unit_price_formatted']);
+
+        $this->employee->delete();
+        $archivedResponse = $this->get(route('overtimes.periods.print', $period->id));
+        $archivedResponse->assertOk()->assertSee('Karyawan Test Lembur');
+        $this->assertSame(50000.0, $archivedResponse->viewData('slips')[0]['totals']['hourly_ot_pay']);
+
+        OvertimeSubmission::create([
+            'reference_number' => 'OT-MIXED-'.uniqid(),
+            'overtime_period_id' => $period->id,
+            'employee_id' => $this->employee->id,
+            'date' => Carbon::now()->startOfWeek()->addDay()->format('Y-m-d'),
+            'start_time' => '18:00',
+            'end_time' => '19:00',
+            'duration_hours' => 1,
+            'hourly_rate' => 30000,
+            'meal_allowance' => 0,
+            'total_amount' => 30000,
+            'reason' => 'Tarif berbeda',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->karyawanUser->id,
+        ]);
+
+        $mixedResponse = $this->get(route('overtimes.periods.print', $period->id));
+        $mixedResponse->assertOk();
+        $this->assertSame(80000.0, $mixedResponse->viewData('slips')[0]['totals']['hourly_ot_pay']);
+        $this->assertSame('Sesuai pengajuan', $mixedResponse->viewData('slips')[0]['unit_price_formatted']);
     }
 
     public function test_employee_effective_meal_allowance_standar_vs_khusus(): void
@@ -615,12 +703,15 @@ class OvertimeTest extends TestCase
             'end_date' => $endDate->format('Y-m-d'),
         ], $this->adminUser);
 
+        app(AttendanceService::class)->syncToWeeklyOvertimePeriod($period, $this->adminUser);
+        $period->refresh();
+
         $this->actingAs($this->adminUser);
 
         // Test Livewire dedicated attendance page
         Livewire::actingAs($this->adminUser)
             ->test(PeriodAttendance::class, ['period' => $period])
-            // Toggle a day (e.g. remove 'sat' from 6 default days -> becomes 5 days)
+        // Belum ada catatan absensi, jadi tindakan Admin menambahkan hari hadir secara manual.
             ->call('toggleAttendanceDay', $this->employee->id, 'sat')
             ->call('save')
             ->assertDispatched('swal:alert');
@@ -630,8 +721,8 @@ class OvertimeTest extends TestCase
             ->first();
 
         $this->assertNotNull($att);
-        $this->assertEquals(5, $att->attended_days);
-        $this->assertNotContains('sat', $att->attendance_days);
+        $this->assertEquals(1, $att->attended_days);
+        $this->assertContains('sat', $att->attendance_days);
 
         // Also test direct numeric days count update (Opsi A) & rate update
         Livewire::actingAs($this->adminUser)
@@ -819,6 +910,77 @@ class OvertimeTest extends TestCase
         $this->assertEquals('Rp 250.000', $submission->formatted_subtotal_overtime);
     }
 
+    public function test_monthly_payslip_summary_separates_weekly_meal_and_daily_or_hourly_overtime(): void
+    {
+        $period = OvertimePeriod::create([
+            'reference_number' => 'PER-PRINT-'.uniqid(),
+            'name' => 'Gaji Mingguan W45',
+            'start_date' => '2026-11-01',
+            'end_date' => '2026-11-07',
+            'status' => OvertimePeriodStatus::DRAFT,
+            'created_by' => $this->adminUser->id,
+        ]);
+
+        OvertimePeriodAttendance::create([
+            'overtime_period_id' => $period->id,
+            'employee_id' => $this->employee->id,
+            'attended_days' => 3,
+            'attendance_days' => ['mon', 'tue', 'wed'],
+            'total_meal_allowance' => 45000,
+        ]);
+
+        OvertimeSubmission::create([
+            'reference_number' => 'OT-PRINT-D-'.uniqid(),
+            'overtime_period_id' => $period->id,
+            'employee_id' => $this->employee->id,
+            'overtime_type' => OvertimeType::DAILY,
+            'date' => '2026-11-03',
+            'start_time' => null,
+            'end_time' => null,
+            'duration_hours' => 1,
+            'hourly_rate' => 200000,
+            'meal_allowance' => 10000,
+            'total_amount' => 210000,
+            'reason' => 'Lembur seharian',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->karyawanUser->id,
+        ]);
+
+        OvertimeSubmission::create([
+            'reference_number' => 'OT-PRINT-H-'.uniqid(),
+            'overtime_period_id' => $period->id,
+            'employee_id' => $this->employee->id,
+            'overtime_type' => OvertimeType::HOURLY,
+            'date' => '2026-11-04',
+            'start_time' => '17:00',
+            'end_time' => '19:00',
+            'duration_hours' => 2,
+            'hourly_rate' => 50000,
+            'meal_allowance' => 5000,
+            'total_amount' => 105000,
+            'reason' => 'Lembur dua jam',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->karyawanUser->id,
+        ]);
+
+        $summary = app(OvertimeService::class)->getEmployeeMonthlyOvertimeSummary(
+            $this->employee->id,
+            2026,
+            11
+        );
+
+        $this->assertSame(45000.0, $summary['attendance_meal_allowance']);
+        $this->assertSame(10000.0, $summary['daily_overtime_meal_allowance']);
+        $this->assertSame(5000.0, $summary['hourly_overtime_meal_allowance']);
+        $this->assertSame(60000.0, $summary['total_meal_allowance']);
+        $this->assertSame(200000.0, $summary['daily_overtime_pay']);
+        $this->assertSame(100000.0, $summary['hourly_overtime_pay']);
+        $this->assertSame(300000.0, $summary['total_overtime_pay']);
+        $this->assertSame(2.0, $summary['total_hours']);
+    }
+
     public function test_user_can_switch_overtime_type_via_badge_tab(): void
     {
         Livewire::actingAs($this->adminUser)
@@ -953,7 +1115,7 @@ class OvertimeTest extends TestCase
             ->assertSee('Catatan admin untuk direktur');
     }
 
-    public function test_all_active_employees_are_included_in_period_attendance(): void
+    public function test_period_without_attendance_does_not_assume_all_harian_lepas_worked(): void
     {
         $this->employee->update([
             'employment_status' => EmploymentStatus::HARIAN,
@@ -970,8 +1132,315 @@ class OvertimeTest extends TestCase
         $activeWeeklyEmployeesCount = Employee::where('status', 'active')
             ->where('employment_status', EmploymentStatus::HARIAN)
             ->count();
-        $this->assertGreaterThanOrEqual(1, $period->attendances()->count());
-        $this->assertEquals($activeWeeklyEmployeesCount, $period->attendances()->count());
+        $this->assertSame(0, $period->attendances()->count());
+        $this->assertSame(0.0, (float) $period->grand_total);
+        $this->assertNotNull($period->attendance_synced_at);
+        $this->assertGreaterThanOrEqual(1, $activeWeeklyEmployeesCount);
+    }
+
+    public function test_weekly_sync_ignores_attendance_waiting_for_admin_review(): void
+    {
+        $service = app(OvertimeService::class);
+        $date = '2026-11-09';
+        $submission = OvertimeSubmission::create([
+            'reference_number' => $service->generateSubmissionReference(),
+            'employee_id' => $this->employee->id,
+            'date' => $date,
+            'start_time' => '17:00',
+            'end_time' => '19:00',
+            'duration_hours' => 2,
+            'hourly_rate' => 25000,
+            'meal_allowance' => 0,
+            'total_amount' => 50000,
+            'reason' => 'Lembur terjadwal',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->karyawanUser->id,
+            'approved_at' => now(),
+        ]);
+        $attendanceLog = Attendance::create([
+            'employee_id' => $this->employee->id,
+            'date' => $date,
+            'clock_in' => '08:00:00',
+            'clock_out' => '17:00:00',
+            'status' => 'hadir',
+            'review_status' => 'pending_review',
+            'duration_minutes' => 540,
+            'source' => 'web',
+        ]);
+
+        $period = $service->createPeriod([
+            'name' => 'Periode Review Mingguan',
+            'start_date' => '2026-11-07',
+            'end_date' => '2026-11-13',
+        ], $this->adminUser);
+
+        $row = $period->attendances()->where('employee_id', $this->employee->id)->firstOrFail();
+        $this->assertSame(0, (int) $row->attended_days);
+
+        $this->assertNotNull($period->fresh()->attendance_synced_at);
+        app(AttendanceService::class)->reviewAttendance($attendanceLog, 'approved', actor: $this->adminUser);
+
+        $this->assertSame(1, (int) $row->fresh()->attended_days);
+        $this->assertNotNull($period->fresh()->attendance_synced_at);
+        $this->assertSame($period->id, $submission->fresh()->overtime_period_id);
+    }
+
+    public function test_weekly_slip_separates_casual_daily_and_hourly_work_pay(): void
+    {
+        CompanyProfile::getProfile()->update([
+            'overtime_rounding_mode' => 'round_60_min',
+            'overtime_rounding_threshold_minutes' => 10,
+        ]);
+        $this->employee->update([
+            'employment_status' => EmploymentStatus::HARIAN,
+            'daily_rate' => 125000,
+            'overtime_rate_per_hour' => 30000,
+        ]);
+
+        Attendance::create([
+            'employee_id' => $this->employee->id,
+            'date' => '2026-11-07',
+            'clock_in' => '08:00:00',
+            'clock_out' => '17:00:00',
+            'status' => 'hadir',
+            'review_status' => 'approved',
+            'casual_work_type' => 'daily',
+            'casual_pay_override' => 100000,
+            'source' => 'web_gps',
+        ]);
+        Attendance::create([
+            'employee_id' => $this->employee->id,
+            'date' => '2026-11-08',
+            'clock_in' => '09:00:00',
+            'clock_out' => '10:10:00',
+            'status' => 'hadir',
+            'review_status' => 'approved',
+            'duration_minutes' => 70,
+            'casual_work_type' => 'hourly',
+            'source' => 'web_gps',
+        ]);
+
+        $period = app(OvertimeService::class)->createPeriod([
+            'name' => 'Periode HLP Harian dan Per Jam Test',
+            'start_date' => '2026-11-07',
+            'end_date' => '2026-11-13',
+        ], $this->adminUser);
+
+        app(AttendanceService::class)->syncToWeeklyOvertimePeriod($period, $this->adminUser);
+
+        $row = $period->attendances()->where('employee_id', $this->employee->id)->firstOrFail();
+        $this->assertSame(2, (int) $row->attended_days);
+        $this->assertEquals(100000.0, (float) $row->total_daily_wage);
+        $this->assertEquals(60000.0, (float) $row->total_hourly_work_pay);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('overtimes.periods.print', $period->id));
+
+        $response->assertOk();
+        $slip = collect($response->viewData('slips'))->firstWhere('employee.id', $this->employee->id);
+        $this->assertNotNull($slip);
+        $this->assertEquals(100000.0, $slip['total_daily_wage']);
+        $this->assertEquals(60000.0, $slip['totals']['total_hourly_work_pay']);
+    }
+
+    public function test_admin_can_confirm_hourly_selection_as_daily_before_approval(): void
+    {
+        $this->employee->update([
+            'employment_status' => EmploymentStatus::HARIAN,
+            'daily_rate' => 125000,
+            'overtime_rate_per_hour' => 30000,
+        ]);
+        $attendance = Attendance::create([
+            'employee_id' => $this->employee->id,
+            'date' => '2026-11-07',
+            'clock_in' => '08:00:00',
+            'clock_out' => '17:00:00',
+            'clock_in_photo_path' => 'attendances/in.jpg',
+            'clock_out_photo_path' => 'attendances/out.jpg',
+            'status' => 'hadir',
+            'review_status' => 'pending_review',
+            'duration_minutes' => 540,
+            'casual_work_type' => 'hourly',
+            'source' => 'web_gps',
+        ]);
+
+        app(AttendanceService::class)->reviewAttendance(
+            $attendance,
+            'approved',
+            actor: $this->adminUser,
+            casualPayOverride: 100000,
+            casualPayReason: 'Pekerjaan disepakati sebagai kerja harian.',
+            confirmedCasualWorkType: 'daily',
+        );
+
+        $this->assertSame('hourly', $attendance->fresh()->casual_work_type);
+        $this->assertSame('daily', $attendance->fresh()->casual_work_type_confirmed);
+        $this->assertSame(100000.0, (float) $attendance->fresh()->casual_pay_override);
+
+        $period = app(OvertimeService::class)->createPeriod([
+            'name' => 'Periode Konfirmasi Jenis Kerja',
+            'start_date' => '2026-11-07',
+            'end_date' => '2026-11-13',
+        ], $this->adminUser);
+        app(AttendanceService::class)->syncToWeeklyOvertimePeriod($period, $this->adminUser);
+        $row = $period->attendances()->where('employee_id', $this->employee->id)->firstOrFail();
+
+        $this->assertSame(100000.0, (float) $row->total_daily_wage);
+        $this->assertSame(0.0, (float) $row->total_hourly_work_pay);
+    }
+
+    public function test_admin_must_confirm_casual_work_type_before_approval(): void
+    {
+        $this->employee->update(['employment_status' => EmploymentStatus::HARIAN]);
+        $attendance = Attendance::create([
+            'employee_id' => $this->employee->id,
+            'date' => '2026-11-07',
+            'clock_in' => '08:00:00',
+            'clock_out' => '17:00:00',
+            'clock_in_photo_path' => 'attendances/in.jpg',
+            'clock_out_photo_path' => 'attendances/out.jpg',
+            'status' => 'hadir',
+            'review_status' => 'pending_review',
+            'casual_work_type' => 'daily',
+            'source' => 'web_gps',
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Admin harus mengonfirmasi jenis kerja harian lepas sebelum menyetujui absensi.');
+
+        app(AttendanceService::class)->reviewAttendance($attendance, 'approved', actor: $this->adminUser);
+    }
+
+    public function test_weekly_page_fallback_does_not_treat_hourly_harian_lepas_work_as_daily_pay(): void
+    {
+        CompanyProfile::getProfile()->update([
+            'overtime_rounding_mode' => 'round_60_min',
+            'overtime_rounding_threshold_minutes' => 10,
+        ]);
+        $this->employee->update([
+            'employment_status' => EmploymentStatus::HARIAN,
+            'daily_rate' => 125000,
+            'overtime_rate_per_hour' => 30000,
+        ]);
+
+        $period = app(OvertimeService::class)->createPeriod([
+            'name' => 'Periode HLP Fallback Test',
+            'start_date' => '2026-11-07',
+            'end_date' => '2026-11-13',
+        ], $this->adminUser);
+        Attendance::create([
+            'employee_id' => $this->employee->id,
+            'date' => '2026-11-07',
+            'clock_in' => '09:00:00',
+            'clock_out' => '10:10:00',
+            'status' => 'hadir',
+            'review_status' => 'approved',
+            'duration_minutes' => 70,
+            'casual_work_type' => 'hourly',
+            'source' => 'web_gps',
+        ]);
+
+        Livewire::actingAs($this->adminUser)
+            ->test(PeriodAttendance::class, ['period' => $period])
+            ->assertSee('Upah Kerja per Jam');
+
+        $row = $period->attendances()->where('employee_id', $this->employee->id)->firstOrFail();
+        $this->assertSame(0.0, (float) $row->total_daily_wage);
+        $this->assertSame(60000.0, (float) $row->total_hourly_work_pay);
+    }
+
+    public function test_admin_cannot_manually_change_harian_lepas_hourly_work_pay(): void
+    {
+        $this->employee->update([
+            'employment_status' => EmploymentStatus::HARIAN,
+            'overtime_rate_per_hour' => 30000,
+        ]);
+        $attendance = Attendance::create([
+            'employee_id' => $this->employee->id,
+            'date' => '2026-11-07',
+            'clock_in' => '09:00:00',
+            'clock_out' => '10:10:00',
+            'clock_in_photo_path' => 'attendances/in.jpg',
+            'clock_out_photo_path' => 'attendances/out.jpg',
+            'status' => 'hadir',
+            'review_status' => 'pending_review',
+            'duration_minutes' => 70,
+            'casual_work_type' => 'hourly',
+            'source' => 'web_gps',
+        ]);
+
+        try {
+            app(AttendanceService::class)->reviewAttendance(
+                $attendance,
+                'approved',
+                actor: $this->adminUser,
+                casualPayOverride: 50000,
+                casualPayReason: 'Pembayaran manual',
+                confirmedCasualWorkType: 'hourly',
+            );
+            $this->fail('Pembayaran Kerja per Jam seharusnya tidak dapat diubah manual.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertSame('Pembayaran Kerja per Jam dihitung otomatis dan tidak dapat disesuaikan manual.', $exception->getMessage());
+        }
+    }
+
+    public function test_period_attendance_shows_incomplete_roster_as_escaped_card_list(): void
+    {
+        CompanyProfile::getProfile()->update(['work_schedule_mode' => 'roster']);
+        $this->employee->update(['full_name' => "Karyawan <script>alert('xss')</script>"]);
+        foreach (range(1, 7) as $index) {
+            Employee::factory()->active()->create([
+                'department_id' => $this->employee->department_id,
+                'position_id' => $this->employee->position_id,
+                'full_name' => "Karyawan Roster Tambahan {$index}",
+            ]);
+        }
+
+        $incompleteEmployeeCount = Employee::query()
+            ->where('status', 'active')
+            ->where(fn ($query) => $query->whereNull('employment_status')->orWhere('employment_status', '!=', EmploymentStatus::HARIAN))
+            ->count();
+
+        $period = OvertimePeriod::create([
+            'reference_number' => 'PER-ROSTER-'.uniqid(),
+            'name' => 'Periode Roster Belum Lengkap',
+            'start_date' => '2026-10-24',
+            'end_date' => '2026-10-31',
+            'status' => OvertimePeriodStatus::DRAFT,
+            'created_by' => $this->adminUser->id,
+        ]);
+
+        Livewire::actingAs($this->adminUser)
+            ->test(PeriodAttendance::class, ['period' => $period])
+            ->assertDispatched('swal:alert', fn ($event, $params) => (
+                str_contains($params[0]['html'] ?? '', 'class="roster-warning-card"')
+                && substr_count($params[0]['html'] ?? '', 'class="roster-warning-card"') === 5
+                && substr_count($params[0]['html'] ?? '', 'class="roster-warning-date"') === 40
+                && str_contains($params[0]['html'] ?? '', 'Dan '.($incompleteEmployeeCount - 5).' karyawan lainnya')
+                && ! str_contains($params[0]['html'] ?? '', 'roster-warning-scroll-hint')
+                && ! str_contains($params[0]['html'] ?? '', '<table')
+                && ($params[0]['customClass']['popup'] ?? null) === 'roster-warning-popup'
+                && str_contains($params[0]['html'] ?? '', '&lt;script&gt;')
+                && ! str_contains($params[0]['html'] ?? '', "<script>alert('xss')</script>")
+            ));
+    }
+
+    public function test_roster_period_creation_is_blocked_until_active_employees_have_daily_statuses(): void
+    {
+        CompanyProfile::getProfile()->update(['work_schedule_mode' => 'roster']);
+
+        try {
+            app(OvertimeService::class)->createPeriod([
+                'name' => 'Periode Roster Belum Lengkap',
+                'start_date' => '2026-11-07',
+                'end_date' => '2026-11-13',
+            ], $this->adminUser);
+            $this->fail('Periode roster tidak boleh dibuat saat masih ada tanggal yang kosong.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('Jadwal roster belum lengkap', $exception->getMessage());
+            $this->assertStringContainsString('Jadwal Kerja (Roster)', $exception->getMessage());
+        }
     }
 
     public function test_period_attendance_page_access_and_bulk_set(): void
@@ -1001,7 +1470,7 @@ class OvertimeTest extends TestCase
             ->assertOk()
             ->assertSee('Kehadiran &amp; Uang Makan Mingguan', false);
 
-        // Bulk action test
+        // There is no attendance row yet, so the bulk action cannot create a payable amount.
         Livewire::actingAs($this->adminUser)
             ->test(PeriodAttendance::class, ['period' => $period])
             ->call('updateAttendedDaysCount', $this->employee->id, 3)
@@ -1012,7 +1481,7 @@ class OvertimeTest extends TestCase
             ->where('employee_id', $this->employee->id)
             ->first();
 
-        $this->assertEquals(6, $att->attended_days);
+        $this->assertNull($att);
     }
 
     public function test_period_attendance_excludes_zero_attended_days_from_view(): void
@@ -1040,6 +1509,21 @@ class OvertimeTest extends TestCase
             'start_date' => $startDate->format('Y-m-d'),
             'end_date' => $endDate->format('Y-m-d'),
         ], $this->adminUser);
+
+        $secondEmployee = Employee::where('full_name', 'Karyawan Harian Dua')->firstOrFail();
+        foreach ([$this->employee, $secondEmployee] as $employee) {
+            OvertimePeriodAttendance::create([
+                'overtime_period_id' => $period->id,
+                'employee_id' => $employee->id,
+                'attended_days' => 0,
+                'attendance_days' => [],
+                'meal_allowance_type' => 'standar',
+                'meal_allowance_per_day' => 25000,
+                'daily_rate' => 125000,
+                'total_meal_allowance' => 0,
+                'total_daily_wage' => 0,
+            ]);
+        }
 
         $attendances = $period->attendances()->with('employee')->take(2)->get();
         $this->assertCount(2, $attendances);
@@ -1099,6 +1583,21 @@ class OvertimeTest extends TestCase
             'end_date' => $endDate->format('Y-m-d'),
         ], $this->adminUser);
 
+        $secondEmployee = Employee::where('full_name', 'Karyawan Harian Tiga')->firstOrFail();
+        foreach ([$this->employee, $secondEmployee] as $employee) {
+            OvertimePeriodAttendance::create([
+                'overtime_period_id' => $period->id,
+                'employee_id' => $employee->id,
+                'attended_days' => 0,
+                'attendance_days' => [],
+                'meal_allowance_type' => 'standar',
+                'meal_allowance_per_day' => 25000,
+                'daily_rate' => 125000,
+                'total_meal_allowance' => 0,
+                'total_daily_wage' => 0,
+            ]);
+        }
+
         $attendances = $period->attendances()->with('employee')->take(2)->get();
         $this->assertCount(2, $attendances);
 
@@ -1130,7 +1629,7 @@ class OvertimeTest extends TestCase
         $response->assertDontSee($attZero->employee->full_name);
     }
 
-    public function test_admin_can_pay_and_edit_employee_weekly_salary(): void
+    public function test_admin_cannot_edit_weekly_slip_after_payment(): void
     {
         $this->employee->update([
             'employment_status' => EmploymentStatus::HARIAN,
@@ -1146,8 +1645,19 @@ class OvertimeTest extends TestCase
             'end_date' => $endDate->format('Y-m-d'),
         ], $this->adminUser);
 
-        $attendance = $period->attendances()->first();
-        $this->assertNotNull($attendance);
+        $period->update(['attendance_synced_at' => now()]);
+        $attendance = OvertimePeriodAttendance::create([
+            'overtime_period_id' => $period->id,
+            'employee_id' => $this->employee->id,
+            'attended_days' => 0,
+            'attendance_days' => [],
+            'meal_allowance_type' => 'standar',
+            'meal_allowance_per_day' => 25000,
+            'daily_rate' => 125000,
+            'total_meal_allowance' => 0,
+            'total_daily_wage' => 0,
+            'payment_status' => 'unpaid',
+        ]);
 
         $attendance->update([
             'attended_days' => 5,
@@ -1190,18 +1700,31 @@ class OvertimeTest extends TestCase
             ->call('openPaymentDetailModal', $attendance->employee_id)
             ->assertDispatched('open-modal', id: 'paymentDetailModal');
 
-        // 3. Edit Pembayaran
+        // 3. Slip yang sudah lunas tidak lagi bisa membuka formulir edit.
         Livewire::test(PeriodAttendance::class, ['period' => $period])
             ->call('openEditPaymentModal', $attendance->employee_id)
-            ->assertDispatched('close-modal', id: 'paymentDetailModal')
-            ->assertDispatched('open-modal', id: 'payEmployeeModal')
-            ->set('itemPaymentNotes', 'Catatan diperbarui')
-            ->call('processEmployeePayment')
-            ->assertDispatched('close-modal', id: 'payEmployeeModal')
+            ->assertNotDispatched('open-modal', id: 'payEmployeeModal')
             ->assertDispatched('swal:alert');
 
+        try {
+            $service->updateEmployeeWeeklyPayment($attendance, ['payment_notes' => 'Catatan diperbarui'], $this->adminUser);
+            $this->fail('Slip yang sudah dibayar harus menolak perubahan detail pembayaran.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertSame('Slip mingguan sudah dibayar dan seluruh datanya terkunci.', $exception->getMessage());
+        }
+
         $attendance->refresh();
-        $this->assertEquals('Catatan diperbarui', $attendance->payment_notes);
+        $this->assertSame('Gaji mingguan dibayar penuh via transfer BCA', $attendance->payment_notes);
+        $this->assertSame(5, (int) $attendance->attended_days);
+
+        try {
+            $service->updatePeriodAttendance($period, $attendance->employee_id, ['attended_days' => 1], $this->adminUser);
+            $this->fail('Kehadiran pada slip yang sudah dibayar harus terkunci.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertSame('Slip mingguan karyawan ini sudah dibayar dan tidak dapat diubah.', $exception->getMessage());
+        }
+
+        $this->assertSame(5, (int) $attendance->fresh()->attended_days);
     }
 
     public function test_karyawan_can_submit_overnight_overtime_crossing_midnight(): void
@@ -1607,11 +2130,11 @@ class OvertimeTest extends TestCase
         $this->assertEquals(15000.00, (float) $period->total_meal_allowance);
     }
 
-    public function test_store_period_rejects_non_friday_start_and_non_thursday_end(): void
+    public function test_store_period_rejects_dates_outside_saturday_to_friday_cycle(): void
     {
         $this->actingAs($this->adminUser);
 
-        // Senin s/d Minggu bukan siklus Jum'at s/d Kamis.
+        // Senin s/d Minggu bukan siklus Sabtu s/d Jumat.
         Livewire::test(OvertimeIndex::class)
             ->set('period_start_date', Carbon::parse('2026-03-02')->format('Y-m-d'))
             ->set('period_end_date', Carbon::parse('2026-03-08')->format('Y-m-d'))

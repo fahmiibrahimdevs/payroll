@@ -145,6 +145,10 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->middleware('role:admin|direktur|karyawan')
         ->name('attendances.index');
 
+    Route::get('attendances/{attendance}/photo/{type}', [SecureDocumentController::class, 'attendancePhoto'])
+        ->middleware('role:admin|direktur|karyawan')
+        ->name('attendances.photo');
+
     Route::get('schedules', App\Livewire\Schedules\Index::class)
         ->middleware('role:admin|direktur|karyawan')
         ->name('schedules.index');

@@ -9,15 +9,15 @@
     <link rel="icon" type="image/jpeg" href="{{ asset('assets/img/larashiz-logo.jpg') }}">
 
     <!-- General CSS Files -->
-    <link rel="stylesheet" href="{{ asset('assets/css/bootstrap-tailwind.compiled.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/css/bootstrap-tailwind.compiled.css') }}?v={{ @filemtime(public_path('assets/css/bootstrap-tailwind.compiled.css')) }}">
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css"
         integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
     <link rel="stylesheet" href="{{ asset('assets/css/flatpickr.min.css') }}">
 
     <!-- Template CSS -->
-    <link rel="stylesheet" href="{{ asset('assets/css/style-tailwind.compiled.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/components-tailwind.compiled.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/css/style-tailwind.compiled.css') }}?v={{ @filemtime(public_path('assets/css/style-tailwind.compiled.css')) }}">
+    <link rel="stylesheet" href="{{ asset('assets/css/components-tailwind.compiled.css') }}?v={{ @filemtime(public_path('assets/css/components-tailwind.compiled.css')) }}">
 
     @livewireStyles
     <style>
@@ -223,6 +223,9 @@
                     swalConfig.html = data.html;
                 } else {
                     swalConfig.text = data.message || data.text || '';
+                }
+                if (data.customClass) {
+                    swalConfig.customClass = data.customClass;
                 }
                 Swal.fire(swalConfig);
             });

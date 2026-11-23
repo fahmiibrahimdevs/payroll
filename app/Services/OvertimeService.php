@@ -178,7 +178,28 @@ class OvertimeService
         int $perPage = 15
     ): LengthAwarePaginator {
         $query = OvertimeSubmission::query()
-            ->with(['employee.department', 'employee.position', 'submitter', 'verifiedByAdmin', 'approvedByDirektur', 'rejectedBy'])
+            ->select([
+                'id',
+                'employee_id',
+                'overtime_period_id',
+                'overtime_type',
+                'date',
+                'start_time',
+                'end_time',
+                'duration_hours',
+                'hourly_rate',
+                'meal_allowance',
+                'total_amount',
+                'reason',
+                'submission_source',
+                'status',
+                'rejection_reason',
+            ])
+            ->with([
+                'employee:id,full_name,photo_path,department_id,position_id',
+                'employee.department:id,name',
+                'employee.position:id,name',
+            ])
             ->latest('date')
             ->latest('id');
 
@@ -888,6 +909,68 @@ class OvertimeService
         }
     }
 
+    /** Ensure a weekly roster has an explicit work/off choice for every date. */
+    public function assertWeeklyRosterComplete(string $startDate, string $endDate): void
+    {
+        $company = CompanyProfile::getProfile();
+        if (! $company->isRosterMode()) {
+            return;
+        }
+
+        $employees = Employee::query()
+            ->where('status', 'active')
+            ->where(function ($query): void {
+                $query->whereNull('employment_status')
+                    ->orWhere('employment_status', '!=', EmploymentStatus::HARIAN);
+            })
+            ->orderBy('full_name')
+            ->get(['id', 'full_name']);
+
+        if ($employees->isEmpty()) {
+            return;
+        }
+
+        $schedules = EmployeeSchedule::schedulesForEmployees($employees->pluck('id')->all(), $startDate, $endDate);
+        $incomplete = [];
+        $date = Carbon::parse($startDate)->startOfDay();
+        $lastDate = Carbon::parse($endDate)->startOfDay();
+
+        while ($date->lessThanOrEqualTo($lastDate)) {
+            foreach ($employees as $employee) {
+                if (! $schedules->get($employee->id, collect())->has($date->toDateString())) {
+                    $incomplete[$employee->full_name][] = $date->locale('id')->translatedFormat('D, d M');
+                }
+            }
+
+            $date->addDay();
+        }
+
+        if ($incomplete !== []) {
+            $details = collect($incomplete)
+                ->map(fn (array $dates, string $name): string => $name.': '.implode(', ', $dates))
+                ->take(8)
+                ->implode('; ');
+            $remaining = count($incomplete) - 8;
+            $suffix = $remaining > 0 ? "; dan {$remaining} karyawan lainnya" : '';
+
+            throw new InvalidArgumentException('Jadwal roster belum lengkap untuk seluruh karyawan aktif. Lengkapi tanggal berikut di menu Jadwal Kerja (Roster), pilih Kerja atau Libur: '.$details.$suffix.'.');
+        }
+    }
+
+    /** Return employees with attendance records that still need Admin review. */
+    public function weeklyPendingAttendanceEmployeeIds(OvertimePeriod $period): array
+    {
+        return Attendance::query()
+            ->whereBetween('date', [$period->start_date->toDateString(), $period->end_date->toDateString()])
+            ->whereNotNull('clock_in')
+            ->where('review_status', 'pending_review')
+            ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+            ->distinct()
+            ->pluck('employee_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
     public function createPeriod(array $data, User $actor): OvertimePeriod
     {
         $this->authorizeWeeklyAdmin($actor);
@@ -899,6 +982,8 @@ class OvertimeService
             if ($endDate->lessThan($startDate)) {
                 throw new InvalidArgumentException('Tanggal akhir periode tidak boleh lebih awal dari tanggal mulai.');
             }
+
+            $this->assertWeeklyRosterComplete($startDate->toDateString(), $endDate->toDateString());
 
             // Cegah periode bertumpang tindih: upah harian + uang makan hari yang
             // sama akan dibayar dua kali di dua periode bila rentangnya overlap.
@@ -928,10 +1013,16 @@ class OvertimeService
             // Cek apakah data absensi log mesin sudah tersedia di rentang tanggal ini
             $attendances = Attendance::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
                 ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+                ->where(fn ($query) => $query->whereNull('review_status')->orWhere('review_status', 'approved'))
                 ->get()
                 ->groupBy('employee_id');
 
-            $hasAttendanceLog = $attendances->isNotEmpty();
+            $attendanceEmployeeIds = Attendance::query()
+                ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                ->whereIn('status', ['hadir', 'terlambat', 'pulang_cepat'])
+                ->distinct()
+                ->pluck('employee_id')
+                ->all();
             $attendedEmpIds = $attendances->keys()->all();
 
             // Target karyawan mingguan:
@@ -940,11 +1031,11 @@ class OvertimeService
             // 3. Karyawan aktif (tetap/kontrak) yang memiliki catatan kehadiran di periode ini (berhak uang makan)
             $candidateEmployees = Employee::query()
                 ->where('status', 'active')
-                ->where(function ($q) use ($linkedEmpIds, $attendedEmpIds, $hasAttendanceLog) {
+                ->where(function ($q) use ($linkedEmpIds, $attendanceEmployeeIds) {
                     $q->where('employment_status', EmploymentStatus::HARIAN)
                         ->orWhereIn('id', $linkedEmpIds);
-                    if ($hasAttendanceLog) {
-                        $q->orWhereIn('id', $attendedEmpIds);
+                    if ($attendanceEmployeeIds !== []) {
+                        $q->orWhereIn('id', $attendanceEmployeeIds);
                     }
                 })
                 ->orderBy('full_name')
@@ -975,15 +1066,10 @@ class OvertimeService
                     ->update(['overtime_period_id' => $period->id]);
             }
 
-            // Fallback tanpa log absensi: hari kerja aktual dalam rentang
-            // (kecualikan akhir pekan sesuai jadwal kerja dan hari libur
-            // nasional dari kalender admin).
             $company = CompanyProfile::getProfile();
             $workDaysPerWeek = (int) ($company->work_days_per_week ?? 6);
             $isRoster = $company->isRosterMode();
             $validWorkDays = WorkingDays::workDays($startDate->toDateString(), $endDate->toDateString(), $workDaysPerWeek);
-            $defaultDays = array_values($validWorkDays);
-            $defaultDaysCount = max(1, count($defaultDays));
 
             $rosterSchedules = $isRoster
                 ? EmployeeSchedule::schedulesForEmployees($candidateEmployees->pluck('id')->all(), $startDate->toDateString(), $endDate->toDateString())
@@ -999,7 +1085,7 @@ class OvertimeService
                     ? WorkingDays::employeeWorkDays($emp->id, $startDate->toDateString(), $endDate->toDateString(), $company, $rosterSchedules->get($emp->id))
                     : $validWorkDays;
 
-                if ($hasAttendanceLog) {
+                if ($attendances->isNotEmpty()) {
                     // Presensi mingguan hanya menghitung hari kerja valid
                     // (Minggu/Sabtu sesuai jadwal dan libur nasional tidak
                     // dihitung); log absensinya tetap tersimpan.
@@ -1026,25 +1112,26 @@ class OvertimeService
                         'total_daily_wage' => $totalDailyWage,
                     ]);
                 } else {
-                    // Jika log absensi belum diimpor, default hanya untuk karyawan harian aktif & lembur
-                    $empDefaultDays = $isRoster ? array_values($empValidWorkDays) : $defaultDays;
-                    $empDefaultDaysCount = max(1, count($empDefaultDays));
-                    $totalDailyWage = $empDefaultDaysCount * $dailyRate;
+                    if (! $hasOvertime) {
+                        continue;
+                    }
+
                     OvertimePeriodAttendance::create([
                         'overtime_period_id' => $period->id,
                         'employee_id' => $emp->id,
                         'meal_allowance_type' => $emp->meal_allowance_type ?: 'standar',
                         'meal_allowance_per_day' => $rate,
                         'daily_rate' => $dailyRate,
-                        'attended_days' => $empDefaultDaysCount,
-                        'attendance_days' => $empDefaultDays,
-                        'total_meal_allowance' => $empDefaultDaysCount * $rate,
-                        'total_daily_wage' => $totalDailyWage,
+                        'attended_days' => 0,
+                        'attendance_days' => [],
+                        'total_meal_allowance' => 0,
+                        'total_daily_wage' => 0,
                     ]);
                 }
             }
 
             $period->recalculateTotals();
+            app(AttendanceService::class)->syncToWeeklyOvertimePeriod($period, $actor);
 
             $this->logger->info(
                 action: 'OVERTIME_PERIOD_CREATED',
@@ -1113,9 +1200,18 @@ class OvertimeService
         $this->authorizeWeeklyAdmin($actor);
 
         return DB::transaction(function () use ($period, $employeeId, $data, $recalculateTotals) {
+            $lockedPeriod = OvertimePeriod::query()->lockForUpdate()->findOrFail($period->id);
+            if ($lockedPeriod->status === OvertimePeriodStatus::PAID) {
+                throw new InvalidArgumentException('Periode mingguan sudah lunas dan tidak dapat diubah.');
+            }
+
             $attendance = OvertimePeriodAttendance::where('overtime_period_id', $period->id)
                 ->where('employee_id', $employeeId)
+                ->lockForUpdate()
                 ->firstOrFail();
+            if ($attendance->isPaid()) {
+                throw new InvalidArgumentException('Slip mingguan karyawan ini sudah dibayar dan tidak dapat diubah.');
+            }
 
             $attendedDays = isset($data['attended_days']) ? (int) $data['attended_days'] : $attendance->attended_days;
             $attendanceDays = $data['attendance_days'] ?? $attendance->attendance_days;
@@ -1134,7 +1230,12 @@ class OvertimeService
             $isHarian = $employee && $employee->employment_status === EmploymentStatus::HARIAN;
             // daily_rate selalu dari data master karyawan, bukan dari input client (read-only di UI).
             $dailyRate = $isHarian ? (float) ($employee->daily_rate ?? 0) : 0.0;
-            $totalDailyWage = round($attendedDays * $dailyRate, 2);
+            $totalDailyWage = $isHarian
+                ? (float) $attendance->total_daily_wage
+                : 0.0;
+            $totalHourlyWorkPay = $isHarian
+                ? (float) $attendance->total_hourly_work_pay
+                : 0.0;
 
             $attendance->update([
                 'attended_days' => $attendedDays,
@@ -1144,6 +1245,7 @@ class OvertimeService
                 'total_meal_allowance' => $totalMeal,
                 'daily_rate' => $dailyRate,
                 'total_daily_wage' => $totalDailyWage,
+                'total_hourly_work_pay' => $totalHourlyWorkPay,
                 'notes' => $data['notes'] ?? $attendance->notes,
             ]);
 
@@ -1187,6 +1289,15 @@ class OvertimeService
                 throw new InvalidArgumentException('Periode lembur yang dibatalkan tidak dapat ditandai dibayar.');
             }
 
+            if (! $lockedPeriod->attendance_synced_at) {
+                app(AttendanceService::class)->syncToWeeklyOvertimePeriod($lockedPeriod, $actor);
+                $lockedPeriod->refresh();
+            }
+
+            if ($this->weeklyPendingAttendanceEmployeeIds($lockedPeriod) !== []) {
+                throw new InvalidArgumentException('Masih ada absensi yang menunggu review Admin. Periksa dan setujui atau tolak absensi tersebut sebelum menandai seluruh periode lunas.');
+            }
+
             $lockedPeriod->update([
                 'status' => OvertimePeriodStatus::PAID,
                 'paid_by' => $actor->id,
@@ -1227,6 +1338,17 @@ class OvertimeService
         $this->authorizeWeeklyAdmin($actor);
 
         return DB::transaction(function () use ($attendance, $data, $actor) {
+            $period = OvertimePeriod::query()->lockForUpdate()->findOrFail($attendance->overtime_period_id);
+            if (! $period->attendance_synced_at) {
+                app(AttendanceService::class)->syncToWeeklyOvertimePeriod($period, $actor);
+                $period->refresh();
+                $attendance->refresh();
+            }
+
+            if (in_array($attendance->employee_id, $this->weeklyPendingAttendanceEmployeeIds($period), true)) {
+                throw new InvalidArgumentException('Masih ada absensi karyawan ini yang menunggu review Admin. Absensi tersebut belum dihitung ke slip.');
+            }
+
             // Guard pembayaran ganda: pembaruan data untuk yang sudah dibayar wajib lewat updateEmployeeWeeklyPayment().
             if ($attendance->payment_status === 'paid') {
                 throw new InvalidArgumentException('Gaji mingguan karyawan ini sudah ditandai dibayar. Gunakan menu ubah data pembayaran untuk memperbarui detailnya.');
@@ -1267,7 +1389,13 @@ class OvertimeService
     {
         $this->authorizeWeeklyAdmin($actor);
 
-        return DB::transaction(function () use ($attendance, $data, $actor) {
+        return DB::transaction(function () use ($attendance, $data) {
+            $period = OvertimePeriod::query()->lockForUpdate()->findOrFail($attendance->overtime_period_id);
+            $lockedAttendance = OvertimePeriodAttendance::query()->lockForUpdate()->findOrFail($attendance->id);
+            if ($period->status === OvertimePeriodStatus::PAID || $lockedAttendance->isPaid()) {
+                throw new InvalidArgumentException('Slip mingguan sudah dibayar dan seluruh datanya terkunci.');
+            }
+
             $updates = [
                 'paid_at' => $data['payment_date'] ?? $attendance->paid_at,
                 'payment_method' => $data['payment_method'] ?? $attendance->payment_method,
@@ -1281,24 +1409,24 @@ class OvertimeService
                 $updates['payment_proof_path'] = $data['payment_proof_path'];
             }
 
-            $attendance->update($updates);
+            $lockedAttendance->update($updates);
 
             $this->logger->info(
                 action: 'OVERTIME_ATTENDANCE_PAYMENT_UPDATED',
                 module: 'overtimes',
-                message: "Detail pembayaran gaji mingguan karyawan {$attendance->employee?->full_name} diperbarui oleh {$actor->name}",
+                message: 'Weekly payment details updated',
                 context: [
-                    'period_id' => $attendance->overtime_period_id,
-                    'employee_id' => $attendance->employee_id,
+                    'period_id' => $lockedAttendance->overtime_period_id,
+                    'employee_id' => $lockedAttendance->employee_id,
                 ]
             );
 
-            return $attendance;
+            return $lockedAttendance;
         });
     }
 
     /**
-     * Get monthly overtime totals already paid or approved for an employee.
+     * Get monthly overtime and meal totals for payslip information.
      */
     public function getEmployeeMonthlyOvertimeSummary(int $employeeId, int $year, int $month): array
     {
@@ -1319,8 +1447,13 @@ class OvertimeService
             ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->get();
 
-        $totalHours = (float) $submissions->sum('duration_hours');
-        $totalOvertimePay = (float) $submissions->sum(fn ($sub) => (float) $sub->subtotal_overtime);
+        $dailySubmissions = $submissions->filter(fn (OvertimeSubmission $submission): bool => $submission->isDaily());
+        $hourlySubmissions = $submissions->reject(fn (OvertimeSubmission $submission): bool => $submission->isDaily());
+
+        $totalHours = (float) $hourlySubmissions->sum('duration_hours');
+        $dailyOvertimePay = (float) $dailySubmissions->sum(fn ($sub) => (float) $sub->subtotal_overtime);
+        $hourlyOvertimePay = (float) $hourlySubmissions->sum(fn ($sub) => (float) $sub->subtotal_overtime);
+        $totalOvertimePay = $dailyOvertimePay + $hourlyOvertimePay;
 
         // Jika tidak ada pengajuan manual tapi ada log jam lembur mesin di absensi
         if ($totalOvertimePay <= 0) {
@@ -1332,7 +1465,8 @@ class OvertimeService
                     ->sum('overtime_minutes');
                 if ($attMins > 0) {
                     $totalHours = round($attMins / 60, 2);
-                    $totalOvertimePay = round(($attMins / 60) * $otRate, 2);
+                    $hourlyOvertimePay = round(($attMins / 60) * $otRate, 2);
+                    $totalOvertimePay = $hourlyOvertimePay;
                 }
             }
         }
@@ -1348,8 +1482,9 @@ class OvertimeService
             ->get();
 
         $attendanceMeal = (float) $attendances->sum('total_meal_allowance');
-        $overtimeMeal = (float) $submissions->sum('meal_allowance');
-        $totalMealAllowance = $attendanceMeal + $overtimeMeal;
+        $dailyOvertimeMeal = (float) $dailySubmissions->sum('meal_allowance');
+        $hourlyOvertimeMeal = (float) $hourlySubmissions->sum('meal_allowance');
+        $totalMealAllowance = $attendanceMeal + $dailyOvertimeMeal + $hourlyOvertimeMeal;
 
         $grandTotal = $totalOvertimePay + $totalMealAllowance;
 
@@ -1357,7 +1492,12 @@ class OvertimeService
             'count' => $submissions->count(),
             'total_hours' => $totalHours,
             'total_overtime_pay' => $totalOvertimePay,
+            'daily_overtime_pay' => $dailyOvertimePay,
+            'hourly_overtime_pay' => $hourlyOvertimePay,
             'total_meal_allowance' => $totalMealAllowance,
+            'attendance_meal_allowance' => $attendanceMeal,
+            'daily_overtime_meal_allowance' => $dailyOvertimeMeal,
+            'hourly_overtime_meal_allowance' => $hourlyOvertimeMeal,
             'grand_total' => $grandTotal,
             'formatted_total_overtime_pay' => 'Rp '.number_format($totalOvertimePay, 0, ',', '.'),
             'formatted_total_meal_allowance' => 'Rp '.number_format($totalMealAllowance, 0, ',', '.'),
