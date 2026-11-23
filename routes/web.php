@@ -26,10 +26,6 @@ use Livewire\Volt\Volt;
 Route::redirect('/', '/login');
 
 Route::middleware(['auth', 'active'])->group(function () {
-    $extraDashboardMiddleware = app()->environment(['local', 'development', 'testing'])
-        ? ['role:admin|direktur|karyawan|developer']
-        : ['verified', 'role:admin|direktur|karyawan|developer'];
-
     Route::get('dashboard', function (DashboardService $dashboardService) {
         $user = auth()->user();
 
@@ -43,7 +39,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 
         return view('dashboard', ['employeeDashboard' => $employeeDashboard]);
     })
-        ->middleware($extraDashboardMiddleware)
+        ->middleware('role:admin|direktur|karyawan|developer')
         ->name('dashboard');
 
     Route::view('profile', 'profile')->name('profile');

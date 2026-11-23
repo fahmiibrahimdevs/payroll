@@ -4,7 +4,6 @@ namespace App\Models;
 
 use BackedEnum;
 use Database\Factories\UserFactory;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,7 +17,7 @@ use Ramsey\Uuid\UuidInterface;
 
 #[Fillable(['name', 'email', 'password', 'is_active', 'email_verified_at'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable implements LaratrustUser, MustVerifyEmail
+class User extends Authenticatable implements LaratrustUser
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;

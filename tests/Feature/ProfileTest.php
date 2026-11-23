@@ -43,30 +43,11 @@ class ProfileTest extends TestCase
 
         $this->assertSame('Test User', $user->name);
         $this->assertSame('test@example.com', $user->email);
-        $this->assertNull($user->email_verified_at);
         $this->assertDatabaseHas('activity_logs', [
             'user_id' => $user->id,
             'module' => 'users',
             'action' => 'PROFILE_UPDATED',
         ]);
-    }
-
-    public function test_email_verification_status_is_unchanged_when_the_email_address_is_unchanged(): void
-    {
-        $user = User::factory()->create();
-
-        $this->actingAs($user);
-
-        $component = Volt::test('profile.update-profile-information-form')
-            ->set('name', 'Test User')
-            ->set('email', $user->email)
-            ->call('updateProfileInformation');
-
-        $component
-            ->assertHasNoErrors()
-            ->assertNoRedirect();
-
-        $this->assertNotNull($user->refresh()->email_verified_at);
     }
 
     public function test_user_can_delete_their_account(): void

@@ -45,10 +45,6 @@ new class extends Component
         $user->fill($validated);
         $changedFields = array_keys($user->getDirty());
 
-        if ($user->isDirty('email')) {
-            $user->email_verified_at = null;
-        }
-
         $user->save();
 
         if ($changedFields !== []) {
@@ -66,32 +62,6 @@ new class extends Component
 
         $this->dispatch('profile-updated', name: $user->name);
         session()->flash('profile_status', 'Informasi profil berhasil disimpan!');
-    }
-
-    /**
-     * Send an email verification notification to the current user.
-     */
-    public function sendVerification(): void
-    {
-        $user = Auth::user();
-
-        if ($user->hasVerifiedEmail()) {
-            $this->redirectIntended(default: route('dashboard', absolute: false));
-
-            return;
-        }
-
-        $user->sendEmailVerificationNotification();
-
-        app(ActivityLogService::class)->info(
-            action: 'VERIFICATION_LINK_SENT',
-            module: 'auth',
-            message: 'Email verification link sent',
-            context: ['user_id' => $user->id],
-            userId: $user->id
-        );
-
-        Session::flash('status', 'verification-link-sent');
     }
 }; ?>
 
@@ -129,21 +99,6 @@ new class extends Component
                     {{ $message }}
                 </div>
             @enderror
-
-            @if (! app()->environment(['local', 'development']) && auth()->user() instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! auth()->user()->hasVerifiedEmail())
-                <div class="mt-2 text-warning text-small">
-                    <i class="fas fa-exclamation-circle mr-1"></i> Email Anda belum diverifikasi.
-                    <a href="#" wire:click.prevent="sendVerification" class="font-weight-bold ml-1">
-                        Klik di sini untuk mengirim ulang link verifikasi.
-                    </a>
-
-                    @if (session('status') === 'verification-link-sent')
-                        <div class="text-success mt-1">
-                            <i class="fas fa-check mr-1"></i> Link verifikasi baru telah dikirim ke email Anda.
-                        </div>
-                    @endif
-                </div>
-            @endif
         </div>
 
         <div class="text-right">
