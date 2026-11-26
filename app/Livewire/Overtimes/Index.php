@@ -270,20 +270,24 @@ class Index extends Component
     }
 
     /**
-     * Open admin adjustment modal.
+     * Open admin adjustment / edit modal.
      */
     public function openAdjustModal(int|string $id): void
     {
         abort_unless(auth()->user()?->hasRole('admin'), 403, 'Hanya Admin yang dapat menyesuaikan pengajuan lembur.');
 
         $realId = IdObfuscator::decodeOrFail($id, OvertimeSubmission::class);
-        $submission = OvertimeSubmission::with('employee')->findOrFail($realId);
+        $submission = OvertimeSubmission::with(['employee', 'overtimePeriod.attendances'])->findOrFail($realId);
 
-        if ($submission->status !== OvertimeStatus::PENDING_ADMIN) {
+        if (! $submission->canBeEditedByAdmin()) {
+            $message = $submission->isPaidLocked()
+                ? 'Pengajuan lembur ini sudah masuk ke pembayaran yang berstatus lunas/dibayar dan tidak dapat diedit.'
+                : "Pengajuan berstatus {$submission->status->fullLabel()} tidak dapat diedit.";
+
             $this->dispatch('swal:alert', [
                 'type' => 'warning',
-                'title' => 'Tidak Dapat Disesuaikan',
-                'message' => 'Pengajuan ini sudah tidak berstatus Menunggu Verifikasi Admin.',
+                'title' => 'Tidak Dapat Diedit',
+                'message' => $message,
             ]);
 
             return;
@@ -300,11 +304,13 @@ class Index extends Component
             $dailyRate = (float) ($submission->employee?->getEffectiveMealAllowancePerDay() ?? 0);
             $this->adjust_daily_meal_source = 'daily';
             $this->adjust_meal_allowance = $dailyRate > 0 ? $dailyRate : (float) $submission->meal_allowance;
-        } else {
+        } elseif ($submission->status === OvertimeStatus::PENDING_ADMIN) {
             $threshold = $this->companyOvertimeMealThresholdHours;
             $this->adjust_meal_allowance = $this->adjust_duration_hours >= $threshold
                 ? $this->companyOvertimeMealAllowance
                 : 0.0;
+        } else {
+            $this->adjust_meal_allowance = (float) $submission->meal_allowance;
         }
 
         $this->dispatch('open-modal', id: 'overtimeAdjustModal');
@@ -318,6 +324,16 @@ class Index extends Component
     public function updatedAdjustEndTime(): void
     {
         $this->recalculateAdjustDuration();
+    }
+
+    public function updatedAdjustDurationHours(): void
+    {
+        if ($this->adjustingSubmission?->isHourly()) {
+            $duration = (float) ($this->adjust_duration_hours ?? 0);
+            $this->adjust_meal_allowance = $duration >= $this->companyOvertimeMealThresholdHours
+                ? $this->companyOvertimeMealAllowance
+                : 0.0;
+        }
     }
 
     protected function recalculateAdjustDuration(): void
@@ -681,7 +697,11 @@ class Index extends Component
         }
 
         try {
-            $service->adjustAndForwardToDirector($submission, [
+            $previousStatus = $submission->status;
+            $wasPendingAdmin = $previousStatus === OvertimeStatus::PENDING_ADMIN;
+            $wasApproved = $previousStatus === OvertimeStatus::APPROVED;
+
+            $updatedSubmission = $service->adjustAndForwardToDirector($submission, [
                 'start_time' => $this->adjust_start_time,
                 'end_time' => $this->adjust_end_time,
                 'duration_hours' => $this->adjust_duration_hours,
@@ -689,12 +709,30 @@ class Index extends Component
                 'admin_notes' => $this->adjust_admin_notes,
             ], auth()->user());
 
+            if ($this->detailSubmissionId === $updatedSubmission->id) {
+                $this->detailSubmission = $updatedSubmission->load([
+                    'employee.department',
+                    'employee.position',
+                    'submitter',
+                    'verifiedByAdmin',
+                    'approvedByDirektur',
+                    'rejectedBy',
+                    'overtimePeriod.attendances',
+                ]);
+            }
+
             $this->dispatch('close-modal', id: 'overtimeAdjustModal');
+
+            $successMessage = match (true) {
+                $wasPendingAdmin => 'Lembur berhasil disesuaikan dan telah diteruskan ke Direktur untuk approval final.',
+                $wasApproved => 'Data lembur berhasil diperbarui dan dikembalikan ke antrean Approval Direktur untuk persetujuan ulang.',
+                default => 'Data lembur berhasil diperbarui dan tetap menunggu approval Direktur.',
+            };
 
             $this->dispatch('swal:alert', [
                 'type' => 'success',
-                'title' => 'Verifikasi Selesai',
-                'message' => 'Lembur berhasil disesuaikan dan telah diteruskan ke Direktur untuk approval final.',
+                'title' => $wasPendingAdmin ? 'Verifikasi Selesai' : 'Perubahan Disimpan',
+                'message' => $successMessage,
             ]);
         } catch (\Throwable $e) {
             $this->dispatch('swal:alert', [
@@ -897,7 +935,7 @@ class Index extends Component
             'verifiedByAdmin',
             'approvedByDirektur',
             'rejectedBy',
-            'overtimePeriod',
+            'overtimePeriod.attendances:id,overtime_period_id,employee_id,payment_status',
         ])->findOrFail($realId);
 
         $user = auth()->user();

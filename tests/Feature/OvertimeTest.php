@@ -2342,4 +2342,275 @@ class OvertimeTest extends TestCase
             ->first();
         $this->assertNotNull($att);
     }
+
+    public function test_admin_can_edit_pending_direktur_submission_without_reverting_status(): void
+    {
+        $service = app(OvertimeService::class);
+        $this->employee->update(['overtime_rate_per_hour' => 15000]);
+
+        $submission = OvertimeSubmission::create([
+            'reference_number' => $service->generateSubmissionReference(),
+            'employee_id' => $this->employee->id,
+            'overtime_type' => OvertimeType::HOURLY,
+            'date' => '2026-11-24',
+            'start_time' => '18:04',
+            'end_time' => '06:00',
+            'duration_hours' => 12.00,
+            'hourly_rate' => 15000.00,
+            'meal_allowance' => 15000.00,
+            'total_amount' => 195000.00,
+            'reason' => 'Auto cut-off 12 jam lupa absen pulang',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::PENDING_DIREKTUR,
+            'submitted_by' => $this->karyawanUser->id,
+            'verified_by_admin_id' => $this->adminUser->id,
+        ]);
+
+        $this->actingAs($this->adminUser);
+
+        Livewire::test(OvertimeIndex::class)
+            ->call('openAdjustModal', $submission->id)
+            ->assertDispatched('open-modal', id: 'overtimeAdjustModal')
+            ->set('adjust_start_time', '18:00')
+            ->set('adjust_end_time', '20:00')
+            ->set('adjust_duration_hours', 2.00)
+            ->set('adjust_admin_notes', 'Dikoreksi jadi 2 jam karena lupa tap pulang')
+            ->call('submitAdjustment')
+            ->assertHasNoErrors()
+            ->assertDispatched('close-modal', id: 'overtimeAdjustModal');
+
+        $submission->refresh();
+        $this->assertEquals(OvertimeStatus::PENDING_DIREKTUR, $submission->status);
+        $this->assertEquals('18:00:00', $submission->start_time);
+        $this->assertEquals('20:00:00', $submission->end_time);
+        $this->assertEquals(2.00, (float) $submission->duration_hours);
+        $this->assertEquals(0.00, (float) $submission->meal_allowance);
+        $this->assertEquals(30000.00, (float) $submission->total_amount);
+        $this->assertEquals('Dikoreksi jadi 2 jam karena lupa tap pulang', $submission->admin_notes);
+    }
+
+    public function test_admin_can_edit_approved_submission_and_revert_to_pending_direktur_then_reapprove(): void
+    {
+        $service = app(OvertimeService::class);
+        $this->employee->update(['overtime_rate_per_hour' => 25000]);
+
+        $period = OvertimePeriod::create([
+            'reference_number' => 'PRD-EDIT-'.uniqid(),
+            'name' => 'Periode Draf Edit',
+            'start_date' => '2026-11-23',
+            'end_date' => '2026-11-29',
+            'status' => OvertimePeriodStatus::DRAFT,
+            'total_hours' => 12,
+            'total_overtime_pay' => 300000,
+            'total_meal_allowance' => 15000,
+            'grand_total' => 315000,
+            'employee_count' => 1,
+            'created_by' => $this->adminUser->id,
+        ]);
+
+        OvertimePeriodAttendance::create([
+            'overtime_period_id' => $period->id,
+            'employee_id' => $this->employee->id,
+            'meal_allowance_type' => 'standar',
+            'meal_allowance_per_day' => 0,
+            'daily_rate' => 0,
+            'attended_days' => 1,
+            'total_meal_allowance' => 0,
+            'total_daily_wage' => 0,
+            'payment_status' => 'unpaid',
+        ]);
+
+        $submission = OvertimeSubmission::create([
+            'reference_number' => $service->generateSubmissionReference(),
+            'employee_id' => $this->employee->id,
+            'overtime_period_id' => $period->id,
+            'overtime_type' => OvertimeType::HOURLY,
+            'date' => '2026-11-24',
+            'start_time' => '18:00',
+            'end_time' => '06:00',
+            'duration_hours' => 12.00,
+            'hourly_rate' => 25000.00,
+            'meal_allowance' => 15000.00,
+            'total_amount' => 315000.00,
+            'reason' => 'Lembur sudah diapprove tapi perlu revisi jam',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->karyawanUser->id,
+            'verified_by_admin_id' => $this->adminUser->id,
+            'approved_by_direktur_id' => $this->direkturUser->id,
+            'approved_at' => now(),
+        ]);
+
+        $this->actingAs($this->adminUser);
+
+        Livewire::test(OvertimeIndex::class)
+            ->call('openAdjustModal', $submission->id)
+            ->assertDispatched('open-modal', id: 'overtimeAdjustModal')
+            ->set('adjust_start_time', '18:00')
+            ->set('adjust_end_time', '21:00')
+            ->set('adjust_duration_hours', 3.00)
+            ->set('adjust_admin_notes', 'Revisi pasca approve menjadi 3 jam')
+            ->call('submitAdjustment')
+            ->assertHasNoErrors();
+
+        $submission->refresh();
+        $period->refresh();
+
+        $this->assertEquals(OvertimeStatus::PENDING_DIREKTUR, $submission->status);
+        $this->assertNull($submission->approved_by_direktur_id);
+        $this->assertNull($submission->approved_at);
+        $this->assertNull($submission->overtime_period_id);
+        $this->assertEquals(3.00, (float) $submission->duration_hours);
+        $this->assertEquals(15000.00, (float) $submission->meal_allowance);
+        $this->assertEquals(90000.00, (float) $submission->total_amount);
+
+        // Karena belum diapprove ulang direktur, periode draf sementara tidak menghitung pengajuan ini
+        $this->assertEquals(0.00, (float) $period->total_hours);
+        $this->assertEquals(0.00, (float) $period->grand_total);
+
+        // Setelah direktur approve ulang, otomatis tertaut kembali ke periode draf dengan nominal baru
+        $service->approveByDirector($submission, $this->direkturUser);
+
+        $submission->refresh();
+        $period->refresh();
+
+        $this->assertEquals(OvertimeStatus::APPROVED, $submission->status);
+        $this->assertEquals($this->direkturUser->id, $submission->approved_by_direktur_id);
+        $this->assertEquals($period->id, $submission->overtime_period_id);
+        $this->assertEquals(3.00, (float) $period->total_hours);
+        $this->assertEquals(75000.00, (float) $period->total_overtime_pay);
+        $this->assertEquals(15000.00, (float) $period->total_meal_allowance);
+        $this->assertEquals(90000.00, (float) $period->grand_total);
+    }
+
+    public function test_admin_cannot_edit_submission_locked_by_paid_period_or_paid_employee(): void
+    {
+        $service = app(OvertimeService::class);
+        $this->employee->update(['overtime_rate_per_hour' => 25000]);
+
+        $paidPeriod = OvertimePeriod::create([
+            'reference_number' => 'PRD-PAID-'.uniqid(),
+            'name' => 'Periode Sudah Lunas',
+            'start_date' => '2026-11-16',
+            'end_date' => '2026-11-22',
+            'status' => OvertimePeriodStatus::PAID,
+            'total_hours' => 4,
+            'total_overtime_pay' => 100000,
+            'total_meal_allowance' => 15000,
+            'grand_total' => 115000,
+            'employee_count' => 1,
+            'created_by' => $this->adminUser->id,
+        ]);
+
+        $lockedByPeriod = OvertimeSubmission::create([
+            'reference_number' => $service->generateSubmissionReference(),
+            'employee_id' => $this->employee->id,
+            'overtime_period_id' => $paidPeriod->id,
+            'overtime_type' => OvertimeType::HOURLY,
+            'date' => '2026-11-18',
+            'start_time' => '18:00',
+            'end_time' => '22:00',
+            'duration_hours' => 4.00,
+            'hourly_rate' => 25000.00,
+            'meal_allowance' => 15000.00,
+            'total_amount' => 115000.00,
+            'reason' => 'Sudah dibayar di periode',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->karyawanUser->id,
+            'approved_by_direktur_id' => $this->direkturUser->id,
+            'approved_at' => now(),
+        ]);
+
+        $draftPeriod = OvertimePeriod::create([
+            'reference_number' => 'PRD-EMP-PAID-'.uniqid(),
+            'name' => 'Periode Draf Karyawan Sudah Dibayar',
+            'start_date' => '2026-11-23',
+            'end_date' => '2026-11-29',
+            'status' => OvertimePeriodStatus::DRAFT,
+            'total_hours' => 4,
+            'total_overtime_pay' => 100000,
+            'total_meal_allowance' => 15000,
+            'grand_total' => 115000,
+            'employee_count' => 1,
+            'created_by' => $this->adminUser->id,
+        ]);
+
+        OvertimePeriodAttendance::create([
+            'overtime_period_id' => $draftPeriod->id,
+            'employee_id' => $this->employee->id,
+            'meal_allowance_type' => 'standar',
+            'meal_allowance_per_day' => 0,
+            'daily_rate' => 0,
+            'attended_days' => 1,
+            'total_meal_allowance' => 0,
+            'total_daily_wage' => 0,
+            'payment_status' => 'paid',
+            'paid_at' => now(),
+            'paid_by' => $this->adminUser->id,
+        ]);
+
+        $lockedByEmployeePayment = OvertimeSubmission::create([
+            'reference_number' => $service->generateSubmissionReference(),
+            'employee_id' => $this->employee->id,
+            'overtime_period_id' => $draftPeriod->id,
+            'overtime_type' => OvertimeType::HOURLY,
+            'date' => '2026-11-24',
+            'start_time' => '18:00',
+            'end_time' => '22:00',
+            'duration_hours' => 4.00,
+            'hourly_rate' => 25000.00,
+            'meal_allowance' => 15000.00,
+            'total_amount' => 115000.00,
+            'reason' => 'Karyawan sudah dibayar',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::APPROVED,
+            'submitted_by' => $this->karyawanUser->id,
+            'approved_by_direktur_id' => $this->direkturUser->id,
+            'approved_at' => now(),
+        ]);
+
+        $this->assertFalse($lockedByPeriod->canBeEditedByAdmin());
+        $this->assertFalse($lockedByEmployeePayment->canBeEditedByAdmin());
+
+        $this->actingAs($this->adminUser);
+        Livewire::test(OvertimeIndex::class)
+            ->call('openAdjustModal', $lockedByPeriod->id)
+            ->assertNotDispatched('open-modal')
+            ->assertDispatched('swal:alert');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $service->adjustAndForwardToDirector($lockedByEmployeePayment, [
+            'start_time' => '18:00',
+            'end_time' => '20:00',
+            'duration_hours' => 2.00,
+        ], $this->adminUser);
+    }
+
+    public function test_non_admin_cannot_edit_overtime_submission(): void
+    {
+        $service = app(OvertimeService::class);
+        $submission = OvertimeSubmission::create([
+            'reference_number' => $service->generateSubmissionReference(),
+            'employee_id' => $this->employee->id,
+            'overtime_type' => OvertimeType::HOURLY,
+            'date' => '2026-11-24',
+            'start_time' => '18:00',
+            'end_time' => '22:00',
+            'duration_hours' => 4.00,
+            'hourly_rate' => 25000.00,
+            'meal_allowance' => 15000.00,
+            'total_amount' => 115000.00,
+            'reason' => 'Test non-admin forbid',
+            'submission_source' => OvertimeSubmissionSource::KARYAWAN,
+            'status' => OvertimeStatus::PENDING_DIREKTUR,
+            'submitted_by' => $this->karyawanUser->id,
+        ]);
+
+        $this->actingAs($this->direkturUser);
+
+        Livewire::test(OvertimeIndex::class)
+            ->call('openAdjustModal', $submission->id)
+            ->assertForbidden();
+    }
 }

@@ -199,6 +199,8 @@ class OvertimeService
                 'employee:id,full_name,photo_path,department_id,position_id',
                 'employee.department:id,name',
                 'employee.position:id,name',
+                'overtimePeriod:id,status',
+                'overtimePeriod.attendances:id,overtime_period_id,employee_id,payment_status',
             ])
             ->latest('date')
             ->latest('id');
@@ -422,7 +424,8 @@ class OvertimeService
     }
 
     /**
-     * Admin adjusts hours and meal allowance after discussion, then forwards to Direktur.
+     * Admin adjusts hours and meal allowance (during verification, pending director approval,
+     * or approved when not yet locked by payment) and forwards or preserves approval status.
      */
     public function adjustAndForwardToDirector(OvertimeSubmission $submission, array $data, User $admin): OvertimeSubmission
     {
@@ -431,9 +434,42 @@ class OvertimeService
                 ->lockForUpdate()
                 ->findOrFail($submission->id);
 
-            if ($lockedSubmission->status !== OvertimeStatus::PENDING_ADMIN) {
-                throw new InvalidArgumentException('Hanya pengajuan berstatus Menunggu Verifikasi Admin yang dapat disesuaikan.');
+            $editableStatuses = [
+                OvertimeStatus::PENDING_ADMIN,
+                OvertimeStatus::PENDING_DIREKTUR,
+                OvertimeStatus::APPROVED,
+            ];
+
+            if (! in_array($lockedSubmission->status, $editableStatuses, true)) {
+                throw new InvalidArgumentException("Pengajuan lembur {$lockedSubmission->reference_number} berstatus {$lockedSubmission->status->fullLabel()} dan tidak dapat diedit.");
             }
+
+            $lockedPeriod = null;
+            if ($lockedSubmission->overtime_period_id !== null) {
+                $lockedPeriod = OvertimePeriod::query()
+                    ->lockForUpdate()
+                    ->find($lockedSubmission->overtime_period_id);
+
+                if ($lockedPeriod && $lockedPeriod->status === OvertimePeriodStatus::PAID) {
+                    throw new InvalidArgumentException('Pengajuan lembur ini sudah masuk ke periode yang telah dibayar dan tidak dapat diedit.');
+                }
+
+                if ($lockedPeriod && $lockedPeriod->status !== OvertimePeriodStatus::CANCELLED) {
+                    $isEmployeePaid = OvertimePeriodAttendance::query()
+                        ->where('overtime_period_id', $lockedPeriod->id)
+                        ->where('employee_id', $lockedSubmission->employee_id)
+                        ->where('payment_status', 'paid')
+                        ->exists();
+
+                    if ($isEmployeePaid) {
+                        throw new InvalidArgumentException('Pembayaran lembur karyawan pada periode ini sudah berstatus dibayar sehingga pengajuan tidak dapat diedit.');
+                    }
+                }
+            }
+
+            $previousStatus = $lockedSubmission->status;
+            $previousDurationHours = (float) $lockedSubmission->duration_hours;
+            $previousTotalAmount = (float) $lockedSubmission->total_amount;
 
             $mealAllowance = isset($data['meal_allowance']) ? (float) $data['meal_allowance'] : (float) $lockedSubmission->meal_allowance;
             $rate = (float) $lockedSubmission->hourly_rate;
@@ -487,6 +523,9 @@ class OvertimeService
                 $totalAmount = round(($durationHours * $rate) + $mealAllowance, 2);
             }
 
+            $nextStatus = OvertimeStatus::PENDING_DIREKTUR;
+            $wasApproved = $previousStatus === OvertimeStatus::APPROVED;
+
             $lockedSubmission->update([
                 'start_time' => $startTimeStr,
                 'end_time' => $endTimeStr,
@@ -496,19 +535,35 @@ class OvertimeService
                 'admin_notes' => $data['admin_notes'] ?? $lockedSubmission->admin_notes,
                 'admin_adjusted_at' => now(),
                 'verified_by_admin_id' => $admin->id,
-                'status' => OvertimeStatus::PENDING_DIREKTUR,
+                'status' => $nextStatus,
+                'approved_by_direktur_id' => $wasApproved ? null : $lockedSubmission->approved_by_direktur_id,
+                'approved_at' => $wasApproved ? null : $lockedSubmission->approved_at,
+                'overtime_period_id' => $wasApproved ? null : $lockedSubmission->overtime_period_id,
             ]);
 
+            if ($lockedPeriod && $lockedPeriod->status === OvertimePeriodStatus::DRAFT) {
+                $lockedPeriod->recalculateTotals();
+            }
+
+            $isInitialVerification = $previousStatus === OvertimeStatus::PENDING_ADMIN;
+
             $this->logger->info(
-                action: 'OVERTIME_VERIFIED_BY_ADMIN',
+                action: $isInitialVerification ? 'OVERTIME_VERIFIED_BY_ADMIN' : 'OVERTIME_ADJUSTED_BY_ADMIN',
                 module: 'overtimes',
-                message: "Pengajuan lembur {$lockedSubmission->reference_number} diverifikasi admin {$admin->name} dan diajukan ke Direktur",
+                message: $isInitialVerification
+                    ? "Pengajuan lembur {$lockedSubmission->reference_number} diverifikasi admin {$admin->name} dan diajukan ke Direktur"
+                    : "Pengajuan lembur {$lockedSubmission->reference_number} diperbarui oleh admin {$admin->name} dan menunggu approval Direktur",
                 context: [
                     'submission_id' => $lockedSubmission->id,
                     'reference_number' => $lockedSubmission->reference_number,
+                    'previous_status' => $previousStatus->value,
+                    'status' => $nextStatus->value,
+                    'previous_duration_hours' => $previousDurationHours,
                     'duration_hours' => $durationHours,
                     'meal_allowance' => $mealAllowance,
+                    'previous_total_amount' => $previousTotalAmount,
                     'total_amount' => $totalAmount,
+                    'overtime_period_id' => $lockedSubmission->overtime_period_id,
                 ]
             );
 

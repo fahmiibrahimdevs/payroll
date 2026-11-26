@@ -276,12 +276,15 @@
                                                 Rincian
                                             </button>
 
-                                            @if (auth()->user()->hasRole('admin') && $sub->status === \App\Enums\OvertimeStatus::PENDING_ADMIN)
-                                                <button type="button" class="btn btn-primary btn-sm" wire:click="openAdjustModal('{{ $sub->hashid }}')" wire:loading.attr="disabled" wire:target="openAdjustModal" title="Koordinasi dan sesuaikan jam kerja">
+                                            @if (auth()->user()->hasRole('admin') && $sub->canBeEditedByAdmin())
+                                                @php $isPendingAdminRow = $sub->status === \App\Enums\OvertimeStatus::PENDING_ADMIN; @endphp
+                                                <button type="button" class="btn btn-primary btn-sm" wire:click="openAdjustModal('{{ $sub->hashid }}')" wire:loading.attr="disabled" wire:target="openAdjustModal" title="{{ $isPendingAdminRow ? 'Koordinasi dan sesuaikan jam kerja' : 'Edit jam dan durasi lembur' }}">
                                                     <i wire:loading wire:target="openAdjustModal" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-                                                    <i wire:loading.remove wire:target="openAdjustModal" class="fas fa-user-edit" aria-hidden="true"></i>
-                                                    Sesuaikan
+                                                    <i wire:loading.remove wire:target="openAdjustModal" class="fas {{ $isPendingAdminRow ? 'fa-user-edit' : 'fa-edit' }}" aria-hidden="true"></i>
+                                                    {{ $isPendingAdminRow ? 'Sesuaikan' : 'Edit' }}
                                                 </button>
+                                            @endif
+                                            @if (auth()->user()->hasRole('admin') && $sub->status === \App\Enums\OvertimeStatus::PENDING_ADMIN)
                                                 <button type="button" class="btn btn-danger btn-sm" wire:click="openRejectModal('{{ $sub->hashid }}')" wire:loading.attr="disabled" wire:target="openRejectModal" title="Tolak pengajuan lembur">
                                                     <i wire:loading wire:target="openRejectModal" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
                                                     <i wire:loading.remove wire:target="openRejectModal" class="fas fa-times" aria-hidden="true"></i>
@@ -454,11 +457,14 @@
                                                 <i class="fas fa-eye"></i>
                                             </button>
 
-                                            <!-- AKSI ADMIN: VERIFIKASI JAM / TOLAK -->
-                                            @if (auth()->user()->hasRole('admin') && $sub->status === \App\Enums\OvertimeStatus::PENDING_ADMIN)
-                                                <button type="button" class="btn btn-primary btn-action mr-1" wire:click="openAdjustModal('{{ $sub->hashid }}')" title="Koordinasi & Sesuaikan Jam Kerja">
-                                                    <i class="fas fa-user-edit"></i>
+                                            <!-- AKSI ADMIN: VERIFIKASI / EDIT JAM & TOLAK -->
+                                            @if (auth()->user()->hasRole('admin') && $sub->canBeEditedByAdmin())
+                                                @php $isPendingAdminRow = $sub->status === \App\Enums\OvertimeStatus::PENDING_ADMIN; @endphp
+                                                <button type="button" class="btn btn-primary btn-action mr-1" wire:click="openAdjustModal('{{ $sub->hashid }}')" title="{{ $isPendingAdminRow ? 'Koordinasi & Sesuaikan Jam Kerja' : 'Edit Jam & Durasi Lembur' }}">
+                                                    <i class="fas {{ $isPendingAdminRow ? 'fa-user-edit' : 'fa-edit' }}"></i>
                                                 </button>
+                                            @endif
+                                            @if (auth()->user()->hasRole('admin') && $sub->status === \App\Enums\OvertimeStatus::PENDING_ADMIN)
                                                 <button type="button" class="btn btn-danger btn-action mr-1" wire:click="openRejectModal('{{ $sub->hashid }}')" title="Tolak Pengajuan Lembur">
                                                     <i class="fas fa-times"></i>
                                                 </button>
@@ -925,7 +931,7 @@
             <div class="modal-content bg-white" style="border: 1px solid #eaedf2; border-radius: 8px;">
                 <div class="modal-header bg-white border-bottom py-3">
                     <h5 class="modal-title text-dark" id="adjustModalLabel" style="font-weight: 500;">
-                        Verifikasi &amp; Sesuaikan Lembur
+                        {{ ($adjustingSubmission?->status === \App\Enums\OvertimeStatus::PENDING_ADMIN) ? 'Verifikasi & Sesuaikan Lembur' : 'Edit Jam & Data Lembur' }}
                     </h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
@@ -934,6 +940,21 @@
 
                 <form wire:submit.prevent="submitAdjustment">
                     <div class="modal-body py-3 px-4 bg-white">
+                        @if ($adjustingSubmission && $adjustingSubmission->status !== \App\Enums\OvertimeStatus::PENDING_ADMIN)
+                            <div class="alert alert-light border mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
+                                <div class="d-flex align-items-center font-weight-600 mb-1" style="font-size: 12.5px; color: #1e293b;">
+                                    <i class="fas fa-info-circle mr-2" style="color: #0b52aa;"></i>
+                                    <span>Mode Edit ({{ $adjustingSubmission->status->fullLabel() }})</span>
+                                </div>
+                                <div style="font-size: 12px; line-height: 1.45; color: #334155;">
+                                    @if ($adjustingSubmission->status === \App\Enums\OvertimeStatus::APPROVED)
+                                        Setelah disimpan, status pengajuan akan kembali ke <strong>Menunggu Approval Direktur</strong> untuk persetujuan ulang, dan nominal upah serta uang makan dihitung ulang otomatis.
+                                    @else
+                                        Perubahan jam atau durasi akan otomatis menghitung ulang upah lembur dan uang makan sambil tetap menunggu approval Direktur.
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
                         @if ($adjustingSubmission)
                             <!-- Identitas & Data Asli Pengajuan (Clean White Card, Avatar Circle, Dark Slate) -->
                             <div class="mb-3" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 14px 16px;">
@@ -1067,7 +1088,7 @@
                             <div class="col-md-4 col-12">
                                 <div class="form-group">
                                     <label for="adjust_duration_hours">Total Durasi (Jam) <span class="text-danger">*</span></label>
-                                    <input type="number" step="0.25" min="0.25" id="adjust_duration_hours" wire:model="adjust_duration_hours" class="form-control @error('adjust_duration_hours') is-invalid @enderror">
+                                    <input type="number" step="0.25" min="0.25" id="adjust_duration_hours" wire:model.live.debounce.300ms="adjust_duration_hours" class="form-control @error('adjust_duration_hours') is-invalid @enderror">
                                     @error('adjust_duration_hours')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
@@ -1143,7 +1164,10 @@
                         <button type="button" class="btn btn-secondary shadow-none" data-dismiss="modal" style="font-weight: 500;">Batal</button>
                         <button type="submit" class="btn btn-primary shadow-none" wire:loading.attr="disabled" wire:target="submitAdjustment" style="font-weight: 500;">
                             <span wire:loading wire:target="submitAdjustment"><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...</span>
-                            <span wire:loading.remove wire:target="submitAdjustment"><i class="fas fa-paper-plane mr-1"></i> Verifikasi &amp; Teruskan ke Direktur</span>
+                            <span wire:loading.remove wire:target="submitAdjustment">
+                                <i class="fas {{ ($adjustingSubmission?->status === \App\Enums\OvertimeStatus::PENDING_ADMIN) ? 'fa-paper-plane' : 'fa-save' }} mr-1"></i>
+                                {{ ($adjustingSubmission?->status === \App\Enums\OvertimeStatus::PENDING_ADMIN) ? 'Verifikasi & Teruskan ke Direktur' : 'Simpan Perubahan' }}
+                            </span>
                         </button>
                     </div>
                 </form>
@@ -1369,10 +1393,19 @@
                 </div>
 
                 <div class="modal-footer bg-white border-top px-4 py-3 d-flex justify-content-between align-items-center">
-                    @if ($detailSubmission && auth()->user()->hasRole('admin') && $detailSubmission->status !== \App\Enums\OvertimeStatus::APPROVED && $detailSubmission->submission_source === \App\Enums\OvertimeSubmissionSource::ADMIN && is_null($detailSubmission->overtime_period_id))
-                        <button type="button" class="btn btn-danger btn-sm" wire:click="confirmDelete('{{ $detailSubmission->hashid }}')" style="font-weight: 500; border-radius: 8px;">
-                            <i class="fas fa-trash-alt mr-1"></i> Hapus Pengajuan
-                        </button>
+                    @if ($detailSubmission && auth()->user()->hasRole('admin'))
+                        <div class="d-flex align-items-center" style="gap: 8px;">
+                            @if ($detailSubmission->canBeEditedByAdmin())
+                                <button type="button" class="btn btn-primary btn-sm" onclick="$('#overtimeDetailModal').modal('hide');" wire:click="openAdjustModal('{{ $detailSubmission->hashid }}')" wire:loading.attr="disabled" wire:target="openAdjustModal" style="font-weight: 500; border-radius: 8px;">
+                                    <i class="fas fa-edit mr-1"></i> Edit Lembur
+                                </button>
+                            @endif
+                            @if ($detailSubmission->status !== \App\Enums\OvertimeStatus::APPROVED && $detailSubmission->submission_source === \App\Enums\OvertimeSubmissionSource::ADMIN && is_null($detailSubmission->overtime_period_id))
+                                <button type="button" class="btn btn-danger btn-sm" wire:click="confirmDelete('{{ $detailSubmission->hashid }}')" style="font-weight: 500; border-radius: 8px;">
+                                    <i class="fas fa-trash-alt mr-1"></i> Hapus Pengajuan
+                                </button>
+                            @endif
+                        </div>
                     @elseif ($detailSubmission && auth()->user()->hasRole('direktur') && $detailSubmission->status === \App\Enums\OvertimeStatus::PENDING_DIREKTUR)
                         <div class="d-flex align-items-center" style="gap: 8px;">
                             <button type="button" class="btn btn-danger btn-sm" onclick="$('#overtimeDetailModal').modal('hide'); confirmRejectOvertime({{ $detailSubmission->id }}, @js($detailSubmission->reference_number));" style="font-weight: 500; border-radius: 8px;">

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OvertimePeriodStatus;
 use App\Enums\OvertimeStatus;
 use App\Enums\OvertimeSubmissionSource;
 use App\Enums\OvertimeType;
@@ -217,5 +218,56 @@ class OvertimeSubmission extends Model
     public function isRejected(): bool
     {
         return in_array($this->status, [OvertimeStatus::REJECTED_ADMIN, OvertimeStatus::REJECTED_DIREKTUR], true);
+    }
+
+    /**
+     * Check whether this submission is locked by an already-paid weekly period or employee payment.
+     */
+    public function isPaidLocked(): bool
+    {
+        if ($this->overtime_period_id === null) {
+            return false;
+        }
+
+        $period = $this->overtimePeriod;
+        if (! $period) {
+            return false;
+        }
+
+        if ($period->status === OvertimePeriodStatus::PAID) {
+            return true;
+        }
+
+        if ($period->status === OvertimePeriodStatus::CANCELLED) {
+            return false;
+        }
+
+        if ($period->relationLoaded('attendances')) {
+            $attendance = $period->attendances->firstWhere('employee_id', $this->employee_id);
+
+            return $attendance?->isPaid() ?? false;
+        }
+
+        return OvertimePeriodAttendance::query()
+            ->where('overtime_period_id', $period->id)
+            ->where('employee_id', $this->employee_id)
+            ->where('payment_status', 'paid')
+            ->exists();
+    }
+
+    /**
+     * Determine whether an Admin is permitted to adjust/edit this submission.
+     */
+    public function canBeEditedByAdmin(): bool
+    {
+        if (! in_array($this->status, [
+            OvertimeStatus::PENDING_ADMIN,
+            OvertimeStatus::PENDING_DIREKTUR,
+            OvertimeStatus::APPROVED,
+        ], true)) {
+            return false;
+        }
+
+        return ! $this->isPaidLocked();
     }
 }
