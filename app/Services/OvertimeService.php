@@ -321,7 +321,7 @@ class OvertimeService
 
                 $rate = (float) ($employee->overtime_rate_per_day ?? 0);
                 if ($rate <= 0) {
-                    throw new InvalidArgumentException("Karyawan {$employee->full_name} belum memiliki nominal lembur harian di profilnya. Silakan atur tarif lembur di profil karyawan terlebih dahulu.");
+                    throw new InvalidArgumentException("Karyawan {$employee->full_name} belum memiliki nominal lembur harian di profilnya. Silakan atur nominal lembur di profil karyawan terlebih dahulu.");
                 }
 
                 $startTimeVal = null;
@@ -330,7 +330,7 @@ class OvertimeService
             } else {
                 $rate = (float) ($employee->overtime_rate_per_hour ?? 0);
                 if ($rate <= 0) {
-                    throw new InvalidArgumentException("Karyawan {$employee->full_name} belum memiliki tarif lembur per jam di profilnya. Silakan atur tarif lembur di profil karyawan terlebih dahulu.");
+                    throw new InvalidArgumentException("Karyawan {$employee->full_name} belum memiliki nominal lembur per jam di profilnya. Silakan atur nominal lembur di profil karyawan terlebih dahulu.");
                 }
 
                 $startTime = Carbon::parse($data['start_time']);

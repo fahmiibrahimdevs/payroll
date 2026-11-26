@@ -1155,6 +1155,17 @@ class AttendanceService
         if ($isCasualWorker && $type === 'clock_in' && ! in_array($casualWorkType, ['daily', 'hourly'], true)) {
             throw new InvalidArgumentException('Pilih Kerja harian atau Kerja per jam sebelum absen masuk.');
         }
+        if ($isCasualWorker && $type === 'clock_in') {
+            if ($casualWorkType === 'daily' && (float) ($employee->daily_rate ?? 0) <= 0) {
+                throw new InvalidArgumentException('Nominal kerja harian belum diatur, silahkan hubungi admin untuk minta mengatur nominal harian.');
+            }
+            if ($casualWorkType === 'hourly' && (float) ($employee->overtime_rate_per_hour ?? 0) <= 0) {
+                throw new InvalidArgumentException('Nominal kerja per jam belum diatur, silahkan hubungi admin untuk minta mengatur nominal per jam.');
+            }
+        }
+        if (in_array($type, ['overtime_in', 'overtime_out'], true) && (float) ($employee->overtime_rate_per_hour ?? 0) <= 0) {
+            throw new InvalidArgumentException('Nominal lembur belum diatur, silahkan hubungi admin untuk minta mengatur nominal lembur.');
+        }
         if ($isCasualWorker && in_array($type, ['clock_in', 'clock_out'], true) && blank($photoBase64)) {
             throw new InvalidArgumentException('Foto selfie wajib diambil saat absen masuk dan pulang.');
         }
@@ -1584,8 +1595,8 @@ class AttendanceService
         }
 
         $hourlyRate = (float) ($employee->overtime_rate_per_hour ?? 0);
-        if ($hourlyRate <= 0) {
-            $hourlyRate = (float) ($employee->basic_salary > 0 ? round($employee->basic_salary / 173, 2) : 0);
+        if ($hourlyRate <= 0 && ! $isAutoCutoff) {
+            throw new InvalidArgumentException('Nominal lembur belum diatur, silahkan hubungi admin untuk minta mengatur nominal lembur.');
         }
 
         $company = CompanyProfile::getProfile();

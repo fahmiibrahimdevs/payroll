@@ -175,14 +175,21 @@ class Index extends Component
                 return;
             }
 
-            if ((float) ($emp->overtime_rate_per_hour ?? 0) <= 0 && (float) ($emp->overtime_rate_per_day ?? 0) <= 0) {
+            $hasHourlyRate = (float) ($emp->overtime_rate_per_hour ?? 0) > 0;
+            $hasDailyRate = (float) ($emp->overtime_rate_per_day ?? 0) > 0;
+
+            if (! $hasHourlyRate && ! $hasDailyRate) {
                 $this->dispatch('swal:alert', [
                     'type' => 'warning',
-                    'title' => 'Tarif Lembur Belum Diset',
-                    'message' => 'Anda belum memiliki tarif lembur (per jam atau harian). Silakan koordinasi dengan Admin HRD terlebih dahulu.',
+                    'title' => 'Nominal Lembur Belum Diatur',
+                    'message' => 'Nominal lembur belum diatur, silahkan hubungi admin untuk minta mengatur nominal lembur.',
                 ]);
 
                 return;
+            }
+
+            if (! $hasHourlyRate && $hasDailyRate) {
+                $this->form->overtime_type = 'daily';
             }
 
             $this->form->employee_id = $emp->id;
@@ -239,8 +246,8 @@ class Index extends Component
             if ($rate <= 0) {
                 $this->dispatch('swal:alert', [
                     'type' => 'warning',
-                    'title' => 'Tarif Lembur Belum Diset',
-                    'message' => "Karyawan {$targetEmp->full_name} belum memiliki tarif lembur ".($isDaily ? 'harian' : 'per jam').' di profilnya. Silakan atur tarif lembur di Master Karyawan terlebih dahulu.',
+                    'title' => 'Nominal Lembur Belum Diatur',
+                    'message' => "Karyawan {$targetEmp->full_name} belum memiliki nominal lembur ".($isDaily ? 'harian' : 'per jam').' di profilnya. Silakan atur nominal lembur di Master Karyawan terlebih dahulu.',
                 ]);
 
                 return;

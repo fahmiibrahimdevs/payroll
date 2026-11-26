@@ -670,6 +670,7 @@
                     <div class="modal-body py-3 px-4 bg-white">
                         @php
                             $isFormLocked = ! $isKaryawan && empty($form->employee_id);
+                            $isRateMissing = ! empty($form->employee_id) && $this->formOvertimeRate <= 0;
                         @endphp
 
                         @if (! $isKaryawan)
@@ -692,7 +693,7 @@
                                                         @if ($hasAnyRate)
                                                             · {{ $hasHourly ? \App\Support\Rupiah::hourly((float) $emp->overtime_rate_per_hour) : '-' }} · {{ $hasDaily ? \App\Support\Rupiah::daily((float) $emp->overtime_rate_per_day) : '-' }}
                                                         @else
-                                                            · (Tarif Belum Diset)
+                                                            · (Nominal Belum Diatur)
                                                         @endif
                                                     </option>
                                                 @endforeach
@@ -738,6 +739,18 @@
                                 <div class="text-danger small mt-1">{{ $message }}</div>
                             @enderror
                         </div>
+
+                        @if ($isRateMissing)
+                            <div class="mb-3" style="background-color: #ffffff; border: 1px solid #fecaca; border-left: 3px solid #dc2626; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); padding: 10px 14px;">
+                                <div class="d-flex align-items-center font-weight-600 mb-1" style="font-size: 12.5px; color: #b91c1c;">
+                                    <i class="fas fa-exclamation-circle mr-2"></i>
+                                    <span>Nominal Lembur {{ $form->overtime_type === 'daily' ? 'Harian' : 'Per Jam' }} Belum Diatur</span>
+                                </div>
+                                <div style="font-size: 12px; color: #334155; line-height: 1.45;">
+                                    Nominal lembur {{ $form->overtime_type === 'daily' ? 'harian' : 'per jam' }} karyawan ini masih Rp 0. Silakan atur nominalnya terlebih dahulu di Master Karyawan sebelum mengajukan lembur.
+                                </div>
+                            </div>
+                        @endif
 
                         @if ($form->overtime_type === 'hourly')
                             <!-- FORM LEMBUR PER JAM -->
@@ -915,7 +928,7 @@
 
                     <div class="modal-footer bg-white border-top px-4 py-3">
                         <button type="button" class="btn btn-secondary shadow-none" data-dismiss="modal" style="font-weight: 500;">Batal</button>
-                        <button type="submit" class="btn btn-primary shadow-none" @disabled($isFormLocked) wire:loading.attr="disabled" wire:target="storeSubmission" style="font-weight: 500; {{ $isFormLocked ? 'opacity: 0.6; cursor: not-allowed;' : '' }}">
+                        <button type="submit" class="btn btn-primary shadow-none" @disabled($isFormLocked || $isRateMissing) wire:loading.attr="disabled" wire:target="storeSubmission" style="font-weight: 500; {{ ($isFormLocked || $isRateMissing) ? 'opacity: 0.6; cursor: not-allowed;' : '' }}">
                             <span wire:loading wire:target="storeSubmission"><i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...</span>
                             <span wire:loading.remove wire:target="storeSubmission"><i class="fas fa-paper-plane mr-1"></i> Kirim Pengajuan</span>
                         </button>

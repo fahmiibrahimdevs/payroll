@@ -132,6 +132,7 @@ class WebAttendanceClockTest extends TestCase
         $employee = Employee::factory()->create([
             'user_id' => $user->id,
             'employment_status' => EmploymentStatus::HARIAN,
+            'daily_rate' => 100000,
             'work_location_id' => $office->id,
         ]);
         $photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -242,7 +243,10 @@ class WebAttendanceClockTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-11-04 18:00:00'));
 
         try {
-            $employee = Employee::factory()->create(['is_free_location' => true]);
+            $employee = Employee::factory()->create([
+                'is_free_location' => true,
+                'overtime_rate_per_hour' => 25000,
+            ]);
             $service = app(AttendanceService::class);
             Attendance::create([
                 'employee_id' => $employee->id,
@@ -778,5 +782,75 @@ class WebAttendanceClockTest extends TestCase
         $this->assertStringContainsString('Auto Cut-off 06:00', $submission->reason);
 
         Carbon::setTestNow();
+    }
+
+    public function test_overtime_clock_is_blocked_with_alert_when_hourly_rate_is_unset(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-04 18:00:00'));
+
+        try {
+            $user = $this->createKaryawanUser();
+            $employee = Employee::factory()->create([
+                'user_id' => $user->id,
+                'basic_salary' => 5000000,
+                'overtime_rate_per_hour' => 0,
+                'is_free_location' => true,
+            ]);
+
+            Attendance::create([
+                'employee_id' => $employee->id,
+                'date' => Carbon::today()->toDateString(),
+                'clock_in' => '08:00:00',
+                'clock_out' => '17:00:00',
+                'status' => 'hadir',
+                'source' => 'web_gps',
+            ]);
+
+            $this->actingAs($user);
+
+            Livewire::test(DashboardClock::class)
+                ->call('openClockModal', 'overtime_in')
+                ->assertNotDispatched('open-web-clock-modal')
+                ->assertDispatched('swal:alert', function ($event, $params) {
+                    $payload = $params[0] ?? $params;
+
+                    return $payload['type'] === 'warning'
+                        && $payload['title'] === 'Nominal Lembur Belum Diatur';
+                });
+
+            $this->expectException(\InvalidArgumentException::class);
+            app(AttendanceService::class)->recordWebClock($employee, 'overtime_in', null, -6.5, 107.7);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_casual_worker_clock_in_is_blocked_when_selected_rate_is_unset(): void
+    {
+        $user = $this->createKaryawanUser();
+        $employee = Employee::factory()->create([
+            'user_id' => $user->id,
+            'employment_status' => EmploymentStatus::HARIAN,
+            'daily_rate' => 0,
+            'overtime_rate_per_hour' => 0,
+            'is_free_location' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(DashboardClock::class)
+            ->call('openClockModal', 'clock_in')
+            ->assertNotDispatched('open-web-clock-modal')
+            ->assertDispatched('swal:alert', function ($event, $params) {
+                $payload = $params[0] ?? $params;
+
+                return $payload['type'] === 'warning'
+                    && $payload['title'] === 'Nominal Upah Belum Diatur';
+            });
+
+        $photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+        $this->expectException(\InvalidArgumentException::class);
+        app(AttendanceService::class)->recordWebClock($employee, 'clock_in', $photo, -6.5, 107.7, null, null, $user, 5, 'daily');
     }
 }

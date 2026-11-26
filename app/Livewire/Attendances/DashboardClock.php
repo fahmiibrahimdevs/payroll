@@ -180,6 +180,20 @@ class DashboardClock extends Component
             return;
         }
 
+        if ($type === 'clock_in' && ! $this->hasClockedIn && $this->isCasualWorker) {
+            $hasDailyRate = (float) ($this->employee?->daily_rate ?? 0) > 0;
+            $hasHourlyRate = (float) ($this->employee?->overtime_rate_per_hour ?? 0) > 0;
+            if (! $hasDailyRate && ! $hasHourlyRate) {
+                $this->dispatch('swal:alert', [
+                    'type' => 'warning',
+                    'title' => 'Nominal Upah Belum Diatur',
+                    'message' => 'Nominal upah harian maupun per jam belum diatur, silahkan hubungi admin untuk minta mengatur nominal upah.',
+                ]);
+
+                return;
+            }
+        }
+
         // Validasi alur lembur:
         // Pada hari kerja biasa: Karyawan WAJIB sudah Absen Pulang kerja normal terlebih dahulu!
         if ($type === 'overtime_in' && ! $this->isHolidayOrWeekend && ! $this->hasClockedOut) {
@@ -187,6 +201,16 @@ class DashboardClock extends Component
                 'type' => 'warning',
                 'title' => 'Wajib Absen Pulang Terlebih Dahulu',
                 'message' => 'Anda harus menyelesaikan presensi pulang kerja reguler terlebih dahulu sebelum memulai presensi lembur.',
+            ]);
+
+            return;
+        }
+
+        if ($type === 'overtime_in' && ! $this->hasOvertimeIn && (float) ($this->employee?->overtime_rate_per_hour ?? 0) <= 0) {
+            $this->dispatch('swal:alert', [
+                'type' => 'warning',
+                'title' => 'Nominal Lembur Belum Diatur',
+                'message' => 'Nominal lembur belum diatur, silahkan hubungi admin untuk minta mengatur nominal lembur.',
             ]);
 
             return;

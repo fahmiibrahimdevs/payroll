@@ -347,7 +347,7 @@ class PeriodAttendance extends Component
                 'meal_allowance_type' => $att->meal_allowance_type,
                 'total_meal_allowance' => $totalMealAllowance,
                 'daily_rate' => $dailyRate,
-                'employee_overtime_rate' => (float) ($att->employee?->overtime_rate_per_hour ?: 15000),
+                'employee_overtime_rate' => (float) ($att->employee?->overtime_rate_per_hour ?? 0),
                 'total_daily_wage' => $totalDailyWage,
                 'total_hourly_work_pay' => $totalHourlyWorkPay,
                 'overtime_hours' => $overtimeHours,
@@ -994,10 +994,7 @@ class PeriodAttendance extends Component
             $totalDinner = 0;
             $totalDailyWage = 0;
 
-            $unitPrice = (float) ($attData['employee_overtime_rate'] ?? 15000);
-            if ($unitPrice <= 0) {
-                $unitPrice = 15000;
-            }
+            $unitPrice = (float) ($attData['employee_overtime_rate'] ?? 0);
 
             $mealRate = (float) (($attData['meal_allowance_per_day'] ?? 0) > 0 ? $attData['meal_allowance_per_day'] : $defaultMealRate);
             $dailyRate = (float) ($attData['daily_rate'] ?? 0);
