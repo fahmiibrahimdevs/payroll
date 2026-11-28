@@ -38,10 +38,14 @@ new #[Layout('layouts.guest')] #[Title('PT. SINTESA NIAGA KARYA - Login')] class
         ? $company->logo_url
         : asset('assets/img/sintesa-icon.png');
     $hasCustomUploadedLogo = (bool) $company?->logo_path;
-    $isTestEnvironment = str_contains(request()->getHost(), 'test-')
-        || str_contains((string) config('app.url'), 'test-')
+    $host = strtolower((string) request()->getHost());
+    $appUrl = strtolower((string) config('app.url'));
+    $isPercetakan = str_contains($host, 'percetakansubang') || str_contains($appUrl, 'percetakansubang');
+    $brandSubtitle = $isPercetakan ? 'Percetakansubang' : 'Workshop';
+    $isTestEnvironment = str_contains($host, 'test-')
+        || str_contains($appUrl, 'test-')
         || str_contains(config('app.name'), 'Testing')
-        || str_contains(request()->getHost(), '.test')
+        || str_contains($host, '.test')
         || app()->environment(['local', 'development', 'testing']);
 @endphp
 
@@ -72,7 +76,7 @@ new #[Layout('layouts.guest')] #[Title('PT. SINTESA NIAGA KARYA - Login')] class
 
     .pnj-brand-section {
         text-align: center;
-        margin-bottom: 32px;
+        margin-bottom: 24px;
     }
 
     .pnj-brand-box {
@@ -104,7 +108,7 @@ new #[Layout('layouts.guest')] #[Title('PT. SINTESA NIAGA KARYA - Login')] class
         font-weight: 700;
         color: #111827;
         line-height: 1.3;
-        margin: 0 0 4px 0;
+        margin: 0 0 2px 0;
     }
 
     @media (min-width: 640px) {
@@ -115,20 +119,54 @@ new #[Layout('layouts.guest')] #[Title('PT. SINTESA NIAGA KARYA - Login')] class
 
     .pnj-brand-subtitle {
         font-size: 14px;
-        font-weight: 400;
+        font-weight: 500;
         color: #6b7280;
         margin: 0;
-        display: flex;
+        line-height: 1.4;
+    }
+
+    .pnj-env-status {
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        flex-wrap: wrap;
-        gap: 6px;
-        line-height: 1.4;
+        gap: 7px;
+        margin-top: 10px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        line-height: 1;
+    }
+
+    .pnj-env-status--prod {
+        color: #059669;
+    }
+
+    .pnj-env-status--test {
+        color: #d97706;
+    }
+
+    .pnj-env-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        display: inline-block;
+        flex-shrink: 0;
+    }
+
+    .pnj-env-dot--prod {
+        background-color: #10b981;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16);
+    }
+
+    .pnj-env-dot--test {
+        background-color: #f59e0b;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
     }
 
     .pnj-greeting {
         text-align: center;
-        margin-bottom: 32px;
+        margin-bottom: 28px;
     }
 
     .pnj-greeting-title {
@@ -329,22 +367,21 @@ new #[Layout('layouts.guest')] #[Title('PT. SINTESA NIAGA KARYA - Login')] class
 
             <h1 class="pnj-brand-title">{{ $companyName }}</h1>
 
-            <p class="pnj-brand-subtitle">
-                <span>Sistem Manajemen SDM &amp; Penggajian</span>
+            <p class="pnj-brand-subtitle">{{ $brandSubtitle }}</p>
+
+            <div>
                 @if ($isTestEnvironment)
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border"
-                          style="background-color: #fef3c7; color: #92400e; border-color: #fde68a;">
-                        <span class="w-1.5 h-1.5 rounded-full mr-1" style="background-color: #d97706;"></span>
-                        TEST
+                    <span class="pnj-env-status pnj-env-status--test">
+                        <span class="pnj-env-dot pnj-env-dot--test"></span>
+                        <span>Test Environment</span>
                     </span>
                 @else
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border"
-                          style="background-color: #d1fae5; color: #065f46; border-color: #a7f3d0;">
-                        <span class="w-1.5 h-1.5 rounded-full mr-1" style="background-color: #059669;"></span>
-                        PROD
+                    <span class="pnj-env-status pnj-env-status--prod">
+                        <span class="pnj-env-dot pnj-env-dot--prod"></span>
+                        <span>Production</span>
                     </span>
                 @endif
-            </p>
+            </div>
         </div>
 
         <!-- Welcome Text -->
